@@ -1,0 +1,33 @@
+# Dependencies and generated build output
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Local plans, evidence, and design experiments
+.skillify/*
+!.skillify/plans/
+.skillify/plans/**
+!.skillify/plans/*/
+!.skillify/plans/*/packet.md
+prototype/
+
+# Built binaries are attached to releases, not committed
+release/
+
+# Local editor settings
+.idea/
+.vscode/
+*.code-workspace
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini
