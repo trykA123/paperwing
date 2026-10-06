@@ -105,6 +105,45 @@ impl Fixture {
     }
     async fn commit(&self, name: &str) -> String {
         self.git(&["add", "."]).await;
+        self.commit_staged(name).await
+    }
+    async fn stage_paths(&self, paths: Vec<String>) {
+        let repo = self.0.join("repo");
+        tokio::task::spawn_blocking(move || {
+            let run = |args: &[&str], input: String| {
+                let mut child = std::process::Command::new("git")
+                    .current_dir(&repo)
+                    .args(args)
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                let mut stdin = child.stdin.take().unwrap();
+                let writer = std::thread::spawn(move || {
+                    std::io::Write::write_all(&mut stdin, input.as_bytes()).unwrap()
+                });
+                let output = child.wait_with_output().unwrap();
+                writer.join().unwrap();
+                assert!(output.status.success(), "git {args:?} failed");
+                String::from_utf8(output.stdout).unwrap()
+            };
+            let hashes = run(
+                &["-c", "core.autocrlf=false", "hash-object", "-w", "--stdin-paths"],
+                paths.join("\n") + "\n",
+            );
+            let info: String = hashes
+                .lines()
+                .zip(&paths)
+                .map(|(hash, path)| format!("100644 {hash}\t{path}\n"))
+                .collect();
+            assert_eq!(info.lines().count(), paths.len());
+            run(&["update-index", "--add", "--index-info"], info);
+            run(&["update-index", "--refresh"], String::new());
+        })
+        .await
+        .unwrap();
+    }
+    async fn commit_staged(&self, name: &str) -> String {
         self.git(&[
             "-c",
             "user.name=Fixture",
@@ -439,11 +478,15 @@ async fn scaled_working_inventory_is_lazy_bounded_and_cancellable() {
     fixture.git(&["config", "core.autocrlf", "false"]).await;
     fixture.git(&["config", "core.fsync", "none"]).await;
     let mut bytes = vec![b'x'; 8400];
+    let mut paths = Vec::new();
     for index in 0u32..5000 {
         bytes[..4].copy_from_slice(&index.to_le_bytes());
-        fixture.write(&format!("file-{index:04}.dat"), &bytes);
+        let path = format!("file-{index:04}.dat");
+        fixture.write(&path, &bytes);
+        paths.push(path);
     }
-    fixture.commit("40 MiB scale").await;
+    fixture.stage_paths(paths).await;
+    fixture.commit_staged("40 MiB scale").await;
     let index = std::fs::read(fixture.0.join("repo/.git/index")).unwrap();
     let started = std::time::Instant::now();
     let job = Job {
