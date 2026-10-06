@@ -181,7 +181,7 @@ svg.i.tone-err {
 /* ---------- spacing rhythm: 4 / 8 / 12 / 16 / 24 ---------- */
 .main {
     gap: var(--sp-4);
-    padding: var(--sp-4) var(--sp-5);
+    padding: var(--sp-4) var(--sp-5) var(--sp-2);
 }
 
 .side {
@@ -340,7 +340,7 @@ svg.i.tone-err {
 }
 
 .rfoot {
-    padding: var(--sp-4);
+    padding: var(--sp-4) var(--sp-4) var(--sp-2);
 }
 
 .srccard {
@@ -382,7 +382,7 @@ svg.i.tone-err {
 
 @media (max-width: 1200px) {
     .main {
-        padding: var(--sp-3) var(--sp-4);
+        padding: var(--sp-3) var(--sp-4) var(--sp-2);
     }
 }
 

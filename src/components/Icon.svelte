@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type IconName = 'branch' | 'tag' | 'commit' | 'search' | 'gear' | 'refresh' | 'folder' | 'code' | 'plus' | 'trash' | 'check' | 'copy' | 'close' | 'panel' | 'theme' | 'chevron' | 'activity' | 'download' | 'info' | 'alert' | 'error' | 'disclosure' | 'folderOpen' | 'maximize' | 'restore' | 'upload' | 'remote' | 'stash' | 'submodule';
+  export type IconName = 'branch' | 'tag' | 'commit' | 'search' | 'gear' | 'refresh' | 'folder' | 'code' | 'plus' | 'trash' | 'check' | 'copy' | 'close' | 'panel' | 'theme' | 'chevron' | 'activity' | 'download' | 'info' | 'alert' | 'error' | 'disclosure' | 'folderOpen' | 'minimize' | 'maximize' | 'restore' | 'upload' | 'remote' | 'stash' | 'submodule';
   export type IconTone = 'folder' | 'repo' | 'file' | 'branch' | 'tag' | 'commit' | 'ok' | 'warn' | 'err' | 'brand' | 'sync' | 'record' | 'inspect' | 'danger';
 </script>
 
@@ -63,6 +63,8 @@
     <path d="m6.2 3.8 4.2 4.2-4.2 4.2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
   {:else if name === 'folderOpen'}
     <path d="M1.8 12.8V3.5h4.2l1.5 1.5h5.5v2.2M1.8 12.8l1.7-5.6H15l-1.7 5.6z" stroke-linejoin="round" />
+  {:else if name === 'minimize'}
+    <path d="M3 8h10" />
   {:else if name === 'maximize'}
     <rect x="3" y="3" width="10" height="10" rx="1.5" />
   {:else if name === 'restore'}

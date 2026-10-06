@@ -141,7 +141,7 @@
 
 <div id="shell" class:noright={!rightVisible} class:noside={!app.ws.shell.sidebarVisible} class:panels-moving={panelsMoving}
   style:--lw="{app.ws.shell.sidebarVisible ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
-  <div class="shell-brand"><BrandMark busy={gitBusy} /><span>Skein</span></div>
+  <div class="shell-brand" data-tauri-drag-region><BrandMark busy={gitBusy} /><span>Skein</span></div>
   <Tabs />
   <div class="shell-side" inert={!app.ws.shell.sidebarVisible} aria-hidden={!app.ws.shell.sidebarVisible} style:--panel-width="{app.ws.shell.sidebarWidth}px">
     {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><Sidebar /></div>{/if}

@@ -2,7 +2,7 @@
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
   "originalLineCount": 5848,
-  "normalizedSourceSHA256": "a50088f1b2bbefa84335824eb8b411ed3a39f46c3a18148326f0b70012165a76",
+  "normalizedSourceSHA256": "9107c5385f38864b7c16d3af8e33cadb78071c96cd3830b5a817848547b9e4a6",
   "chapters": [
     {
       "path": "comparison.css",
@@ -68,7 +68,7 @@
       "path": "control-overrides.css",
       "firstLine": 4030,
       "lastLine": 4527,
-      "normalizedSHA256": "461d0d9227452f26c1a8797193fd7e373ded75ad345469ee5bfe85e2ff7f452c"
+      "normalizedSHA256": "097c4b9847276c90aada361b3dbda448fec36bbf7a1df70ec674253d2a495c88"
     },
     {
       "path": "workflow-overrides.css",
