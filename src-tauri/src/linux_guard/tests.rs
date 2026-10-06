@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-struct Fixture(PathBuf);
+struct Fixture {
+    path: PathBuf,
+    _budget: crate::test_support::Shared,
+}
 impl Fixture {
     fn new() -> Self {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.skillify/evidence/paperwing/12/native")
@@ -20,12 +23,12 @@ impl Fixture {
         std::fs::write(path.join("repo/file"), b"restore-drill").unwrap();
         std::fs::write(path.join("repo/file"), &backup).unwrap();
         assert_eq!(std::fs::read(path.join("repo/file")).unwrap(), backup);
-        Self(path.canonicalize().unwrap())
+        Self { path: path.canonicalize().unwrap(), _budget: crate::test_support::Shared::new() }
     }
-    fn root(&self) -> Root { Root::open(&self.0.join("repo"), &[]).unwrap() }
+    fn root(&self) -> Root { Root::open(&self.path.join("repo"), &[]).unwrap() }
 }
 impl Drop for Fixture {
-    fn drop(&mut self) { assert_eq!(std::fs::read(self.0.join("outside")).unwrap(), b"outside-sentinel"); }
+    fn drop(&mut self) { assert_eq!(std::fs::read(self.path.join("outside")).unwrap(), b"outside-sentinel"); }
 }
 
 #[test]
@@ -34,12 +37,12 @@ fn confined_reads_refuse_links_metadata_aliases_and_changed_roots() {
     assert_eq!(root.read("file", 32).unwrap().unwrap().bytes, b"before");
     assert!(root.read("../outside", 32).is_err());
     assert!(root.read(".git/config", 32).is_err());
-    std::fs::rename(fixture.0.join("repo/file"), fixture.0.join("repo/original")).unwrap();
-    symlink(fixture.0.join("outside"), fixture.0.join("repo/file")).unwrap();
-    assert_eq!(std::fs::read(fixture.0.join("repo/file")).unwrap(), b"outside-sentinel");
+    std::fs::rename(fixture.path.join("repo/file"), fixture.path.join("repo/original")).unwrap();
+    symlink(fixture.path.join("outside"), fixture.path.join("repo/file")).unwrap();
+    assert_eq!(std::fs::read(fixture.path.join("repo/file")).unwrap(), b"outside-sentinel");
     assert!(root.read("file", 32).is_err());
-    std::fs::rename(fixture.0.join("repo"), fixture.0.join("moved")).unwrap();
-    std::fs::create_dir(fixture.0.join("repo")).unwrap();
+    std::fs::rename(fixture.path.join("repo"), fixture.path.join("moved")).unwrap();
+    std::fs::create_dir(fixture.path.join("repo")).unwrap();
     assert!(root.revalidate().is_err());
 }
 
@@ -47,7 +50,7 @@ fn confined_reads_refuse_links_metadata_aliases_and_changed_roots() {
 fn guarded_replace_create_metadata_and_stage_cleanup() {
     let fixture = Fixture::new(); let root = fixture.root();
     root.probe_write().unwrap();
-    let path=fixture.0.join("repo/file");
+    let path=fixture.path.join("repo/file");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
     rustix::fs::setxattr(&path,"user.paperwing-fixture",b"preserved",rustix::fs::XattrFlags::empty()).unwrap();
     let parent = root.parent("file", false).unwrap(); let before=parent.snapshot().unwrap();
@@ -58,21 +61,21 @@ fn guarded_replace_create_metadata_and_stage_cleanup() {
     assert!(matches!(parent.snapshot().unwrap(), Snapshot::Regular{identity,..} if identity==published.identity));
     let mut value=[0;32];let count=rustix::fs::getxattr(&path,"user.paperwing-fixture",&mut value).unwrap();
     assert_eq!(&value[..count],b"preserved");
-    assert!(std::fs::read_dir(fixture.0.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".paperwing-stage-")));
+    assert!(std::fs::read_dir(fixture.path.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".paperwing-stage-")));
     let new=root.parent("nested/new",true).unwrap();let missing=new.snapshot().unwrap();
     assert_eq!(missing,Snapshot::Missing);new.publish(new.stage(b"new",&missing).unwrap(),&missing).unwrap();
     let expected=new.snapshot().unwrap();new.remove_created(&expected).unwrap();
-    assert!(!fixture.0.join("repo/nested/new").exists());
+    assert!(!fixture.path.join("repo/nested/new").exists());
 }
 
 #[test]
 fn private_storage_exclusive_files_and_lock_lifetime() {
-    let fixture=Fixture::new();let directory=PrivateDir::open(&fixture.0,"private").unwrap();
+    let fixture=Fixture::new();let directory=PrivateDir::open(&fixture.path,"private").unwrap();
     let file=directory.file("backup",true).unwrap();file.write(b"backup").unwrap();
     assert_eq!(file.read(32).unwrap(),b"backup");assert!(directory.file("backup",true).is_err());
     let lock=directory.lock().unwrap();lock.revalidate().unwrap();assert!(directory.lock().is_err());drop(lock);directory.lock().unwrap();
-    assert_eq!(std::fs::metadata(fixture.0.join("private")).unwrap().permissions().mode() & 0o777,0o700);
-    assert_eq!(std::fs::metadata(fixture.0.join("private/backup")).unwrap().permissions().mode() & 0o777,0o600);
+    assert_eq!(std::fs::metadata(fixture.path.join("private")).unwrap().permissions().mode() & 0o777,0o700);
+    assert_eq!(std::fs::metadata(fixture.path.join("private/backup")).unwrap().permissions().mode() & 0o777,0o600);
 }
 
 fn writer(path: &std::path::Path, bytes: &str) {
@@ -86,53 +89,53 @@ fn writer(path: &std::path::Path, bytes: &str) {
 fn fresh_validation_preserves_external_edits_and_hardlink_aliases() {
     let fixture=Fixture::new();let root=fixture.root();let parent=root.parent("file",false).unwrap();
     let expected=parent.snapshot().unwrap();let stage=parent.stage(b"ours",&expected).unwrap();
-    writer(&fixture.0.join("repo/file"),"external");
+    writer(&fixture.path.join("repo/file"),"external");
     assert!(parent.publish(stage,&expected).is_err());
-    assert_eq!(std::fs::read(fixture.0.join("repo/file")).unwrap(),b"external");
-    std::fs::hard_link(fixture.0.join("repo/file"),fixture.0.join("repo/alias")).unwrap();
+    assert_eq!(std::fs::read(fixture.path.join("repo/file")).unwrap(),b"external");
+    std::fs::hard_link(fixture.path.join("repo/file"),fixture.path.join("repo/alias")).unwrap();
     assert!(parent.snapshot().is_err());
-    assert_eq!(std::fs::read(fixture.0.join("repo/alias")).unwrap(),b"external");
+    assert_eq!(std::fs::read(fixture.path.join("repo/alias")).unwrap(),b"external");
     let new=root.parent("new",false).unwrap();let missing=new.snapshot().unwrap();let stage=new.stage(b"ours",&missing).unwrap();
-    writer(&fixture.0.join("repo/new"),"raced-create");
+    writer(&fixture.path.join("repo/new"),"raced-create");
     assert!(new.publish(stage,&missing).is_err());
-    assert_eq!(std::fs::read(fixture.0.join("repo/new")).unwrap(),b"raced-create");
+    assert_eq!(std::fs::read(fixture.path.join("repo/new")).unwrap(),b"raced-create");
 }
 
 #[test]
 fn final_check_races_follow_the_accepted_practical_contract() {
     let fixture=Fixture::new();let root=fixture.root();let parent=root.parent("file",false).unwrap();
     let expected=parent.snapshot().unwrap();let stage=parent.stage(b"ours",&expected).unwrap();
-    parent.publish_after_check(stage,&expected,|| {writer(&fixture.0.join("repo/file"),"later-edit");Ok(())}).unwrap();
-    assert_eq!(std::fs::read(fixture.0.join("repo/file")).unwrap(),b"ours");
+    parent.publish_after_check(stage,&expected,|| {writer(&fixture.path.join("repo/file"),"later-edit");Ok(())}).unwrap();
+    assert_eq!(std::fs::read(fixture.path.join("repo/file")).unwrap(),b"ours");
     let new=root.parent("new",false).unwrap();let missing=new.snapshot().unwrap();let stage=new.stage(b"ours",&missing).unwrap();
-    let failure=new.publish_after_check(stage,&missing,|| {writer(&fixture.0.join("repo/new"),"later-create");Ok(())}).unwrap_err();
-    assert!(!failure.applied);assert_eq!(std::fs::read(fixture.0.join("repo/new")).unwrap(),b"later-create");
+    let failure=new.publish_after_check(stage,&missing,|| {writer(&fixture.path.join("repo/new"),"later-create");Ok(())}).unwrap_err();
+    assert!(!failure.applied);assert_eq!(std::fs::read(fixture.path.join("repo/new")).unwrap(),b"later-create");
     let created=new.snapshot().unwrap();
-    new.remove_after_check(&created,|| {writer(&fixture.0.join("repo/new"),"later-edited-created");Ok(())}).unwrap();
-    assert!(!fixture.0.join("repo/new").exists());
+    new.remove_after_check(&created,|| {writer(&fixture.path.join("repo/new"),"later-edited-created");Ok(())}).unwrap();
+    assert!(!fixture.path.join("repo/new").exists());
 }
 
 #[test]
 fn moved_ancestors_and_metadata_pointer_changes_refuse_mutation() {
     let fixture=Fixture::new();let root=fixture.root();
-    std::fs::create_dir(fixture.0.join("repo/folder")).unwrap();
-    std::fs::write(fixture.0.join("repo/folder/file"),b"before").unwrap();
+    std::fs::create_dir(fixture.path.join("repo/folder")).unwrap();
+    std::fs::write(fixture.path.join("repo/folder/file"),b"before").unwrap();
     let parent=root.parent("folder/file",false).unwrap();let expected=parent.snapshot().unwrap();let stage=parent.stage(b"ours",&expected).unwrap();
-    std::fs::rename(fixture.0.join("repo/folder"),fixture.0.join("moved-folder")).unwrap();
-    std::fs::create_dir(fixture.0.join("repo/folder")).unwrap();
+    std::fs::rename(fixture.path.join("repo/folder"),fixture.path.join("moved-folder")).unwrap();
+    std::fs::create_dir(fixture.path.join("repo/folder")).unwrap();
     assert!(parent.publish(stage,&expected).is_err());
-    assert_eq!(std::fs::read(fixture.0.join("moved-folder/file")).unwrap(),b"before");
-    std::fs::write(fixture.0.join("repo/.git/commondir"),b"before-pointer").unwrap();
-    let bound=fixture.root();std::fs::write(fixture.0.join("repo/.git/commondir"),b"later-pointer").unwrap();
+    assert_eq!(std::fs::read(fixture.path.join("moved-folder/file")).unwrap(),b"before");
+    std::fs::write(fixture.path.join("repo/.git/commondir"),b"before-pointer").unwrap();
+    let bound=fixture.root();std::fs::write(fixture.path.join("repo/.git/commondir"),b"later-pointer").unwrap();
     assert!(bound.revalidate().is_err());
     assert!(bound.parent("file",false).is_err());
-    let refreshed=fixture.root();std::fs::hard_link(fixture.0.join("repo/.git/commondir"),fixture.0.join("repo/metadata-alias")).unwrap();
+    let refreshed=fixture.root();std::fs::hard_link(fixture.path.join("repo/.git/commondir"),fixture.path.join("repo/metadata-alias")).unwrap();
     assert!(refreshed.read("metadata-alias",64).is_err());
 }
 
 #[test]
 fn access_acl_roundtrip_preserves_the_kernel_validated_metadata() {
-    let fixture=Fixture::new();let path=fixture.0.join("repo/file");
+    let fixture=Fixture::new();let path=fixture.path.join("repo/file");
     let mut acl=2u32.to_le_bytes().to_vec();
     for (tag,permission,id) in [(1u16,6u16,u32::MAX),(2,4,unsafe {libc::geteuid()}+1),(4,0,u32::MAX),(16,4,u32::MAX),(32,0,u32::MAX)] {
         acl.extend_from_slice(&tag.to_le_bytes());acl.extend_from_slice(&permission.to_le_bytes());acl.extend_from_slice(&id.to_le_bytes());
@@ -146,6 +149,7 @@ fn access_acl_roundtrip_preserves_the_kernel_validated_metadata() {
 
 #[test]
 fn bounded_private_files_and_handle_ownership_fail_closed() {
+    let _exclusive = crate::test_support::Exclusive::new();
     let fixture=Fixture::new();let root=fixture.root();
     assert!(root.read("file",2).is_err());
     let depth=std::iter::repeat_n("folder",65).collect::<Vec<_>>().join("/");
@@ -155,9 +159,9 @@ fn bounded_private_files_and_handle_ownership_fail_closed() {
     let mut permits=Vec::new();while let Ok(permit)=Permit::acquire(){permits.push(permit);}
     assert!(root.read("file",32).is_err());drop(permits);assert_eq!(root.read("file",32).unwrap().unwrap().bytes,b"before");
     let memory=BytePermit::acquire(512*1024*1024).unwrap();assert!(BytePermit::acquire(1).is_err());drop(memory);
-    let private=PrivateDir::open(&fixture.0,"private").unwrap();
-    std::fs::set_permissions(fixture.0.join("private"),std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert!(private.file("backup",true).is_err());assert!(!fixture.0.join("private/backup").exists());
+    let private=PrivateDir::open(&fixture.path,"private").unwrap();
+    std::fs::set_permissions(fixture.path.join("private"),std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(private.file("backup",true).is_err());assert!(!fixture.path.join("private/backup").exists());
 }
 
 #[test]
@@ -185,13 +189,13 @@ fn isolated_storage_failures_and_mount_crossings() {
         }
         return;
     }
-    let fixture=Fixture::new();std::fs::create_dir(fixture.0.join("namespace-mount")).unwrap();
+    let fixture=Fixture::new();std::fs::create_dir(fixture.path.join("namespace-mount")).unwrap();
     let namespace=std::fs::read_link("/proc/self/ns/mnt").unwrap();
     let script=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/testing/linux-guard-io.py");
-    let result=std::process::Command::new("unshare").args(["-Urnm","python3"]).arg(script).arg(&fixture.0)
+    let result=std::process::Command::new("unshare").args(["-Urnm","python3"]).arg(script).arg(&fixture.path)
         .arg(std::env::current_exe().unwrap()).arg(&namespace).output().unwrap();
     assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));
-    assert!(fixture.0.join("io-report.json").exists());
+    assert!(fixture.path.join("io-report.json").exists());
     assert_eq!(std::fs::read_link("/proc/self/ns/mnt").unwrap(),namespace);
 }
 
@@ -202,30 +206,30 @@ fn published_mutation_failures_preserve_applied_outcome_and_changed_bytes() {
     let fail=|_: &Handle| Err(Error::io(std::io::Error::from_raw_os_error(libc::EIO)));
     let error=parent.publish_with_sync(stage,&before,fail).unwrap_err();
     assert!(error.applied);assert_eq!(error.error.code,Some(libc::EIO));
-    assert_eq!(std::fs::read(fixture.0.join("repo/file")).unwrap(),b"published");
+    assert_eq!(std::fs::read(fixture.path.join("repo/file")).unwrap(),b"published");
     assert!(parent.validate(&before).is_err());
-    assert!(std::fs::read_dir(fixture.0.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".paperwing-stage-")));
+    assert!(std::fs::read_dir(fixture.path.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".paperwing-stage-")));
     let created=root.parent("new",false).unwrap();let missing=created.snapshot().unwrap();
     created.publish(created.stage(b"created",&missing).unwrap(),&missing).unwrap();
     let expected=created.snapshot().unwrap();let error=created.remove_with_sync(&expected,fail).unwrap_err();
     assert!(error.applied);assert_eq!(error.error.code,Some(libc::EIO));
-    assert!(!fixture.0.join("repo/new").exists());
+    assert!(!fixture.path.join("repo/new").exists());
 }
 
 #[test]
 fn private_diff_materialization_cleans_owned_files_and_preserves_substitutions() {
     let fixture=Fixture::new();
-    let mut temporary=storage::Temporary::new(&fixture.0).unwrap();let path=temporary.path().unwrap();
+    let mut temporary=storage::Temporary::new(&fixture.path).unwrap();let path=temporary.path().unwrap();
     let left=temporary.write("left",b"private-left").unwrap();let right=temporary.write("right",b"private-right").unwrap();
     assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,0o700);
     for file in [&left,&right] { assert_eq!(std::fs::metadata(file).unwrap().permissions().mode() & 0o777,0o600); }
     assert_eq!(std::fs::read(&left).unwrap(),b"private-left");drop(temporary);assert!(!path.exists());
-    let mut temporary=storage::Temporary::new(&fixture.0).unwrap();let path=temporary.path().unwrap();
+    let mut temporary=storage::Temporary::new(&fixture.path).unwrap();let path=temporary.path().unwrap();
     let left=temporary.write("left",b"owned").unwrap();std::fs::rename(&left,path.join("saved-owned")).unwrap();
     std::fs::write(&left,b"substituted").unwrap();drop(temporary);
     assert_eq!(std::fs::read(&left).unwrap(),b"substituted");
     assert_eq!(std::fs::read(path.join("saved-owned")).unwrap(),b"owned");
-    let mut temporary=storage::Temporary::new(&fixture.0).unwrap();
+    let mut temporary=storage::Temporary::new(&fixture.path).unwrap();
     let left=temporary.write("left",b"owned").unwrap();std::fs::write(&left,b"changed").unwrap();drop(temporary);
     assert_eq!(std::fs::read(&left).unwrap(),b"changed");
 }
@@ -234,11 +238,11 @@ fn private_diff_materialization_cleans_owned_files_and_preserves_substitutions()
 fn newly_created_commondir_invalidates_root_reads_parents_and_stages() {
     let fixture=Fixture::new();let root=fixture.root();let parent=root.parent("file",false).unwrap();
     let expected=parent.snapshot().unwrap();let stage=parent.stage(b"ours",&expected).unwrap();
-    std::fs::write(fixture.0.join("repo/.git/commondir"),b"../new-common").unwrap();
+    std::fs::write(fixture.path.join("repo/.git/commondir"),b"../new-common").unwrap();
     assert!(root.revalidate().is_err());assert!(root.probe_write().is_err());
     assert!(root.read("file",32).is_err());assert!(root.parent("file",false).is_err());
     assert!(parent.revalidate().is_err());assert!(parent.publish(stage,&expected).is_err());
-    assert_eq!(std::fs::read(fixture.0.join("repo/file")).unwrap(),b"before");
+    assert_eq!(std::fs::read(fixture.path.join("repo/file")).unwrap(),b"before");
 }
 
 #[test]
@@ -250,24 +254,24 @@ fn persisted_guard_values_are_lossless_and_reopen_fresh_authority() {
     let fixture=Fixture::new();let root=fixture.root();let value=root.value().unwrap();
     let decoded=serde_json::from_slice(&serde_json::to_vec(&value).unwrap()).unwrap();
     assert_eq!(Root::reopen(&decoded).unwrap().value().unwrap(),value);
-    std::fs::write(fixture.0.join("repo/.git/commondir"),b"../later").unwrap();
+    std::fs::write(fixture.path.join("repo/.git/commondir"),b"../later").unwrap();
     assert!(Root::reopen(&value).is_err());
-    let fixture=Fixture::new();std::fs::create_dir(fixture.0.join("repo/nested")).unwrap();
+    let fixture=Fixture::new();std::fs::create_dir(fixture.path.join("repo/nested")).unwrap();
     let root=fixture.root();let parent=root.parent("nested/file",false).unwrap();let ancestors=parent.ancestors().unwrap();
-    std::fs::rename(fixture.0.join("repo/nested"),fixture.0.join("old-nested")).unwrap();std::fs::create_dir(fixture.0.join("repo/nested")).unwrap();
+    std::fs::rename(fixture.path.join("repo/nested"),fixture.path.join("old-nested")).unwrap();std::fs::create_dir(fixture.path.join("repo/nested")).unwrap();
     assert!(root.parent("nested/file",false).unwrap().matches_ancestors(&ancestors).is_err());
 }
 
 #[test]
 fn private_existing_lookup_and_owned_deletion_refuse_unknown_links() {
-    let fixture=Fixture::new();let private=PrivateDir::open(&fixture.0,"private").unwrap();
-    assert!(private.lookup("missing").is_err());assert!(!fixture.0.join("private/missing").exists());
+    let fixture=Fixture::new();let private=PrivateDir::open(&fixture.path,"private").unwrap();
+    assert!(private.lookup("missing").is_err());assert!(!fixture.path.join("private/missing").exists());
     let child=private.create_child("record").unwrap();child.write_new("backup",b"verified").unwrap();
     let entries=child.entries(4).unwrap();assert_eq!(entries.len(),1);
     child.unlink_owned("backup",&entries[0].identity,b"verified").unwrap();
     private.remove_empty("record",&child.identity().unwrap()).unwrap();
-    symlink(fixture.0.join("outside"),fixture.0.join("private/unknown")).unwrap();assert!(private.entries(4).is_err());
-    assert_eq!(std::fs::read(fixture.0.join("outside")).unwrap(),b"outside-sentinel");
+    symlink(fixture.path.join("outside"),fixture.path.join("private/unknown")).unwrap();assert!(private.entries(4).is_err());
+    assert_eq!(std::fs::read(fixture.path.join("outside")).unwrap(),b"outside-sentinel");
 }
 
 #[test]

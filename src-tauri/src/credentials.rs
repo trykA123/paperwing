@@ -62,7 +62,7 @@ fn reason(state: CredentialState) -> &'static str {
         CredentialState::Missing => "No token is saved for this source.",
         CredentialState::Locked => "The credential store is locked. Unlock it in your desktop wallet, then retry.",
         CredentialState::Unavailable => "The desktop credential service is unavailable. Start or configure a persistent Secret Service store, then retry.",
-        CredentialState::PermissionDenied => "The credential store denied access. Allow PaperWing access in your desktop wallet, then retry.",
+        CredentialState::PermissionDenied => "The credential store denied access. Allow Skein access in your desktop wallet, then retry.",
         CredentialState::Uncertain => "The credential operation lost its response. The token may have changed. Unlock or reconnect the store, then explicitly retry saving or deleting.",
         CredentialState::Error => "The credential store could not complete the operation. Retry after checking your desktop wallet.",
     }
@@ -361,7 +361,7 @@ mod native {
         }
         let collection = service.get_default_collection().map_err(|error| before_dispatch(failure(error)))?;
         if collection.is_locked().map_err(|error| before_dispatch(failure(error)))? { return Err(Failure::new(CredentialState::Locked)); }
-        collection.create_item("PaperWing token", attributes(source_id), token.as_bytes(), true, "text/plain")
+        collection.create_item("Skein token", attributes(source_id), token.as_bytes(), true, "text/plain")
             .map(|_| ()).map_err(dispatched_failure)
     }
 

@@ -263,12 +263,19 @@ Current limits include:
 - Commit file lists: at most 2,000 changed files; non-UTF-8 names can be omitted with a warning.
    Git still commits the entire staged index. Review larger changes with Git directly.
 
-Recoverable writes require local Windows NTFS with Transactional NTFS (TxF) available.
+Linux saves, hunk saves, directional copies and undo require a successful native root probe on ordinary user-owned local ext4 roots.
+Unsupported Linux roots remain readable with a reason for refused writes. Linux uses the separate `linux-recovery-v1` journal.
+Each write verifies the comparison generation, registered root identity, metadata and expected bytes before publication.
+Another process can change or move files after the final check; this accepted Linux race remains.
+Recovery refuses later edits detected before its final check. Parent recovery records retain created directories.
+See [Linux write contract](docs/linux-write-contract.md), [guards](docs/linux-file-guards.md) and [recovery](docs/linux-recovery.md).
+
+Windows recoverable writes require local NTFS with Transactional NTFS (TxF) available.
 Microsoft deprecated TxF. Unsupported volumes, unavailable transactions, and unsupported
 path/file metadata fail closed, with no unsafe write fallback.
 Network shares and reparse paths are not supported for these writes.
 
-Writes preserve owner, group, ordinary permissions (DACL), basic attributes, and creation time.
+Windows writes preserve owner, group, ordinary permissions (DACL), basic attributes, and creation time.
 The write service does not preserve auditing permissions (SACL), extended attributes,
 object IDs, hard-link membership, or short names. Backup checksums detect corruption;
 they do not authenticate backups against malicious tampering. Keep independent backups of important work.
@@ -286,7 +293,7 @@ Repository discovery uses the GitHub API or GitHub Enterprise API. Manual URLs b
 Git operations use your installed `git` and its SSH or HTTPS authentication setup.
 The source's API token does not replace your Git credentials.
 Monaco supplies the text editor and diff views; Git objects supply read-only snapshot content.
-The Windows write service supplies the recovery journal outside your repositories.
+The platform file service supplies a recovery journal outside your repositories.
 
 The implementation is organized around these areas:
 
@@ -463,16 +470,16 @@ bun install --frozen-lockfile
 bun run --bun tauri build --no-bundle -- --offline --locked
 ```
 
-Linux supports native root selection, path validation, physical identity and read-only diffs.
-Existing Windows roots remain saved until you explicitly choose a native folder. Save,
-recoverable copy, undo and folder trash remain unavailable with visible reasons. Linux
+Linux supports native root selection, physical identity, comparisons and recoverable file writes.
+Existing Windows roots remain saved until you explicitly choose a native folder. Editing,
+directional copies and undo require supported roots; folder trash remains unavailable. Linux
 credentials use a persistent desktop Secret Service store, with private native restart and
 error-path evidence. Configure the store separately; the app does not activate a wallet.
 Git operations stop helpers within their owned process group and finish output cleanup
 before releasing runner resources. Detached helpers are outside that boundary; see
 [Linux Git lifecycle](docs/linux-git-lifecycle.md). Protected filesystem guards and
-[durable Linux recovery](docs/linux-recovery.md) pass isolated native tests. Application
-save/copy/recovery integration and folder workflows still need packets 14–15. The accepted
+[durable Linux recovery](docs/linux-recovery.md) supply the Linux file service. Folder
+workflows still need packet15. The accepted
 [Linux write contract](docs/linux-write-contract.md) records concurrent-writer race limits.
 See [implementation status](docs/implementation-status.md) and [isolated testing](docs/testing.md).
 

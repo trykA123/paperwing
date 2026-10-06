@@ -6,7 +6,7 @@ impl PrivateDir {
     pub(crate) fn lock_existing(&self) -> Result<Lock, Error> {
         let file = self.file("lock", false)?;
         rustix::fs::flock(&file.handle, FlockOperation::NonBlockingLockExclusive).map_err(
-            |_| Error::conflict("Another PaperWing process owns the Linux recovery lock"),
+            |_| Error::conflict("Another Skein process owns the Linux recovery lock"),
         )?;
         file.revalidate()?;
         Ok(Lock(file))

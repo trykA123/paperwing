@@ -40,8 +40,8 @@
   <div class="operation-list">{#each records as record}<section>
     <div><strong class="mono grow">{record.path || record.id}</strong><span>{record.stage}</span><time>{new Date(record.createdAt).toLocaleString()}</time></div>
     <p class="mono faint">{record.root}</p>{#if record.warning}<p class="warn">{record.warning}</p>{/if}
-    <div><button class="btn" disabled={busy || !['applied', 'replacing', 'prepared'].includes(record.stage)} onclick={() => run(record, 'undo')}><Icon name="refresh" /> Restore</button>
-      <button class="btn" disabled={busy || record.stage !== 'replacing'} onclick={() => run(record, 'resolve')}>Acknowledge conflict</button>
-      <span class="grow"></span><button class="btn" disabled={busy || !['undone', 'notApplied', 'conflict', 'incomplete'].includes(record.stage)} onclick={() => run(record, 'cleanup')}><Icon name="close" /> Delete backup</button></div>
+    <div><button class="btn" disabled={busy || !['applied', 'replacing', 'prepared', 'staged', 'undoing'].includes(record.stage)} onclick={() => run(record, 'undo')}><Icon name="refresh" /> Restore</button>
+      <button class="btn" disabled={busy || !(app.platform.platform === 'linux' ? ['conflict', 'parentConflict'].includes(record.stage) : record.stage === 'replacing')} onclick={() => run(record, 'resolve')}>Acknowledge conflict</button>
+      <span class="grow"></span><button class="btn" disabled={busy || !(app.platform.platform === 'linux' ? ['undone', 'notApplied', 'resolved', 'cleanupPending', 'parentLinked', 'parentRetained', 'parentResolved', 'parentCleanupPending'].includes(record.stage) : ['undone', 'notApplied', 'conflict', 'incomplete'].includes(record.stage))} onclick={() => run(record, 'cleanup')}><Icon name="close" /> Delete backup</button></div>
   </section>{:else}<p>No recovery records.</p>{/each}</div>
 </dialog>

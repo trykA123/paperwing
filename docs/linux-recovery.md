@@ -1,7 +1,8 @@
 # Linux durable recovery library
 
 Packet13 adds a native Linux library under `src-tauri/src/linux_journal`.
-All application save, copy, undo and recovery IPC remains disabled until packet14.
+Packet14 connects application save, copy, undo and recovery IPC through `linux_files`.
+Writes require a successful native root probe.
 Windows source and `recovery-v2` records remain unchanged. No record is translated.
 
 ## Storage and ownership
@@ -229,7 +230,7 @@ unused-code failure. Independent repair recheck is required before integration.
 ## Guarded parent library
 
 The packet14 library adds value-only missing-parent previews and durable parent records.
-Application commands remain disabled. New parent operations require `Journal::open_guarded`
+New parent operations require `Journal::open_guarded`
 with actual source roots and an outside local-ext4 storage location. `open_existing` creates
 nothing and supports private recovery without a surviving source root.
 
@@ -267,3 +268,26 @@ sentinel and child reaping. The separate frozen13 reader harness exercises forei
 artifacts, verified file export and conditional create/replace undo in four real layouts.
 Independent implementation review and owner acceptance remain gates. SIGKILL results do not
 establish power-loss durability or native Windows behavior.
+
+## Application file service
+
+Packet14 exposes the Windows command names and response shapes through `linux_files`.
+Linux persistence remains separate; the reserved Windows `rootVolume` and `rootIndex`
+response fields are zero on Linux. Native journal root snapshots authorize recovery.
+
+Edit tickets retain exact identity, supported metadata and expected bytes. Limits are32
+open tickets and2MiB per file. Four previews each hold at most128 files and32MiB of
+source/destination snapshots. Four blocking workers retain ownership after dropped IPC.
+Close, cancel and page reload revoke authority. Comparison refresh revokes its generation.
+
+Every mutation refreshes registered settings and native root/source authority. Final
+publication checks revocation after journal, parent and destination verification. A batch
+may reuse only parent identities recorded by its own earlier file publications. Failure
+returns applied/failed/notAttempted outcomes and retained recovery identities.
+
+Recovery opens existing storage without creating it. Parent rows expose historical
+creation and retain destination directories. Acknowledgement and cleanup operate only
+on verified eligible journal records; incomplete, foreign and unresolved backups remain.
+Close editors referencing file undo records before cleanup. A missing or replaced root
+refuses automatic undo; listing and verified private acknowledgement remain accessible.
+The practical external-writer race and hidden-metadata limits remain unchanged.

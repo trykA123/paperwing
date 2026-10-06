@@ -250,6 +250,21 @@ impl Journal {
         }
         Ok(result.into_values().collect())
     }
+    pub(crate) fn get(&self, id: &str) -> Result<RecoveryRecord, Error> {
+        self._lock.revalidate()?;
+        let manifest = format!("cleanup-{id}.json");
+        if self.directory.file(&manifest, false).is_ok() {
+            if let Some(record) = self.cleanup_record(&manifest) {
+                return Ok(record);
+            }
+        }
+        self.record_dir(id)
+            .map_err(|_| Error::invalid("Unknown recovery record"))?;
+        Ok(match self.load(id) {
+            Ok(loaded) => loaded.dto(),
+            Err(error) => unreadable(id, error),
+        })
+    }
     pub(crate) fn export(&self, id: &str, before: bool) -> Result<Vec<u8>, Error> {
         self._lock.revalidate()?;
         let directory = self.record_dir(id)?;

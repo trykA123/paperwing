@@ -1,8 +1,8 @@
 # Linux file guards
 
 Packet12 supplies Linux-only filesystem primitives and protected comparison reads.
-Editor writes, directional copy, undo and recovery commands remain disabled until
-packets13–14 integrate the durable journal and fresh authority checks. Windows
+Packet14 connects editor writes, directional copy, undo and recovery commands to
+the durable journal and fresh authority checks. Per-root write probes must pass. Windows
 files.rs and file_guard.rs retain their baseline bytes.
 
 ## Supported envelope

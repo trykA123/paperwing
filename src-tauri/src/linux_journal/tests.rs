@@ -60,7 +60,10 @@ use crate::linux_guard::{mutation::Snapshot, Root};
 use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-struct Fixture(std::path::PathBuf);
+struct Fixture {
+    path: std::path::PathBuf,
+    _budget: crate::test_support::Shared,
+}
 impl Fixture {
     fn new() -> Self {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -99,13 +102,13 @@ impl Fixture {
             restored_expected
         );
         std::fs::write(path.join("restore-proof.json"),serde_json::to_vec(&serde_json::json!({"before":hash(&bytes),"restored":hash(&std::fs::read(path.join("repo/file")).unwrap()),"sentinel":hash(b"outside-sentinel"),"identityAndMetadataRestored":true})).unwrap()).unwrap();
-        Self(path.canonicalize().unwrap())
+        Self { path: path.canonicalize().unwrap(), _budget: crate::test_support::Shared::new() }
     }
     fn root(&self) -> Root {
-        Root::open(&self.0.join("repo"), &[]).unwrap()
+        Root::open(&self.path.join("repo"), &[]).unwrap()
     }
     fn journal(&self) -> Journal {
-        Journal::open(&self.0.join("data")).unwrap()
+        Journal::open(&self.path.join("data")).unwrap()
     }
     fn write(&self, journal: &Journal, path: &str, bytes: &[u8]) -> publication::Published {
         let root = self.root();
@@ -116,7 +119,7 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         assert_eq!(
-            std::fs::read(self.0.join("outside")).unwrap(),
+            std::fs::read(self.path.join("outside")).unwrap(),
             b"outside-sentinel"
         );
     }
@@ -150,14 +153,14 @@ fn native_publication_replacement_creation_and_same_bytes_bind_distinct_identiti
             .existed
     );
     assert_eq!(
-        std::fs::read(fixture.0.join("repo/created")).unwrap(),
+        std::fs::read(fixture.path.join("repo/created")).unwrap(),
         b"created"
     );
     assert!(journal
         .export("r-00000000000000000000000000000000", true)
         .is_err());
     assert!(!fixture
-        .0
+        .path
         .join("data/linux-recovery-v1/r-00000000000000000000000000000000")
         .exists());
 }
@@ -188,7 +191,7 @@ fn checkpoints_retain_backups_and_post_native_publication_errors_report_applied(
         let applied = ["renamed", "directorySynced", "applied"].contains(&phase);
         assert_eq!(error.applied, applied, "{phase}");
         assert_eq!(
-            std::fs::read(fixture.0.join("repo/file")).unwrap(),
+            std::fs::read(fixture.path.join("repo/file")).unwrap(),
             if applied {
                 b"after".as_slice()
             } else {
@@ -245,7 +248,7 @@ fn unsafe_pending_torn_foreign_and_full_stores_refuse_new_allocation() {
         assert!(journal.replace(&root, "file", &expected, b"new").is_err());
         assert_eq!(names, journal.directory.names(32).unwrap());
         assert_eq!(
-            std::fs::read(fixture.0.join("repo/file")).unwrap(),
+            std::fs::read(fixture.path.join("repo/file")).unwrap(),
             b"before"
         );
     }
@@ -310,7 +313,7 @@ fn reader_keeps_valid_records_accessible_beside_unknown_corrupt_and_linked_recor
         .read(1024)
         .unwrap();
     std::os::unix::fs::symlink(
-        fixture.0.join("outside"),
+        fixture.path.join("outside"),
         journal
             .directory
             .path()
@@ -337,7 +340,7 @@ fn reader_keeps_valid_records_accessible_beside_unknown_corrupt_and_linked_recor
 #[test]
 fn native_undo_restores_bytes_mode_acl_and_user_attributes_with_new_writer_disabled() {
     let fixture = Fixture::new();
-    let path = fixture.0.join("repo/file");
+    let path = fixture.path.join("repo/file");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
     rustix::fs::setxattr(
         &path,
@@ -427,12 +430,12 @@ fn created_file_undo_and_post_unlink_failures_reconcile_without_recreating_bytes
         journal.fault = Some(phase);
         let error = journal.undo(&result.record).unwrap_err();
         assert_eq!(error.applied, phase != "undoing");
-        assert_eq!(fixture.0.join("repo/created").exists(), phase == "undoing");
+        assert_eq!(fixture.path.join("repo/created").exists(), phase == "undoing");
         drop(journal);
         let journal = fixture.journal();
         journal.reconcile().unwrap();
         journal.undo(&result.record).unwrap();
-        assert!(!fixture.0.join("repo/created").exists());
+        assert!(!fixture.path.join("repo/created").exists());
         assert_eq!(journal.list().unwrap()[0].stage, "undone");
     }
 }
@@ -443,11 +446,11 @@ fn later_edits_equal_bytes_identity_changes_and_metadata_changes_are_preserved()
         let fixture = Fixture::new();
         let journal = fixture.journal();
         let result = fixture.write(&journal, "file", b"after");
-        let path = fixture.0.join("repo/file");
+        let path = fixture.path.join("repo/file");
         match edit {
             "bytes" => std::fs::write(&path, b"later").unwrap(),
             "identity" => {
-                std::fs::rename(&path, fixture.0.join("repo/saved-after")).unwrap();
+                std::fs::rename(&path, fixture.path.join("repo/saved-after")).unwrap();
                 std::fs::write(&path, b"after").unwrap();
             }
             "mode" => {
@@ -501,31 +504,31 @@ fn later_edits_equal_bytes_identity_changes_and_metadata_changes_are_preserved()
 fn fresh_guard_undo_refuses_changed_roots_pointers_and_destination_ancestors() {
     for edit in ["root", "pointer", "ancestor"] {
         let fixture = Fixture::new();
-        std::fs::create_dir(fixture.0.join("repo/nested")).unwrap();
-        std::fs::write(fixture.0.join("repo/nested/file"), b"before").unwrap();
+        std::fs::create_dir(fixture.path.join("repo/nested")).unwrap();
+        std::fs::write(fixture.path.join("repo/nested/file"), b"before").unwrap();
         let journal = fixture.journal();
         let result = fixture.write(&journal, "nested/file", b"after");
         match edit {
             "root" => {
-                std::fs::rename(fixture.0.join("repo"), fixture.0.join("moved")).unwrap();
-                std::fs::create_dir(fixture.0.join("repo")).unwrap();
+                std::fs::rename(fixture.path.join("repo"), fixture.path.join("moved")).unwrap();
+                std::fs::create_dir(fixture.path.join("repo")).unwrap();
             }
             "pointer" => {
-                std::fs::write(fixture.0.join("repo/.git/commondir"), b"../later").unwrap()
+                std::fs::write(fixture.path.join("repo/.git/commondir"), b"../later").unwrap()
             }
             _ => {
-                std::fs::rename(fixture.0.join("repo/nested"), fixture.0.join("old-nested"))
+                std::fs::rename(fixture.path.join("repo/nested"), fixture.path.join("old-nested"))
                     .unwrap();
-                std::fs::create_dir(fixture.0.join("repo/nested")).unwrap();
-                std::fs::write(fixture.0.join("repo/nested/file"), b"later").unwrap();
+                std::fs::create_dir(fixture.path.join("repo/nested")).unwrap();
+                std::fs::write(fixture.path.join("repo/nested/file"), b"later").unwrap();
             }
         }
         assert!(journal.undo(&result.record).is_err(), "{edit}");
         assert_eq!(journal.export(&result.record, true).unwrap(), b"before");
         let path = match edit {
-            "root" => fixture.0.join("moved/nested/file"),
-            "ancestor" => fixture.0.join("old-nested/file"),
-            _ => fixture.0.join("repo/nested/file"),
+            "root" => fixture.path.join("moved/nested/file"),
+            "ancestor" => fixture.path.join("old-nested/file"),
+            _ => fixture.path.join("repo/nested/file"),
         };
         assert_eq!(std::fs::read(path).unwrap(), b"after");
     }
@@ -585,7 +588,7 @@ fn unrelated_pending_torn_and_foreign_records_do_not_block_bound_reverse_undo() 
         assert_eq!(journal.export(&result.record, true).unwrap(), b"before");
         journal.undo(&result.record).unwrap();
         assert_eq!(
-            std::fs::read(fixture.0.join("repo/file")).unwrap(),
+            std::fs::read(fixture.path.join("repo/file")).unwrap(),
             b"before"
         );
         let after: Vec<_> = directory
@@ -647,7 +650,7 @@ fn cleanup_manifest_resumes_after_each_deletion_boundary_and_returns_partial_cou
             .join(format!("cleanup-{}.json", result.record))
             .exists());
         assert_eq!(journal.directory.names(16).unwrap(), vec!["lock"]);
-        assert!(!fixture.0.join("repo/created").exists());
+        assert!(!fixture.path.join("repo/created").exists());
         assert_eq!(journal.cleanup(&result.record, true).unwrap().removed, 0);
     }
 }
@@ -682,7 +685,7 @@ fn cleanup_refuses_unknown_entries_substituted_artifacts_and_changed_bytes() {
                 .unwrap();
             }
             "bytes" => std::fs::write(path.join("after"), b"changed").unwrap(),
-            _ => std::fs::hard_link(path.join("after"), fixture.0.join("retained-alias")).unwrap(),
+            _ => std::fs::hard_link(path.join("after"), fixture.path.join("retained-alias")).unwrap(),
         }
         let names = std::fs::read_dir(&path).unwrap().count();
         let result = journal.cleanup(&result.record, true).unwrap();
@@ -713,7 +716,7 @@ fn validated_child_fixture() -> Fixture {
         std::fs::read(path.join("restore-backup")).unwrap(),
         b"before"
     );
-    Fixture(path)
+    Fixture { path, _budget: crate::test_support::Shared::new() }
 }
 #[test]
 #[ignore]
@@ -722,7 +725,7 @@ fn native_child() {
     let mode = std::env::var("PAPERWING_JOURNAL_CHILD_MODE").unwrap();
     if mode == "park" {
         std::fs::write(
-            fixture.0.join("child-ready.json"),
+            fixture.path.join("child-ready.json"),
             serde_json::to_vec(&serde_json::json!({"pid":std::process::id()})).unwrap(),
         )
         .unwrap();
@@ -762,7 +765,7 @@ fn native_child() {
     if mode == "restoreControl" {
         let leaf = std::env::var("PAPERWING_CONTROL_STORE").unwrap();
         assert!(["data", "bind-data", "nested-bind-data"].contains(&leaf.as_str()));
-        let original = Journal::open(&fixture.0.join("repo").join(&leaf)).unwrap();
+        let original = Journal::open(&fixture.path.join("repo").join(&leaf)).unwrap();
         let id = std::env::var("PAPERWING_JOURNAL_RECORD").unwrap();
         let loaded = original.load(&id).unwrap();
         assert!(matches!(loaded.revision.state, State::Applied { .. }));
@@ -793,11 +796,11 @@ fn native_child() {
         assert!(
             matches!(&actual,Snapshot::Regular{bytes,security:actual,..} if bytes==&backup && actual==&security)
         );
-        std::fs::write(fixture.0.join("negative-control-restored.json"),serde_json::to_vec_pretty(&serde_json::json!({"originalRecord":id,"restoreRecord":restored.record,"backupHash":hash(&backup),"restoredHash":hash(actual.bytes().unwrap()),"mode":security.mode,"uidInFixtureNamespace":security.uid,"gidInFixtureNamespace":security.gid,"metadataRestored":true,"sentinelHash":hash(b"outside-sentinel")})).unwrap()).unwrap();
+        std::fs::write(fixture.path.join("negative-control-restored.json"),serde_json::to_vec_pretty(&serde_json::json!({"originalRecord":id,"restoreRecord":restored.record,"backupHash":hash(&backup),"restoredHash":hash(actual.bytes().unwrap()),"mode":security.mode,"uidInFixtureNamespace":security.uid,"gidInFixtureNamespace":security.gid,"metadataRestored":true,"sentinelHash":hash(b"outside-sentinel")})).unwrap()).unwrap();
         return;
     }
     if mode == "nestedBind" {
-        let journal = Journal::open(&fixture.0.join("namespace-alias")).unwrap();
+        let journal = Journal::open(&fixture.path.join("namespace-alias")).unwrap();
         let root = fixture.root();
         let expected = root.parent("file", false).unwrap().snapshot().unwrap();
         assert!(journal.replace(&root, "file", &expected, b"after").is_err());
@@ -807,17 +810,17 @@ fn native_child() {
             expected
         );
         std::fs::write(
-            fixture.0.join("nested-bind-proof.json"),
+            fixture.path.join("nested-bind-proof.json"),
             br#"{"recordAllocated":false,"targetChanged":false,"nestedBindRefused":true}"#,
         )
         .unwrap();
         return;
     }
     if mode == "insideBind" {
-        let app_data = fixture.0.join("repo/bind-data");
+        let app_data = fixture.path.join("repo/bind-data");
         std::fs::create_dir(&app_data).unwrap();
         let journal = Journal::open(&app_data).unwrap();
-        let root = Root::open(&fixture.0.join("namespace-alias"), &[]).unwrap();
+        let root = Root::open(&fixture.path.join("namespace-alias"), &[]).unwrap();
         let expected = root.parent("file", false).unwrap().snapshot().unwrap();
         assert!(journal.replace(&root, "file", &expected, b"after").is_err());
         assert_eq!(journal.directory.names(8).unwrap(), vec!["lock"]);
@@ -826,7 +829,7 @@ fn native_child() {
             expected
         );
         std::fs::write(
-            fixture.0.join("bind-outside-proof.json"),
+            fixture.path.join("bind-outside-proof.json"),
             br#"{"recordAllocated":false,"targetChanged":false,"physicalAliasRefused":true}"#,
         )
         .unwrap();
@@ -855,7 +858,7 @@ fn native_child() {
 }
 impl Fixture {
     fn journal_result(&self) -> Result<Journal, Error> {
-        Journal::open(&self.0.join("data"))
+        Journal::open(&self.path.join("data"))
     }
 }
 struct OwnedChild {
@@ -883,12 +886,12 @@ impl OwnedChild {
                 "--nocapture",
                 "--test-threads=1",
             ])
-            .env("PAPERWING_JOURNAL_FIXTURE", &fixture.0)
+            .env("PAPERWING_JOURNAL_FIXTURE", &fixture.path)
             .env("PAPERWING_JOURNAL_CHILD_MODE", mode)
             .env_remove("PAPERWING_JOURNAL_KILL_PHASE")
             .env_remove("PAPERWING_JOURNAL_RECORD")
-            .stdout(std::fs::File::create(fixture.0.join("child-stdout.log"))?)
-            .stderr(std::fs::File::create(fixture.0.join("child-stderr.log"))?);
+            .stdout(std::fs::File::create(fixture.path.join("child-stdout.log"))?)
+            .stderr(std::fs::File::create(fixture.path.join("child-stderr.log"))?);
         if let Some(phase) = phase {
             command.env("PAPERWING_JOURNAL_KILL_PHASE", phase);
         }
@@ -903,7 +906,7 @@ impl OwnedChild {
         };
         let pid = owner.child.id();
         std::fs::write(
-            fixture.0.join("spawned-child.json"),
+            fixture.path.join("spawned-child.json"),
             serde_json::to_vec(
                 &serde_json::json!({"pid":pid,"parent":std::process::id(),"mode":mode}),
             )
@@ -927,7 +930,7 @@ impl OwnedChild {
         }
         use std::os::fd::FromRawFd;
         owner.pidfd = Some(unsafe { std::os::fd::OwnedFd::from_raw_fd(fd as i32) });
-        std::fs::write(fixture.0.join("owned-child.json"),serde_json::to_vec(&serde_json::json!({"pid":pid,"pidfdOwned":true,"mode":mode,"phase":phase,"fixture":fixture.0})).map_err(std::io::Error::other)?)?;
+        std::fs::write(fixture.path.join("owned-child.json"),serde_json::to_vec(&serde_json::json!({"pid":pid,"pidfdOwned":true,"mode":mode,"phase":phase,"fixture":fixture.path})).map_err(std::io::Error::other)?)?;
         Ok(owner)
     }
     fn poll(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
@@ -998,7 +1001,7 @@ impl OwnedChild {
     fn checkpoint(&mut self, fixture: &Fixture, phase: &str) -> String {
         let end = std::time::Instant::now() + std::time::Duration::from_secs(15);
         loop {
-            if let Ok(bytes) = std::fs::read_to_string(fixture.0.join("checkpoint")) {
+            if let Ok(bytes) = std::fs::read_to_string(fixture.path.join("checkpoint")) {
                 let mut values = bytes.split_whitespace();
                 if values.next() == Some(phase) {
                     let id = values.next().unwrap().to_string();
@@ -1051,12 +1054,12 @@ fn actual_sigkill_publication_restart_matrix_retains_identity_proofs_stages_and_
     ] {
         let fixture = Fixture::new();
         std::fs::set_permissions(
-            fixture.0.join("repo/file"),
+            fixture.path.join("repo/file"),
             std::fs::Permissions::from_mode(0o640),
         )
         .unwrap();
         rustix::fs::setxattr(
-            fixture.0.join("repo/file"),
+            fixture.path.join("repo/file"),
             "user.kill-fixture",
             b"metadata",
             rustix::fs::XattrFlags::empty(),
@@ -1126,7 +1129,7 @@ fn actual_sigkill_publication_restart_matrix_retains_identity_proofs_stages_and_
                 .replace(&fixture.root(), "file", &restored, b"blocked")
                 .is_err());
         }
-        matrix.push(serde_json::json!({"phase":phase,"fixture":fixture.0,"record":id,"classified":stage,"beforeHash":hash(b"before"),"restoredHash":hash(restored.bytes().unwrap()),"sentinelHash":hash(b"outside-sentinel"),"processReaped":true,"powerLoss":false}));
+        matrix.push(serde_json::json!({"phase":phase,"fixture":fixture.path,"record":id,"classified":stage,"beforeHash":hash(b"before"),"restoredHash":hash(restored.bytes().unwrap()),"sentinelHash":hash(b"outside-sentinel"),"processReaped":true,"powerLoss":false}));
     }
     let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../.skillify/evidence/paperwing/13/repair-1");
@@ -1173,22 +1176,22 @@ fn actual_sigkill_reverse_and_created_undo_resume_with_forward_reader_available(
         if incomplete {
             assert!(journal.undo(&result.record).is_err());
             assert_eq!(
-                std::fs::read(fixture.0.join("repo/file")).unwrap(),
+                std::fs::read(fixture.path.join("repo/file")).unwrap(),
                 b"after"
             );
             assert_eq!(journal.export(&result.record, true).unwrap(), b"before");
         } else {
             journal.undo(&result.record).unwrap();
             if created {
-                assert!(!fixture.0.join("repo/created").exists());
+                assert!(!fixture.path.join("repo/created").exists());
             } else {
                 assert_eq!(
-                    std::fs::read(fixture.0.join("repo/file")).unwrap(),
+                    std::fs::read(fixture.path.join("repo/file")).unwrap(),
                     b"before"
                 );
             }
         }
-        matrix.push(serde_json::json!({"phase":phase,"created":created,"fixture":fixture.0,"record":result.record,"restartState":state.name(),"incompleteRetained":incomplete,"processReaped":true}));
+        matrix.push(serde_json::json!({"phase":phase,"created":created,"fixture":fixture.path,"record":result.record,"restartState":state.name(),"incompleteRetained":incomplete,"processReaped":true}));
     }
     std::fs::write(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1226,8 +1229,8 @@ fn actual_sigkill_cleanup_resumes_through_empty_directory_and_final_manifest_del
         assert!(journal.cleanup(&result.record, true).unwrap().complete);
         assert!(journal.reserve(1, true).is_ok());
         assert_eq!(journal.directory.names(32).unwrap(), vec!["lock"]);
-        assert!(!fixture.0.join("repo/created").exists());
-        matrix.push(serde_json::json!({"phase":phase,"fixture":fixture.0,"record":result.record,"complete":true,"processReaped":true}));
+        assert!(!fixture.path.join("repo/created").exists());
+        matrix.push(serde_json::json!({"phase":phase,"fixture":fixture.path,"record":result.record,"complete":true,"processReaped":true}));
     }
     std::fs::write(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1237,7 +1240,7 @@ fn actual_sigkill_cleanup_resumes_through_empty_directory_and_final_manifest_del
     .unwrap();
 }
 fn native_io_child(fixture: &Fixture) {
-    let mount = fixture.0.join("namespace-mount");
+    let mount = fixture.path.join("namespace-mount");
     let directory =
         crate::linux_guard::storage::PrivateDir::open(&mount, "linux-recovery-v1").unwrap();
     let phase = std::env::var("PAPERWING_JOURNAL_IO_PHASE").unwrap();
@@ -1248,7 +1251,7 @@ fn native_io_child(fixture: &Fixture) {
         );
         assert!(!mount.join("readonly-new").exists());
         std::fs::write(
-            fixture.0.join("io-readonly.json"),
+            fixture.path.join("io-readonly.json"),
             br#"{"EROFS":true,"sourcePreserved":true,"sentinelPreserved":true}"#,
         )
         .unwrap();
@@ -1278,7 +1281,7 @@ fn native_io_child(fixture: &Fixture) {
             root.parent("file", false).unwrap().snapshot().unwrap(),
             before
         );
-        let source = fixture.0.join("cross-device-source");
+        let source = fixture.path.join("cross-device-source");
         std::fs::write(&source, b"retained-source").unwrap();
         let error = rustix::fs::renameat_with(
             rustix::fs::CWD,
@@ -1290,7 +1293,7 @@ fn native_io_child(fixture: &Fixture) {
         .unwrap_err();
         assert_eq!(error, rustix::io::Errno::XDEV);
         assert_eq!(std::fs::read(&source).unwrap(), b"retained-source");
-        std::fs::write(fixture.0.join("io-full.json"),serde_json::to_vec(&serde_json::json!({"ENOSPC":true,"EXDEV":true,"sourceHash":hash(before.bytes().unwrap()),"sentinelHash":hash(b"outside-sentinel"),"applied":false})).unwrap()).unwrap();
+        std::fs::write(fixture.path.join("io-full.json"),serde_json::to_vec(&serde_json::json!({"ENOSPC":true,"EXDEV":true,"sourceHash":hash(before.bytes().unwrap()),"sentinelHash":hash(b"outside-sentinel"),"applied":false})).unwrap()).unwrap();
     } else {
         panic!("Invalid writable native I/O phase");
     }
@@ -1303,15 +1306,15 @@ fn sequential_saves_require_owned_reverse_provenance_for_older_undo() {
     let first = fixture.write(&journal, "file", b"B");
     let second = fixture.write(&journal, "file", b"C");
     journal.undo(&second.record).unwrap();
-    assert_eq!(std::fs::read(fixture.0.join("repo/file")).unwrap(), b"B");
+    assert_eq!(std::fs::read(fixture.path.join("repo/file")).unwrap(), b"B");
     journal.undo(&first.record).unwrap();
     assert_eq!(
-        std::fs::read(fixture.0.join("repo/file")).unwrap(),
+        std::fs::read(fixture.path.join("repo/file")).unwrap(),
         b"before"
     );
     journal.undo(&first.record).unwrap();
     assert_eq!(
-        std::fs::read(fixture.0.join("repo/file")).unwrap(),
+        std::fs::read(fixture.path.join("repo/file")).unwrap(),
         b"before"
     );
 }
@@ -1326,19 +1329,19 @@ fn trusted_stack_transition_preserves_external_equal_bytes_and_created_predecess
         journal.undo(&second.record).unwrap();
         if external {
             std::fs::rename(
-                fixture.0.join("repo/created"),
-                fixture.0.join("saved-created"),
+                fixture.path.join("repo/created"),
+                fixture.path.join("saved-created"),
             )
             .unwrap();
-            std::fs::write(fixture.0.join("repo/created"), b"created").unwrap();
+            std::fs::write(fixture.path.join("repo/created"), b"created").unwrap();
             assert!(journal.undo(&first.record).is_err());
             assert_eq!(
-                std::fs::read(fixture.0.join("repo/created")).unwrap(),
+                std::fs::read(fixture.path.join("repo/created")).unwrap(),
                 b"created"
             );
         } else {
             journal.undo(&first.record).unwrap();
-            assert!(!fixture.0.join("repo/created").exists());
+            assert!(!fixture.path.join("repo/created").exists());
             journal.undo(&first.record).unwrap();
         }
     }
@@ -1347,8 +1350,8 @@ fn trusted_stack_transition_preserves_external_equal_bytes_and_created_predecess
     let first = fixture.write(&journal, "file", b"B");
     let second = fixture.write(&journal, "file", b"C");
     journal.undo(&second.record).unwrap();
-    std::fs::rename(fixture.0.join("repo/file"), fixture.0.join("saved-B")).unwrap();
-    std::fs::write(fixture.0.join("repo/file"), b"B").unwrap();
+    std::fs::rename(fixture.path.join("repo/file"), fixture.path.join("saved-B")).unwrap();
+    std::fs::write(fixture.path.join("repo/file"), b"B").unwrap();
     let before = fixture
         .root()
         .parent("file", false)
@@ -1444,7 +1447,7 @@ fn missing_cleaned_corrupt_competing_and_cyclic_stack_provenance_refuse_older_un
         match defect {
             "missing" => std::fs::rename(
                 journal.directory.path().join(reverse),
-                fixture.0.join("retained-reverse"),
+                fixture.path.join("retained-reverse"),
             )
             .unwrap(),
             "cleaned" => {
@@ -1481,12 +1484,12 @@ fn missing_cleaned_corrupt_competing_and_cyclic_stack_provenance_refuse_older_un
                 if defect == "cyclic" {
                     std::fs::rename(
                         original.directory.path(),
-                        fixture.0.join("retained-original"),
+                        fixture.path.join("retained-original"),
                     )
                     .unwrap();
                     std::fs::rename(
                         reversed.directory.path(),
-                        fixture.0.join("retained-reverse"),
+                        fixture.path.join("retained-reverse"),
                     )
                     .unwrap();
                 }
@@ -1546,14 +1549,14 @@ fn actual_sigkill_stacked_undo_resumes_only_with_exact_persisted_provenance() {
         journal.reconcile().unwrap();
         journal.undo(&first.record).unwrap();
         if created {
-            assert!(!fixture.0.join("repo/created").exists());
+            assert!(!fixture.path.join("repo/created").exists());
         } else {
             assert_eq!(
-                std::fs::read(fixture.0.join("repo/file")).unwrap(),
+                std::fs::read(fixture.path.join("repo/file")).unwrap(),
                 b"before"
             );
         }
-        matrix.push(serde_json::json!({"created":created,"phase":phase,"record":first.record,"fixture":fixture.0,"complete":true,"processReaped":true}));
+        matrix.push(serde_json::json!({"created":created,"phase":phase,"record":first.record,"fixture":fixture.path,"complete":true,"processReaped":true}));
     }
     std::fs::write(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1566,7 +1569,7 @@ fn actual_sigkill_stacked_undo_resumes_only_with_exact_persisted_provenance() {
 #[test]
 fn isolated_native_journal_full_readonly_and_cross_device_failures_preserve_source() {
     let fixture = Fixture::new();
-    std::fs::create_dir(fixture.0.join("namespace-mount")).unwrap();
+    std::fs::create_dir(fixture.path.join("namespace-mount")).unwrap();
     let namespace = std::fs::read_link("/proc/self/ns/mnt").unwrap();
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
@@ -1586,21 +1589,21 @@ assert (root/'outside').read_bytes()==b'outside-sentinel'
 "#;
     let output = std::process::Command::new("unshare")
         .args(["-Urnm", "python3", "-c", script])
-        .arg(&fixture.0)
+        .arg(&fixture.path)
         .arg(std::env::current_exe().unwrap())
         .arg(&namespace)
         .output()
         .unwrap();
-    std::fs::write(fixture.0.join("io-stdout.log"), &output.stdout).unwrap();
-    std::fs::write(fixture.0.join("io-stderr.log"), &output.stderr).unwrap();
+    std::fs::write(fixture.path.join("io-stdout.log"), &output.stdout).unwrap();
+    std::fs::write(fixture.path.join("io-stderr.log"), &output.stderr).unwrap();
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(std::fs::read_link("/proc/self/ns/mnt").unwrap(), namespace);
-    assert!(fixture.0.join("io-full.json").exists());
-    assert!(fixture.0.join("io-readonly.json").exists());
+    assert!(fixture.path.join("io-full.json").exists());
+    assert!(fixture.path.join("io-readonly.json").exists());
 }
 
 #[test]
@@ -1725,7 +1728,7 @@ fn confirmed_cleanup_reclaims_only_physically_removed_artifact_capacity() {
     assert_eq!(journal.accounted_bytes().unwrap(), 0);
     assert!(journal.reserve(1, true).is_ok());
     fixture.write(&journal, "next", b"next");
-    assert_eq!(std::fs::read(fixture.0.join("repo/next")).unwrap(), b"next");
+    assert_eq!(std::fs::read(fixture.path.join("repo/next")).unwrap(), b"next");
 }
 
 #[test]
@@ -1781,7 +1784,7 @@ fn nested_pending_reverse_requires_explicit_linked_recovery_without_recursive_lo
     journal.reconcile_loaded(&mut original).unwrap();
     assert_eq!(original.revision.state.name(), "conflict");
     assert_eq!(
-        std::fs::read(fixture.0.join("repo/file")).unwrap(),
+        std::fs::read(fixture.path.join("repo/file")).unwrap(),
         b"after"
     );
 }
@@ -1795,7 +1798,7 @@ fn persistent_inventory_streams_deep_parent_handles_below_the_live_handle_bound(
         for _ in 0..30 {
             relative.push_str("/nested");
         }
-        std::fs::create_dir_all(fixture.0.join("repo").join(&relative)).unwrap();
+        std::fs::create_dir_all(fixture.path.join("repo").join(&relative)).unwrap();
         relative.push_str("/file");
         fixture.write(&journal, &relative, b"new");
     }
@@ -1806,10 +1809,10 @@ fn persistent_inventory_streams_deep_parent_handles_below_the_live_handle_bound(
 #[test]
 fn recovery_store_inside_a_differently_spelled_root_refuses_before_record_allocation() {
     let fixture = Fixture::new();
-    let app_data = fixture.0.join("repo/data");
+    let app_data = fixture.path.join("repo/data");
     std::fs::create_dir(&app_data).unwrap();
     let journal = Journal::open(&app_data).unwrap();
-    let root = Root::open(&fixture.0.join("repo/../repo"), &[]).unwrap();
+    let root = Root::open(&fixture.path.join("repo/../repo"), &[]).unwrap();
     let expected = root.parent("file", false).unwrap().snapshot().unwrap();
     assert!(journal.replace(&root, "file", &expected, b"after").is_err());
     assert_eq!(journal.directory.names(8).unwrap(), vec!["lock"]);
@@ -1822,7 +1825,7 @@ fn recovery_store_inside_a_differently_spelled_root_refuses_before_record_alloca
 #[test]
 fn private_namespace_bind_alias_cannot_place_recovery_inside_the_physical_root() {
     let fixture = Fixture::new();
-    std::fs::create_dir(fixture.0.join("namespace-alias")).unwrap();
+    std::fs::create_dir(fixture.path.join("namespace-alias")).unwrap();
     let namespace = std::fs::read_link("/proc/self/ns/mnt").unwrap();
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
@@ -1837,27 +1840,27 @@ assert (root/'outside').read_bytes()==b'outside-sentinel'
 "#;
     let output = std::process::Command::new("unshare")
         .args(["-Urnm", "python3", "-c", script])
-        .arg(&fixture.0)
+        .arg(&fixture.path)
         .arg(std::env::current_exe().unwrap())
         .arg(&namespace)
         .output()
         .unwrap();
-    std::fs::write(fixture.0.join("bind-stdout.log"), &output.stdout).unwrap();
-    std::fs::write(fixture.0.join("bind-stderr.log"), &output.stderr).unwrap();
+    std::fs::write(fixture.path.join("bind-stdout.log"), &output.stdout).unwrap();
+    std::fs::write(fixture.path.join("bind-stderr.log"), &output.stderr).unwrap();
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(std::fs::read_link("/proc/self/ns/mnt").unwrap(), namespace);
-    assert!(fixture.0.join("bind-outside-proof.json").exists());
+    assert!(fixture.path.join("bind-outside-proof.json").exists());
 }
 
 #[test]
 fn private_namespace_nested_bind_alias_cannot_hide_recovery_root_ancestry() {
     let fixture = Fixture::new();
-    std::fs::create_dir(fixture.0.join("repo/nested-bind-data")).unwrap();
-    std::fs::create_dir(fixture.0.join("namespace-alias")).unwrap();
+    std::fs::create_dir(fixture.path.join("repo/nested-bind-data")).unwrap();
+    std::fs::create_dir(fixture.path.join("namespace-alias")).unwrap();
     let namespace = std::fs::read_link("/proc/self/ns/mnt").unwrap();
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
@@ -1872,20 +1875,20 @@ assert (root/'outside').read_bytes()==b'outside-sentinel'
 "#;
     let output = std::process::Command::new("unshare")
         .args(["-Urnm", "python3", "-c", script])
-        .arg(&fixture.0)
+        .arg(&fixture.path)
         .arg(std::env::current_exe().unwrap())
         .arg(&namespace)
         .output()
         .unwrap();
-    std::fs::write(fixture.0.join("nested-bind-stdout.log"), &output.stdout).unwrap();
-    std::fs::write(fixture.0.join("nested-bind-stderr.log"), &output.stderr).unwrap();
+    std::fs::write(fixture.path.join("nested-bind-stdout.log"), &output.stdout).unwrap();
+    std::fs::write(fixture.path.join("nested-bind-stderr.log"), &output.stderr).unwrap();
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(std::fs::read_link("/proc/self/ns/mnt").unwrap(), namespace);
-    assert!(fixture.0.join("nested-bind-proof.json").exists());
+    assert!(fixture.path.join("nested-bind-proof.json").exists());
 }
 
 fn recovery_state_bytes(journal: &Journal, id: &str) -> Vec<(String, Vec<u8>)> {
@@ -1917,15 +1920,15 @@ fn resumed_created_undo_refuses_replaced_lock_before_target_or_state_mutation() 
     let expected = parent.snapshot().unwrap();
     let states = recovery_state_bytes(&journal, &result.record);
     std::fs::rename(
-        fixture.0.join("data/linux-recovery-v1/lock"),
-        fixture.0.join("retained-lock"),
+        fixture.path.join("data/linux-recovery-v1/lock"),
+        fixture.path.join("retained-lock"),
     )
     .unwrap();
     let replacement = fixture.journal();
     let error = journal.undo(&result.record).unwrap_err();
     let current = parent.snapshot().unwrap();
     let current_states = recovery_state_bytes(&replacement, &result.record);
-    std::fs::write(fixture.0.join("undo-entry-authority.json"), serde_json::to_vec_pretty(&serde_json::json!({"applied":error.applied,"targetUnchanged":current==expected,"statesUnchanged":current_states==states,"record":result.record})).unwrap()).unwrap();
+    std::fs::write(fixture.path.join("undo-entry-authority.json"), serde_json::to_vec_pretty(&serde_json::json!({"applied":error.applied,"targetUnchanged":current==expected,"statesUnchanged":current_states==states,"record":result.record})).unwrap()).unwrap();
     assert!(!error.applied);
     assert_eq!(current, expected);
     assert_eq!(current_states, states);
@@ -1947,8 +1950,8 @@ fn final_created_undo_refuses_replaced_lock_after_target_validation() {
         .undo_inner(&result.record, || {
             assert_eq!(parent.snapshot().unwrap(), expected);
             std::fs::rename(
-                fixture.0.join("data/linux-recovery-v1/lock"),
-                fixture.0.join("retained-lock"),
+                fixture.path.join("data/linux-recovery-v1/lock"),
+                fixture.path.join("retained-lock"),
             )
             .unwrap();
             replacement = Some(fixture.journal());
@@ -1957,7 +1960,7 @@ fn final_created_undo_refuses_replaced_lock_after_target_validation() {
         .unwrap_err();
     let current = parent.snapshot().unwrap();
     let current_states = recovery_state_bytes(replacement.as_ref().unwrap(), &result.record);
-    std::fs::write(fixture.0.join("undo-final-authority.json"), serde_json::to_vec_pretty(&serde_json::json!({"applied":error.applied,"targetUnchanged":current==expected,"statesUnchanged":current_states==states,"record":result.record})).unwrap()).unwrap();
+    std::fs::write(fixture.path.join("undo-final-authority.json"), serde_json::to_vec_pretty(&serde_json::json!({"applied":error.applied,"targetUnchanged":current==expected,"statesUnchanged":current_states==states,"record":result.record})).unwrap()).unwrap();
     assert!(!error.applied);
     assert_eq!(current, expected);
     assert_eq!(current_states, states);
@@ -2021,13 +2024,13 @@ assert code==0 and not external_cleanup
 "#;
     let output = std::process::Command::new("python3")
         .args(["-c", script])
-        .arg(&fixture.0)
+        .arg(&fixture.path)
         .arg(std::env::current_exe().unwrap())
         .arg(mode)
         .output()
         .unwrap();
-    std::fs::write(fixture.0.join("external-owner-stdout.log"), &output.stdout).unwrap();
-    std::fs::write(fixture.0.join("external-owner-stderr.log"), &output.stderr).unwrap();
+    std::fs::write(fixture.path.join("external-owner-stdout.log"), &output.stdout).unwrap();
+    std::fs::write(fixture.path.join("external-owner-stderr.log"), &output.stderr).unwrap();
     assert!(
         output.status.success(),
         "{}\n{}",

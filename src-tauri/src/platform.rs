@@ -63,8 +63,8 @@ fn unavailable(reason: &str) -> Capability {
 pub(crate) fn unavailable_reason(operation: &str) -> String {
     if cfg!(target_os = "linux") {
         match operation {
-            "edit" => "Linux editing requires the later recoverable write backend.",
-            "copy" => "Linux copying requires the later recoverable copy backend.",
+            "edit" => "Linux editing requires a successful native root probe.",
+            "copy" => "Linux copying requires a successful native root probe.",
             "recovery" => "Linux recovery requires the later recovery backend.",
             "trash" => "Linux folder trash requires the later native trash backend.",
             _ => "Linux support for this operation is unavailable.",
@@ -93,7 +93,7 @@ fn capabilities() -> Capabilities {
             },
             edit: unavailable(&unavailable_reason("edit")),
             copy: unavailable(&unavailable_reason("copy")),
-            recovery: unavailable(&unavailable_reason("recovery")),
+            recovery: if cfg!(target_os = "linux") { available() } else { unavailable(&unavailable_reason("recovery")) },
             trash: unavailable(&unavailable_reason("trash")),
         }
     }
@@ -118,8 +118,12 @@ fn root_capabilities(_path: &Path) -> Capabilities {
     #[cfg(windows)]
     let capabilities = capabilities_with_write_support(capabilities, supported_volume(_path));
     #[cfg(target_os = "linux")]
-    let capabilities = capabilities_with_write_support(capabilities, crate::linux_guard::Root::open(_path, &[])
-        .and_then(|root| root.probe_write()).map_err(|error| error.to_string()));
+    let capabilities = {
+        let support = crate::linux_guard::Root::open(_path, &[]).and_then(|root| root.probe_write()).map_err(|error| error.to_string());
+        let mut capabilities = capabilities;
+        if support.is_ok() { capabilities.edit = available(); capabilities.copy = available(); capabilities.recovery = available(); }
+        capabilities_with_write_support(capabilities, support)
+    };
     capabilities
 }
 
@@ -445,9 +449,9 @@ mod tests {
             serde_json::json!({
                 "platform": "linux", "separator": "/", "credentials": serde_json::to_value(crate::credentials::capability().await).unwrap(), "capabilities": {
                     "readCompare": {"supported": true, "reason": null},
-                    "edit": {"supported": false, "reason": "Linux editing requires the later recoverable write backend."},
-                    "copy": {"supported": false, "reason": "Linux copying requires the later recoverable copy backend."},
-                    "recovery": {"supported": false, "reason": "Linux recovery requires the later recovery backend."},
+                    "edit": {"supported": false, "reason": "Linux editing requires a successful native root probe."},
+                    "copy": {"supported": false, "reason": "Linux copying requires a successful native root probe."},
+                    "recovery": {"supported": true, "reason": null},
                     "trash": {"supported": false, "reason": "Linux folder trash requires the later native trash backend."}
                 }
             })
@@ -457,7 +461,13 @@ mod tests {
         let identity = physical_identity(&fixture.0).unwrap();
         let volume = rustix::fs::fstatfs(std::fs::File::open(&fixture.0).unwrap()).unwrap();
         let capabilities = if volume.f_type == libc::EXT4_SUPER_MAGIC {
-            serde_json::to_value(platform_info().await).unwrap()["capabilities"].clone()
+            serde_json::json!({
+                "readCompare": {"supported": true, "reason": null},
+                "edit": {"supported": true, "reason": null},
+                "copy": {"supported": true, "reason": null},
+                "recovery": {"supported": true, "reason": null},
+                "trash": {"supported": false, "reason": "Linux folder trash requires the later native trash backend."}
+            })
         } else {
             serde_json::json!({
                 "readCompare": {"supported": true, "reason": null},
