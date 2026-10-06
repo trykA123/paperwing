@@ -38,13 +38,16 @@ export class Credentials {
       const status = await api.credentialStatus(sourceId);
       if (this.generations.get(sourceId) === generation
         && status.revision >= (this.revisions.get(sourceId) ?? 0)) {
-        if (status.revision > (this.revisions.get(sourceId) ?? 0)) this.invalidate(sourceId, status.revision);
+        const revisionChanged = status.revision > (this.revisions.get(sourceId) ?? 0);
+        if (revisionChanged) this.invalidate(sourceId, status.revision);
+        else if (status.state !== 'saved' && status.state !== 'missing') this.invalidateMetadata(sourceId);
         this.revisions.set(sourceId, status.revision);
         this.statuses[sourceId] = status;
       }
     } catch (error) {
       if (this.generations.get(sourceId) === generation) {
         const previous = this.statuses[sourceId];
+        this.invalidateMetadata(sourceId);
         this.statuses[sourceId] = { sourceId, backend: previous?.backend ?? 'unsupported',
           state: previous?.state === 'uncertain' ? 'uncertain' : 'error',
           revision: this.revisions.get(sourceId) ?? 0, reason: String(error) };

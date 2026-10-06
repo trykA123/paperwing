@@ -39,19 +39,27 @@
   let input: HTMLInputElement;
   let listEl: HTMLDivElement;
 
-  onMount(() => {
-    input.focus();
-    app.ensureRefs(items.map(i => i.url));
+  onMount(() => input.focus());
+  $effect(() => {
+    const urls = items.map(i => i.url).filter(url => app.needsRefs(url));
+    if (!urls.length) return;
+    const consumer = new AbortController();
+    untrack(() => { void app.ensureRefs(urls, false, consumer.signal); });
+    return () => consumer.abort();
   });
   $effect(() => {
-    if (single && tab === 'commit') untrack(() => app.ensureCommits(items[0]));
+    if (single && tab === 'commit' && app.needsCommits(items[0])) {
+      const consumer = new AbortController();
+      untrack(() => { void app.ensureCommits(items[0], false, consumer.signal); });
+      return () => consumer.abort();
+    }
   });
 
   const entries = $derived(items.map(i => app.refs[i.url]));
   const loaded = $derived(entries.filter(e => e && !e.loading).length);
   const loading = $derived(loaded < total);
   const failed = $derived(items.filter(i => app.refs[i.url]?.error));
-  const commitsEntry = $derived(single ? app.commits[items[0].repoId] : undefined);
+  const commitsEntry = $derived(single ? app.commitsFor(items[0]) : undefined);
   const commits = $derived(Array.isArray(commitsEntry) ? commitsEntry : []);
 
   function tally(get: (e: RefsEntry) => string[]): [string, number][] {

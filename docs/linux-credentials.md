@@ -95,8 +95,8 @@ display metadata and errors after token replacement. Typed action identities and
 content stay exact. A changed credential revision is rejected after acquisition and
 before HTTP dispatch.
 
-Packet 16 still owns general metadata identity, branch keys and single-flight behavior.
-This revision seam does not repair every previously characterized metadata race.
+Packet 16 uses this revision seam to invalidate source listings, references and branch-scoped histories.
+See [metadata caching](metadata-caching.md) for cache scope, freshness and request lifetimes.
 
 ## Native evidence
 

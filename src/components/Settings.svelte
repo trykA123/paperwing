@@ -216,7 +216,7 @@
             <div class="title"><b>{s.name}</b><span class="mut">{s.kind === 'manual' ? `${s.urls.length} URLs` : s.host}</span></div>
             {#if s.orgs.length}<div class="chips">{#each s.orgs as o}<span class="chip">{o}</span>{/each}</div>{/if}
             <small class="mut">
-              {(app.repos[s.id] ?? []).length} repositories
+              {(app.repos[s.id] ?? []).length} repositories{#if app.staleRepos[s.id]} (cached){/if}
               {#if s.kind !== 'manual'} · <span class:okc={tokenSaved(s.id)} class:warn={!tokenSaved(s.id)}>{credentialLabel(app.credentials.statuses[s.id])}</span>{/if}
               {#if app.loadingRepos[s.id]} · <span class="spin"></span>{/if}
             </small>

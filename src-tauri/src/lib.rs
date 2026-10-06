@@ -117,6 +117,7 @@ pub fn run() {
             github::test_source,
             github::list_user_orgs,
             github::list_repos,
+            github::list_cached_repos,
             github::get_commits,
             git::get_refs_many,
             git::activity_snapshot,

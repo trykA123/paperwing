@@ -6,6 +6,7 @@
 - Redesign notifications and inline alerts: five notification types with status-coloured icon and edge, a Rails loop for loading, and Retry and Show log actions on errors. Errors and loading notices stay until dismissed.
 - Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon. The bundle identifier, settings folder and credential service names are unchanged.
 - On Windows the installer is now named Skein. If PaperWing 0.2.0 still appears in Installed apps, uninstall it first. Settings and data are kept because the bundle identifier is unchanged.
+- Scope metadata by source, credential and ref epochs; share foreground requests and discover authenticated personal private repositories.
 - Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
 - Add durable Linux diff reservations with bounded admission, namespace prepayment and safe cleanup; application writes remain disabled.
 - Add durable Linux recovery with verified backups, restart reconciliation, conditional undo and owned cleanup; application writes remain disabled.

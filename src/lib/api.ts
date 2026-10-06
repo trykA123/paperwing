@@ -62,7 +62,7 @@ export type Repo = {
   id: string; source: string; org: string; name: string; description: string;
   url: string; defaultBranch: string; pushedAt: string; archived: boolean;
 };
-export type RepoList = { repos: Repo[]; fetchedAt: number; errors: string[] };
+export type RepoList = { repos: Repo[]; fetchedAt: number; errors: string[]; stale?: boolean };
 export type Commit = { sha: string; message: string; author: string; date: string; parents: string[] };
 export type RefsResult = {
   url: string; branches: string[]; tags: string[]; branchShas: string[]; tagShas: string[]; branchLabels?: string[]; tagLabels?: string[]; error: string | null;
@@ -80,6 +80,7 @@ export type Activity = {
 };
 export type TreeRef = { name: string; label?: string; sha: string; current: boolean; symbolic: string };
 export type RepositoryTree = {
+  identity?: string;
   branches: TreeRef[]; tags: TreeRef[];
   remotes: { name: string; urls: string[]; refs: TreeRef[] }[];
   stashes: { name: string; sha: string; subject: string }[];
@@ -162,6 +163,7 @@ export const api = {
   testSource: (source: Source) => invoke<string>('test_source', { source }),
   listUserOrgs: (source: Source) => invoke<string[]>('list_user_orgs', { source }),
   listRepos: (source: Source, refresh: boolean) => invoke<RepoList>('list_repos', { source, refresh }),
+  listCachedRepos: (source: Source) => invoke<RepoList | null>('list_cached_repos', { source }),
   getCommits: (source: Source, org: string, name: string, branch: string) =>
     invoke<Commit[]>('get_commits', { source, org, name, branch }),
   getRefsMany: (urls: string[]) => invoke<RefsResult[]>('get_refs_many', { urls }),

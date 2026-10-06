@@ -12,8 +12,9 @@
 
   $effect(() => {
     const paths = app.set.items.filter(item => expanded.includes(`${app.set.id}:${item.id}`)).map(item => app.dest(item));
-    untrack(() => { app.openTreePaths = paths; for (const path of paths) void app.loadTree(path); });
-    return () => { app.openTreePaths = []; };
+    const consumer = new AbortController();
+    untrack(() => { app.openTreePaths = paths; for (const path of paths) void app.loadTree(path, false, consumer.signal); });
+    return () => { consumer.abort(); app.openTreePaths = []; };
   });
 
   /** Git names stashes "On <branch>: <message>"; show the message and keep the branch as detail. */

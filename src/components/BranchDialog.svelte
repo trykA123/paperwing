@@ -97,10 +97,10 @@
     if (!busy) app.gitDialog = null;
   }
 
-  onMount(() => {
-    dialog.showModal();
-    input.focus();
-    Promise.all(targets.map(target => api.repositoryTree(target.path))).then(trees => {
+  async function loadReferences(signal: AbortSignal) {
+    try {
+      const trees = await Promise.all(targets.map(target => app.readTree(target.path, signal)));
+      if (signal.aborted) return;
       const common = (pick: (tree: (typeof trees)[number]) => string[]) => {
         const sets = trees.map(tree => new Set(pick(tree)));
         return [...sets[0]].filter(item => sets.every(set => set.has(item))).sort();
@@ -111,7 +111,15 @@
         { label: 'Tags', icon: 'tag', tone: 'tag', names: common(tree => tree.tags.map(item => item.name)), labels: Object.fromEntries(trees.flatMap(tree => tree.tags.map(item => [item.name, item.label ?? item.name]))) },
         { label: 'Remote branches', icon: 'branch', tone: 'repo', names: common(tree => tree.remotes.flatMap(remote => remote.refs.map(item => item.name)).filter(item => !item.endsWith('/HEAD'))), labels: Object.fromEntries(trees.flatMap(tree => tree.remotes.flatMap(remote => remote.refs.map(item => [item.name, item.label ?? item.name])))) },
       ].filter(group => group.names.length) as RefGroup[];
-    }).catch(() => {});
+    } catch (reason) { if (!signal.aborted) error = `Could not load references: ${String(reason)}`; }
+  }
+
+  onMount(() => {
+    dialog.showModal();
+    input.focus();
+    const consumer = new AbortController();
+    void loadReferences(consumer.signal);
+    return () => consumer.abort();
   });
 </script>
 

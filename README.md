@@ -363,6 +363,10 @@ Configure one source in **Settings**:
 5. For a manual source, enter clone URLs, one per line, instead of API credentials.
 6. Save the source, add repositories to a set, and choose a destination root.
 
+Configure your signed-in login as an owner to discover your own private and public repositories.
+Personal discovery includes only repositories owned by that account and permitted by the token.
+Expired or denied tokens report an error instead of falling back to a public-only listing.
+
 The source form links to token creation. Classic GitHub tokens use `repo` for private
 repositories and `read:org` for organization discovery. Apply any required single-sign-on authorization.
 Store only tokens whose permissions and lifetime fit your organization's policy.

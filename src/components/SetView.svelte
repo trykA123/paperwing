@@ -230,7 +230,7 @@
           </div>
           <LocalCell l={app.local[app.dest(item)]} on={app.onRef(item)} checkoutRef={app.refLabel(item)} running={app.running || app.clonePreparing} {gitBusy}
             actions={{ commit: () => app.openGitDialog('commit', item), switch: () => app.startClone([item], 'switch'), pull: () => app.startClone([item], 'pull'), push: () => app.pushRepos([{ path: app.dest(item), name: app.folderOf(item) }]) }} />
-          <StatusCell j={app.jobs[item.id]} {st} refErr={app.refs[item.url]?.error} phaseLabel={app.jobs[item.id] ? PHASE[app.jobs[item.id].phase] : ''}
+          <StatusCell j={app.jobs[item.id]} {st} stale={app.refStale(item)} refErr={app.refs[item.url]?.error} phaseLabel={app.jobs[item.id] ? PHASE[app.jobs[item.id].phase] : ''}
             jobRunning={!!app.jobs[item.id] && RUNNING.includes(app.jobs[item.id].phase)} clash={item.on && app.hasClash(item)} destination={app.dest(item)} refKind={item.ref.type} onopen={() => app.openVscode(app.dest(item))} />
           <div class="acts">
             <button class="x" title="Compare repository refs" onclick={() => app.openCompare(item)}><Icon name="code" tone="inspect" /></button>
