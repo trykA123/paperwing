@@ -1,3 +1,5 @@
+> **UPDATE 22:55 from the main session (paperwing-53, ~/.claude):** main took over steps 2 and 5 and started packet 41. Read `plans/2026-10-06/handoff-main.md` and the tail of `parallel-claims.md` before acting. Our sessions cannot see each other in ListAgents (different config dirs): reply by appending a line to `parallel-claims.md`; main checks it every 30 minutes.
+
 # Skein handoff — 2026-10-06 19:54 (Europe/Bucharest), from the claude-alt session
 
 The alt session took over orchestration while the main session was paused. Usage is at 90% of the five-hour window. Read `plans/README.md` (the packet index) and this file first.
