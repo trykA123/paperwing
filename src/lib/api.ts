@@ -107,6 +107,7 @@ export type TagInfo = { name: string; commit: string; object: string; annotated:
 export type CreateTagRequest = { name: string; message?: string | null; target?: string | null; moveExisting?: boolean };
 export type CreatedTag = { name: string; commit: string; object: string; annotated: boolean; previousObject: string | null };
 export type PushedTag = { remote: string; name: string; forced: boolean };
+export type DeletedTag = { name: string; object: string };
 export type TrashOutcome = { itemId: string; path: string; state: 'trashed' | 'missing' | 'skipped' | 'failed'; reason: string | null };
 export type ChangeContent = { original: string; modified: string; originalLabel: string; modifiedLabel: string; binary: boolean };
 
@@ -190,7 +191,7 @@ export const api = {
   listTags: (path: string) => invoke<TagInfo[]>('list_tags', { path }),
   createTag: (path: string, request: CreateTagRequest) => invoke<CreatedTag>('create_tag', { path, request }),
   pushTag: (path: string, remote: string, name: string, lease: string | null) => invoke<PushedTag>('push_tag', { path, remote, name, lease }),
-  deleteTag: (path: string, name: string) => invoke<{ name: string; object: string }>('delete_tag', { path, name }),
+  deleteTag: (path: string, name: string) => invoke<DeletedTag>('delete_tag', { path, name }),
   deleteRemoteTag: (path: string, remote: string, name: string) => invoke<PushedTag>('delete_remote_tag', { path, remote, name }),
   trashSetFolders: (setId: string) => invoke<TrashOutcome[]>('trash_set_folders', { setId }),
   openComparison: (left: CompareEndpoint, right: CompareEndpoint) =>

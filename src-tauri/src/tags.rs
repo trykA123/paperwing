@@ -85,6 +85,9 @@ fn valid_object_id(value: &str) -> bool {
 
 async fn validate_name(path: &str, name: &str) -> Result<(), String> {
     valid_ref(name).map_err(|_| "Invalid tag name".to_string())?;
+    if name.eq_ignore_ascii_case("head") {
+        return Err("Invalid tag name".into());
+    }
     let full = format!("refs/tags/{name}");
     let checked = quick(
         path,
@@ -205,7 +208,7 @@ pub async fn create_tag(path: String, request: CreateTagRequest) -> Result<Creat
         args.push("--force");
     }
     if let Some(message) = &message {
-        args.extend(["-a", "-m", message]);
+        args.extend(["-a", "--cleanup=whitespace", "-m", message]);
     }
     args.extend([request.name.as_str(), commit.as_str()]);
     run(

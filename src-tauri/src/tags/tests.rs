@@ -95,6 +95,16 @@ async fn creates_lightweight_and_annotated_tags_and_lists_them() {
 }
 
 #[tokio::test]
+async fn annotated_message_keeps_hash_lines() {
+    let (dir, _bare) = repo_with_remote();
+    create_tag(path(&dir), request("v1", Some("#123 fixed\nreal line")))
+        .await
+        .unwrap();
+    let body = git_out(&dir, &["cat-file", "-p", "refs/tags/v1"]);
+    assert!(body.ends_with("#123 fixed\nreal line"), "{body}");
+}
+
+#[tokio::test]
 async fn tags_a_given_ref_instead_of_head() {
     let (dir, _bare) = repo_with_remote();
     let first = git_out(&dir, &["rev-parse", "HEAD"]);
@@ -155,7 +165,9 @@ async fn refuses_duplicate_names_unless_moving() {
 #[tokio::test]
 async fn rejects_invalid_tag_and_remote_names() {
     let (dir, _bare) = repo_with_remote();
-    for name in ["-x", "a..b", "", "a b", "a~1", "x.lock", "--delete"] {
+    for name in [
+        "-x", "HEAD", "head", "a..b", "", "a b", "a~1", "x.lock", "--delete",
+    ] {
         assert!(
             create_tag(path(&dir), request(name, None)).await.is_err(),
             "{name}"
