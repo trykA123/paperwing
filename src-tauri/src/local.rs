@@ -98,3 +98,6 @@ pub async fn local_status(paths: Vec<String>) -> Vec<LocalStatus> {
     }
     out
 }
+
+#[cfg(test)]
+mod slow_tests;
