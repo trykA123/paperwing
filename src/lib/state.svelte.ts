@@ -2,6 +2,7 @@ import { Credentials } from './state/credentials.svelte';
 import { RepositoryMetadata, type RefState } from './state/repository-metadata.svelte';
 import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
+import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
 import { railClick } from './rail';
 import { doingWord, RunNotices } from './state/run-notices';
@@ -24,6 +25,8 @@ export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
 export type { View } from './workspace';
 
 export type { RefsEntry, CommitsEntry, RefState } from './state/repository-metadata.svelte';
+const STATUS_CHUNK = 8;
+const STATUS_CONCURRENCY = 4;
 export const uid = () => Math.random().toString(36).slice(2, 10);
 export const RUNNING: Phase[] = ['resolving', 'cloning', 'fetching', 'checkout'];
 export const PHASE: Record<Phase, string> = {
@@ -201,6 +204,8 @@ class AppState {
   #runNotice = 0;
   pushing = $state<Record<string, 'Pushing' | 'Waiting'>>({});
   #cloneWaiters: (() => void)[] = [];
+  #statusGeneration = 0;
+  #statusGenerations = new Map<string, number>();
 
   get allRepos() { return this.repositoryMetadata.allRepos; }
   set allRepos(value: RepositoryMetadata['allRepos']) { this.repositoryMetadata.allRepos = value; }
@@ -632,10 +637,19 @@ class AppState {
   async checkExists(dests: string[]) {
     if (!dests.length) return;
     this.#invalidateTrees(dests);
-    for (const s of await api.localStatus(dests)) {
-      this.exists[s.path] = s.exists;
-      this.local[s.path] = s;
-    }
+    const generation = ++this.#statusGeneration;
+    for (const path of dests) this.#statusGenerations.set(path, generation);
+    await loadInChunks(dests, {
+      size: STATUS_CHUNK, concurrency: STATUS_CONCURRENCY,
+      load: chunk => api.localStatus([...chunk]),
+      publish: rows => {
+        for (const s of rows) {
+          if (this.#statusGenerations.get(s.path) !== generation) continue;
+          this.exists[s.path] = s.exists;
+          this.local[s.path] = s;
+        }
+      },
+    });
     await Promise.all(this.openTreePaths.filter(path => dests.includes(path)).map(path => this.loadTree(path, true)));
   }
 
