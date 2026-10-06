@@ -26,7 +26,7 @@ The alt session took over orchestration while the main session was paused. Usage
 | What | Where | State |
 |---|---|---|
 | Speed fixes, backend | `.alt/perf-backend`, branch `alt/perf-backend` (`99956b6..75457b8`) | Agent may still be running (it had not reported at handoff). Commits: tree fix for big repos (8 MB cap), secret cache per credential revision, async path_identities/probe_root, ordered results, concurrent org listing with partial pages (`warnings: string[]`). **Needs a reviewer pass.** |
-| Speed fixes, frontend | `.alt/perf-frontend`, branch `alt/perf-frontend` (`1d8bc12..3ce5566` + review fixes in progress) | Reviewer said "fix first", 9 items. The agent is applying them (contract `warnings[]`, mark stale after fetch/pull, no stuck "Checking…", cancel superseded sweeps, priority upgrade, BranchDialog rows, backoff keep, CRLF). |
+| Speed fixes, frontend | `.alt/perf-frontend`, branch `alt/perf-frontend` (`1d8bc12..3ce5566` + review fixes in progress) | All 9 review items fixed in `fa1c458` (gates green, 196 frontend tests). Ready to merge with perf-backend; `api.ts` RepoList line already matches the backend. |
 | Packet 17 phase 1 (batched Git) | Codex run `crew/api-builder-sfzxd`, `.crew/paperwing-api-builder-sfzxd` | Running since 17:42, uncommitted, base far behind main (conflicts with search's `git/runner.rs` changes). Review the diff and its before/after table; merge only with a clear Windows win. |
 | Diagnosis tests | `.alt/check-slow`, branch `check/slow` `b36d112` | Cherry-picked into perf-backend; worktree can be removed after merge. |
 | Paused main session worktree | `.claude/worktrees/agent-a488fb7de6d04ca04` (`fix/parallel-tests`, dirty) | Its content is already in main (`3f18795`); safe to remove later. |
