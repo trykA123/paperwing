@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
+  import WindowControls from './WindowControls.svelte';
 
   function navigate(event: KeyboardEvent, index: number) {
     let next = index;
@@ -15,8 +16,8 @@
   }
 </script>
 
-<header class="tabs-chrome">
-  <div class="tabstrip" role="tablist" aria-label="Workspace tabs">
+<header class="tabs-chrome" class:native-controls={app.platform.platform === 'windows'} data-tauri-drag-region>
+  <div class="tabstrip" role="tablist" aria-label="Workspace tabs" data-tauri-drag-region>
     {#each app.tabs as tab, index (tab.id)}
       <div class="shell-tab" class:on={tab.id === app.activeTabId}>
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"
@@ -30,7 +31,7 @@
       </div>
     {/each}
   </div>
-  <div class="topbtns">
+  <div class="topbtns" data-tauri-drag-region>
     <button class="kbtn" title="Command palette (Ctrl+K)" onclick={() => (app.paletteOpen = true)}><Icon name="search" /><span>Search or run a command...</span><kbd>Ctrl K</kbd></button>
     <button class="icon shell-control" class:on={app.ws.shell.sidebarVisible} title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.ws.shell.sidebarVisible}
       onclick={() => (app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible)}><Icon name="panel" /></button>
@@ -39,4 +40,15 @@
     <button class="icon shell-control" title="Toggle light/dark theme" aria-label="Toggle light/dark theme"
       onclick={() => (app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark')}><Icon name="theme" /></button>
   </div>
+  <WindowControls />
 </header>
+
+<style>
+  .tabs-chrome.native-controls {
+    padding-right: 0;
+  }
+
+  :global(.shell-brand > *) {
+    pointer-events: none;
+  }
+</style>
