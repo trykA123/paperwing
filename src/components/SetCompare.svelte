@@ -47,6 +47,6 @@
     {#each rows as row (row.itemId)}<tr><td><button class="set-result" disabled={comparison.stale || !row.snapshot || row.state !== 'ready'} onclick={() => app.openSetCompareRow(row)}>{row.folder}</button></td>
       <td>{row.snapshot ? row.snapshot.display.unavailable ? 'Partly unavailable' : row.snapshot.display.different + row.snapshot.display.leftOnly + row.snapshot.display.rightOnly + row.snapshot.display.typeConflict ? 'Different' : 'Identical' : row.state}{#if row.message}<div class="warn">{row.message}</div>{/if}</td>
       <td>{row.snapshot ? row.snapshot.display.different + row.snapshot.display.typeConflict : '-'}</td><td>{row.snapshot?.display.leftOnly ?? '-'}</td><td>{row.snapshot?.display.rightOnly ?? '-'}</td>
-      <td>{row.added === null ? 'N/A' : `+${row.added} / -${row.removed}`}</td><td>{row.snapshot?.history.available ? `${row.snapshot.history.rightCount} / ${row.snapshot.history.leftCount}` : 'N/A'}</td></tr>{/each}
+      <td>{#if row.added === null}N/A{:else}<span class="set-added">+{row.added}</span> / <span class="set-removed">-{row.removed}</span>{/if}</td><td>{row.snapshot?.history.available ? `${row.snapshot.history.rightCount} / ${row.snapshot.history.leftCount}` : 'N/A'}</td></tr>{/each}
   </tbody></table></div>
 </section>

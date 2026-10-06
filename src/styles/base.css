@@ -32,11 +32,11 @@
     --hl-text: oklch(46% 0.1 106);
     --hl-soft: oklch(96% 0.04 106);
     --c-diff: var(--warn);
-    --c-lo: var(--acc);
-    --c-ro: var(--hl);
+    --c-lo: var(--err);
+    --c-ro: var(--ok);
     --c-diff-text: var(--warn-text);
-    --c-lo-text: var(--acc);
-    --c-ro-text: var(--hl-text);
+    --c-lo-text: var(--err-text);
+    --c-ro-text: var(--ok-text);
     --c-same: var(--text);
 }
 

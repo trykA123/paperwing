@@ -24,6 +24,14 @@
     background: var(--panel);
 }
 
+.set-added {
+    color: var(--ok-text);
+}
+
+.set-removed {
+    color: var(--err-text);
+}
+
 .set-result {
     color: var(--acc);
     text-align: left;
@@ -298,7 +306,9 @@
 }
 
 .compare-row {
+    position: relative;
     height: 32px;
+    color: var(--text);
     border-bottom: 1px solid var(--line);
     cursor: default;
     font-size: var(--fs-xs);
@@ -376,20 +386,91 @@
     place-items: center;
 }
 
-.compare-different,
-.compare-typeConflict {
+.compare-row::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 2px;
+    background: var(--edge, transparent);
+}
+
+.compare-row.selected::before {
+    left: 3px;
+}
+
+.compare-row.compare-same,
+.compare-row.compare-same .compare-marker {
+    color: var(--dim);
+}
+
+.compare-row.compare-different,
+.compare-row.compare-typeConflict {
+    --edge: var(--c-diff);
+}
+
+.compare-row.compare-leftOnly {
+    --edge: var(--c-lo);
+}
+
+.compare-row.compare-leftOnly:not(.selected):not(:hover) {
+    background: color-mix(in oklch, var(--c-lo) 6%, transparent);
+}
+
+.compare-row.compare-rightOnly {
+    --edge: var(--c-ro);
+}
+
+.compare-row.compare-rightOnly:not(.selected):not(:hover) {
+    background: color-mix(in oklch, var(--c-ro) 6%, transparent);
+}
+
+.compare-row.compare-unavailable {
+    --edge: var(--warn);
+}
+
+.compare-row.compare-different .compare-marker,
+.compare-row.compare-typeConflict .compare-marker {
     color: var(--c-diff-text);
 }
 
-.compare-leftOnly {
+.compare-row.compare-leftOnly .compare-marker {
     color: var(--c-lo-text);
 }
 
-.compare-rightOnly {
+.compare-row.compare-rightOnly .compare-marker {
     color: var(--c-ro-text);
 }
 
-.compare-unavailable {
+.compare-row.compare-unavailable .compare-marker {
+    color: var(--warn-text);
+}
+
+.compare-line-count .ok {
+    color: var(--ok-text);
+}
+
+.compare-line-count .err {
+    color: var(--err-text);
+}
+
+.compare-summary .compare-different,
+.compare-kv .compare-different,
+.compare-kv .compare-typeConflict,
+.compare-summary .compare-typeConflict {
+    color: var(--c-diff-text);
+}
+
+.compare-summary .compare-leftOnly,
+.compare-kv .compare-leftOnly {
+    color: var(--c-lo-text);
+}
+
+.compare-summary .compare-rightOnly,
+.compare-kv .compare-rightOnly {
+    color: var(--c-ro-text);
+}
+
+.compare-kv .compare-unavailable {
     color: var(--warn-text);
 }
 
