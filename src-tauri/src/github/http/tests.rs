@@ -49,8 +49,26 @@ fn pagination_rejects_another_origin_endpoint_or_nonsequential_page() {
         Some("<https://enterprise.invalid/api/v3/user/repos?page=2>; rel=\"next\"")
     )
     .unwrap());
+    for (current, target) in [
+        (
+            "https://api.github.com/orgs/acme/repos?type=all&per_page=100&page=1",
+            "https://api.github.com/organizations/123456/repos?type=all&per_page=100&page=2",
+        ),
+        (
+            "https://enterprise.invalid/api/v3/orgs/acme/repos?page=2",
+            "https://enterprise.invalid/api/v3/organizations/42/repos?page=3",
+        ),
+        (
+            "https://api.github.com/users/admin/repos?type=owner&page=1",
+            "https://api.github.com/user/987/repos?type=owner&page=2",
+        ),
+    ] {
+        assert!(next_page(current, Some(&format!("<{target}>; rel=\"next\""))).unwrap());
+    }
     for target in [
         "https://other.invalid/api/v3/user/repos?page=2",
+        "https://enterprise.invalid/api/v3/organizations/42/repos?page=2",
+        "https://enterprise.invalid/api/v3/organizations/x1/repos?page=2",
         "https://enterprise.invalid/api/v3/users/admin/repos?page=2",
         "https://enterprise.invalid/api/v3/user/repos?page=4",
     ] {
