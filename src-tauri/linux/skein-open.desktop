@@ -8,4 +8,4 @@ X-KDE-Priority=TopLevel
 [Desktop Action openWithSkein]
 Name=Open with Skein
 Icon=skein
-Exec=skein %f
+Exec=skein %F
