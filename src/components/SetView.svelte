@@ -16,6 +16,7 @@
   import BulkBar from './set/BulkBar.svelte';
   import RowMenu from './set/RowMenu.svelte';
 
+  const COMPACT_ABOVE = 100;
   const tab = untrack(() => app.activeTab);
   const isFilter = (value: string | undefined): value is FormationFilter => FILTERS.some(filter => filter.id === value);
   let page = $state(tab?.page ?? 0);
@@ -34,6 +35,7 @@
   const pages = $derived(size === 'all' ? 1 : Math.max(1, Math.ceil(shown.length / size)));
   const cur = $derived(Math.min(page, pages - 1));
   const rows = $derived(size === 'all' ? shown : shown.slice(cur * size, cur * size + size));
+  const density = $derived(app.ws.density ?? (items.length > COMPACT_ABOVE ? 'compact' : 'comfortable'));
   const selected = $derived(app.selected);
   const allOn = $derived(shown.length > 0 && shown.every(item => item.on));
   const targets = $derived(bulkTargets(selected, rowFacts));
@@ -126,9 +128,9 @@
 <FilterChips {counts} value={filter} onchange={setFilter} />
 
 <div class="fm-wrap">
-  <div class="card fill repository-table fm-table" class:running={app.running || app.clonePreparing}>
-    {#key `${set.id}|${filter}|${cur}|${size}`}
-      <VirtualList items={rows} rowHeight={56} key={i => i.id}>
+  <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
+    {#key `${set.id}|${filter}|${cur}|${size}|${density}`}
+      <VirtualList items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
         {#snippet header()}
           <div class="fm-row fm-head">
             <div class="fm-cell fm-check"><input type="checkbox" checked={allOn} indeterminate={!allOn && shown.some(item => item.on)}
@@ -155,7 +157,7 @@
         {/snippet}
       </VirtualList>
     {/key}
-    {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} />{/if}
+    {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} {density} ondensity={value => (app.ws.density = value)} />{/if}
   </div>
   <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} busy={gitBusy} {checking} handlers={bulk} />
 </div>

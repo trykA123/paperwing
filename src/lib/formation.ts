@@ -68,7 +68,7 @@ export function syncView(local: LocalStatus | undefined, failure?: string): Sync
 
 export const RAIL_STEP = 14;
 export const RAIL_MAX_DOTS = 4;
-export const shownDots = (count: number) => Math.min(count, RAIL_MAX_DOTS);
+export const shownDots = (count: number) => Math.max(0, Math.min(count, RAIL_MAX_DOTS));
 
 export type BulkTargets<T> = { cloned: T[]; fetchable: T[]; behind: T[]; offRef: T[]; pushable: T[] };
 

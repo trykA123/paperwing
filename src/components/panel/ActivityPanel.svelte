@@ -3,6 +3,12 @@
   import { api } from '../../lib/api';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
+  import Select, { type SelectOption } from '../Select.svelte';
+
+  const STATUSES: SelectOption[] = [
+    { value: 'all', label: 'All' }, { value: 'running', label: 'Running' }, { value: 'completed', label: 'Completed' },
+    { value: 'failed', label: 'Failed' }, { value: 'cancelled', label: 'Cancelled' }, { value: 'timedOut', label: 'Timed out' },
+  ];
 
   let query = $state('');
   let filter = $state('all');
@@ -22,10 +28,7 @@
   </header>
   <div class="activity-filters">
     <input aria-label="Filter Git activity" placeholder="Filter commands" bind:value={query} />
-    <select aria-label="Activity status" bind:value={filter}>
-      <option value="all">All</option><option value="running">Running</option><option value="completed">Completed</option>
-      <option value="failed">Failed</option><option value="cancelled">Cancelled</option><option value="timedOut">Timed out</option>
-    </select>
+    <Select label="Activity status" options={STATUSES} value={filter} onchange={value => (filter = value)} />
   </div>
   <div class="activity-list">
     {#each entries as entry (entry.id)}

@@ -10,6 +10,7 @@
   import Alert from './Alert.svelte';
   import EmptyState from './EmptyState.svelte';
   import Skeleton from './Skeleton.svelte';
+  import { countLabel, errorSummary } from '../lib/source-status';
 
   let { mode, source = '', org = '' }: { mode: 'org' | 'search'; source?: string; org?: string } = $props();
 
@@ -28,6 +29,8 @@
   const rows = $derived(size === 'all' ? list : list.slice(cur * size, cur * size + size));
   const loading = $derived(mode === 'org' ? !!app.loadingRepos[source] : Object.values(app.loadingRepos).some(Boolean));
   const errors = $derived(mode === 'org' ? (app.repoErrors[source] ?? []) : Object.values(app.repoErrors).flat());
+  const unknown = $derived(!base.length && (loading || errors.length > 0));
+  const failing = $derived(mode === 'org' ? (src ? [src] : []) : app.sources.filter(s => app.repoErrors[s.id]?.length));
   const warnings = $derived(mode === 'org' ? warningsForOrg(app.repoWarnings[source] ?? [], org) : Object.values(app.repoWarnings).flat());
 
   let previousQuery = untrack(() => query);
@@ -35,6 +38,8 @@
     if (query !== previousQuery) page = 0;
     previousQuery = query;
   });
+
+  const retry = () => failing.forEach(s => void app.loadRepos(s, true));
 
   async function addAll() {
     const toAdd = list.filter(r => !app.inSet(r.id));
@@ -50,7 +55,7 @@
     <div class="crumb">{mode === 'org' ? `Organization · ${src?.name ?? ''}` : 'Search'}</div>
     <h1>{mode === 'org' ? org : `“${app.query}”`}</h1>
     <div class="mut">
-      {list.length}{query.trim() && mode === 'org' ? ` of ${base.length}` : ''} repositories{mode === 'search' ? ' across all sources' : ''}
+      {unknown ? countLabel(false, 0) : list.length}{query.trim() && mode === 'org' && !unknown ? ` of ${base.length}` : ''} repositories{mode === 'search' ? ' across all sources' : ''}
       {#if loading}· <span class="spin"></span> loading{/if}
     </div>
   </div>
@@ -68,7 +73,12 @@
   </div>
 </header>
 
-{#if errors.length}<Alert kind="err">{errors.join(' · ')}</Alert>{/if}
+{#if errors.length}
+  <Alert kind="err" role="status" title="Can't reach {failing.map(s => s.name).join(', ') || 'the source'}">
+    {errorSummary(errors)}
+    {#snippet action()}<button class="btn small" disabled={loading} onclick={retry}>Retry</button>{/snippet}
+  </Alert>
+{/if}
 {#if warnings.length}<Alert kind="warn" role="status" title={mode === 'org' ? 'Partial list' : 'Some repositories may be missing'}>{warnings.join(' · ')}</Alert>{/if}
 
 <div class="card fill">

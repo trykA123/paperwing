@@ -535,3 +535,29 @@ test('the backoff keeps growing when a loading picker is closed and reopened', a
     } finally { setSystemTime(); }
   });
 });
+
+test('a repeated demand keeps its in-flight request and release cancels it', async () => {
+  const { createDemand } = await import('./metadata-demand.ts');
+  const rows = [{ url: item.url, branches: ['main'], tags: [] }];
+  await fixture(async (state, calls) => {
+    const demand = createDemand((urls, signal) => state.ensureRefs(urls, false, signal));
+    demand.request([item.url]);
+    demand.request([item.url]);
+    expect(calls).toHaveLength(1);
+    calls[0].resolve(rows);
+    await Promise.resolve();
+    await new Promise(done => setTimeout(done, 0));
+    expect(state.refState(item)).toBe('ok');
+    expect(state.needsRefs(item.url)).toBe(false);
+  });
+  await fixture(async (state, calls) => {
+    const demand = createDemand((urls, signal) => state.ensureRefs(urls, false, signal));
+    demand.request([item.url]);
+    demand.release();
+    demand.request([item.url]);
+    calls[0].resolve(rows);
+    await new Promise(done => setTimeout(done, 0));
+    expect(calls).toHaveLength(1);
+    expect(state.needsRefs(item.url)).toBe(true);
+  });
+});

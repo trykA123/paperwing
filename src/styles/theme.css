@@ -1,7 +1,7 @@
 /* ---------- dark theme ---------- */
 :root {
     color-scheme: light;
-    --fs-xs: 11px;
+    --fs-xs: 12px;
     --fs-sm: 12px;
     --fs-md: 13px;
     --fs-base: 14px;
@@ -35,7 +35,7 @@
     --tone-folder: var(--warn);
     --tone-repo: var(--acc);
     --tone-file: var(--faint-text);
-    --tone-branch: var(--hl-text);
+    --tone-branch: var(--text);
     --act-sync: var(--tone-repo);
     --act-record: var(--tone-commit);
     --act-branch: var(--tone-branch);
@@ -43,6 +43,12 @@
     --act-danger: var(--err-text);
     --tone-tag: var(--warn-text);
     --tone-commit: var(--ok-text);
+    --lane-1: var(--acc);
+    --lane-2: var(--hl);
+    --lane-3: var(--ok);
+    --lane-4: var(--dim);
+    --lane-5: var(--faint);
+    --lane-6: var(--text);
 }
 
 [data-theme="dark"] {

@@ -142,10 +142,11 @@ export type RepoSet = { id: string; name: string; items: SetItem[] };
 export type ColWidths = { repo: number; checkout: number; local: number; status: number };
 export type RailSection = 'sets' | 'compare' | 'recovery' | 'activity';
 export type ShellLayout = { version: 1; sidebarWidth: number; sidebarVisible: boolean; rightVisible: boolean; section: RailSection };
+export type RowDensity = 'comfortable' | 'compact';
 export type Workspace = {
   sets: RepoSet[]; stars: string[]; activeSet: string; root: string; layout: 'flat' | 'custom'; pathTemplate: string;
   cols: ColWidths;
-  shallow: boolean; parallel: number; onExisting: OnExisting; pageSize: PageSize; rightWidth: number;
+  shallow: boolean; parallel: number; onExisting: OnExisting; pageSize: PageSize; density?: RowDensity; rightWidth: number;
   theme: Theme; uiFont: string; codeFont: string;
   shell: ShellLayout;
 };
