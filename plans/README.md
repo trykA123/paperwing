@@ -5,6 +5,7 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 ## Ready now
 | Packet | What | Size |
 |---|---|---|
+| [40](packets/40-github-compare.md) | Compare on GitHub without cloning (GHES-aware) | L |
 | [41](packets/41-windows-diagnostics.md) | Anonymous diagnostics export, test builds only | M |
 | [06](packets/06-windows-write-boundaries.md) | Split `files.rs` on Windows, no behaviour change | M |
 | [03b](packets/03b-rail-context-menus.md) | Activity rail panels and context menus | M |
@@ -22,6 +23,7 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 | Packet | Where |
 |---|---|
 | [17](packets/17-cold-path.md) | Phase 1, Codex run in `.crew/paperwing-api-builder-sfzxd` |
+| [41](packets/41-windows-diagnostics.md) | Backend, Codex run in `.crew/paperwing-api-builder-1ci2m` |
 | 34 local store | branch `alt/store`: merge plus review fixes (old packet text lives in git history) |
 
 ## Blocked
