@@ -12,10 +12,10 @@
 
   const LABELS: Record<string, string> = {
     clone: 'Clone', fetch: 'Fetch', pull: 'Pull (fast-forward)', push: 'Push', switch: 'Switch to the set’s branch',
-    commit: 'Commit changes…', 'new-branch': 'New branch…', code: 'Open in VS Code',
+    commit: 'Commit changes…', 'new-branch': 'New branch…', cleanup: 'Clean up merged branches…', code: 'Open in VS Code',
   };
   const IDS = Object.keys(LABELS);
-  const FOCUS_TAKERS = ['commit', 'new-branch', 'code'];
+  const FOCUS_TAKERS = ['commit', 'new-branch', 'cleanup', 'code'];
   const gitBusy = $derived(app.running || app.gitBusy);
   const cloned = $derived(!!app.local[app.dest(item)]?.repo);
   let menu: HTMLDivElement;

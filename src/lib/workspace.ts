@@ -5,6 +5,7 @@ export type View =
   | { kind: 'item'; itemId: string }
   | { kind: 'org'; source: string; org: string }
   | { kind: 'search' }
+  | { kind: 'codeSearch' }
   | { kind: 'compare'; comparisonId: string; left: CompareEndpoint; right: CompareEndpoint; readOnly?: boolean }
   | { kind: 'setCompare'; comparisonId: string }
   | { kind: 'fileDiff'; comparisonId: string; fileId: string; path: string; sessionId: string; generation: number }
@@ -17,6 +18,7 @@ export function tabId(view: View, setId: string): string {
     case 'item': return `item:${setId}:${view.itemId}`;
     case 'org': return `org:${setId}:${view.source}:${view.org}`;
     case 'search': return `search:${setId}`;
+    case 'codeSearch': return `codeSearch:${setId}`;
     case 'compare': return `compare:${view.comparisonId}`;
     case 'setCompare': return `setCompare:${view.comparisonId}`;
     case 'fileDiff': return `fileDiff:${view.comparisonId}:${view.fileId}`;

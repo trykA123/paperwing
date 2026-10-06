@@ -39,12 +39,13 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
       id: `set:${set.id}`, label: `Open set: ${set.name}`, icon: 'folder' as const, enabled: app.ready,
       run: () => app.openView({ kind: 'set' }, set.id),
     })),
+    { id: 'search-code', label: 'Search code across set', icon: 'search', reason: 'Clone at least one repository of the set first', enabled: app.ready && app.set.items.some(item => app.local[app.dest(item)]?.repo), run: () => app.openCodeSearch() },
     { id: 'new-set', label: 'New set', icon: 'plus', enabled: app.ready, run: () => app.newSet() },
     { id: 'add', label: 'Browse repositories', icon: 'search', enabled: app.ready, run: () => app.goAddRepos() },
     { id: 'settings', label: 'Settings', icon: 'gear', enabled: app.ready, run: () => app.openView({ kind: 'settings' }) },
     { id: 'sidebar', label: `${app.ws.shell.sidebarVisible ? 'Hide' : 'Show'} sidebar`, icon: 'panel', enabled: true,
       run: () => { app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible; } },
-    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.view.kind !== 'settings',
+    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.view.kind !== 'settings' && app.view.kind !== 'codeSearch',
       run: () => { app.ws.shell.rightVisible = !app.ws.shell.rightVisible; } },
     { id: 'theme', label: `Use ${app.ws.theme === 'dark' ? 'light' : 'dark'} theme`, icon: 'theme', enabled: true,
       run: () => { app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark'; } },
@@ -65,6 +66,8 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
       run: () => app.pushRepos(pushable.map(item => ({ path: app.dest(item), name: app.folderOf(item) }))) },
     { id: 'new-branch', label: local.length > 1 ? `New branch in ${local.length} repositories…` : 'New branch…', icon: 'branch', tone: 'branch' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!local.length,
       run: () => app.openBranchDialog(local) },
+    { id: 'cleanup', label: local.length > 1 ? `Clean up merged branches in ${local.length} repositories…` : 'Clean up merged branches…', icon: 'trash', tone: 'branch' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!local.length,
+      run: () => app.openCleanupDialog(local) },
     ...(items.length === 1 ? [
       { id: 'commit', label: 'Commit changes…', icon: 'check' as const, tone: 'record' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!local.length, run: () => app.openGitDialog('commit', items[0]) },
       { id: 'history', label: 'Show commit history', icon: 'commit' as const, tone: 'inspect' as const, enabled: !!local.length, run: () => historyDrawer.open({ path: app.dest(items[0]), name: app.folderOf(items[0]) }, paletteReturn.element) },
@@ -75,6 +78,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
 
 export function shortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): string | undefined {
   const control = event.ctrlKey || event.metaKey;
+  if (control && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'f') return 'search-code';
   if (control && !event.altKey && !event.shiftKey && railShortcut(event.key)) return `rail-${event.key}`;
   if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Tab') return event.shiftKey ? 'tab-previous' : 'tab-next';
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'w') return 'tab-close';

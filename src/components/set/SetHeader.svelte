@@ -80,6 +80,7 @@
       <button class="btn dark" disabled={temporary.scanning} title={temporary.scanning ? 'Wait for the scan to finish' : 'Keep this set in the list of sets'} onclick={() => app.temporary.save(temporary.id)}><Icon name="check" /> Save as set</button>
       <button class="btn" onclick={() => app.temporary.discard(temporary.id)}><Icon name="close" /> Discard</button>
     {:else}
+      <button class="btn" disabled={!set.items.length} title="Search code across the repositories of this set (Ctrl+Shift+F)" onclick={() => app.openCodeSearch()}><Icon name="search" /> Search code</button>
       <button class="btn" onclick={() => app.goAddRepos()}><Icon name="plus" /> Add repos</button>
       <button class="btn icon-only" title="Delete set" aria-label="Delete set" disabled={app.ws.sets.length < 2} onclick={deleteSet}><Icon name="trash" /></button>
       <button class="btn dark" disabled={busy || !fetchable.length} title={fetchable.length ? `git fetch --prune in the ${fetchable.length} cloned repositories` : 'Nothing cloned to fetch'} onclick={() => app.startClone(fetchable, 'fetch')}><Icon name="refresh" /> Fetch all</button>

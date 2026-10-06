@@ -1,7 +1,7 @@
 <script lang="ts" module>
   export type BulkHandlers = {
     fetch: () => void; pull: () => void; push: () => void; switch: () => void; ref: (anchor: HTMLElement) => void;
-    check: () => void; branch: () => void; commit: () => void; clear: () => void;
+    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; clear: () => void;
   };
 </script>
 
@@ -36,6 +36,7 @@
     {#if checking}<span class="spin"></span>{:else}<Icon name="search" />{/if}<span class="sr-only">Check refs</span>
   </button>
   <button aria-label="New branch" disabled={busy || !targets.cloned.length} title={reason('New branch in the selected repositories')} onclick={handlers.branch}><Icon name="plus" /><span class="sr-only">New branch</span></button>
+  <button aria-label="Clean up merged branches" disabled={busy || !targets.cloned.length} title={reason('Delete merged branches in the selected repositories')} onclick={handlers.cleanup}><Icon name="trash" /><span class="sr-only">Clean up merged branches</span></button>
   <button disabled={busy || !dirty} title={reason(dirty ? 'Commit the first selected repository with changes' : 'No selected repository has changes')} onclick={handlers.commit}>
     <Icon name="check" /><span class="t">Commit</span>{#if dirty > 1}<small>{dirty}</small>{/if}
   </button>

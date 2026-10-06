@@ -29,11 +29,13 @@
   import { historyDrawer } from './lib/history-drawer.svelte';
   import { confirmQueue } from './lib/confirm';
   import SetCompare from './components/SetCompare.svelte';
+  import BranchCleanup from './components/BranchCleanup.svelte';
+  import CodeSearch from './components/CodeSearch.svelte';
   import ActivityRail from './components/ActivityRail.svelte';
   import SidePanel from './components/SidePanel.svelte';
   import { RAIL_SECTIONS, railShortcut } from './lib/rail';
 
-  const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings');
+  const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings' && app.view.kind !== 'codeSearch');
   const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
   let reducedMotion = $state(false), panelsMoving = $state(false);
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activity.some(entry => entry.state === 'running'));
@@ -67,7 +69,7 @@
       else if (target) Object.assign(app.ws.shell, { section: target, sidebarVisible: true });
       return;
     }
-    if (id.startsWith('tab-')) {
+    if (id.startsWith('tab-') || id === 'search-code') {
       if (app.paletteOpen || !app.ready) return;
       event.preventDefault(); event.stopPropagation();
       if (id === 'tab-close' && event.repeat) return;
@@ -169,6 +171,7 @@
     {/if}
     {#each app.tabs as tab (tab.id)}
       {#if tab.view.kind === 'setCompare' && app.setComparisons[tab.view.comparisonId]}<div class="compare-tab" hidden={tab.id !== app.activeTabId}><SetCompare comparison={app.setComparisons[tab.view.comparisonId]} /></div>
+      {:else if tab.view.kind === 'codeSearch' && app.codeSearches[tab.id]}<div class="compare-tab" hidden={tab.id !== app.activeTabId}><CodeSearch session={app.codeSearches[tab.id]} setId={tab.setId} /></div>
       {:else if tab.view.kind === 'compare' && app.comparisons[tab.view.comparisonId]}<div class="compare-tab" hidden={tab.id !== app.activeTabId}><FolderCompare view={tab.view} comparison={app.comparisons[tab.view.comparisonId]} /></div>
       {:else if tab.view.kind === 'fileDiff' && app.comparisons[tab.view.comparisonId]}<div class="compare-tab" hidden={tab.id !== app.activeTabId}><FileCompare view={tab.view} comparison={app.comparisons[tab.view.comparisonId]} active={tab.id === app.activeTabId} /></div>{/if}
     {/each}
@@ -190,6 +193,7 @@
 {#if app.copyRequest}<CopyOperations request={app.copyRequest} />{/if}
 {#if app.recoveryOpen}<RecoveryPanel />{/if}
 {#if app.gitDialog?.kind === 'commit'}<CommitDialog request={app.gitDialog} />{:else if app.gitDialog?.kind === 'branch'}<BranchDialog request={app.gitDialog} />{/if}
+{#if app.cleanupDialog}<BranchCleanup request={app.cleanupDialog} />{/if}
 {#if $confirmQueue.length}{#key $confirmQueue[0]}<ConfirmDialog request={$confirmQueue[0]} />{/key}{/if}
 <Notifications />
 <Tooltip />
