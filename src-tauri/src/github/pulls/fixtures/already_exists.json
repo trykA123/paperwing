@@ -1,0 +1,40 @@
+[
+  {
+    "method": "POST",
+    "path": "/repos/admin/skein-fixture-api/pulls",
+    "status": 422,
+    "body": {
+      "message": "Validation Failed",
+      "errors": [
+        {
+          "resource": "PullRequest",
+          "code": "custom",
+          "message": "A pull request already exists for admin:feature/login."
+        }
+      ]
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/repos/admin/skein-fixture-api/pulls?head=admin%3Afeature%2Flogin&state=open&sort=updated&direction=desc&per_page=1&page=1",
+    "status": 200,
+    "body": [
+      {
+        "number": 28,
+        "title": "Add login",
+        "html_url": "https://github.com/admin/skein-fixture-api/pull/28",
+        "state": "open",
+        "draft": false,
+        "merged_at": null,
+        "base": {
+          "ref": "main",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "head": {
+          "ref": "feature/login",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    ]
+  }
+]

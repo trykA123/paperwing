@@ -2753,6 +2753,7 @@ dependencies = [
 name = "paperwing"
 version = "0.2.0"
 dependencies = [
+ "chrono",
  "dbus",
  "dbus-secret-service",
  "keyring",
@@ -2767,6 +2768,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "thiserror 2.0.21",
  "tokio",
  "windows-sys 0.61.2",
 ]

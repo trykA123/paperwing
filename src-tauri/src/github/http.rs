@@ -1,4 +1,8 @@
 use super::{api_base, Source};
+use reqwest::Method;
+
+mod response;
+pub(super) use response::{Error, Response};
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
@@ -32,7 +36,22 @@ impl<'a> Http<'a> {
     }
 
     pub async fn connect_at(source: &'a Source, expected: u64) -> Result<Self, (u16, String)> {
-        let base = api_base(&source.host).map_err(|reason| (0, reason))?;
+        Self::connect_host(source, expected, &source.host).await
+    }
+
+    pub async fn connect_github_at(
+        source: &'a Source,
+        expected: u64,
+    ) -> Result<Self, (u16, String)> {
+        Self::connect_host(source, expected, "github.com").await
+    }
+
+    async fn connect_host(
+        source: &'a Source,
+        expected: u64,
+        host: &str,
+    ) -> Result<Self, (u16, String)> {
+        let base = api_base(host).map_err(|reason| (0, reason))?;
         Self::with_token(
             Connection {
                 source,
@@ -84,52 +103,87 @@ fn changed() -> (u16, String) {
     (0, "Source credentials changed; retry the request".into())
 }
 
+impl Http<'_> {
+    pub async fn send(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<Response, Error> {
+        self.check_revision()?;
+        let url = format!("{}{path}", self.base);
+        let mut request = self
+            .client
+            .request(method, &url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some(token) = &self.token {
+            request = request.bearer_auth(token);
+        }
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request
+            .send()
+            .await
+            .map_err(|_| Error::Message("Cannot reach GitHub; check your connection".into()))?;
+        self.check_revision()?;
+        let response = self.read_response(&url, response).await?;
+        self.check_revision()?;
+        Ok(response)
+    }
+
+    async fn read_response(
+        &self,
+        url: &str,
+        mut response: reqwest::Response,
+    ) -> Result<Response, Error> {
+        let status = response.status().as_u16();
+        let headers = response.headers().clone();
+        let next = if response.status().is_success() {
+            next_page(
+                url,
+                headers.get("link").and_then(|value| value.to_str().ok()),
+            )?
+        } else {
+            false
+        };
+        let mut body = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| Error::Message("Cannot read GitHub response; try again later".into()))?
+        {
+            if body.len() + chunk.len() > 8 * 1024 * 1024 {
+                return Err(Error::Message(
+                    "GitHub response exceeds metadata limit".into(),
+                ));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(Response {
+            status,
+            headers,
+            body,
+            next,
+        })
+    }
+}
+
 impl GithubApi for Http<'_> {
     fn authenticated(&self) -> bool {
         self.token.is_some()
     }
 
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<Page<T>, (u16, String)> {
-        self.check_revision()?;
-        let url = format!("{}{path}", self.base);
-        let mut request = self
-            .client
-            .get(&url)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28");
-        if let Some(token) = &self.token {
-            request = request.bearer_auth(token);
-        }
-        let mut response = request
-            .send()
+        let response = self
+            .send(Method::GET, path, None)
             .await
-            .map_err(|_| (0, format!("Cannot reach {}", self.source.host)))?;
-        self.check_revision()?;
-        if !response.status().is_success() {
-            return Err(http_error(response.status().as_u16()));
+            .map_err(|error| (0, error.to_string()))?;
+        if !(200..300).contains(&response.status) {
+            return Err(http_error(response.status));
         }
-        let next = next_page(
-            &url,
-            response
-                .headers()
-                .get("link")
-                .and_then(|value| value.to_str().ok()),
-        )?;
-        let mut body = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|_| (0, "Cannot read GitHub response".into()))?
-        {
-            if body.len() + chunk.len() > 8 * 1024 * 1024 {
-                return Err((0, "GitHub response exceeds metadata limit".into()));
-            }
-            body.extend_from_slice(&chunk);
-        }
-        let data = serde_json::from_slice(&body)
-            .map_err(|_| (0, format!("Unexpected response from {}", self.source.host)))?;
-        self.check_revision()?;
-        Ok(Page { data, next })
+        response.decode().map_err(|error| (0, error.to_string()))
     }
 }
 

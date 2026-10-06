@@ -5,6 +5,7 @@ use tauri::{AppHandle, Manager};
 mod cache;
 mod http;
 mod listing;
+pub mod pulls;
 use http::{get_json, GithubApi};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -134,7 +135,7 @@ fn enc(s: &str) -> String {
         .collect()
 }
 
-fn parse_manual(source: &Source, url: &str) -> Option<Repo> {
+fn parse_manual_path(url: &str) -> Option<(&str, &str)> {
     let u = url.trim();
     if u.is_empty() || u.starts_with('-') || u.chars().any(|c| c.is_whitespace() || c.is_control())
     {
@@ -149,18 +150,24 @@ fn parse_manual(source: &Source, url: &str) -> Option<Repo> {
     } else {
         u.split_once(':')?.1
     };
-    let path = path.trim_end_matches('/').trim_end_matches(".git");
+    let path = path.trim_end_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
     let (org, name) = path.rsplit_once('/')?;
     if org.is_empty() || name.is_empty() {
         return None;
     }
+    Some((org, name))
+}
+
+fn parse_manual(source: &Source, url: &str) -> Option<Repo> {
+    let (org, name) = parse_manual_path(url)?;
     Some(Repo {
         id: format!("{}:{}/{}", source.id, org, name),
         source: source.id.clone(),
         org: org.into(),
         name: name.into(),
         description: String::new(),
-        url: u.into(),
+        url: url.trim().into(),
         default_branch: String::new(),
         pushed_at: String::new(),
         archived: false,

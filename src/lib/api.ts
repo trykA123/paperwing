@@ -64,6 +64,16 @@ export type Repo = {
   url: string; defaultBranch: string; pushedAt: string; archived: boolean;
 };
 export type RepoList = { repos: Repo[]; fetchedAt: number; errors: string[]; stale?: boolean };
+export type PullState = 'draft' | 'open' | 'merged' | 'closed';
+export type ReviewState = 'approved' | 'changesRequested' | 'reviewRequired' | 'none';
+export type ChecksState = 'success' | 'failure' | 'pending' | 'none';
+export type PullChecks = { state: ChecksState; success: number; failure: number; pending: number; total: number };
+export type PullRequest = {
+  number: number; title: string; url: string; state: PullState; base: string; headSha: string;
+  reviewState: ReviewState; checks: PullChecks;
+};
+export type OpenPullRequest = { head: string; base: string; title: string; body: string; draft?: boolean };
+export type CreatedPullRequest = { number: number; url: string };
 export type Commit = { sha: string; message: string; author: string; date: string; parents: string[] };
 export type RefsResult = {
   url: string; branches: string[]; tags: string[]; branchShas: string[]; tagShas: string[]; branchLabels?: string[]; tagLabels?: string[]; error: string | null;
@@ -201,6 +211,8 @@ export const api = {
   listCachedRepos: (source: Source) => invoke<RepoList | null>('list_cached_repos', { source }),
   getCommits: (source: Source, org: string, name: string, branch: string) =>
     invoke<Commit[]>('get_commits', { source, org, name, branch }),
+  pullForBranch: (path: string, branch: string) => invoke<PullRequest | null>('pull_for_branch', { path, branch }),
+  openPullRequest: (path: string, request: OpenPullRequest) => invoke<CreatedPullRequest>('open_pull_request', { path, request }),
   getRefsMany: (urls: string[]) => invoke<RefsResult[]>('get_refs_many', { urls }),
   pathsExist: (paths: string[]) => invoke<boolean[]>('paths_exist', { paths }),
   startClone: (jobs: CloneJob[], opts: CloneOpts, mode: GitAction = 'clone') => invoke<void>('start_clone', { jobs, opts, mode }),
