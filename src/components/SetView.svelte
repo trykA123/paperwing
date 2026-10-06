@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { app } from '../lib/state.svelte';
   import type { Ref, SetItem } from '../lib/api';
   import { bulkTargets, filterCounts, matchesFilter, FILTERS, type FormationFilter } from '../lib/formation';
   import { describeRow } from '../lib/formation-row';
+  import { plural } from '../lib/plural';
   import { pushTarget, rowFacts, runNextAction } from '../lib/row-actions';
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
@@ -23,6 +24,9 @@
   let filter = $state<FormationFilter>(isFilter(tab?.filter) ? tab.filter : 'all');
   let editingId = $state<string | null>(null);
   let checking = $state(false);
+  let list = $state<ReturnType<typeof VirtualList<SetItem>>>();
+  let activeId = $state<string | null>(null);
+  let anchorId: string | null = null;
   let picker = $state<{ items: SetItem[]; anchor: DOMRect } | null>(null);
   let menu = $state<{ item: SetItem; x: number; y: number; opener: HTMLElement | null } | null>(null);
   $effect(() => { if (tab) { tab.page = page; tab.filter = filter; } });
@@ -37,6 +41,7 @@
   const rows = $derived(size === 'all' ? shown : shown.slice(cur * size, cur * size + size));
   const autoDensity = $derived.by(() => { void set.id; return untrack(() => items.length) > COMPACT_ABOVE ? 'compact' : 'comfortable'; });
   const density = $derived(app.ws.density ?? autoDensity);
+  const activeRow = $derived(rows.find(item => item.id === activeId) ?? rows[0]);
   const selected = $derived(app.selected);
   const allOn = $derived(shown.length > 0 && shown.every(item => item.on));
   const targets = $derived(bulkTargets(selected, rowFacts));
@@ -75,7 +80,7 @@
     ok.forEach(i => app.setRef(i, ref));
     const miss = targets.filter(i => !ok.includes(i)).map(i => i.name);
     const tail = miss.length ? ` (not in ${miss.slice(0, 4).join(', ')}${miss.length > 4 ? ` +${miss.length - 4} more` : ''})` : '';
-    app.toast(`${app.refLabel({ ...targets[0], ref })} applied to ${ok.length} of ${targets.length} repos${tail}`, miss.length ? 'warn' : 'success');
+    app.toast(`${app.refLabel({ ...targets[0], ref })} applied to ${ok.length} of ${plural(targets.length, 'repository', 'repositories')}${tail}`, miss.length ? 'warn' : 'success');
   }
 
   async function checkRefs() {
@@ -97,8 +102,51 @@
     editingId = null;
   }
 
+  const PAGE_STEP = 10;
+
+  function setRange(from: string | null, to: SetItem, on: boolean) {
+    const a = shown.findIndex(item => item.id === from);
+    const b = shown.indexOf(to);
+    if (a < 0 || b < 0) { to.on = on; return; }
+    for (const item of shown.slice(Math.min(a, b), Math.max(a, b) + 1)) item.on = on;
+  }
+
+  async function focusRow(index: number, extend: boolean) {
+    const target = rows[Math.max(0, Math.min(rows.length - 1, index))];
+    if (!target) return;
+    if (extend) { anchorId ??= activeRow?.id ?? target.id; setRange(anchorId, target, true); } else anchorId = null;
+    activeId = target.id;
+    list?.reveal(rows.indexOf(target));
+    await tick();
+    document.querySelector<HTMLElement>(`.fm-table .fm-row[data-id="${CSS.escape(target.id)}"]`)?.focus();
+  }
+
+  function gridKey(event: KeyboardEvent) {
+    const row = (event.target as Element).closest<HTMLElement>('.fm-row[data-id]');
+    if (event.target !== row || !activeRow) return;
+    const at = rows.indexOf(activeRow);
+    const control = event.ctrlKey || event.metaKey;
+    if (control && event.key.toLowerCase() === 'a') { for (const item of shown) item.on = true; }
+    else if (event.key === 'ArrowDown') void focusRow(at + 1, event.shiftKey);
+    else if (event.key === 'ArrowUp') void focusRow(at - 1, event.shiftKey);
+    else if (event.key === 'PageDown') void focusRow(at + PAGE_STEP, event.shiftKey);
+    else if (event.key === 'PageUp') void focusRow(at - PAGE_STEP, event.shiftKey);
+    else if (event.key === 'Home') void focusRow(0, event.shiftKey);
+    else if (event.key === 'End') void focusRow(rows.length - 1, event.shiftKey);
+    else if (event.key === ' ') { activeRow.on = !activeRow.on; anchorId = activeRow.id; }
+    else if (event.key === 'Enter') app.inspectedId = activeRow.id;
+    else return;
+    event.preventDefault();
+  }
+
+  let lastToggled: string | null = null;
   const rowHandlers = (item: SetItem) => ({
-    toggle: (on: boolean) => { item.on = on; },
+    toggle: (on: boolean, range: boolean) => {
+      if (range && lastToggled) setRange(lastToggled, item, on); else item.on = on;
+      lastToggled = item.id;
+      anchorId = item.id;
+    },
+    activate: () => { activeId = item.id; },
     inspect: () => { app.inspectedId = item.id; },
     pickRef: (anchor: HTMLElement) => { picker = { items: [item], anchor: anchor.getBoundingClientRect() }; },
     next: (kind: Parameters<typeof runNextAction>[1]) => runNextAction(item, kind),
@@ -131,12 +179,12 @@
 <div class="fm-wrap">
   <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
     {#key `${set.id}|${filter}|${cur}|${size}`}
-      <VirtualList items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
+      <VirtualList bind:this={list} role="grid" label="Repositories in {set.name}" onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
         {#snippet header()}
-          <div class="fm-row fm-head">
-            <div class="fm-cell fm-check"><input type="checkbox" checked={allOn} indeterminate={!allOn && shown.some(item => item.on)}
-              onchange={e => { for (const item of shown) item.on = e.currentTarget.checked; }} aria-label="Select all shown repositories" /></div>
-            <div class="fm-cell">Repository</div><div class="fm-cell">Branch</div><div class="fm-cell">Sync</div><div class="fm-cell">Next action</div><div class="fm-cell"></div>
+          <div class="fm-row fm-head" role="row">
+            <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && shown.some(item => item.on)}
+              onchange={e => { for (const item of shown) item.on = e.currentTarget.checked; }} aria-label="Select all shown repositories" /></label></div>
+            <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div><div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
           </div>
         {/snippet}
         {#snippet empty()}
@@ -154,7 +202,7 @@
           {/if}
         {/snippet}
         {#snippet row(item: SetItem)}
-          <FormationRow row={describeRow(item, { focused: app.detailItem?.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} handlers={rowHandlers(item)} />
+          <FormationRow row={describeRow(item, { focused: app.detailItem?.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} handlers={rowHandlers(item)} />
         {/snippet}
       </VirtualList>
     {/key}

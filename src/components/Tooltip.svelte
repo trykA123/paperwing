@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import { app } from '../lib/state.svelte';
 
   const EDGE = 8;
   const GAP = 6;
   const SIDE_GAP = 8;
   const CHAINED_MS = 300;
 
-  let tip = $state<{ text: string; rect: DOMRect; side: boolean } | null>(null);
+  let tip = $state<{ text: string; rect: DOMRect; side: 'left' | 'right' | null } | null>(null);
   let host: HTMLDivElement;
   let target: HTMLElement | null = null;
   let pressed: HTMLElement | null = null;
@@ -38,7 +39,12 @@
     const height = host.offsetHeight;
     const clampX = (x: number) => Math.max(EDGE, Math.min(innerWidth - width - EDGE, x));
     const clampY = (y: number) => Math.max(EDGE, Math.min(innerHeight - height - EDGE, y));
-    if (side && rect.right + SIDE_GAP + width + EDGE <= innerWidth) {
+    if (side === 'left' && rect.left - SIDE_GAP - width - EDGE >= 0) {
+      host.style.left = `${rect.left - SIDE_GAP - width}px`;
+      host.style.top = `${clampY(rect.top + rect.height / 2 - height / 2)}px`;
+      return;
+    }
+    if (side === 'right' && rect.right + SIDE_GAP + width + EDGE <= innerWidth) {
       host.style.left = `${rect.right + SIDE_GAP}px`;
       host.style.top = `${clampY(rect.top + rect.height / 2 - height / 2)}px`;
       return;
@@ -50,7 +56,7 @@
 
   function show() {
     if (!target?.isConnected) return restore();
-    tip = { text: target.dataset.tip ?? '', rect: target.getBoundingClientRect(), side: target.dataset.tipSide === 'right' };
+    tip = { text: target.dataset.tip ?? '', rect: target.getBoundingClientRect(), side: target.dataset.tipSide === 'right' ? 'right' : target.dataset.tipSide === 'left' ? 'left' : null };
   }
 
   function enter(event: Event) {
@@ -76,6 +82,12 @@
     if (tip && !open) host.showPopover();
     else if (!tip && open) host.hidePopover();
     if (tip) place();
+  });
+
+  $effect(() => {
+    void app.view;
+    void app.activeTabId;
+    untrack(restore);
   });
 
   onMount(() => {

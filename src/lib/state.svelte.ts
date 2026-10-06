@@ -23,6 +23,7 @@ import { SearchSession } from './search.svelte';
 import type { CleanupTarget } from './branch-cleanup';
 import { defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } from './workspace';
 import { NotificationStore, type NoticeAction, type NoticeKind, type NoticeOptions } from './notifications.svelte';
+import { describeError } from './errors';
 export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
 export type { View } from './workspace';
 
@@ -209,6 +210,7 @@ class AppState {
   #runItems: SetItem[] = [];
   #runSetId = '';
   #runNotice = 0;
+  get runMode() { return this.#runMode; }
   pushing = $state<Record<string, 'Pushing' | 'Waiting'>>({});
   #cloneWaiters: (() => void)[] = [];
   #statusGeneration = 0;
@@ -556,7 +558,7 @@ class AppState {
           if (this.nativePlatform === 'linux') { await this.checkExists(this.ws.sets.find(set => set.id === id)?.items.map(item => this.dest(item, id)) ?? []); return; }
         }
       } catch (reason) {
-        this.toast(String(reason), 'error');
+        this.toast(describeError(reason, 'remove the set'), 'error');
         return;
       } finally { this.gitBusy = false; }
     }
@@ -660,7 +662,7 @@ class AppState {
   }
 
   openVscode(path: string) {
-    api.openInVscode(path).catch(e => this.toast(String(e), 'error'));
+    api.openInVscode(path).catch(e => this.toast(describeError(e, 'open the folder in VS Code'), 'error'));
   }
 
   /** Refreshes "on disk" markers and the Local column (branch, ahead/behind, changes) for these folders. */
@@ -736,7 +738,7 @@ class AppState {
       const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i, setId), refType: i.ref.type, refName: i.ref.name }));
       let observations: PathIdentity[];
       try { observations = await this.refreshPathIdentities(jobs.map(job => job.dest)); }
-      catch (reason) { this.toast(String(reason), 'error'); return; }
+      catch (reason) { this.toast(describeError(reason, 'check the destination folders'), 'error'); return; }
       const identities = Object.fromEntries(observations.map(observation => [observation.path, observation]));
       const invalid = jobs.find(job => identities[job.dest]?.reason);
       if (invalid) { this.toast(identities[invalid.dest].reason!, 'warn'); return; }
@@ -766,7 +768,7 @@ class AppState {
       } catch (e) {
         this.running = false;
         this.notices.dismiss(this.#runNotice);
-        this.toast(String(e), 'error');
+        this.toast(describeError(e, 'start the Git run'), 'error');
       }
     } finally { this.clonePreparing = false; }
   }

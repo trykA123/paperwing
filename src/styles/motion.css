@@ -58,7 +58,6 @@ input[type="checkbox"]::before {
     transition: transform var(--dur-fast) var(--ease-out);
 }
 
-.btn:active:not(:disabled),
 .pgb:active:not(:disabled),
 .add:active,
 .mini:active:not(:disabled) {
