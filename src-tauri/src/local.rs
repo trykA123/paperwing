@@ -1,8 +1,6 @@
 use crate::git::{buffered, valid_root};
 use serde::Serialize;
 use std::path::Path;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
 
 /// What a destination folder currently has checked out (no network access).
 #[derive(Serialize, Default)]
@@ -79,24 +77,13 @@ async fn status_of(path: String) -> LocalStatus {
 
 #[tauri::command]
 pub async fn local_status(paths: Vec<String>) -> Vec<LocalStatus> {
-    let sem = Arc::new(Semaphore::new(8));
-    let handles: Vec<_> = paths
-        .into_iter()
-        .map(|p| {
-            let sem = sem.clone();
-            tauri::async_runtime::spawn(async move {
-                let _permit = sem.acquire_owned().await;
-                status_of(p).await
-            })
-        })
-        .collect();
-    let mut out = Vec::with_capacity(handles.len());
-    for h in handles {
-        if let Ok(s) = h.await {
-            out.push(s);
-        }
-    }
-    out
+    let names = paths.clone();
+    crate::ordered::map_bounded(paths, 8, status_of, move |index| LocalStatus {
+        path: names[index].clone(),
+        error: Some("Status check did not finish".into()),
+        ..Default::default()
+    })
+    .await
 }
 
 #[cfg(test)]
