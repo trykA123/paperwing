@@ -15,7 +15,7 @@
       {
         "number": 28,
         "title": "Add login",
-        "html_url": "https://github.com/admin/skein-fixture-api/pull/28",
+        "html_url": "https://gitext.company.com/admin/skein-fixture-api/pull/28",
         "state": "open",
         "draft": false,
         "merged_at": null,
@@ -34,7 +34,17 @@
     "method": "GET",
     "path": "/repos/admin/skein-fixture-api/pulls/28/reviews?per_page=100&page=1",
     "status": 200,
-    "body": []
+    "body": [
+      {
+        "id": 1,
+        "user": {
+          "id": 1,
+          "login": "admin"
+        },
+        "state": "APPROVED",
+        "submitted_at": "2026-10-05T12:00:00Z"
+      }
+    ]
   },
   {
     "method": "GET",

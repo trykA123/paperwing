@@ -4,6 +4,7 @@ use reqwest::Method;
 mod response;
 pub(super) use response::{Error, Response};
 use serde::de::DeserializeOwned;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 pub(super) struct Page<T> {
@@ -22,11 +23,14 @@ pub(super) struct Http<'a> {
     token: Option<String>,
     revision: u64,
     client: reqwest::Client,
+    api_host: String,
+    version_header: AtomicBool,
 }
 
 struct Connection<'a> {
     source: &'a Source,
     base: String,
+    host: &'a str,
     expected: u64,
 }
 
@@ -36,26 +40,20 @@ impl<'a> Http<'a> {
     }
 
     pub async fn connect_at(source: &'a Source, expected: u64) -> Result<Self, (u16, String)> {
-        Self::connect_host(source, expected, &source.host).await
+        Self::connect_host_at(source, expected, &source.host).await
     }
 
-    pub async fn connect_github_at(
+    pub async fn connect_host_at(
         source: &'a Source,
         expected: u64,
-    ) -> Result<Self, (u16, String)> {
-        Self::connect_host(source, expected, "github.com").await
-    }
-
-    async fn connect_host(
-        source: &'a Source,
-        expected: u64,
-        host: &str,
+        host: &'a str,
     ) -> Result<Self, (u16, String)> {
         let base = api_base(host).map_err(|reason| (0, reason))?;
         Self::with_token(
             Connection {
                 source,
                 base,
+                host,
                 expected,
             },
             crate::credentials::read(source.id.clone()),
@@ -72,7 +70,11 @@ impl<'a> Http<'a> {
         if revision() != connection.expected {
             return Err(changed());
         }
-        let token = token.await.map_err(|reason| (0, reason))?;
+        let token = if token_allowed(connection.source, connection.host) {
+            token.await.map_err(|reason| (0, reason))?
+        } else {
+            None
+        };
         if revision() != connection.expected {
             return Err(changed());
         }
@@ -88,6 +90,8 @@ impl<'a> Http<'a> {
             token,
             revision: connection.expected,
             client,
+            api_host: connection.host.into(),
+            version_header: AtomicBool::new(true),
         })
     }
 
@@ -97,6 +101,17 @@ impl<'a> Http<'a> {
         }
         Ok(())
     }
+}
+
+fn token_allowed(source: &Source, host: &str) -> bool {
+    if source.kind == "manual" {
+        return !source.urls.is_empty()
+            && source
+                .urls
+                .iter()
+                .all(|url| super::pulls::repository::parse_remote(url, host).is_ok());
+    }
+    source.host.eq_ignore_ascii_case(host)
 }
 
 fn changed() -> (u16, String) {
@@ -110,25 +125,86 @@ impl Http<'_> {
         path: &str,
         body: Option<serde_json::Value>,
     ) -> Result<Response, Error> {
-        self.check_revision()?;
         let url = format!("{}{path}", self.base);
+        let response = self.dispatch(method, path, body).await?;
+        let response = self.read_response(&url, response).await?;
+        self.check_revision()?;
+        Ok(response)
+    }
+
+    async fn dispatch(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<reqwest::Response, Error> {
+        let request = self.build_request(method, path, body)?;
+        self.dispatch_request(request, |request| async {
+            let response = self
+                .client
+                .execute(request)
+                .await
+                .map_err(|_| self.connection_error())?;
+            Ok((response.status().as_u16(), response))
+        })
+        .await
+    }
+
+    fn connection_error(&self) -> Error {
+        Error::Message(format!("Cannot reach {}", self.source.host))
+    }
+
+    fn build_request(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<reqwest::Request, Error> {
         let mut request = self
             .client
-            .request(method, &url)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28");
+            .request(method, format!("{}{path}", self.base))
+            .header("Accept", "application/vnd.github+json");
+        if self.version_header.load(Ordering::Relaxed) {
+            request = request.header("X-GitHub-Api-Version", "2022-11-28");
+        }
         if let Some(token) = &self.token {
             request = request.bearer_auth(token);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request
-            .send()
-            .await
-            .map_err(|_| Error::Message("Cannot reach GitHub; check your connection".into()))?;
+        request.build().map_err(|_| self.connection_error())
+    }
+
+    async fn dispatch_request<T, F, Fut>(
+        &self,
+        request: reqwest::Request,
+        send: F,
+    ) -> Result<T, Error>
+    where
+        F: Fn(reqwest::Request) -> Fut,
+        Fut: std::future::Future<Output = Result<(u16, T), Error>>,
+    {
         self.check_revision()?;
-        let response = self.read_response(&url, response).await?;
+        let retry = if !self.api_host.eq_ignore_ascii_case("github.com")
+            && request.headers().contains_key("X-GitHub-Api-Version")
+        {
+            request.try_clone()
+        } else {
+            None
+        };
+        let (status, response) = send(request).await?;
+        self.check_revision()?;
+        if status != 400 {
+            return Ok(response);
+        }
+        let Some(mut retry) = retry else {
+            return Ok(response);
+        };
+        retry.headers_mut().remove("X-GitHub-Api-Version");
+        self.version_header.store(false, Ordering::Relaxed);
+        self.check_revision()?;
+        let (_, response) = send(retry).await?;
         self.check_revision()?;
         Ok(response)
     }
@@ -152,7 +228,7 @@ impl Http<'_> {
         while let Some(chunk) = response
             .chunk()
             .await
-            .map_err(|_| Error::Message("Cannot read GitHub response; try again later".into()))?
+            .map_err(|_| Error::Message("Cannot read GitHub response".into()))?
         {
             if body.len() + chunk.len() > 8 * 1024 * 1024 {
                 return Err(Error::Message(
@@ -177,13 +253,18 @@ impl GithubApi for Http<'_> {
 
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<Page<T>, (u16, String)> {
         let response = self
-            .send(Method::GET, path, None)
+            .dispatch(Method::GET, path, None)
             .await
             .map_err(|error| (0, error.to_string()))?;
-        if !(200..300).contains(&response.status) {
-            return Err(http_error(response.status));
-        }
-        response.decode().map_err(|error| (0, error.to_string()))
+        let status = response.status().as_u16();
+        let page = response::shared_page(
+            &self.source.host,
+            status,
+            self.read_response(&format!("{}{path}", self.base), response),
+        )
+        .await?;
+        self.check_revision()?;
+        Ok(page)
     }
 }
 
@@ -358,3 +439,4 @@ mod tests {
         assert!(result.err().unwrap().1.contains("changed"));
     }
 }
+mod tests;

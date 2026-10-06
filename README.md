@@ -61,6 +61,10 @@ The main capabilities are:
 
 Search filters repository lists that Skein has loaded. It is not server-wide code search.
 The app uses ordinary Git repositories, so terminal commands and other editors still work.
+
+The pull request client supports GitHub.com and separately configured GitHub Enterprise Server hosts.
+It uses each host's stored token, targets fork parents, follows branch upstream names, and reports unpushed commits.
+Manual source tokens are used only when every configured URL belongs to the requested API host.
 Skein reduces terminal juggling; Git retains its right to complain about conflicts.
 
 ## The workspace model

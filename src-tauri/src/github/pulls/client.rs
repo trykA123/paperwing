@@ -3,9 +3,10 @@ use super::super::{
     http::{Error, Http, Response},
 };
 use super::model::{
-    CommitStatus, CreatedPullRequest, GithubPull, OpenPullRequest, PullRequest, Review,
+    CommitStatus, CreatedPullRequest, GithubCreatedPull, GithubPull, GithubRepository,
+    OpenPullRequest, PublishedBranch, PullRequest, Review,
 };
-use super::repository::Repository;
+use super::repository::{Branch, Repository};
 use super::summary;
 use reqwest::Method;
 use serde::de::DeserializeOwned;
@@ -35,15 +36,19 @@ impl Transport for Http<'_> {
 
 pub(super) async fn pull_for_branch(
     transport: &impl Transport,
-    repo: &Repository,
-    branch: &str,
+    branch: &Branch,
 ) -> Result<Option<PullRequest>, Error> {
-    let pull = match find_pull(transport, &repo.pulls_path(branch, "open")).await? {
+    let repo = target_repository(transport, &branch.repo).await?;
+    let head_owner = &branch.repo.owner;
+    let head = &branch.head;
+    let pull = match find_pull(transport, &repo.pulls_path(head_owner, head, "open")).await? {
         Some(pull) => pull,
-        None => match find_closed_pull(transport, &repo.pulls_path(branch, "closed")).await? {
-            Some(pull) => pull,
-            None => return Ok(None),
-        },
+        None => {
+            match find_closed_pull(transport, &repo.pulls_path(head_owner, head, "closed")).await? {
+                Some(pull) if pull.head.sha == branch.sha => pull,
+                _ => return Ok(None),
+            }
+        }
     };
     let state = pull.state()?;
     let root = repo.api_path();
@@ -53,7 +58,27 @@ pub(super) async fn pull_for_branch(
         None,
     )
     .await?;
-    let commit = format!("{root}/commits/{}", enc(&pull.head.sha));
+    let checks = load_checks(transport, &root, &pull.head.sha).await?;
+    Ok(Some(PullRequest {
+        number: pull.number,
+        title: pull.title,
+        url: pull.html_url,
+        state,
+        base: pull.base.name,
+        has_unpushed_commits: pull.head.sha != branch.sha,
+        head_sha: pull.head.sha,
+        target_repo: format!("{}/{}", repo.owner, repo.name),
+        review_state: summary::review_state(&reviews, state),
+        checks,
+    }))
+}
+
+async fn load_checks(
+    transport: &impl Transport,
+    root: &str,
+    sha: &str,
+) -> Result<super::model::Checks, Error> {
+    let commit = format!("{root}/commits/{}", enc(sha));
     let runs = collect(
         transport,
         &format!("{commit}/check-runs?filter=latest"),
@@ -61,17 +86,8 @@ pub(super) async fn pull_for_branch(
     )
     .await?;
     let statuses: Vec<CommitStatus> =
-        collect(transport, &format!("{commit}/statuses"), None).await?;
-    Ok(Some(PullRequest {
-        number: pull.number,
-        title: pull.title,
-        url: pull.html_url,
-        state,
-        base: pull.base.name,
-        head_sha: pull.head.sha,
-        review_state: summary::review_state(&reviews, state),
-        checks: summary::checks(runs, statuses),
-    }))
+        collect(transport, &format!("{commit}/status"), Some("statuses")).await?;
+    Ok(summary::checks(runs, statuses))
 }
 
 async fn find_pull(transport: &impl Transport, path: &str) -> Result<Option<GithubPull>, Error> {
@@ -136,21 +152,69 @@ pub(super) fn require_published(published: bool) -> Result<(), Error> {
     Ok(())
 }
 
-pub(super) struct Creation<'a> {
-    pub request: &'a OpenPullRequest,
-    pub published: bool,
+async fn target_repository(
+    transport: &impl Transport,
+    repo: &Repository,
+) -> Result<Repository, Error> {
+    let metadata: GithubRepository = transport
+        .send(Method::GET, &repo.api_path(), None)
+        .await?
+        .decode()?
+        .data;
+    if !metadata.fork {
+        return Ok(repo.clone());
+    }
+    let parent = metadata
+        .parent
+        .ok_or_else(|| Error::Message("GitHub did not return the fork parent repository".into()))?;
+    let (owner, name) = parent
+        .full_name
+        .split_once('/')
+        .ok_or_else(|| Error::Message("Unexpected fork parent repository from GitHub".into()))?;
+    super::super::valid_name(owner)
+        .and_then(|_| super::super::valid_name(name))
+        .map_err(|_| Error::Message("Unexpected fork parent repository from GitHub".into()))?;
+    Ok(Repository {
+        owner: owner.into(),
+        name: name.into(),
+        host: repo.host.clone(),
+    })
+}
+
+async fn has_unpushed_commits(transport: &impl Transport, branch: &Branch) -> Result<bool, Error> {
+    let path = format!("{}/branches/{}", branch.repo.api_path(), enc(&branch.head));
+    let response = transport.send(Method::GET, &path, None).await?;
+    require_published(response.status != 404)?;
+    let status = response.status;
+    let remote: PublishedBranch = response.decode()?.data;
+    if status != 200 {
+        return Err(Error::Message(
+            "Unexpected branch response from GitHub".into(),
+        ));
+    }
+    Ok(remote.commit.sha != branch.sha)
 }
 
 pub(super) async fn open_pull_request(
     transport: &impl Transport,
-    repo: &Repository,
-    creation: Creation<'_>,
+    branch: &Branch,
+    request: &OpenPullRequest,
 ) -> Result<CreatedPullRequest, Error> {
-    let request = creation.request;
     request.validate()?;
-    require_published(creation.published)?;
-    let body = serde_json::to_value(request)
+    let has_unpushed_commits = has_unpushed_commits(transport, branch).await?;
+    let repo = target_repository(transport, &branch.repo).await?;
+    if repo.same_repo(&branch.repo) && branch.head == request.base {
+        return Err(Error::Message(
+            "Choose a base branch different from the head branch".into(),
+        ));
+    }
+    let mut body = serde_json::to_value(request)
         .map_err(|_| Error::Message("Cannot encode pull request".into()))?;
+    body["head"] = if repo.same_repo(&branch.repo) {
+        branch.head.clone().into()
+    } else {
+        format!("{}:{}", branch.repo.owner, branch.head).into()
+    };
     let result = transport
         .send(
             Method::POST,
@@ -158,16 +222,37 @@ pub(super) async fn open_pull_request(
             Some(body),
         )
         .await?
-        .decode();
-    match result {
-        Err(Error::AlreadyExists) => {
-            let pull = find_pull(transport, &repo.pulls_path(&request.head, "open")).await?
-                .ok_or_else(|| Error::Message("A pull request already exists, but GitHub did not return it; refresh and try again".into()))?;
-            Ok(CreatedPullRequest {
-                number: pull.number,
-                url: pull.html_url,
-            })
-        }
-        result => result.map(|page| page.data),
-    }
+        .decode::<GithubCreatedPull>();
+    let pull = match result {
+        Err(Error::AlreadyExists) => existing_pull(transport, &repo, branch).await?,
+        result => result?.data,
+    };
+    Ok(CreatedPullRequest {
+        number: pull.number,
+        url: pull.html_url,
+        target_repo: format!("{}/{}", repo.owner, repo.name),
+        has_unpushed_commits,
+    })
+}
+
+async fn existing_pull(
+    transport: &impl Transport,
+    repo: &Repository,
+    branch: &Branch,
+) -> Result<GithubCreatedPull, Error> {
+    let pull = find_pull(
+        transport,
+        &repo.pulls_path(&branch.repo.owner, &branch.head, "open"),
+    )
+    .await?
+    .ok_or_else(|| {
+        Error::Message(
+            "A pull request already exists, but GitHub did not return it; refresh and try again"
+                .into(),
+        )
+    })?;
+    Ok(GithubCreatedPull {
+        number: pull.number,
+        html_url: pull.html_url,
+    })
 }

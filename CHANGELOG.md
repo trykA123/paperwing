@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add the Formation layout: a dense repository table with one next action per row (Clone, Commit, Switch, Pull, Push, or a Diverged marker that opens History), inline sync rails, filter chips with live counts, and a floating bulk bar. Add an activity rail (Sets, Compare, Recovery, Activity, Settings; Ctrl+1 to Ctrl+5), a repository details panel, and temporary sets for folders opened with Skein that you can save or discard. Fetch, Pull and Push show one loading notice with Retry. Folders opened in place are never cloned, pulled, switched, compared or trashed by Skein.
+- Fix pull request reviews, status summaries, fork targets and publication checks; support separate Enterprise hosts with scoped tokens and typed rate-limit errors.
 - Add GitHub pull request client commands with review and CI summaries, draft creation and rate-limit reporting.
 - Add a repository history drawer: open it from the command palette or the details panel to see working tree, local commits, origin commits and the shared base as two rails, with hover and keyboard details. It reads local refs only and never fetches.
 - Redesign notifications and inline alerts: five notification types with status-coloured icon and edge, a Rails loop for loading, and Retry and Show log actions on errors. Errors and loading notices stay until dismissed.

@@ -49,6 +49,8 @@ pub struct PullRequest {
     pub head_sha: String,
     pub review_state: ReviewState,
     pub checks: Checks,
+    pub target_repo: String,
+    pub has_unpushed_commits: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -76,11 +78,6 @@ impl OpenPullRequest {
                 ));
             }
         }
-        if self.head == self.base {
-            return Err(Error::Message(
-                "Choose a base branch different from the head branch".into(),
-            ));
-        }
         if self.title.trim().is_empty()
             || self.title.len() > 256
             || self.title.chars().any(char::is_control)
@@ -98,12 +95,40 @@ impl OpenPullRequest {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedPullRequest {
     pub number: u64,
-    #[serde(rename(deserialize = "html_url"))]
     pub url: String,
+    pub target_repo: String,
+    pub has_unpushed_commits: bool,
+}
+
+#[derive(Deserialize)]
+pub(super) struct GithubCreatedPull {
+    pub number: u64,
+    pub html_url: String,
+}
+
+#[derive(Deserialize)]
+pub(super) struct GithubRepository {
+    pub fork: bool,
+    pub parent: Option<ParentRepository>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct ParentRepository {
+    pub full_name: String,
+}
+
+#[derive(Deserialize)]
+pub(super) struct PublishedBranch {
+    pub commit: CommitSha,
+}
+
+#[derive(Deserialize)]
+pub(super) struct CommitSha {
+    pub sha: String,
 }
 
 #[derive(Deserialize)]

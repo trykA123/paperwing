@@ -1,0 +1,20 @@
+[
+  {
+    "id": "external",
+    "name": "External",
+    "kind": "ghe",
+    "host": "gitext.company.com"
+  },
+  {
+    "id": "internal",
+    "name": "Internal",
+    "kind": "ghe",
+    "host": "gitint.company.com"
+  },
+  {
+    "id": "public",
+    "name": "Public",
+    "kind": "github",
+    "host": "github.com"
+  }
+]

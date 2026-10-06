@@ -1,6 +1,14 @@
 [
   {
     "method": "GET",
+    "path": "/repos/admin/skein-fixture-api",
+    "status": 200,
+    "body": {
+      "fork": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/repos/admin/skein-fixture-api/pulls?head=admin%3Afeature%2Flogin&state=open&sort=updated&direction=desc&per_page=1&page=1",
     "status": 200,
     "body": [
@@ -52,19 +60,21 @@
   },
   {
     "method": "GET",
-    "path": "/repos/admin/skein-fixture-api/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/statuses?per_page=100&page=1",
+    "path": "/repos/admin/skein-fixture-api/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100&page=1",
     "status": 200,
-    "body": [
-      {
-        "id": 3,
-        "context": "external/lint",
-        "state": "error"
-      },
-      {
-        "id": 4,
-        "context": "external/scan",
-        "state": "success"
-      }
-    ]
+    "body": {
+      "statuses": [
+        {
+          "id": 3,
+          "context": "external/lint",
+          "state": "error"
+        },
+        {
+          "id": 4,
+          "context": "external/scan",
+          "state": "success"
+        }
+      ]
+    }
   }
 ]
