@@ -649,12 +649,17 @@ struct Fetch {
     problem: Option<Problem>,
 }
 
+#[cfg(all(test, target_os = "linux"))]
+type WriteRootHook = Arc<dyn Fn() + Send + Sync>;
+
 pub struct Service {
     sessions: Mutex<HashMap<String, Session>>,
     fetches: Mutex<HashMap<PathBuf, Arc<Mutex<Fetch>>>>,
     slots: Semaphore,
     #[cfg(target_os = "linux")]
     diff: std::sync::OnceLock<Arc<crate::linux_diff::Storage>>,
+    #[cfg(all(test, target_os = "linux"))]
+    fresh_write_root_hook: std::sync::Mutex<Option<WriteRootHook>>,
 }
 
 struct Session {
@@ -673,6 +678,8 @@ impl Default for Service {
             slots: Semaphore::new(4),
             #[cfg(target_os = "linux")]
             diff: std::sync::OnceLock::new(),
+            #[cfg(all(test, target_os = "linux"))]
+            fresh_write_root_hook: std::sync::Mutex::new(None),
         }
     }
 }
@@ -696,6 +703,18 @@ pub enum RefreshResult {
 }
 
 impl Service {
+    #[cfg(target_os = "linux")]
+    pub(crate) async fn write_revocation(
+        &self,
+        settings: &crate::settings::Settings,
+        id: &str,
+        generation: u64,
+    ) -> Result<Arc<AtomicBool>, String> {
+        let (_, job) = self.snapshot(settings, id, generation).await.map_err(|problem| problem.message)?;
+        job.check().map_err(|problem| problem.message)?;
+        Ok(job.cancel)
+    }
+
     #[cfg(target_os = "linux")]
     pub(crate) fn configure_diff(&self, path: PathBuf) -> Result<(), String> {
         let storage = crate::linux_diff::Storage::new(path).map_err(|error| error.to_string())?;
@@ -1275,7 +1294,18 @@ impl Service {
         if resolved.files.get(&row.path).is_some_and(|entry| entry.kind != Kind::File || entry.reason.is_some()) {
             return Err("Only regular, available working-tree files are writable".into());
         }
+        #[cfg(target_os = "linux")]
+        let expected_root = resolved.safe.linux_value()?;
+        #[cfg(all(test, target_os = "linux"))]
+        if fresh {
+            let hook = self.fresh_write_root_hook.lock().map_err(|_| "Root test control unavailable")?.clone();
+            if let Some(hook) = hook { hook(); }
+        }
         let safe = if fresh { read_root(&resolved.context, &job).await.map_err(|problem| problem.message)? } else { resolved.safe.clone() };
+        #[cfg(target_os = "linux")]
+        if safe.linux_value()? != expected_root {
+            return Err("Repository root changed during validation; reopen the comparison".into());
+        }
         safe.resolve_cached(&row.path, false, &mut paths::ReadCache::default())?;
         Ok(WriteContext { root: resolved.context.root.clone(), path: row.path.clone(), safe })
     }

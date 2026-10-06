@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Enable probe-gated Linux edit/save, directional copies and conditional undo using bounded tickets and the durable Linux journal.
+
 - Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
 - Add durable Linux diff reservations with bounded admission, namespace prepayment and safe cleanup; application writes remain disabled.
 - Add durable Linux recovery with verified backups, restart reconciliation, conditional undo and owned cleanup; application writes remain disabled.

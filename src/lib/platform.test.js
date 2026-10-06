@@ -93,24 +93,25 @@ test('Stale physical-identity responses cannot overwrite the latest destination 
     });
 });
 
-test('Linux write commands and shortcuts stay disabled despite stale editor eligibility', async () => {
-    const previous = { platform: app.platform, editors: app.editorActions, copy: app.copyActions, active: app.activeTabId, ready: app.ready, recovery: app.recoveryOpen };
+test('Linux write commands stay disabled without root support despite stale editor eligibility', async () => {
+    const previous = { platform: app.platform, editors: app.editorActions, copy: app.copyActions, active: app.activeTabId, ready: app.ready, recovery: app.recoveryOpen, probes: app.rootProbes };
     let invoked = 0;
     try {
-        app.platform = linuxPlatform; app.ready = true; app.activeTabId = 'fixture'; app.recoveryOpen = false;
+        app.platform = linuxPlatform; app.rootProbes = {}; app.ready = true; app.activeTabId = 'fixture'; app.recoveryOpen = false;
         app.editorActions = { fixture: { canSave: true, canSaveLeft: true, canSaveRight: true, canCopyLeft: true, canCopyRight: true, canUndo: true, save: () => invoked++, copy: () => invoked++, undo: () => invoked++ } };
         app.copyActions = { fixture: { left: true, right: true, copy: () => invoked++ } };
-        const unavailable = ['editor-save', 'editor-save-left', 'editor-save-right', 'hunk-left', 'hunk-right', 'copy-left', 'copy-right', 'file-undo', 'recovery'];
+        const unavailable = ['editor-save', 'editor-save-left', 'editor-save-right', 'hunk-left', 'hunk-right', 'copy-left', 'copy-right'];
         for (const id of unavailable) {
             const command = commands([]).find(command => command.id === id);
-            expect(command.enabled).toBe(false); expect(command.reason).toContain('Linux'); execute(command);
+            expect(command.enabled).toBe(false); expect(command.reason).toBeTruthy(); execute(command);
         }
+        expect(commands([]).find(command => command.id === 'recovery').enabled).toBe(true);
         const id = shortcut({ key: 's', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false });
         execute(commands([]).find(command => command.id === id));
         expect(invoked).toBe(0); expect(app.recoveryOpen).toBe(false);
     } finally {
         app.platform = previous.platform; app.editorActions = previous.editors; app.copyActions = previous.copy;
-        app.activeTabId = previous.active; app.ready = previous.ready; app.recoveryOpen = previous.recovery;
+        app.activeTabId = previous.active; app.ready = previous.ready; app.recoveryOpen = previous.recovery; app.rootProbes = previous.probes;
     }
 });
 
@@ -219,7 +220,7 @@ test('Copy confirmation admits one operation before its asynchronous root probe'
     const functions = ['apply', 'close'].map(name => ast.instance.content.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === name));
     const probe = deferred(), native = deferred(); let probes = 0, applies = 0, cancellations = 0;
     const context = {
-        platform: windowsPlatform, comparisons: { fixture: { snapshot: { id: 'session', generation: 1, right: { endpoint: {} } }, refresh: async () => {}, loadAllFiles: async () => {} } },
+        platform: windowsPlatform, fileCapability: operation => windowsPlatform.capabilities[operation], comparisons: { fixture: { snapshot: { id: 'session', generation: 1, right: { endpoint: {} } }, refresh: async () => {}, loadAllFiles: async () => {} } },
         probeEndpoints: () => { probes++; return probe.promise; }, endpointCapability: () => ({ supported: true, reason: null }), copyRequest: {},
     };
     const calls = { copyApply: () => { applies++; return native.promise; }, copyCancel: async () => { cancellations++; return true; } };
@@ -233,4 +234,38 @@ test('Copy confirmation admits one operation before its asynchronous root probe'
     expect(applies).toBe(1); expect(operation.busy).toBe(true);
     await operation.close(); expect(cancellations).toBe(1); expect(context.copyRequest).not.toBeNull();
     native.resolve([]); await first; expect(operation.busy).toBe(false);
+});
+
+
+test('Linux writes become eligible only after a successful native root probe', async () => {
+    const previous = { platform: app.platform, ws: app.ws, probes: app.rootProbes };
+    const writable = { ...linuxCapabilities, edit: { supported: true, reason: null }, copy: { supported: true, reason: null }, recovery: { supported: true, reason: null } };
+    await withIpc((_command, args) => args.root === '/fixture' ? supportedRoot(args.root, writable) : supportedRoot(args.root, linuxCapabilities), async () => {
+        try {
+            app.platform = linuxPlatform; app.ws = { ...app.ws, root: '/fixture' }; app.rootProbes = {};
+            expect(app.fileCapability('edit').supported).toBe(false);
+            expect(app.fileCapability('copy').supported).toBe(false);
+            expect(app.capability('recovery').supported).toBe(true);
+            await app.probeRoot('/fixture');
+            expect(app.fileCapability('edit').supported).toBe(true);
+            expect(app.fileCapability('copy').supported).toBe(true);
+            app.ws.root = '/unsupported'; await app.probeRoot('/unsupported');
+            expect(app.capability('edit').supported).toBe(false);
+            expect(app.fileCapability('edit').supported).toBe(true);
+            expect(app.capability('readCompare').supported).toBe(true);
+        } finally { app.platform = previous.platform; app.ws = previous.ws; app.rootProbes = previous.probes; }
+    });
+});
+
+
+test('A supported comparison root stays writable inside an unsupported workspace root', () => {
+    const previous = { platform: app.platform, ws: app.ws, probes: app.rootProbes };
+    try {
+        app.platform = linuxPlatform; app.ws = { ...app.ws, root: '/workspace' };
+        app.rootProbes = { '/workspace': supportedRoot('/workspace', linuxCapabilities), '/workspace/repo': supportedRoot('/workspace/repo') };
+        expect(app.capability('edit').supported).toBe(false);
+        expect(app.capability('edit', '/workspace/repo').supported).toBe(true);
+        expect(app.fileCapability('edit').supported).toBe(true);
+        expect(app.fileCapability('copy').supported).toBe(true);
+    } finally { app.platform = previous.platform; app.ws = previous.ws; app.rootProbes = previous.probes; }
 });

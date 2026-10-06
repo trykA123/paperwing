@@ -60,7 +60,7 @@ use crate::linux_guard::{mutation::Snapshot, Root};
 use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-struct Fixture(std::path::PathBuf);
+struct Fixture(std::path::PathBuf, #[allow(dead_code)] crate::test_support::Shared);
 impl Fixture {
     fn new() -> Self {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -99,7 +99,7 @@ impl Fixture {
             restored_expected
         );
         std::fs::write(path.join("restore-proof.json"),serde_json::to_vec(&serde_json::json!({"before":hash(&bytes),"restored":hash(&std::fs::read(path.join("repo/file")).unwrap()),"sentinel":hash(b"outside-sentinel"),"identityAndMetadataRestored":true})).unwrap()).unwrap();
-        Self(path.canonicalize().unwrap())
+        Self(path.canonicalize().unwrap(), crate::test_support::Shared::new())
     }
     fn root(&self) -> Root {
         Root::open(&self.0.join("repo"), &[]).unwrap()
@@ -713,7 +713,7 @@ fn validated_child_fixture() -> Fixture {
         std::fs::read(path.join("restore-backup")).unwrap(),
         b"before"
     );
-    Fixture(path)
+    Fixture(path, crate::test_support::Shared::new())
 }
 #[test]
 #[ignore]

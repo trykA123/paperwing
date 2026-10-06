@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
-struct Fixture(PathBuf);
+struct Fixture(PathBuf, #[allow(dead_code)] crate::test_support::Shared);
 impl Fixture {
     fn new() -> Self {
         let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -36,7 +36,7 @@ impl Fixture {
         std::fs::write(path.join("left/file"), b"source-left").unwrap();
         std::fs::write(path.join("right/file"), b"source-right").unwrap();
         std::fs::write(path.join("outside"), b"outside-sentinel").unwrap();
-        let fixture = Self(path.canonicalize().unwrap());
+        let fixture = Self(path.canonicalize().unwrap(), crate::test_support::Shared::new());
         let before = fixture.snapshot();
         let bytes = std::fs::read(fixture.0.join("left/file")).unwrap();
         std::fs::write(fixture.0.join("restore-backup"), &bytes).unwrap();
@@ -229,7 +229,7 @@ fn native_child() {
         std::fs::read(path.join(".paperwing-diff-fixture")).unwrap(),
         b"paperwing-diff-fixture-v1\n"
     );
-    let fixture = Fixture(path);
+    let fixture = Fixture(path, crate::test_support::Shared::new());
     let before = fixture.snapshot();
     let mode = std::env::var("PAPERWING_DIFF_MODE").unwrap();
     if mode == "bind" {
@@ -1256,6 +1256,7 @@ fn initializer_create_races_verify_safe_winners_and_refuse_unsafe_winners() {
 }
 #[tokio::test]
 async fn source_capture_is_bounded_and_memory_admission_precedes_owned_inputs_or_artifacts() {
+    let _exclusive = crate::test_support::Exclusive::new();
     let fixture = Fixture::new();
     let before = fixture.snapshot();
     let storage = Arc::new(fixture.storage());

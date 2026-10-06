@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
 struct Fixture {
+    _budget: crate::test_support::Shared,
     path: PathBuf,
     before: serde_json::Value,
 }
@@ -55,6 +56,7 @@ impl Fixture {
         )
         .unwrap();
         Self {
+            _budget: crate::test_support::Shared::new(),
             path: path.canonicalize().unwrap(),
             before,
         }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-struct Fixture(PathBuf);
+struct Fixture(PathBuf, #[allow(dead_code)] crate::test_support::Shared);
 impl Fixture {
     fn new() -> Self {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.skillify/evidence/paperwing/12/native")
@@ -20,7 +20,7 @@ impl Fixture {
         std::fs::write(path.join("repo/file"), b"restore-drill").unwrap();
         std::fs::write(path.join("repo/file"), &backup).unwrap();
         assert_eq!(std::fs::read(path.join("repo/file")).unwrap(), backup);
-        Self(path.canonicalize().unwrap())
+        Self(path.canonicalize().unwrap(), crate::test_support::Shared::new())
     }
     fn root(&self) -> Root { Root::open(&self.0.join("repo"), &[]).unwrap() }
 }
@@ -146,6 +146,7 @@ fn access_acl_roundtrip_preserves_the_kernel_validated_metadata() {
 
 #[test]
 fn bounded_private_files_and_handle_ownership_fail_closed() {
+    let _exclusive = crate::test_support::Exclusive::new();
     let fixture=Fixture::new();let root=fixture.root();
     assert!(root.read("file",2).is_err());
     let depth=std::iter::repeat_n("folder",65).collect::<Vec<_>>().join("/");

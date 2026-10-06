@@ -14,7 +14,7 @@
     if (!busy) app.copyRequest = null;
   }
   async function apply() {
-    if (!preview || busy || !app.platform.capabilities.copy.supported) return;
+    if (!preview || busy || !app.fileCapability('copy').supported) return;
     busy = true; error = '';
     try {
       const snapshot = app.comparisons[request.comparisonId]?.snapshot;

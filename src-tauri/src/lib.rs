@@ -18,11 +18,15 @@ mod github;
 mod local;
 mod paths;
 mod platform;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 mod unsupported_files;
+#[cfg(target_os = "linux")]
+mod linux_files;
 mod settings;
 mod credentials;
 mod trash;
+#[cfg(test)]
+mod test_support;
 
 use std::path::Path;
 use tauri::Manager;
@@ -64,12 +68,16 @@ pub fn run() {
     let builder = tauri::Builder::default().manage(compare::Service::default());
     #[cfg(windows)]
     let builder = builder.manage(files::Service::default());
+    #[cfg(target_os = "linux")]
+    let builder = builder.manage(linux_files::Service::default());
     builder
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
                 tauri::async_runtime::block_on(webview.state::<compare::Service>().release_sessions());
                 #[cfg(windows)]
                 tauri::async_runtime::block_on(webview.state::<files::Service>().release_tickets());
+                #[cfg(target_os = "linux")]
+                tauri::async_runtime::block_on(webview.state::<linux_files::Service>().release_tickets());
             }
         })
         .setup(|app| {
@@ -132,25 +140,35 @@ pub fn run() {
             compare::comparison_content,
             compare::comparison_commits,
             #[cfg(windows)] files::file_edit_open,
-            #[cfg(not(windows))] unsupported_files::file_edit_open,
+            #[cfg(target_os = "linux")] linux_files::file_edit_open,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::file_edit_open,
             #[cfg(windows)] files::file_edit_close,
-            #[cfg(not(windows))] unsupported_files::file_edit_close,
+            #[cfg(target_os = "linux")] linux_files::file_edit_close,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::file_edit_close,
             #[cfg(windows)] files::file_save,
-            #[cfg(not(windows))] unsupported_files::file_save,
+            #[cfg(target_os = "linux")] linux_files::file_save,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::file_save,
             #[cfg(windows)] files::copy_preview,
-            #[cfg(not(windows))] unsupported_files::copy_preview,
+            #[cfg(target_os = "linux")] linux_files::copy_preview,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::copy_preview,
             #[cfg(windows)] files::copy_apply,
-            #[cfg(not(windows))] unsupported_files::copy_apply,
+            #[cfg(target_os = "linux")] linux_files::copy_apply,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::copy_apply,
             #[cfg(windows)] files::copy_cancel,
-            #[cfg(not(windows))] unsupported_files::copy_cancel,
+            #[cfg(target_os = "linux")] linux_files::copy_cancel,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::copy_cancel,
             #[cfg(windows)] files::recovery_list,
-            #[cfg(not(windows))] unsupported_files::recovery_list,
+            #[cfg(target_os = "linux")] linux_files::recovery_list,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_list,
             #[cfg(windows)] files::recovery_undo,
-            #[cfg(not(windows))] unsupported_files::recovery_undo,
+            #[cfg(target_os = "linux")] linux_files::recovery_undo,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_undo,
             #[cfg(windows)] files::recovery_cleanup,
-            #[cfg(not(windows))] unsupported_files::recovery_cleanup,
+            #[cfg(target_os = "linux")] linux_files::recovery_cleanup,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_cleanup,
             #[cfg(windows)] files::recovery_resolve,
-            #[cfg(not(windows))] unsupported_files::recovery_resolve,
+            #[cfg(target_os = "linux")] linux_files::recovery_resolve,
+            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_resolve,
             clone::start_clone,
             local::local_status,
             paths_exist,

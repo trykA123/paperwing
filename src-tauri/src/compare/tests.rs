@@ -1540,3 +1540,7 @@ async fn line_counts_refuse_missing_storage_configuration_and_source_authority()
     assert!(line_counts(b"l\n",b"r\n",&job).await.unwrap_err().message.contains("not configured"));
     job=fixture.job();job.roots.clear();assert!(line_counts(b"l\n",b"r\n",&job).await.is_err());assert!(!fixture.0.join("diff-data").exists());
 }
+
+#[cfg(target_os = "linux")]
+#[path = "tests/linux_files.rs"]
+mod linux_files;

@@ -61,8 +61,13 @@ class AppState {
   get rootSupport() { return this.rootProbes[this.ws.root] ?? unavailableRoot(this.ws.root, 'Choose a valid native destination folder.'); }
   capability(operation: keyof Capabilities, root = this.ws.root): Capability {
     const capability = this.platform.capabilities[operation];
-    if (!capability.supported || operation === 'recovery') return capability;
+    if (operation === 'recovery' || (!capability.supported && this.platform.platform !== 'linux')) return capability;
     return (this.rootProbes[root] ?? unavailableRoot(root, 'Choose a valid native destination folder.')).capabilities[operation];
+  }
+  fileCapability(operation: 'edit' | 'copy') {
+    if (this.platform.platform !== 'linux') return this.platform.capabilities[operation];
+    return Object.values(this.rootProbes).find(probe => probe.valid && probe.capabilities[operation].supported)?.capabilities[operation]
+      ?? { supported: false, reason: 'Linux writes require a successful native root probe.' };
   }
   async probeRoot(root = this.ws.root) {
     const current = (this.rootProbeRevisions.get(root) ?? 0) + 1;
@@ -117,7 +122,7 @@ class AppState {
     const snapshot = this.comparisons[comparisonId]?.snapshot;
     if (!snapshot || this.copyRequest) return;
     const endpoint = snapshot[side].endpoint;
-    if (!this.platform.capabilities.copy.supported) { this.toast(this.platform.capabilities.copy.reason ?? 'Copy is unavailable.', 'warn'); return; }
+    if (!this.fileCapability('copy').supported) { this.toast(this.fileCapability('copy').reason ?? 'Copy is unavailable.', 'warn'); return; }
     await this.probeEndpoints([endpoint]);
     const capability = this.endpointCapability(endpoint, 'copy');
     if (!capability.supported) { this.toast(capability.reason ?? 'Copy is unavailable for this root.', 'warn'); return; }

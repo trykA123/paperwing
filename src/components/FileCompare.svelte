@@ -34,8 +34,9 @@
   const stale = $derived(!snapshot || snapshot.id !== view.sessionId || snapshot.generation !== view.generation);
   const file = $derived(comparison.files.find(file => file.id === view.fileId));
   const identity = $derived(tabId(view, ''));
-  const canCopyLeft = $derived(!stale && !busy && !computing && !!tickets[0] && !!file?.right && hunks.length > 0);
-  const canCopyRight = $derived(!stale && !busy && !computing && !!tickets[1] && !!file?.left && hunks.length > 0);
+  const writable = $derived([snapshot?.left.endpoint, snapshot?.right.endpoint].map(endpoint => app.platform.platform !== 'linux' || !!endpoint && app.endpointCapability(endpoint, 'edit').supported));
+  const canCopyLeft = $derived(!stale && !busy && !computing && !!tickets[0] && writable[0] && !!file?.right && hunks.length > 0);
+  const canCopyRight = $derived(!stale && !busy && !computing && !!tickets[1] && writable[1] && !!file?.left && hunks.length > 0);
   const editorCommands = $derived(commands());
   function command(id: string) { return editorCommands.find(command => command.id === id)!; }
   $effect(() => {
@@ -85,12 +86,13 @@
   }
 
   async function save(side?: number) {
-    if (busy || stale || !editor || !app.platform.capabilities.edit.supported) return;
+    if (busy || stale || !editor || !app.fileCapability('edit').supported) return;
     busy = true; error = '';
     try {
       const model = models(); if (!model) return;
       for (const index of side === undefined ? [0, 1] : [side]) {
         if (!dirty[index] || !tickets[index]) continue;
+        if (!writable[index]) throw new Error(app.endpointCapability(index === 0 ? snapshot!.left.endpoint : snapshot!.right.endpoint, 'edit').reason ?? 'Editing is unavailable for this root.');
         const text = index === 0 ? model.original.getValue() : model.modified.getValue();
         const record = await api.fileSave(tickets[index]!.ticket, encodeText(text, formats[index]));
         diskText[index] = text; undoIds.push(record.id); undoIds = undoIds.slice(-32);
@@ -264,7 +266,7 @@
   $effect(() => {
     if (!editor) return;
     app.editorActions[identity] = { save, dirty: dirty.some(Boolean), next, copy, canCopyLeft, canCopyRight,
-      canSave: !stale && !busy && dirty.some(Boolean), canSaveLeft: !stale && !busy && dirty[0], canSaveRight: !stale && !busy && dirty[1],
+      canSave: !stale && !busy && dirty.some((value, index) => value && writable[index]), canSaveLeft: !stale && !busy && dirty[0] && writable[0], canSaveRight: !stale && !busy && dirty[1] && writable[1],
       canNavigate: !stale && !busy && !computing && hunks.length > 0, canUndo: !stale && !busy && app.capability('recovery').supported && undoIds.length > 0, undo: undoSave,
       saveReasons: readOnlyReasons, undoReason: app.capability('recovery').reason };
   });
