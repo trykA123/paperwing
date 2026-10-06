@@ -632,9 +632,6 @@ class AppState {
   async checkExists(dests: string[]) {
     if (!dests.length) return;
     this.#invalidateTrees(dests);
-    const paths = new Set(dests);
-    const urls = this.ws.sets.flatMap(set => set.items.filter(item => paths.has(this.dest(item, set.id))).map(item => item.url));
-    this.repositoryMetadata.invalidateRefs(urls);
     for (const s of await api.localStatus(dests)) {
       this.exists[s.path] = s.exists;
       this.local[s.path] = s;
