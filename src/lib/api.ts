@@ -264,4 +264,8 @@ export const api = {
   searchCancel: (id: number) => invoke<boolean>('search_cancel', { id }),
   searchCancelAll: () => invoke<number>('search_cancel_all'),
   searchCapabilities: () => invoke<SearchCapabilities>('search_capabilities'),
+  diagnosticsStatus: () => invoke<{ sampling: boolean; samples: number }>('diagnostics_status'),
+  diagnosticsPreview: () => invoke<string>('diagnostics_preview'),
+  diagnosticsCancel: () => invoke<boolean>('diagnostics_cancel'),
+  diagnosticsExport: () => invoke<boolean>('diagnostics_export'),
 };
