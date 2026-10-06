@@ -754,7 +754,12 @@ async fn fetch_recovers_missing_objects_without_checkout_or_index_changes() {
     );
     assert_eq!(std::fs::read(clone.join(".git/HEAD")).unwrap(), head);
     assert_eq!(std::fs::read(clone.join(".git/index")).unwrap(), index);
-    assert_eq!(std::fs::read(clone.join("file.txt")).unwrap(), b"initial\n");
+    assert_eq!(
+        std::fs::read_to_string(clone.join("file.txt"))
+            .unwrap()
+            .replace("\r\n", "\n"),
+        "initial\n"
+    );
     for reference in ["refs/remotes/origin/obsolete", "refs/tags/private-tag"] {
         assert_eq!(
             decode(

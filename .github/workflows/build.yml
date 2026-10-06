@@ -41,6 +41,8 @@ jobs:
       - run: bun scripts/testing/css-order.ts --self-test
       - run: bun scripts/testing/css-order.ts
       - run: bun run --bun build
+      - name: Allow unprivileged user namespaces for the Linux guard tests
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: cargo test --locked
         working-directory: src-tauri
 
