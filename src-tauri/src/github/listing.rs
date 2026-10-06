@@ -301,8 +301,9 @@ mod tests {
             .await
             .unwrap();
         assert!(!fresh.stale);
-        let stored = again.read_stale(store).await.unwrap().unwrap();
+        let stored = again.read_stale(store.clone()).await.unwrap().unwrap();
         assert_eq!(stored.repos[0].name, "second");
+        store.close();
     }
 
     #[tokio::test]

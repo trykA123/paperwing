@@ -2,18 +2,21 @@ use super::error::Error;
 use super::size;
 use rusqlite::Connection;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::{Mutex, PoisonError};
+use std::thread::JoinHandle;
 use tokio::sync::{mpsc, oneshot};
 
 type Job = Box<dyn FnOnce(&mut Connection) + Send>;
 
 pub(super) struct Writer {
-    sender: mpsc::UnboundedSender<Job>,
+    sender: Mutex<Option<mpsc::UnboundedSender<Job>>>,
+    thread: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl Writer {
     pub fn spawn(mut connection: Connection, max_bytes: u64) -> Result<Self, Error> {
         let (sender, mut receiver) = mpsc::unbounded_channel::<Job>();
-        std::thread::Builder::new()
+        let thread = std::thread::Builder::new()
             .name("store-writer".into())
             .spawn(move || {
                 while let Some(job) = receiver.blocking_recv() {
@@ -25,7 +28,10 @@ impl Writer {
                     }
                 }
             })?;
-        Ok(Self { sender })
+        Ok(Self {
+            sender: Mutex::new(Some(sender)),
+            thread: Mutex::new(Some(thread)),
+        })
     }
 
     pub fn submit<T: Send + 'static>(
@@ -36,7 +42,37 @@ impl Writer {
         let job: Job = Box::new(move |connection| {
             let _ = reply.send(work(connection));
         });
-        let _ = self.sender.send(job);
+        if let Some(sender) = self
+            .sender
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+        {
+            let _ = sender.send(job);
+        }
         receiver
+    }
+
+    pub fn close(&self) {
+        self.sender
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        let thread = self
+            .thread
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(thread) = thread {
+            if thread.thread().id() != std::thread::current().id() {
+                let _ = thread.join();
+            }
+        }
+    }
+}
+
+impl Drop for Writer {
+    fn drop(&mut self) {
+        self.close();
     }
 }

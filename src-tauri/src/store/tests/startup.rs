@@ -146,6 +146,7 @@ fn start_returns_at_once_and_becomes_ready_in_the_background() {
         .write_blocking(move |connection| listings::put(connection, &next))
         .unwrap();
     barrier(&store);
+    store.close();
 }
 
 #[test]
@@ -160,6 +161,7 @@ fn legacy_listing_files_are_deleted_once_at_startup() {
     wait_until(|| store.is_ready());
     assert!(cache.0.join("repos-c.txt").exists());
     assert!(cache.0.join("other.json").exists());
+    store.close();
 }
 
 #[test]
@@ -192,4 +194,38 @@ fn damage_second_page(path: &Path) {
     let mut file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
     file.seek(SeekFrom::Start(4096)).unwrap();
     file.write_all(&[0xFF; 4096]).unwrap();
+}
+
+#[test]
+fn close_releases_every_file_so_the_database_can_move_and_go() {
+    let fixture = Fixture::new("store-close");
+    let path = database(&fixture);
+    let store = open(&fixture);
+    let kept = store.clone();
+    store
+        .write_blocking(|connection| listings::put(connection, &listing("one", 50, 0, 5)))
+        .unwrap();
+    store.read_blocking(|_| Ok(())).unwrap();
+    store.close();
+    assert!(matches!(
+        kept.read_blocking(|_| Ok(())),
+        Err(Error::Unavailable)
+    ));
+    assert!(matches!(
+        kept.write_blocking(|_| Ok(())),
+        Err(Error::Unavailable)
+    ));
+    #[cfg(target_os = "linux")]
+    {
+        let held = std::fs::read_dir("/proc/self/fd")
+            .unwrap()
+            .flatten()
+            .filter_map(|entry| std::fs::read_link(entry.path()).ok())
+            .filter(|target| target.starts_with(&fixture.0))
+            .collect::<Vec<_>>();
+        assert!(held.is_empty(), "open handles: {held:?}");
+    }
+    let moved = fixture.0.join("moved.sqlite3");
+    std::fs::rename(&path, &moved).unwrap();
+    std::fs::remove_file(&moved).unwrap();
 }

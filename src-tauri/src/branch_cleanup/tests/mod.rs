@@ -86,6 +86,7 @@ fn fixture() -> Fixture {
         ("user.name", "Test User"),
         ("user.email", "test@example.test"),
         ("commit.gpgsign", "false"),
+        ("core.autocrlf", "false"),
     ] {
         git_in(&work, &["config", key, value]);
     }

@@ -27,6 +27,7 @@ pub(super) fn repo() -> PathBuf {
     git_in(&dir, &["config", "user.name", "Test User"]);
     git_in(&dir, &["config", "user.email", "test@example.test"]);
     git_in(&dir, &["config", "commit.gpgsign", "false"]);
+    git_in(&dir, &["config", "core.autocrlf", "false"]);
     std::fs::write(dir.join("a.txt"), "one\n").unwrap();
     git_in(&dir, &["add", "a.txt"]);
     git_in(&dir, &["commit", "-q", "-m", "initial"]);
