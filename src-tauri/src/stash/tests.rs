@@ -1,7 +1,8 @@
+use super::ops::{drop_stash, push, restore, show};
 use super::*;
 use std::path::{Path, PathBuf};
 
-fn git_in(dir: &Path, args: &[&str]) {
+pub(super) fn git_in(dir: &Path, args: &[&str]) {
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(dir)
@@ -15,7 +16,7 @@ fn git_in(dir: &Path, args: &[&str]) {
     );
 }
 
-fn repo() -> PathBuf {
+pub(super) fn repo() -> PathBuf {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -32,11 +33,11 @@ fn repo() -> PathBuf {
     dir
 }
 
-fn text(dir: &Path) -> String {
+pub(super) fn text(dir: &Path) -> String {
     dir.to_str().unwrap().to_string()
 }
 
-fn read(dir: &Path, name: &str) -> String {
+pub(super) fn read(dir: &Path, name: &str) -> String {
     std::fs::read_to_string(dir.join(name)).unwrap()
 }
 
@@ -66,13 +67,13 @@ async fn push_list_show_apply_pop_and_drop() {
     std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
     std::fs::write(dir.join("new.txt"), "fresh\n").unwrap();
 
-    let tracked = push(&path, Some("first"), false).await.unwrap();
-    let first = tracked.stashed.unwrap();
+    let first = push(&path, Some("first"), false)
+        .await
+        .unwrap()
+        .stashed
+        .unwrap();
     assert_eq!(read(&dir, "a.txt"), "one\n");
-    assert!(
-        dir.join("new.txt").exists(),
-        "untracked stays without the flag"
-    );
+    assert!(dir.join("new.txt").exists());
 
     let listed = stash_list(path.clone()).await.unwrap();
     assert_eq!(listed.len(), 1);
@@ -97,22 +98,11 @@ async fn push_list_show_apply_pop_and_drop() {
     let popped = restore(&path, &first, Restore::Pop).await.unwrap();
     assert_eq!((popped.applied, popped.stash_kept), (true, false));
     assert!(stash_list(path.clone()).await.unwrap().is_empty());
-
-    let both = push(&path, None, true).await.unwrap().stashed.unwrap();
-    assert!(!dir.join("new.txt").exists());
-    let diff = show(&path, &both).await.unwrap();
-    assert!(
-        diff.has_untracked && diff.patch.contains("new.txt") && diff.patch.contains("+fresh"),
-        "{}",
-        diff.patch
-    );
-    drop_stash(&path, &both).await.unwrap();
-    assert!(stash_list(path.clone()).await.unwrap().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[tokio::test]
-async fn untracked_files_return_with_the_stash() {
+async fn untracked_files_are_stashed_shown_and_restored() {
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("new.txt"), "fresh\n").unwrap();
@@ -123,6 +113,12 @@ async fn untracked_files_return_with_the_stash() {
         .stashed
         .unwrap();
     assert!(!dir.join("new.txt").exists());
+    let diff = show(&path, &oid).await.unwrap();
+    assert!(
+        diff.has_untracked && diff.patch.contains("+fresh"),
+        "{}",
+        diff.patch
+    );
     assert!(restore(&path, &oid, Restore::Pop).await.unwrap().applied);
     assert_eq!(read(&dir, "new.txt"), "fresh\n");
     let _ = std::fs::remove_dir_all(&dir);
@@ -171,77 +167,46 @@ async fn stale_or_malformed_ids_are_refused() {
 }
 
 #[tokio::test]
-async fn switch_with_stash_moves_changes_aside_and_pop_restores_them() {
+async fn concurrent_drops_of_one_stash_never_hit_its_neighbour() {
     let dir = repo();
     let path = text(&dir);
-    git_in(&dir, &["branch", "other"]);
-    std::fs::write(dir.join("a.txt"), "one\nlocal\n").unwrap();
-    std::fs::write(dir.join("loose.txt"), "loose\n").unwrap();
-
-    let outcome = switch_with_stash(path.clone(), "other".into())
-        .await
-        .unwrap();
-    assert!(outcome.switched && outcome.error.is_none());
-    let oid = outcome.stashed.unwrap();
-    assert_eq!(read(&dir, "a.txt"), "one\n");
-    assert!(!dir.join("loose.txt").exists());
-    let entries = stash_list(path.clone()).await.unwrap();
-    assert!(entries[0].message.contains("other"));
-
-    let popped = restore(&path, &oid, Restore::Pop).await.unwrap();
-    assert!(popped.applied);
-    assert_eq!(read(&dir, "a.txt"), "one\nlocal\n");
-    assert_eq!(read(&dir, "loose.txt"), "loose\n");
-
-    git_in(&dir, &["stash", "-q", "-u"]);
-    let clean = switch_with_stash(path.clone(), "main".into())
-        .await
-        .unwrap();
-    assert_eq!(
-        clean,
-        SwitchOutcome {
-            stashed: None,
-            switched: true,
-            error: None
-        }
-    );
-    assert!(switch_with_stash(path.clone(), "missing".into())
-        .await
-        .is_err());
-    assert!(switch_with_stash(path.clone(), "-x".into()).await.is_err());
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[tokio::test]
-async fn pop_conflict_keeps_the_stash_and_lists_conflicted_paths() {
-    let dir = repo();
-    let path = text(&dir);
-    std::fs::write(dir.join("a.txt"), "stashed\n").unwrap();
-    let oid = push(&path, Some("conflict"), false)
+    std::fs::write(dir.join("a.txt"), "x\n").unwrap();
+    let x = push(&path, Some("x"), false)
         .await
         .unwrap()
         .stashed
         .unwrap();
-    std::fs::write(dir.join("a.txt"), "committed elsewhere\n").unwrap();
-    git_in(&dir, &["commit", "-qam", "diverge"]);
-
-    let outcome = restore(&path, &oid, Restore::Pop).await.unwrap();
-    assert!(!outcome.applied && outcome.stash_kept);
-    assert_eq!(outcome.conflicted, vec!["a.txt".to_string()]);
-    assert_eq!(stash_list(path.clone()).await.unwrap().len(), 1);
+    std::fs::write(dir.join("a.txt"), "y\n").unwrap();
+    let y = push(&path, Some("y"), false)
+        .await
+        .unwrap()
+        .stashed
+        .unwrap();
+    let (first, second) = tokio::join!(drop_stash(&path, &x), drop_stash(&path, &x));
+    assert_eq!(
+        [first.is_ok(), second.is_ok()]
+            .iter()
+            .filter(|ok| **ok)
+            .count(),
+        1
+    );
+    let left = stash_list(path.clone()).await.unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].oid, y);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[tokio::test]
-async fn overlapping_local_changes_refuse_apply_without_losing_the_stash() {
+async fn oversized_stash_falls_back_to_a_summary() {
     let dir = repo();
     let path = text(&dir);
-    std::fs::write(dir.join("a.txt"), "stashed\n").unwrap();
-    let oid = push(&path, None, false).await.unwrap().stashed.unwrap();
-    std::fs::write(dir.join("a.txt"), "dirty\n").unwrap();
-    let outcome = restore(&path, &oid, Restore::Pop).await.unwrap();
-    assert!(!outcome.applied && outcome.stash_kept && outcome.conflicted.is_empty());
-    assert!(outcome.error.is_some());
-    assert_eq!(read(&dir, "a.txt"), "dirty\n");
+    std::fs::write(dir.join("big.txt"), "line of filler text\n".repeat(500_000)).unwrap();
+    std::fs::write(dir.join("extra.txt"), "x\n").unwrap();
+    let oid = push(&path, None, true).await.unwrap().stashed.unwrap();
+    let diff = show(&path, &oid).await.unwrap();
+    assert!(diff.truncated && diff.has_untracked);
+    assert_eq!(diff.notice.as_deref(), Some("Stash too large to preview"));
+    assert!(diff.patch.contains("big.txt") && diff.patch.contains("extra.txt"));
+    assert!(diff.patch.len() < 10_000);
     let _ = std::fs::remove_dir_all(&dir);
 }
