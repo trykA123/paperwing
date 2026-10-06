@@ -49,6 +49,7 @@ pub struct RepoResult {
 struct Parse {
     buffer: Vec<u8>,
     skipping: bool,
+    scanned: usize,
     rows: Vec<Row>,
     kept: usize,
     truncated: bool,
@@ -75,7 +76,12 @@ impl RowSink {
             return true;
         }
         state.buffer.extend_from_slice(chunk);
-        while let Some(end) = state.buffer.iter().position(|byte| *byte == b'\n') {
+        while let Some(at) = state.buffer[state.scanned..]
+            .iter()
+            .position(|byte| *byte == b'\n')
+        {
+            let end = state.scanned + at;
+            state.scanned = 0;
             let row: Vec<u8> = state.buffer.drain(..=end).collect();
             if std::mem::take(&mut state.skipping) {
                 continue;
@@ -84,9 +90,12 @@ impl RowSink {
                 return true;
             }
         }
+        state.scanned = state.buffer.len();
         if state.buffer.len() > MAX_ROW {
             state.buffer.clear();
+            state.scanned = 0;
             state.skipping = true;
+            state.truncated = true;
         }
         false
     }

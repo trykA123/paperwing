@@ -197,11 +197,11 @@ async fn drain_with(reader: impl AsyncRead + Unpin, stream: &'static str, sender
     loop {
         let count = reader.read(&mut buffer).await.map_err(|_| "Could not read Git output".to_string())?;
         if count == 0 { break; }
+        total += count;
         if let Some((sink, stop)) = &sink {
             if sink(&buffer[..count]) { stop.store(true, AtomicOrdering::Relaxed); break; }
             continue;
         }
-        total += count;
         let room = CAPTURE_LIMIT.saturating_sub(captured.len());
         captured.extend_from_slice(&buffer[..count.min(room)]);
         if matches!(policy, OutputPolicy::Metadata) { continue; }
@@ -438,6 +438,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().ok_or("Missing Git stdout")?;
         let stderr = child.stderr.take().ok_or("Missing Git stderr")?;
+        let streaming = sink.is_some();
         let sunk = Arc::new(AtomicBool::new(false));
         let hook = sink.map(|sink| (sink, sunk.clone()));
         let mut streams = Streams::new(stdin, stdout, stderr, input, redaction.secrets(), if quiet { OutputPolicy::Metadata } else { request.policy }, hook);
@@ -486,13 +487,13 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         if !quiet && matches!(request.policy, OutputPolicy::Metadata) {
             record_output(&mut activity, &mut logged, "metadata".into(), format!("Content omitted: {stdout_bytes} stdout bytes, {stderr_bytes} stderr bytes"), None, start);
         }
-        let sunk_stop = stopped == Some("sunk");
+        let sunk_stop = stopped == Some("sunk") || (stopped.is_none() && sunk.load(AtomicOrdering::Relaxed));
         if sunk_stop { stopped = None; }
         if let Some(state) = stopped {
             activity.state = state.into();
             return Err(if state == "cancelled" { "Git command cancelled" } else { "Git command timed out" }.into());
         }
-        if stdout_bytes > CAPTURE_LIMIT || stderr_bytes > CAPTURE_LIMIT {
+        if (!streaming && stdout_bytes > CAPTURE_LIMIT) || stderr_bytes > CAPTURE_LIMIT {
             return Err("Git output exceeded the capture limit".into());
         }
         activity.state = if sunk_stop || status.code().is_some_and(|code| request.expected.contains(&code)) { "completed" } else { "failed" }.into();

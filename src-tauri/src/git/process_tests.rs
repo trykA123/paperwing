@@ -273,3 +273,16 @@ async fn linux_post_spawn_capture_failure_retains_registration_and_permits_until
     let entry = activity_snapshot().into_iter().find(|entry| entry.context == "linux-capture-failure").unwrap();
     assert_eq!(entry.state, "failed");
 }
+
+#[tokio::test]
+async fn linux_sink_stop_of_an_endless_writer_is_completed_and_counts_bytes() {
+    let _guard = TEST_RUNNER_LOCK.lock().await;
+    let sink: super::runner::StdoutSink = Arc::new(|_| true);
+    let result = super::runner::execute_streaming(Request { args: &["-c", "alias.paperwing-endless=!yes", "paperwing-endless"], context: "linux-sink-endless",
+        timeout: Duration::from_secs(30), expected: &[0], policy: OutputPolicy::Metadata }, Arc::new(std::sync::atomic::AtomicBool::new(false)), sink).await;
+    assert!(result.is_ok());
+    let entry = activity_snapshot().into_iter().find(|entry| entry.context == "linux-sink-endless").unwrap();
+    assert_eq!(entry.state, "completed");
+    assert!(entry.stdout_bytes > 0);
+    assert!(super::runner::resources_idle());
+}

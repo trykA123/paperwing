@@ -65,6 +65,7 @@ pub fn window(raw: &[u8], column: usize) -> (String, u32) {
     let offset = String::from_utf8_lossy(&raw[..end]).chars().count();
     let text = String::from_utf8_lossy(raw);
     let chars: Vec<char> = text.trim_end_matches('\r').chars().collect();
+    let offset = offset.min(chars.len());
     if chars.len() <= MAX_LINE_CHARS {
         return (
             chars.iter().collect(),

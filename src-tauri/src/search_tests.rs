@@ -230,7 +230,8 @@ async fn a_ref_target_searches_committed_content_and_rejects_bad_refs() {
     assert_eq!(only(&working).status.matches, 0);
     options.repos[0].git_ref = Some("HEAD".into());
     let (_, committed) = run(options.clone(), 4).await;
-    assert_eq!(only(&committed).status.state, State::Done);
+    let head = &only(&committed).matches;
+    assert_eq!((head.len(), head[0].path.as_str()), (1, "f.txt"));
     for bad in ["--output=x", "a..b"] {
         options.repos[0].git_ref = Some(bad.into());
         let (summary, payloads) = run(options.clone(), 4).await;
@@ -645,6 +646,20 @@ fn context_gathering_walks_outward_and_stops_at_other_matches() {
             .collect::<Vec<_>>()
     };
     assert_eq!((lines(0), lines(1)), (vec![1, 2, 4, 5], vec![4, 5, 7]));
+}
+
+#[test]
+fn trailing_carriage_returns_cannot_push_the_column_out_of_range() {
+    let raw = format!("{}needle{}", "a".repeat(500), "\r".repeat(600));
+    let (text, column) = window(raw.as_bytes(), 501);
+    assert!(text.starts_with('…') || column > 0);
+    let (short, short_column) = window(b"ab\r\r\r", 6);
+    assert_eq!((short.as_str(), short_column), ("ab", 3));
+    let (long, _) = window(
+        format!("{}{}", "x".repeat(450), "\r".repeat(500)).as_bytes(),
+        900,
+    );
+    assert!(!long.is_empty());
 }
 
 #[test]
