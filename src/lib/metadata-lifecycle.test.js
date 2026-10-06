@@ -1,5 +1,5 @@
 import './test-support/svelte-loader.js';
-import { expect, test } from 'bun:test';
+import { expect, setSystemTime, test } from 'bun:test';
 import { deferred, withIpc } from './test-support/ipc-fixture.js';
 
 const { app } = await import('./state.svelte.ts');
@@ -418,5 +418,120 @@ test('missing discovery metadata cannot cache an empty ready history before the 
     calls[0].resolve([{ sha: 'discovered' }]);
     await loaded;
     expect(state.commitsFor(item)).toEqual([{ sha: 'discovered' }]);
+  });
+});
+
+test('a refs entry that holds an error is retried on the next ensure once the backoff has passed', async () => {
+  await fixture(async (state, calls) => {
+    const first = state.ensureRefs([item.url]);
+    calls[0].reject(new Error('timed out'));
+    await first;
+    expect(state.refs[item.url].error).toContain('timed out');
+    expect(state.needsRefs(item.url)).toBe(false);
+    await state.ensureRefs([item.url]);
+    expect(calls).toHaveLength(1);
+    const failedAt = state.refs[item.url].retryAt;
+    setSystemTime(new Date(failedAt + 1));
+    try {
+      expect(state.needsRefs(item.url)).toBe(true);
+      const retry = state.ensureRefs([item.url]);
+      expect(calls).toHaveLength(2);
+      calls[1].resolve([{ url: item.url, branches: ['main'], tags: [] }]);
+      await retry;
+      expect(state.refs[item.url].error).toBeUndefined();
+      expect(state.refState(item)).toBe('ok');
+    } finally { setSystemTime(); }
+  });
+});
+
+test('repeated failures back off and focus retries an error entry only after its backoff', async () => {
+  await fixture(async (state, calls) => {
+    const delays = [];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const load = state.ensureRefs([item.url]);
+      calls[attempt].reject(new Error('still down'));
+      await load;
+      const { retryAt, failures } = state.refs[item.url];
+      expect(failures).toBe(attempt + 1);
+      delays.push(retryAt - Date.now());
+      setSystemTime(new Date(retryAt + 1));
+    }
+    try {
+      expect(delays[1]).toBeGreaterThan(delays[0] * 1.9);
+      expect(delays[2]).toBeGreaterThan(delays[1] * 1.9);
+      state.markMetadataStale();
+      expect(state.needsRefs(item.url)).toBe(true);
+    } finally { setSystemTime(); }
+  });
+});
+
+test('refs for more than 32 repositories all load as the queue drains', async () => {
+  await fixture(async (state, calls) => {
+    const urls = Array.from({ length: 100 }, (_, index) => `https://fixture.invalid/org/repo-${index}`);
+    const loading = state.ensureRefs(urls);
+    expect(calls).toHaveLength(32);
+    for (let index = 0; index < 100; index++) {
+      calls[index].resolve([{ url: urls[index], branches: ['main'], tags: [] }]);
+      await settle();
+    }
+    await loading;
+    expect(urls.filter(url => state.refs[url]?.error)).toEqual([]);
+    expect(urls.filter(url => state.refs[url]?.branches.includes('main'))).toHaveLength(100);
+  });
+});
+
+test('listing warnings are stored per source and replaced by the next listing', async () => {
+  await fixture(async (state, calls) => {
+    const warning = 'admin: showing 1000 of more; GitHub returned a partial page';
+    const first = state.loadRepos(state.sources[0], true);
+    calls[0].resolve({ repos: [repo], errors: [], warnings: [warning], partial: true });
+    await first;
+    expect(state.repos[source.id]).toEqual([repo]);
+    expect(state.repoWarnings[source.id]).toEqual([warning]);
+    const second = state.loadRepos(state.sources[0], true);
+    calls[1].resolve({ repos: [repo], errors: [] });
+    await second;
+    expect(state.repoWarnings[source.id]).toEqual([]);
+  });
+});
+
+test('markStale with urls keeps data visible for those urls only, refs and histories', async () => {
+  await fixture(async (state, calls) => {
+    const other = 'https://fixture.invalid/admin/other';
+    state.refs = { [item.url]: { branches: ['main'], tags: [] }, [other]: { branches: ['main'], tags: [] } };
+    const loading = state.ensureCommits(item);
+    calls[0].resolve([{ sha: 'one' }]);
+    await loading;
+    expect(state.needsCommits(item)).toBe(false);
+    state.markMetadataStale([item.url]);
+    expect(state.needsRefs(item.url)).toBe(true);
+    expect(state.needsRefs(other)).toBe(false);
+    expect(state.needsCommits(item)).toBe(true);
+    expect(state.refState(item)).toBe('ok');
+    expect(state.commitsFor(item)).toEqual([{ sha: 'one' }]);
+  });
+});
+
+test('the backoff keeps growing when a loading picker is closed and reopened', async () => {
+  await fixture(async (state, calls) => {
+    const failing = state.ensureRefs([item.url]);
+    calls[0].reject(new Error('down'));
+    await failing;
+    expect(state.refs[item.url].failures).toBe(1);
+    setSystemTime(new Date(state.refs[item.url].retryAt + 1));
+    try {
+      const closed = new AbortController();
+      const abandoned = state.ensureRefs([item.url], false, closed.signal);
+      expect(state.refs[item.url].failures).toBe(1);
+      closed.abort();
+      await abandoned;
+      calls[1].resolve([{ url: item.url, branches: ['main'], tags: [] }]);
+      await settle();
+      expect(state.refs[item.url]).toBeUndefined();
+      const again = state.ensureRefs([item.url]);
+      calls[2].reject(new Error('down'));
+      await again;
+      expect(state.refs[item.url].failures).toBe(2);
+    } finally { setSystemTime(); }
   });
 });

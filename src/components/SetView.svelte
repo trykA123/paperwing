@@ -101,6 +101,7 @@
     next: (kind: Parameters<typeof runNextAction>[1]) => runNextAction(item, kind),
     menu: (anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) => openMenu(item, anchor),
     rename: (value: string | null) => rename(item, value),
+    retryStatus: () => { void app.checkExists([app.dest(item)]); },
   });
 
   const bulk = {

@@ -63,7 +63,7 @@ export type Repo = {
   id: string; source: string; org: string; name: string; description: string;
   url: string; defaultBranch: string; pushedAt: string; archived: boolean;
 };
-export type RepoList = { repos: Repo[]; fetchedAt: number; errors: string[]; stale?: boolean };
+export type RepoList = { repos: Repo[]; fetchedAt: number; errors: string[]; stale?: boolean; warnings?: string[]; partial?: boolean };
 export type PullState = 'draft' | 'open' | 'merged' | 'closed';
 export type ReviewState = 'approved' | 'changesRequested' | 'reviewRequired' | 'none';
 export type ChecksState = 'success' | 'failure' | 'pending' | 'none';

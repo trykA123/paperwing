@@ -2,6 +2,7 @@ import { Credentials } from './state/credentials.svelte';
 import { RepositoryMetadata, type RefState } from './state/repository-metadata.svelte';
 import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
+import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
 import { railClick } from './rail';
 import { doingWord, RunNotices } from './state/run-notices';
@@ -24,6 +25,8 @@ export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
 export type { View } from './workspace';
 
 export type { RefsEntry, CommitsEntry, RefState } from './state/repository-metadata.svelte';
+const STATUS_CHUNK = 8;
+const STATUS_CONCURRENCY = 4;
 export const uid = () => Math.random().toString(36).slice(2, 10);
 export const RUNNING: Phase[] = ['resolving', 'cloning', 'fetching', 'checkout'];
 export const PHASE: Record<Phase, string> = {
@@ -145,6 +148,7 @@ class AppState {
   set repos(value: RepositoryMetadata['repos']) { this.repositoryMetadata.repos = value; }
   get repoErrors() { return this.repositoryMetadata.repoErrors; }
   set repoErrors(value: RepositoryMetadata['repoErrors']) { this.repositoryMetadata.repoErrors = value; }
+  get repoWarnings() { return this.repositoryMetadata.repoWarnings; }
   get staleRepos() { return this.repositoryMetadata.staleRepos; }
   get loadingRepos() { return this.repositoryMetadata.loadingRepos; }
   set loadingRepos(value: RepositoryMetadata['loadingRepos']) { this.repositoryMetadata.loadingRepos = value; }
@@ -154,6 +158,7 @@ class AppState {
   set commits(value: RepositoryMetadata['commits']) { this.repositoryMetadata.commits = value; }
   exists = $state<Record<string, boolean>>({});
   local = $state<Record<string, LocalStatus>>({});
+  statusFailures = $state<Record<string, string>>({});
   jobs = $state<Record<string, Progress>>({});
   running = $state(false);
   clonePreparing = $state(false);
@@ -201,6 +206,8 @@ class AppState {
   #runNotice = 0;
   pushing = $state<Record<string, 'Pushing' | 'Waiting'>>({});
   #cloneWaiters: (() => void)[] = [];
+  #statusGeneration = 0;
+  #statusGenerations = new Map<string, number>();
 
   get allRepos() { return this.repositoryMetadata.allRepos; }
   set allRepos(value: RepositoryMetadata['allRepos']) { this.repositoryMetadata.allRepos = value; }
@@ -279,7 +286,7 @@ class AppState {
 
   loadRepos(src: Source, refresh: boolean, signal?: AbortSignal) { return this.repositoryMetadata.loadRepos(src, refresh, signal); }
 
-  markMetadataStale() { this.repositoryMetadata.markStale(); }
+  markMetadataStale(urls?: readonly string[]) { this.repositoryMetadata.markStale(urls); }
 
   openView(view: View, setId = this.ws.activeSet, query?: string) {
     const id = tabId(view, setId);
@@ -629,17 +636,39 @@ class AppState {
   }
 
   /** Refreshes "on disk" markers and the Local column (branch, ahead/behind, changes) for these folders. */
-  async checkExists(dests: string[]) {
-    if (!dests.length) return;
+  async checkExists(dests: string[]): Promise<LocalStatus[]> {
+    if (!dests.length) return [];
     this.#invalidateTrees(dests);
-    const paths = new Set(dests);
-    const urls = this.ws.sets.flatMap(set => set.items.filter(item => paths.has(this.dest(item, set.id))).map(item => item.url));
-    this.repositoryMetadata.invalidateRefs(urls);
-    for (const s of await api.localStatus(dests)) {
-      this.exists[s.path] = s.exists;
-      this.local[s.path] = s;
-    }
+    const generation = ++this.#statusGeneration;
+    const owned = (path: string) => this.#statusGenerations.get(path) === generation;
+    for (const path of dests) { this.#statusGenerations.set(path, generation); delete this.statusFailures[path]; }
+    const rows: LocalStatus[] = [];
+    const failed = await loadInChunks(dests, {
+      size: STATUS_CHUNK, concurrency: STATUS_CONCURRENCY,
+      load: async chunk => { const paths = chunk.filter(owned); return paths.length ? api.localStatus(paths) : []; },
+      publish: chunk => {
+        for (const s of chunk) {
+          if (!owned(s.path)) continue;
+          this.exists[s.path] = s.exists;
+          this.local[s.path] = s;
+          delete this.statusFailures[s.path];
+          rows.push(s);
+        }
+      },
+    });
+    this.#reportStatusFailures(failed, owned);
     await Promise.all(this.openTreePaths.filter(path => dests.includes(path)).map(path => this.loadTree(path, true)));
+    return rows;
+  }
+
+  #reportStatusFailures(failed: { chunk: readonly string[]; reason: unknown }[], owned: (path: string) => boolean) {
+    let reported = false;
+    for (const { chunk, reason } of failed) {
+      const missing = chunk.filter(path => owned(path) && !this.local[path]);
+      const text = reason instanceof Error ? reason.message : String(reason);
+      for (const path of missing) this.statusFailures[path] = text;
+      if (missing.length && !reported) { reported = true; this.toast(`Could not read the status of some folders: ${text}`, 'warn'); }
+    }
   }
 
   refLabel(item: SetItem) {
@@ -725,9 +754,10 @@ class AppState {
       retry: again => void this.startClone([...again], mode, runSet), viewActivity: () => { this.activityOpen = true; },
     });
     this.#invalidateTrees(this.repositoryTrees.paths());
+    if (mode === 'fetch' || mode === 'pull') this.markMetadataStale(this.#runItems.map(item => item.url));
     if (mode === 'fetch' && !failed.length) this.lastFetch[runSet] = Date.now();
     const owner = this.ws.sets.find(set => set.id === runSet) ?? this.temporary.find(runSet) ?? this.set;
-    this.checkExists(owner.items.map(i => this.dest(i, owner.id)));
+    void this.checkExists(owner.items.map(i => this.dest(i, owner.id)));
   }
 }
 

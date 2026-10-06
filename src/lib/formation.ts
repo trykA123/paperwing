@@ -51,10 +51,11 @@ export type SyncView =
   | { kind: 'unknown' }
   | { kind: 'missing' }
   | { kind: 'broken'; reason: string }
+  | { kind: 'unavailable'; reason: string }
   | { kind: 'rails'; ahead: number; behind: number; dirty: number; inSync: boolean; unpublished: boolean; label: string };
 
-export function syncView(local: LocalStatus | undefined): SyncView {
-  if (!local) return { kind: 'unknown' };
+export function syncView(local: LocalStatus | undefined, failure?: string): SyncView {
+  if (!local) return failure ? { kind: 'unavailable', reason: failure } : { kind: 'unknown' };
   if (!local.exists) return { kind: 'missing' };
   if (!local.repo) return { kind: 'broken', reason: 'Folder is not a Git repository' };
   if (local.error) return { kind: 'broken', reason: local.error };

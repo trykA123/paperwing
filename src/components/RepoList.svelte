@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { confirm } from '../lib/confirm';
   import { ago, app, matches } from '../lib/state.svelte';
+  import { warningsForOrg } from '../lib/repo-notices';
   import type { Repo } from '../lib/api';
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
@@ -27,6 +28,7 @@
   const rows = $derived(size === 'all' ? list : list.slice(cur * size, cur * size + size));
   const loading = $derived(mode === 'org' ? !!app.loadingRepos[source] : Object.values(app.loadingRepos).some(Boolean));
   const errors = $derived(mode === 'org' ? (app.repoErrors[source] ?? []) : Object.values(app.repoErrors).flat());
+  const warnings = $derived(mode === 'org' ? warningsForOrg(app.repoWarnings[source] ?? [], org) : Object.values(app.repoWarnings).flat());
 
   let previousQuery = untrack(() => query);
   $effect(() => {
@@ -67,6 +69,7 @@
 </header>
 
 {#if errors.length}<Alert kind="err">{errors.join(' · ')}</Alert>{/if}
+{#if warnings.length}<Alert kind="warn" role="status" title={mode === 'org' ? 'Partial list' : 'Some repositories may be missing'}>{warnings.join(' · ')}</Alert>{/if}
 
 <div class="card fill">
   {#key `${cur}|${size}|${query}`}
