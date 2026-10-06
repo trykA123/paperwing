@@ -9,9 +9,14 @@ export const NOTICE_LIMIT = 5;
 
 const browserScheduler: Scheduler = { set: (run, ms) => setTimeout(run, ms), clear: handle => clearTimeout(handle as number) };
 
+export type HoldSource = 'pointer' | 'focus';
+
+const autoDismisses = (item: NoticeItem) => NOTICE_MS[item.kind] !== null;
+
 export class NotificationStore {
   items = $state<NoticeItem[]>([]);
   #timers = new Map<number, unknown>();
+  #holds = new Map<number, Set<HoldSource>>();
   #seq = 0;
   #clock: Scheduler;
 
@@ -19,11 +24,22 @@ export class NotificationStore {
 
   notify(msg: string, kind: NoticeKind = 'info', options: NoticeOptions = {}) {
     const same = this.items.find(item => item.msg === msg && item.kind === kind);
-    if (same) { this.#arm(same); return same.id; }
+    if (same) {
+      const item = { ...same, detail: options.detail, actions: options.actions ?? [] };
+      this.items = this.items.map(entry => (entry.id === same.id ? item : entry));
+      this.#arm(item);
+      return same.id;
+    }
     const item: NoticeItem = { id: ++this.#seq, msg, kind, detail: options.detail, actions: options.actions ?? [] };
-    const next = [...this.items, item];
-    for (const dropped of next.slice(0, -NOTICE_LIMIT)) this.#cancel(dropped.id);
-    this.items = next.slice(-NOTICE_LIMIT);
+    let next = [...this.items, item];
+    while (next.length > NOTICE_LIMIT) {
+      const older = next.filter(entry => entry.id !== item.id);
+      const dropped = older.find(autoDismisses) ?? older[0];
+      this.#cancel(dropped.id);
+      this.#holds.delete(dropped.id);
+      next = next.filter(entry => entry.id !== dropped.id);
+    }
+    this.items = next;
     this.#arm(item);
     return item.id;
   }
@@ -38,12 +54,25 @@ export class NotificationStore {
 
   dismiss(id: number) {
     this.#cancel(id);
+    this.#holds.delete(id);
     this.items = this.items.filter(item => item.id !== id);
   }
 
-  hold(id: number) { this.#cancel(id); }
+  dismissErrors() {
+    for (const item of this.items.filter(entry => entry.kind === 'error')) this.dismiss(item.id);
+  }
 
-  release(id: number) {
+  hold(id: number, source: HoldSource) {
+    const sources = this.#holds.get(id) ?? new Set<HoldSource>();
+    sources.add(source);
+    this.#holds.set(id, sources);
+    this.#cancel(id);
+  }
+
+  release(id: number, source: HoldSource) {
+    const sources = this.#holds.get(id);
+    sources?.delete(source);
+    if (sources && !sources.size) this.#holds.delete(id);
     const item = this.items.find(entry => entry.id === id);
     if (item) this.#arm(item);
   }
@@ -55,6 +84,7 @@ export class NotificationStore {
 
   #arm(item: NoticeItem) {
     this.#cancel(item.id);
+    if (this.#holds.has(item.id)) return;
     const ms = NOTICE_MS[item.kind];
     if (ms !== null) this.#timers.set(item.id, this.#clock.set(() => this.dismiss(item.id), ms));
   }
