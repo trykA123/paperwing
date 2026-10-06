@@ -1,24 +1,14 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Theme } from './api';
+import { CODE_FONTS, UI_FONTS, fontCss } from './fonts';
 
-export type FontChoice = { id: string; label: string; css: string };
-
-export const UI_FONTS: FontChoice[] = [
-  { id: 'geist', label: 'Geist', css: '"Geist Variable", system-ui, sans-serif' },
-  { id: 'native', label: 'System UI', css: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif' },
-];
-
-export const CODE_FONTS: FontChoice[] = [
-  { id: 'geist-mono', label: 'Geist Mono', css: '"Geist Mono Variable", ui-monospace, monospace' },
-  { id: 'native', label: 'System monospace', css: '"Cascadia Code", Consolas, ui-monospace, monospace' },
-];
+export { CODE_FONTS, UI_FONTS, type FontChoice } from './fonts';
 
 const dark = window.matchMedia('(prefers-color-scheme: dark)');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 /** Duration for JS-driven transitions; 0 when the user prefers reduced motion. */
 export const motionMs = (ms: number) => (reduceMotion.matches ? 0 : ms);
-const fontCss = (list: FontChoice[], id: string) => (list.find(f => f.id === id) ?? list[0]).css;
 
 export function resolvedTheme(theme: Theme): 'light' | 'dark' {
   return theme === 'system' ? (dark.matches ? 'dark' : 'light') : theme;

@@ -35,14 +35,14 @@
     --tone-folder: var(--warn);
     --tone-repo: var(--acc);
     --tone-file: var(--faint-text);
-    --tone-branch: var(--ok-text);
+    --tone-branch: var(--hl-text);
     --act-sync: var(--tone-repo);
     --act-record: var(--tone-commit);
     --act-branch: var(--tone-branch);
     --act-inspect: var(--acc);
     --act-danger: var(--err-text);
-    --tone-tag: var(--hl-text);
-    --tone-commit: var(--acc);
+    --tone-tag: var(--warn-text);
+    --tone-commit: var(--ok-text);
 }
 
 [data-theme="dark"] {

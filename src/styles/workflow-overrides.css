@@ -656,6 +656,11 @@ svg.i.tone-danger {
     background: color-mix(in oklch, var(--err) 85%, black);
 }
 
+[data-theme="dark"] .btn.danger:hover:not(:disabled) {
+    border-color: color-mix(in oklch, var(--err) 85%, white);
+    background: color-mix(in oklch, var(--err) 85%, white);
+}
+
 .tree-entry .tree-delete {
     display: grid;
     place-items: center;

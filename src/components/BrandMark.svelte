@@ -1,15 +1,20 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+
   let { busy = false, size = 24 }: { busy?: boolean; size?: number } = $props();
   let settled = $state(false);
+  let looping = $state(false);
+  let mark: SVGSVGElement;
 
-  $effect(() => { if (busy) settled = true; });
+  onMount(() => { if (!mark.getClientRects().length) settled = true; });
+  $effect(() => { if (busy) { settled = true; looping = true; } });
 </script>
 
-<svg class="logo skein-mark" class:busy class:settled width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+<svg bind:this={mark} class="logo skein-mark" class:looping class:settled width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
   <rect width="64" height="64" rx="15" fill="#006eb8" />
   <path d="M14 21H24C34 21 30 43 40 43H50" fill="none" stroke="#a7d4e4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
   <circle cx="14" cy="21" r="6" fill="#a7d4e4" />
-  <g class="travel"><circle class="pulse" cx="50" cy="43" r="6.5" fill="#fff200" onanimationend={() => (settled = true)} /></g>
+  <g class="travel" onanimationiteration={() => { if (!busy) looping = false; }}><circle class="pulse" cx="50" cy="43" r="6.5" fill="#fff200" onanimationend={() => (settled = true)} /></g>
 </svg>
 
 <style>
@@ -17,8 +22,8 @@
   .travel { animation: travel 1.3s linear both; }
   .pulse { transform-box: fill-box; transform-origin: center; animation: land 320ms ease-out 1.3s both; }
   .settled .travel, .settled .pulse { animation: none; }
-  .busy .travel { animation: loop 1.5s linear infinite; }
-  .busy .pulse { animation: none; }
+  .looping .travel { animation: loop 1.5s linear infinite; }
+  .looping .pulse { animation: none; }
 
   @keyframes land { 50% { transform: scale(1.35); } }
   @keyframes travel {
@@ -69,6 +74,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .travel, .pulse, .busy .travel { animation: none; }
+    .travel, .pulse, .looping .travel { animation: none; }
   }
 </style>

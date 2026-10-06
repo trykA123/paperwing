@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 5483,
-  "normalizedSourceSHA256": "73ed9ef25fb65f9306515a1d229f4b16d8039fe848a32bbf0c3c9b65dcfbf6af",
+  "originalLineCount": 5488,
+  "normalizedSourceSHA256": "25c14cc5827cee4a2850bbeb16b2fa90eb19e294377114a2cb1d32124a8167ec",
   "chapters": [
     {
       "path": "comparison.css",
@@ -14,7 +14,7 @@
       "path": "base.css",
       "firstLine": 555,
       "lastLine": 760,
-      "normalizedSHA256": "a68ea6bc6bb42c1092cb51accf6eca38e218e2fb13256f7bfe63a5f9d4de4702"
+      "normalizedSHA256": "fea4751c559deae181eb8487a0ecebd4e6181daa36edb9f71b47f6f7d8fa1304"
     },
     {
       "path": "shell.css",
@@ -50,7 +50,7 @@
       "path": "theme.css",
       "firstLine": 2747,
       "lastLine": 3599,
-      "normalizedSHA256": "95868b5e5852688a52d18f5c83d17b215001829afaff33ea85109997b5699b65"
+      "normalizedSHA256": "7061a17d3c690bd5c763ac6fdecc7debd58d7d03865d00dc826f1a8a6d0077eb"
     },
     {
       "path": "motion.css",
@@ -73,19 +73,19 @@
     {
       "path": "workflow-overrides.css",
       "firstLine": 4449,
-      "lastLine": 5248,
-      "normalizedSHA256": "ddf6705498f8d70e638d23acb428a6284a9cd141b65ce8642919c02ad91d0049"
+      "lastLine": 5253,
+      "normalizedSHA256": "4dcd9b2cd89cd461eaadbd1104af6dea9f16784647065daf5548db0135a66544"
     },
     {
       "path": "comparison-overrides.css",
-      "firstLine": 5249,
-      "lastLine": 5361,
+      "firstLine": 5254,
+      "lastLine": 5366,
       "normalizedSHA256": "0d4f3d7b6162396c3d00d420b6ef03e07dbb03ac63fbfdcfb835d90ec5712081"
     },
     {
       "path": "select.css",
-      "firstLine": 5362,
-      "lastLine": 5483,
+      "firstLine": 5367,
+      "lastLine": 5488,
       "normalizedSHA256": "0353b962eee511f050c6ac5cdd8a5922d8b0c0b53e058f2ff3ee93b9cb258385"
     }
   ]
