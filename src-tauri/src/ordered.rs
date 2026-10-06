@@ -61,7 +61,7 @@ mod tests {
                 tokio::time::sleep(std::time::Duration::from_millis(u64::from(6 - n))).await;
                 Ok(n)
             },
-            |index| Err(index),
+            Err,
         )
         .await;
         assert_eq!(out, vec![Ok(0), Ok(1), Err(2), Ok(3), Ok(4), Ok(5)]);
