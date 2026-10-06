@@ -41,8 +41,8 @@
 }
 
 .ab.down {
-    color: var(--c-ro-text);
-    background: color-mix(in oklch, var(--c-ro) 12%, var(--panel));
+    color: var(--hl-text);
+    background: color-mix(in oklch, var(--hl) 12%, var(--panel));
 }
 
 .ab.dirty {
@@ -149,8 +149,8 @@
 }
 
 .clbl.l-branch {
-    background: color-mix(in oklch, var(--c-lo) 12%, var(--panel));
-    color: var(--c-lo-text);
+    background: color-mix(in oklch, var(--acc) 12%, var(--panel));
+    color: var(--acc);
 }
 
 .clbl.l-tag {

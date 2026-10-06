@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dir, '../..');
@@ -58,9 +58,26 @@ function selfTest() {
   console.log(`CSS order self-test passed: ${manifest.chapters.length} contiguous chapters, ${digest(source)}`);
 }
 
+function write() {
+  const imports = [...readFileSync(entry, 'utf8').matchAll(/^@import '\.\/styles\/([^']+)';$/gm)].map(match => match[1]);
+  let next = 1;
+  const chapters = imports.map(path => {
+    const file = resolve(root, 'src/styles', path);
+    const text = normalize(readFileSync(file, 'utf8'), file);
+    const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+    const chapter = { path, firstLine: next, lastLine: next + lines - 1, normalizedSHA256: digest(text) };
+    next += lines;
+    return chapter;
+  });
+  const updated = { ...manifest, originalLineCount: next - 1, normalizedSourceSHA256: digest(flatten(entry)), chapters };
+  writeFileSync(resolve(root, 'src/styles/order.json'), JSON.stringify(updated, null, 2) + '\n');
+  console.log(`Wrote src/styles/order.json: ${chapters.length} chapters`);
+}
+
 if (import.meta.main) {
   try {
-    if (process.argv[2] === '--self-test') selfTest();
+    if (process.argv[2] === '--write') write();
+    else if (process.argv[2] === '--self-test') selfTest();
     else {
       verify(flatten(entry));
       const imports = readFileSync(entry, 'utf8').match(/^@import .+;$/gm) ?? [];
