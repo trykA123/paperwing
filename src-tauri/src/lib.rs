@@ -3,6 +3,7 @@ mod benchmark;
 #[cfg(feature = "test-profile")]
 mod test_profile;
 mod clone;
+mod branch_cleanup;
 mod commit;
 mod compare;
 mod file_guard;
@@ -133,6 +134,9 @@ pub fn run() {
             commit::create_branch,
             commit::push_branch,
             commit::delete_branch,
+            branch_cleanup::merged_branches,
+            branch_cleanup::delete_merged_branches,
+            branch_cleanup::delete_remote_branches,
             trash::trash_set_folders,
             compare::comparison_open,
             compare::comparison_refresh,
