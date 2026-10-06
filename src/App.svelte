@@ -30,7 +30,9 @@
   import ConfirmDialog from './components/ConfirmDialog.svelte';
   import { confirmQueue } from './lib/confirm';
   import SetCompare from './components/SetCompare.svelte';
+  import { OpenFolderStore, tauriTransport } from './lib/open-folder.svelte';
 
+  const openFolder = new OpenFolderStore(tauriTransport, (message, kind) => app.toast(message, kind));
   const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings');
   const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
   let reducedMotion = $state(false), panelsMoving = $state(false);
@@ -80,6 +82,7 @@
     updateMotion(); motion.addEventListener('change', updateMotion);
     window.addEventListener('keydown', onKey, true);
     app.init().catch(e => app.toast(`Could not load settings: ${e}`, 'error'));
+    if (isTauri()) openFolder.start().catch(e => app.toast(`Could not listen for launch requests: ${e}`, 'error'));
     let disposed = false, closing = false;
     let unlisten: (() => void) | undefined;
     if (isTauri()) getCurrentWindow().onCloseRequested(async event => {
@@ -92,7 +95,7 @@
         await getCurrentWindow().destroy();
       } catch (reason) { app.toast(String(reason), 'error'); } finally { closing = false; }
     }).then(stop => { if (disposed) stop(); else unlisten = stop; }).catch(reason => app.toast(String(reason), 'error'));
-    return () => { disposed = true; unlisten?.(); window.removeEventListener('keydown', onKey, true); motion.removeEventListener('change', updateMotion); };
+    return () => { disposed = true; unlisten?.(); openFolder.stop(); window.removeEventListener('keydown', onKey, true); motion.removeEventListener('change', updateMotion); };
   });
 
   $effect(() => applyAppearance(app.ws.theme, app.ws.uiFont, app.ws.codeFont));

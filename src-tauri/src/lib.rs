@@ -22,6 +22,9 @@ mod platform;
 mod unsupported_files;
 mod settings;
 mod credentials;
+mod discover;
+mod discover_job;
+mod launch;
 mod trash;
 
 use std::path::Path;
@@ -61,7 +64,11 @@ pub fn run() {
     }
     #[cfg(feature = "test-profile")]
     credentials::drill();
-    let builder = tauri::Builder::default().manage(compare::Service::default());
+    let builder = tauri::Builder::default()
+        .plugin(launch::single_instance())
+        .manage(launch::Pending::from_process())
+        .manage(discover_job::Service::default())
+        .manage(compare::Service::default());
     #[cfg(windows)]
     let builder = builder.manage(files::Service::default());
     builder
@@ -158,6 +165,10 @@ pub fn run() {
             platform::probe_root,
             platform::path_identities,
             open_in_vscode,
+            launch::launch_request,
+            discover_job::discover_start,
+            discover_job::discover_cancel,
+            discover_job::discover_cancel_all,
         ])
         .run(context)
         .expect("error while running PaperWing");
