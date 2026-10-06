@@ -5,6 +5,7 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 ## Ready now
 | Packet | What | Size |
 |---|---|---|
+| [41](packets/41-windows-diagnostics.md) | Anonymous diagnostics export, test builds only | M |
 | [06](packets/06-windows-write-boundaries.md) | Split `files.rs` on Windows, no behaviour change | M |
 | [03b](packets/03b-rail-context-menus.md) | Activity rail panels and context menus | M |
 | [26](packets/26-stash-switch.md) | Stash UI and switch with stash across a set | M |
