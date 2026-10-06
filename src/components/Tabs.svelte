@@ -14,10 +14,12 @@
     app.activateTab(app.tabs[next].id);
     (event.currentTarget as HTMLElement).closest('.tabstrip')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
+
+  const titlebar = $derived(app.platform.platform === 'windows' ? true : undefined);
 </script>
 
-<header class="tabs-chrome" class:native-controls={app.platform.platform === 'windows'} data-tauri-drag-region>
-  <div class="tabstrip" role="tablist" aria-label="Workspace tabs" data-tauri-drag-region>
+<header class="tabs-chrome" class:native-controls={titlebar} data-tauri-drag-region={titlebar}>
+  <div class="tabstrip" role="tablist" aria-label="Workspace tabs">
     {#each app.tabs as tab, index (tab.id)}
       <div class="shell-tab" class:on={tab.id === app.activeTabId}>
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"
@@ -31,7 +33,8 @@
       </div>
     {/each}
   </div>
-  <div class="topbtns" data-tauri-drag-region>
+  <div class="drag-spacer" data-tauri-drag-region={titlebar}></div>
+  <div class="topbtns">
     <button class="kbtn" title="Command palette (Ctrl+K)" onclick={() => (app.paletteOpen = true)}><Icon name="search" /><span>Search or run a command...</span><kbd>Ctrl K</kbd></button>
     <button class="icon shell-control" class:on={app.ws.shell.sidebarVisible} title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.ws.shell.sidebarVisible}
       onclick={() => (app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible)}><Icon name="panel" /></button>
@@ -48,7 +51,9 @@
     padding-right: 0;
   }
 
-  :global(.shell-brand > *) {
-    pointer-events: none;
+  .drag-spacer {
+    flex: none;
+    align-self: stretch;
+    width: var(--drag-min);
   }
 </style>

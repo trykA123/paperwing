@@ -29,7 +29,6 @@
 
 <style>
   .window-controls {
-    --win-close: #c42b1c;
     display: flex;
     align-self: stretch;
     flex: none;
@@ -38,7 +37,7 @@
   button {
     display: grid;
     place-items: center;
-    width: 46px;
+    width: var(--win-control-w);
     height: 100%;
     border-radius: 0;
     color: var(--text);
@@ -54,6 +53,6 @@
 
   button.close:hover {
     background: var(--win-close);
-    color: #fff;
+    color: var(--on-danger);
   }
 </style>

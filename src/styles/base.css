@@ -1,6 +1,10 @@
 /* Skein Benzol, light. Wada plates 267, 257, 295, 143, 49. */
 :root {
     --font: "Geist Variable", system-ui, sans-serif;
+    --win-close: oklch(53.6% 0.191 30.1);
+    --on-danger: oklch(100% 0 0);
+    --win-control-w: 46px;
+    --drag-min: 48px;
     --mono: "Geist Mono Variable", ui-monospace, monospace;
     --bg: oklch(98.5% 0.004 117);
     --panel: oklch(100% 0 117);
