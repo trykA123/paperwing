@@ -131,14 +131,39 @@ pub(super) async fn update(
     if mode != "pull" {
         checkout_ref(app, admission, directory).await?;
     }
-    if mode == "pull" || job.ref_type == "branch" {
+    let merge = if mode == "pull" || job.ref_type == "branch" {
         checked_run(
             app,
             admission,
             directory,
             &["-C", &path, "merge", "--ff-only", "@{u}"],
         )
-        .await?;
+        .await
+    } else {
+        Ok(())
+    };
+    finish_update(job, mode, merge)
+}
+
+fn finish_update(
+    job: &crate::clone::Job,
+    mode: &str,
+    merge: Result<(), String>,
+) -> Result<(&'static str, String), String> {
+    if let Err(error) = merge {
+        if mode == "pull" {
+            return Err(format!("Pull needs a fast-forward: {error}"));
+        }
+        if super::super::interrupted(&error) {
+            return Err(error);
+        }
+        return Ok((
+            "done",
+            format!(
+                "On {} (not fast-forwarded: local changes or diverged)",
+                job.ref_name
+            ),
+        ));
     }
     Ok((
         "done",
@@ -151,6 +176,9 @@ pub(super) async fn update(
         },
     ))
 }
+
+#[cfg(test)]
+mod tests;
 
 async fn checkout_ref(
     app: &AppHandle,

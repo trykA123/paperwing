@@ -4,13 +4,20 @@ Clone, fetch, pull, switch and reclone use the accepted [Linux guard contract](l
 They require a registered destination and saved origin/ref, a user-owned writable local ext4
 workspace, confined parent resolution, and fresh root, ancestor and Git metadata identities.
 Linux clone admission retains its lease through queued jobs, native moves and Git cleanup.
+Each job is admitted separately; refused jobs report failure while eligible jobs continue.
+Only clone mode creates missing destination parents. Fetch, pull and switch leave absent parents alone.
 The trash command checks clone admission while holding the filesystem writer gate.
 
 Clones run in a private sibling directory through a retained descriptor path. Only a successful
 checkout publishes into the destination, using a same-mount no-overwrite rename. Failed or
 cancelled clone data stays in its reported staging path. Recloning first verifies the existing
-origin and preserves the checkout at a unique sibling `<folder>.bak-<random>` path. Neither
-preserved checkouts nor failed staging directories are cleaned up automatically.
+origin and preserves the checkout at a unique sibling `<folder>.bak-<random>` path.
+Origin checks compare repository keys, allowing equivalent SSH/HTTPS URLs and Git `insteadOf`
+rewrites. Verification failures remove the newly created staging folder; clone-command failures and
+cancellations retain staging data. Preserved checkouts are never cleaned up automatically.
+
+After a successful switch checkout, a refused fast-forward reports the selected ref with a warning.
+Cancellation and timeout still fail the switch. Pull failures retain the `Pull needs a fast-forward:` prefix.
 
 Folder recycling implements the [freedesktop Trash specification](https://specifications.freedesktop.org/trash/latest/)
 directly with the existing pinned Rustix/libc primitives; no GIO dependency is added.
@@ -24,7 +31,9 @@ Each unique item receives an exclusive mode0600 `.trashinfo` before its folder m
 `DeletionDate` uses local time in `YYYY-MM-DDThh:mm:ss` form. The info file and its directory
 are synchronized first; source and payload parents are synchronized after the rename.
 Destination collisions never overwrite existing data. Cross-mount moves are refused;
-there is no copy/delete or permanent-delete fallback. Failed moves retain any info artifact.
+there is no copy/delete or permanent-delete fallback. Any failure before or during rename removes
+the newly created info file and synchronizes `info/`. A no-overwrite collision retries a fresh name.
+Only a successful rename followed by a later failure retains its info file for restoration.
 Errors after a move identify both candidate locations for inspection and keep configuration.
 
 Only registered, unshared ordinary repositories qualify. Each folder returns its own
@@ -40,4 +49,4 @@ exercise reverse renames and verify original inode, file bytes and modes.
 This follows the approved practical race limits: descriptors retain objects and repeated
 checks detect observed namespace substitutions, but a non-cooperating writer can still race
 the final check. Ordered fsync and process-interruption evidence do not prove power-loss
-durability. The desktop may empty Trash independently. No automatic restore or cleanup runs.
+durability. The desktop may empty Trash independently. No automatic restore runs.

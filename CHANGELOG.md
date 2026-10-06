@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix Linux folder job admission, trash metadata cleanup and clone verification; preserve Windows source formatting.
 - Add guarded Linux clone/reclone and desktop Trash with recoverable moves; failed recycling keeps the set until explicit configuration-only removal. Windows behavior is unchanged.
 
 - Add a repository history drawer: open it from the command palette or the details panel to see working tree, local commits, origin commits and the shared base as two rails, with hover and keyboard details. It reads local refs only and never fetches.

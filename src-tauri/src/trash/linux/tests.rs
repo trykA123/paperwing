@@ -92,7 +92,7 @@ fn shared_unregistered_and_ineligible_folders_stay_on_disk() {
 }
 
 #[test]
-fn changed_source_and_parent_are_refused_with_info_and_payload_retained() {
+fn pre_rename_failures_remove_info_and_retain_source_data() {
     for change in ["root", "metadata", "parent"] {
         let fixture = Fixture::new("trash-conflict-");
         let path = fixture.repository("repo");
@@ -125,6 +125,19 @@ fn changed_source_and_parent_are_refused_with_info_and_payload_retained() {
             std::fs::read(retained.join("file")).unwrap(),
             b"restorable data"
         );
+        let data = if change == "parent" {
+            fixture.0.with_extension("saved").join("data")
+        } else {
+            fixture.0.join("data")
+        };
+        assert_eq!(
+            std::fs::read_dir(data.join("Trash/info")).unwrap().count(),
+            0
+        );
+        if change == "parent" {
+            std::fs::remove_dir(&fixture.0).unwrap();
+            std::fs::rename(fixture.0.with_extension("saved"), &fixture.0).unwrap();
+        }
     }
 }
 
@@ -133,22 +146,23 @@ fn cross_device_and_name_collisions_never_replace_or_copy_source_data() {
     let fixture = Fixture::new("trash-cross-device-");
     let path = fixture.repository("repo");
     let source = Directory::open(&path).unwrap();
-    let cross = PathBuf::from("/tmp")
-        .join(crate::linux_guard::storage::unique_name("skein-cross-").unwrap());
-    std::fs::create_dir(&cross).unwrap();
-    let target = Directory::open(&cross).unwrap();
+    let cross = crate::platform::Fixture::new("trash-cross-device");
+    let target = Directory::open(&cross.0).unwrap();
     assert!(!source.same_mount(&target));
     assert!(source
         .move_to(&target, "repo")
         .unwrap_err()
         .to_string()
         .contains("Cross-device"));
-    assert!(!cross.join("repo").exists());
+    assert!(!cross.0.join("repo").exists());
     assert_eq!(
         std::fs::read(path.join("file")).unwrap(),
         b"restorable data"
     );
-    std::fs::remove_dir(&cross).unwrap();
+    let cross_path = cross.0.clone();
+    drop(target);
+    drop(cross);
+    assert!(!cross_path.exists());
     let target = Directory::open(&fixture.0).unwrap();
     std::fs::create_dir(fixture.0.join("collision")).unwrap();
     std::fs::write(fixture.0.join("collision/sentinel"), b"keep").unwrap();
@@ -255,4 +269,71 @@ fn malformed_registration_keeps_every_folder_and_refuses_an_empty_success() {
         b"restorable data"
     );
     assert!(!fixture.0.join("data").exists());
+}
+
+#[test]
+fn rename_collision_discards_info_and_retries_without_overwriting() {
+    let fixture = Fixture::new("trash-rename-collision-");
+    let path = fixture.repository("repo");
+    let source = Directory::open(&path).unwrap();
+    let root = Root::open(&path, &[path.join(".git/config")]).unwrap();
+    let trash = Trash::for_source(&source, &fixture.0.join("data")).unwrap();
+    let mut collision = None;
+    let mut attempts = 0;
+    trash
+        .recycle_with(&source, &root, |target, name, renamed| {
+            attempts += 1;
+            if attempts == 1 {
+                let path = target.path.join(name);
+                std::fs::create_dir(&path).unwrap();
+                std::fs::write(path.join("sentinel"), b"keep").unwrap();
+                collision = Some(name.to_string());
+            }
+            source.move_to_tracked(target, name, renamed)
+        })
+        .unwrap();
+    assert_eq!(attempts, 2);
+    let collision = collision.unwrap();
+    assert!(!trash
+        .info
+        .path
+        .join(format!("{collision}.trashinfo"))
+        .exists());
+    assert_eq!(std::fs::read_dir(&trash.info.path).unwrap().count(), 1);
+    assert_eq!(
+        std::fs::read(trash.files.path.join(collision).join("sentinel")).unwrap(),
+        b"keep"
+    );
+    assert!(!source.path.exists());
+}
+
+#[test]
+fn post_rename_failure_keeps_info_and_restorable_payload() {
+    let fixture = Fixture::new("trash-after-rename-");
+    let path = fixture.repository("repo");
+    let source = Directory::open(&path).unwrap();
+    let root = Root::open(&path, &[path.join(".git/config")]).unwrap();
+    let trash = Trash::for_source(&source, &fixture.0.join("data")).unwrap();
+    let mut payload = None;
+    assert!(trash
+        .recycle_with(&source, &root, |target, name, renamed| {
+            payload = Some(source.move_to_tracked(target, name, renamed)?);
+            Err(crate::linux_guard::Error::io(rustix::io::Errno::IO))
+        })
+        .is_err());
+    let payload = payload.unwrap();
+    assert!(!source.path.exists());
+    assert_eq!(std::fs::read_dir(&trash.info.path).unwrap().count(), 1);
+    assert_eq!(
+        std::fs::read(payload.join("file")).unwrap(),
+        b"restorable data"
+    );
+    Directory::open(&payload)
+        .unwrap()
+        .move_to(&Directory::open(&fixture.0).unwrap(), "repo")
+        .unwrap();
+    assert_eq!(
+        std::fs::read(path.join("file")).unwrap(),
+        b"restorable data"
+    );
 }

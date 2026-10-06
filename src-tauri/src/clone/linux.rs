@@ -1,10 +1,12 @@
-use super::{emit, short, validate, Job, Opts};
+use super::{emit, repo_key, short, validate, Job, Opts};
 mod execution;
+mod verification;
 use crate::linux_guard::{folders::Directory, mutation::Parent, Root};
 use crate::settings::Settings;
 use execution::{clone_into, update};
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
+use verification::{origin_matches, verify_clone};
 
 pub(super) struct Admission {
     pub(super) job: Job,
@@ -14,7 +16,28 @@ pub(super) struct Admission {
     repository: Option<Root>,
 }
 
-pub(super) fn admit(settings: &Settings, job: &Job) -> Result<Admission, String> {
+pub(super) fn admit_jobs(
+    settings: &Settings,
+    jobs: Vec<Job>,
+    mode: &str,
+) -> Vec<(Job, Result<Admission, String>)> {
+    let mut destinations = std::collections::HashSet::new();
+    jobs.into_iter()
+        .map(|job| {
+            let result = crate::platform::destination_key(Path::new(&job.dest)).and_then(|key| {
+                if destinations.contains(&key) {
+                    return Err("Clone jobs share a destination; run it once.".into());
+                }
+                let admission = admit(settings, &job, mode)?;
+                destinations.insert(key);
+                Ok(admission)
+            });
+            (job, result)
+        })
+        .collect()
+}
+
+pub(super) fn admit(settings: &Settings, job: &Job, mode: &str) -> Result<Admission, String> {
     validate_binding(settings, job)?;
     let root = Path::new(
         settings.workspace["root"]
@@ -28,7 +51,7 @@ pub(super) fn admit(settings: &Settings, job: &Job) -> Result<Admission, String>
         .to_str()
         .ok_or("Unsupported clone destination")?;
     let parent = workspace
-        .parent(relative, true)
+        .parent(relative, mode == "clone")
         .map_err(|e| e.to_string())?;
     let directory = Directory::open(
         Path::new(&job.dest)
@@ -110,17 +133,10 @@ impl Admission {
         let root = Root::open(path, &[path.join(".git/config")]).map_err(|e| e.to_string())?;
         root.probe_write().map_err(|e| e.to_string())?;
         let directory = Directory::open(path).map_err(|e| e.to_string())?;
-        let fd_path = directory.fd_path();
-        let output = crate::git::buffered(
-            &["-C", &fd_path, "remote", "get-url", "origin"],
-            "Clone origin check",
-            &[0],
-        )
-        .await?;
+        let matches = origin_matches(&directory, &self.job.url).await?;
         root.revalidate().map_err(|e| e.to_string())?;
         self.check()?;
-        if output.code != Some(0) || String::from_utf8_lossy(&output.stdout).trim() != self.job.url
-        {
+        if !matches {
             return Err("Folder origin changed or holds a different repository".into());
         }
         self.repository = Some(root);
@@ -185,9 +201,7 @@ pub(super) async fn run_job(
         .map_err(|e| e.to_string())?;
     let result = clone_into(app, &admission, &stage, opts).await;
     result.map_err(|error| format!("{error}. Clone data retained at {}", stage.path.display()))?;
-    let repository = verify_clone(&admission, &stage)
-        .await
-        .map_err(|error| format!("{error}. Clone data retained at {}", stage.path.display()))?;
+    let repository = verify_clone(&admission, &stage).await?;
     admission
         .rebind(app)
         .and_then(|()| publish(&admission, &stage, &repository))
@@ -249,57 +263,6 @@ pub(super) fn publish(
         )
     })?;
     Ok(())
-}
-
-pub(super) async fn verify_clone(admission: &Admission, stage: &Directory) -> Result<Root, String> {
-    admission.check()?;
-    let target = match admission.job.ref_type.as_str() {
-        "branch" => format!("refs/remotes/origin/{}", admission.job.ref_name),
-        "tag" => format!("refs/tags/{}", admission.job.ref_name),
-        _ => admission.job.ref_name.clone(),
-    };
-    let repository = Root::open(
-        &stage.path,
-        &[
-            stage.path.join(".git/config"),
-            stage.path.join(".git/HEAD"),
-            stage.path.join(".git/packed-refs"),
-            stage.path.join(".git").join(&target),
-        ],
-    )
-    .map_err(|e| e.to_string())?;
-    repository.probe_write().map_err(|e| e.to_string())?;
-    let path = stage.fd_path();
-    let origin = crate::git::buffered(
-        &["-C", &path, "remote", "get-url", "origin"],
-        "Verify clone origin",
-        &[0],
-    )
-    .await?;
-    if origin.code != Some(0) || String::from_utf8_lossy(&origin.stdout).trim() != admission.job.url
-    {
-        return Err("Cloned origin does not match its saved item; staging retained".into());
-    }
-    let target = format!("{target}^{{commit}}");
-    let heads = crate::git::buffered(
-        &["-C", &path, "rev-parse", "--verify", "HEAD"],
-        "Verify clone HEAD",
-        &[0],
-    )
-    .await?;
-    let expected = crate::git::buffered(
-        &["-C", &path, "rev-parse", "--verify", &target],
-        "Verify clone ref",
-        &[0],
-    )
-    .await?;
-    repository.revalidate().map_err(|e| e.to_string())?;
-    stage.revalidate().map_err(|e| e.to_string())?;
-    admission.check()?;
-    if heads.code != Some(0) || expected.code != Some(0) || heads.stdout != expected.stdout {
-        return Err("Cloned checkout does not match its saved ref; staging retained".into());
-    }
-    Ok(repository)
 }
 
 #[cfg(test)]

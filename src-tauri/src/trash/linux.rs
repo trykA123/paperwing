@@ -1,6 +1,6 @@
 use crate::linux_guard::{
     folders::{create_private_path, Directory},
-    Root,
+    Error, Root,
 };
 use std::path::{Path, PathBuf};
 
@@ -69,6 +69,55 @@ impl Trash {
     }
 
     pub(super) fn recycle(&self, source: &Directory, repository: &Root) -> Result<(), String> {
+        self.recycle_with(source, repository, |target, name, renamed| {
+            source.move_to_tracked(target, name, renamed)
+        })
+    }
+
+    fn recycle_with(
+        &self,
+        source: &Directory,
+        repository: &Root,
+        mut move_folder: impl FnMut(&Directory, &str, &mut bool) -> Result<PathBuf, Error>,
+    ) -> Result<(), String> {
+        let bytes = self.info_bytes(source)?;
+        for _ in 0..128 {
+            let name =
+                crate::linux_guard::storage::unique_name("skein-").map_err(|e| e.to_string())?;
+            if !self.files.missing(&name).map_err(|e| e.to_string())? {
+                continue;
+            }
+            let info_name = format!("{name}.trashinfo");
+            match self.info.write_info(&info_name, bytes.as_bytes()) {
+                Ok(()) => (),
+                Err(error) if error.code == Some(libc::EEXIST) => continue,
+                Err(error) => return Err(error.to_string()),
+            }
+            let mut renamed = false;
+            let result = repository
+                .probe_write()
+                .and_then(|()| move_folder(&self.files, &name, &mut renamed));
+            let Err(error) = result else {
+                return Ok(());
+            };
+            if !renamed {
+                self.info.remove_info(&info_name).map_err(|cleanup| {
+                    format!("{error}; could not remove trash info: {cleanup}")
+                })?;
+                if error.code == Some(libc::EEXIST) {
+                    continue;
+                }
+            }
+            return Err(format!(
+                "{error}; inspect {} and {}",
+                source.path.display(),
+                self.files.path.join(name).display()
+            ));
+        }
+        Err("Trash names are exhausted; source retained".into())
+    }
+
+    fn info_bytes(&self, source: &Directory) -> Result<String, String> {
         self.directory.private().map_err(|e| e.to_string())?;
         self.files.private().map_err(|e| e.to_string())?;
         self.info.private().map_err(|e| e.to_string())?;
@@ -87,38 +136,11 @@ impl Trash {
                 .map_err(|_| "Trash source is outside its mount")?,
             None => &source.path,
         };
-        let bytes = format!(
+        Ok(format!(
             "[Trash Info]\nPath={}\nDeletionDate={}\n",
             encode_path(original),
             deletion_date()?
-        );
-        for _ in 0..128 {
-            let name =
-                crate::linux_guard::storage::unique_name("skein-").map_err(|e| e.to_string())?;
-            if !self.files.missing(&name).map_err(|e| e.to_string())? {
-                continue;
-            }
-            match self
-                .info
-                .write_info(&format!("{name}.trashinfo"), bytes.as_bytes())
-            {
-                Ok(()) => (),
-                Err(error) if error.code == Some(libc::EEXIST) => continue,
-                Err(error) => return Err(error.to_string()),
-            }
-            repository.probe_write().map_err(|e| e.to_string())?;
-            match source.move_to(&self.files, &name) {
-                Ok(_) => return Ok(()),
-                Err(error) => {
-                    return Err(format!(
-                        "{error}; inspect {} and {}",
-                        source.path.display(),
-                        self.files.path.join(name).display()
-                    ))
-                }
-            }
-        }
-        Err("Trash names are exhausted; source retained".into())
+        ))
     }
 }
 
