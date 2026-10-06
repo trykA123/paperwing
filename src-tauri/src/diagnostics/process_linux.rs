@@ -1,6 +1,5 @@
-use crate::diagnostics::sampler::{
-    descendant_pids, MachineHardware, ProcessHistory, ProcessRecord,
-};
+use super::process::{MachineHardware, ProcessHistory, ProcessRecord};
+use super::resources::descendant_pids;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;

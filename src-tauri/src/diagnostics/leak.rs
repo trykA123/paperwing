@@ -1,3 +1,4 @@
+use super::vocabulary;
 use crate::settings::Settings;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -95,7 +96,10 @@ impl Denylist {
     pub fn add(&mut self, value: &str) {
         let value = value.trim();
         if value.chars().count() >= 3 {
-            self.tokens.insert(value.to_lowercase());
+            let token = value.to_lowercase();
+            if !vocabulary::contains(&token) {
+                self.tokens.insert(token);
+            }
         }
     }
 
@@ -109,9 +113,18 @@ impl Denylist {
         }
     }
 
-    pub fn contains(&self, serialized: &str) -> bool {
-        let serialized = serialized.to_lowercase();
-        self.tokens.iter().any(|token| serialized.contains(token))
+    pub fn contains(&self, value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::String(text) => {
+                let text = text.to_lowercase();
+                self.tokens
+                    .iter()
+                    .any(|token| vocabulary::contains_word(&text, token))
+            }
+            serde_json::Value::Array(values) => values.iter().any(|value| self.contains(value)),
+            serde_json::Value::Object(values) => values.values().any(|value| self.contains(value)),
+            _ => false,
+        }
     }
 }
 
@@ -121,7 +134,9 @@ pub fn serialize_checked<T: Serialize>(
 ) -> Result<String, &'static str> {
     let serialized = serde_json::to_string_pretty(value)
         .map_err(|_| "Diagnostics document could not be serialized")?;
-    if denylist.contains(&serialized) {
+    let value = serde_json::from_str(&serialized)
+        .map_err(|_| "Diagnostics document could not be serialized")?;
+    if denylist.contains(&value) {
         return Err(REFUSAL);
     }
     Ok(serialized)
@@ -274,7 +289,7 @@ mod tests {
             "private-folder",
         ] {
             let serialized = json!({"value": token.to_ascii_lowercase()});
-            assert!(denylist.contains(&serialized.to_string()));
+            assert!(denylist.contains(&serialized));
             assert_eq!(
                 serialize_checked(&serialized, &denylist).unwrap_err(),
                 REFUSAL
@@ -292,5 +307,53 @@ mod tests {
             remote_parts("git@github.example:Owner/Repo.git"),
             ["github.example", "Owner", "Repo"]
         );
+    }
+
+    #[test]
+    fn common_path_components_and_source_names_allow_fixed_export_strings() {
+        let settings = Settings {
+            sources: vec![Source {
+                id: "source".into(),
+                name: "GitHub Enterprise".into(),
+                kind: "github".into(),
+                host: "github.example".into(),
+                orgs: Vec::new(),
+                urls: Vec::new(),
+                credential_managed: false,
+            }],
+            workspace: json!({"sets": []}),
+        };
+        let mut denylist = Denylist::from_settings(&settings, &[]);
+        for path in ["C:/Users/admin/source/repos", "D:/git/work/app"] {
+            denylist.add_path(Path::new(path));
+        }
+        let document = json!({
+            "machine": {"osFamily": "windows", "systemDriveType": "ssd"},
+            "timings": {"events": [{"phase": "git.process", "operation": "status"}]},
+            "resources": {"git": {"count": 1}},
+            "scale": {"repos": [{"repo": "repo-1", "worktree": false}]}
+        });
+        assert!(serialize_checked(&document, &denylist).is_ok());
+    }
+
+    #[test]
+    fn scans_only_string_values_with_case_insensitive_word_boundaries() {
+        let mut denylist = Denylist::default();
+        denylist.add("ClientCorp");
+        denylist.add("314");
+        let clean = json!({
+            "ClientCorp": "ClientCorporation",
+            "count": 314,
+            "nested": ["preClientCorp", "ClientCorp_suffix", "314159"]
+        });
+        assert!(serialize_checked(&clean, &denylist).is_ok());
+        for value in [
+            json!({"nested": ["clientcorp"]}),
+            json!({"nested": {"value": "(CLIENTCORP)"}}),
+            json!({"value": "https://example.test/ClientCorp/repo"}),
+            json!({"value": "314"}),
+        ] {
+            assert_eq!(serialize_checked(&value, &denylist).unwrap_err(), REFUSAL);
+        }
     }
 }

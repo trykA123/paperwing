@@ -1,8 +1,66 @@
+use super::timings::{OPERATIONS, PHASES};
 use super::*;
 use crate::settings::{Settings, Source};
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[test]
+fn common_windows_layout_exports_a_complete_document_with_exact_ram() {
+    let home = r"C:\Users\admin\source\repos";
+    let repo = r"D:\git\work\app";
+    let settings = Settings {
+        sources: vec![Source {
+            id: "source".into(),
+            name: "GitHub Enterprise".into(),
+            kind: "github".into(),
+            host: "github.example".into(),
+            orgs: Vec::new(),
+            urls: Vec::new(),
+            credential_managed: false,
+        }],
+        workspace: serde_json::json!({
+            "root": home,
+            "sets": [{"name": "work", "items": [{"name": "app", "path": repo}]}]
+        }),
+    };
+    let paths = [PathBuf::from(repo.replace('\\', "/"))];
+    let mut denylist = leak::Denylist::from_settings(&settings, &paths);
+    denylist.add_path(Path::new(&home.replace('\\', "/")));
+    let timings = timings(&serde_json::json!({
+        "aggregates": {"git.process/status": {"count": 1, "totalMs": 1.0, "maxMs": 1.0}},
+        "commands": {"status": 1},
+        "events": [{"phase": "git.process", "operation": "status", "durationMs": 1.0}]
+    }))
+    .unwrap();
+    let scale = scale::ScaleData {
+        set_count: 1,
+        repos_per_set: vec![1],
+        repos: vec![scale::ScaleRepo {
+            repo: format!("{}1", scale::REPO_PREFIX),
+            ..scale::ScaleRepo::default()
+        }],
+    };
+    let hardware = process::MachineHardware {
+        logical_cores: 8,
+        total_ram_bytes: 32_999_999_999,
+        system_drive_type: "ssd",
+        windows_build: Some(26_100),
+    };
+    let document = document_json(
+        scale,
+        timings,
+        resources::ResourceSnapshot::default(),
+        hardware,
+        "2.50.1".into(),
+        0,
+        &denylist,
+    )
+    .unwrap();
+    let value: serde_json::Value = serde_json::from_str(&document).unwrap();
+    assert_eq!(value["machine"]["totalRamBytes"], 33_000_000_000_u64);
+    assert_schema_strings(&value);
+}
 
 #[tokio::test]
 async fn fixture_document_hides_set_repo_owner_and_path_strings() {
@@ -65,10 +123,7 @@ async fn fixture_document_hides_set_repo_owner_and_path_strings() {
         "private-repo",
     ] {
         assert!(
-            denylist.contains(&format!(
-                "{{\"value\":\"{}\"}}",
-                planted.to_ascii_lowercase()
-            )),
+            denylist.contains(&serde_json::json!({"value": planted.to_ascii_lowercase()})),
             "missing {planted}"
         );
         assert_eq!(
@@ -94,7 +149,7 @@ async fn fixture_document_hides_set_repo_owner_and_path_strings() {
         scale,
         timings,
         resources.snapshot().rounded(),
-        sampler::hardware(),
+        process::hardware(),
         git_version().await.unwrap(),
         resources.uptime_ms(),
         &denylist,
@@ -129,17 +184,14 @@ async fn run_git(repo: &Path, command: &[&str]) {
 fn assert_schema_strings(value: &serde_json::Value) {
     match value {
         serde_json::Value::String(text) => {
-            let fixed = text == "linux"
-                || text == "windows"
-                || text == "ssd"
-                || text == "hdd"
-                || text == "unknown"
+            let fixed = document::OS_FAMILIES.contains(&text.as_str())
+                || document::DRIVE_TYPES.contains(&text.as_str())
                 || PHASES.contains(&text.as_str())
                 || OPERATIONS.contains(&text.as_str());
             let version = text.split('.').all(|part| {
                 !part.is_empty() && part.chars().all(|character| character.is_ascii_digit())
             });
-            let repo = text.strip_prefix("repo-").is_some_and(|number| {
+            let repo = text.strip_prefix(scale::REPO_PREFIX).is_some_and(|number| {
                 !number.is_empty() && number.chars().all(|character| character.is_ascii_digit())
             });
             assert!(fixed || version || repo, "unexpected diagnostics string");
