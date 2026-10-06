@@ -104,6 +104,17 @@ impl Service {
         Ok((id, flag))
     }
 
+    fn cancel_all(&self) -> usize {
+        let active = self
+            .active
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        active
+            .values()
+            .for_each(|flag| flag.store(true, Ordering::Relaxed));
+        active.len()
+    }
+
     fn cancel(&self, id: u64) -> bool {
         let active = self.active.lock().ok();
         active
@@ -115,9 +126,24 @@ impl Service {
     }
 }
 
+struct Slot {
+    active: Arc<Mutex<HashMap<u64, Arc<AtomicBool>>>>,
+    id: u64,
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        let mut active = self
+            .active
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        active.remove(&self.id);
+    }
+}
+
 pub fn chosen_folder(path: &str) -> Result<std::path::PathBuf, String> {
+    crate::git::valid_path(path, true)?;
     let canonical = crate::platform::canonical_path(Path::new(path))?;
-    crate::git::valid_path(canonical.to_str().ok_or("Unsupported path encoding")?, true)?;
     if !canonical.is_dir() {
         return Err("Only folders can be scanned".into());
     }
@@ -139,24 +165,22 @@ pub async fn discover_start(
         ..Limits::default()
     };
     let (id, cancel) = service.register()?;
-    let active = service.active.clone();
+    let slot = Slot {
+        active: service.active.clone(),
+        id,
+    };
     tauri::async_runtime::spawn_blocking(move || {
+        let _slot = slot;
         let send = |outbound: Outbound| {
             let sent = match outbound {
                 Outbound::Batch(repos) => app.emit(BATCH_EVENT, BatchPayload { id, repos }),
-                Outbound::Done(summary) => {
-                    eprintln!("folder scan {id} finished: {summary:?}");
-                    app.emit(DONE_EVENT, DonePayload { id, summary })
-                }
+                Outbound::Done(summary) => app.emit(DONE_EVENT, DonePayload { id, summary }),
             };
             if sent.is_err() {
                 cancel.store(true, Ordering::Relaxed);
             }
         };
         run_job(&root, limits, &cancel, &send);
-        if let Ok(mut active) = active.lock() {
-            active.remove(&id);
-        }
     });
     Ok(id)
 }
@@ -164,6 +188,11 @@ pub async fn discover_start(
 #[tauri::command]
 pub async fn discover_cancel(service: State<'_, Service>, id: u64) -> Result<bool, String> {
     Ok(service.cancel(id))
+}
+
+#[tauri::command]
+pub async fn discover_cancel_all(service: State<'_, Service>) -> Result<usize, String> {
+    Ok(service.cancel_all())
 }
 
 #[cfg(test)]
@@ -253,6 +282,25 @@ mod tests {
         assert!(service.cancel(started[0].0));
         assert!(started[0].1.load(Ordering::Relaxed));
         assert!(!service.cancel(999));
+        assert_eq!(service.cancel_all(), MAX_RUNNING);
+        assert!(started.iter().all(|(_, flag)| flag.load(Ordering::Relaxed)));
+    }
+
+    #[test]
+    fn a_slot_frees_its_registration_even_when_the_job_panics() {
+        let service = Service::default();
+        let (id, _) = service.register().unwrap();
+        let slot = Slot {
+            active: service.active.clone(),
+            id,
+        };
+        let outcome = std::thread::spawn(move || {
+            let _slot = slot;
+            panic!("scan failed");
+        })
+        .join();
+        assert!(outcome.is_err());
+        assert_eq!(service.cancel_all(), 0);
     }
 
     #[test]

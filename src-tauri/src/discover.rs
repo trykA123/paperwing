@@ -5,6 +5,19 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+const HIDDEN: [&str; 11] = [
+    ".git",
+    ".cache",
+    ".venv",
+    ".tox",
+    ".idea",
+    ".vscode",
+    ".gradle",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".terraform",
+];
 const SKIPPED: [&str; 7] = [
     "node_modules",
     "target",
@@ -93,6 +106,7 @@ pub fn scan(
     emit: &mut dyn FnMut(Event),
 ) -> Summary {
     let mut run = Run {
+        root,
         limits,
         summary: Summary::default(),
         cancel,
@@ -114,6 +128,7 @@ pub fn scan(
 }
 
 struct Run<'a> {
+    root: &'a Path,
     limits: Limits,
     summary: Summary,
     cancel: &'a AtomicBool,
@@ -134,7 +149,7 @@ impl Run<'_> {
     }
 
     fn visit(&mut self, dir: &Dir, queue: &mut VecDeque<Dir>, emit: &mut dyn FnMut(Event)) -> bool {
-        if let Some((kind, head)) = classify(&dir.path) {
+        if let Some((kind, head)) = classify(&dir.path, self.root) {
             if !self.report(&dir.path, kind, head, None, emit) {
                 return false;
             }
@@ -184,7 +199,7 @@ impl Run<'_> {
             let Some(path) = safe_child(repo, &relative) else {
                 continue;
             };
-            let Some((_, head)) = classify(&path) else {
+            let Some((_, head)) = classify(&path, self.root) else {
                 continue;
             };
             if !self.report(&path, RepoKind::Submodule, head, Some(repo), emit) {
@@ -199,16 +214,22 @@ impl Run<'_> {
             self.summary.unreadable += 1;
             return;
         };
+        let room = (self.limits.directories as usize)
+            .saturating_sub(self.summary.directories as usize + queue.len());
         let mut children = Vec::new();
-        for entry in entries.flatten() {
-            let Ok(metadata) = entry.metadata() else {
+        for entry in entries {
+            if self.cancel.load(Ordering::Relaxed) {
+                self.summary.cancelled = true;
+                return;
+            }
+            let Some(path) = self.child_directory(entry) else {
                 continue;
             };
-            if is_link(&metadata) {
-                self.summary.links_skipped += 1;
-            } else if metadata.is_dir() && !skipped(&entry.file_name().to_string_lossy()) {
-                children.push(entry.path());
+            if children.len() >= room {
+                self.summary.capped = Some(Cap::Directories);
+                break;
             }
+            children.push(path);
         }
         children.sort();
         queue.extend(children.into_iter().map(|path| Dir {
@@ -216,17 +237,36 @@ impl Run<'_> {
             depth: dir.depth + 1,
         }));
     }
+
+    fn child_directory(&mut self, entry: std::io::Result<fs::DirEntry>) -> Option<PathBuf> {
+        let Ok(entry) = entry else {
+            self.summary.unreadable += 1;
+            return None;
+        };
+        let Ok(metadata) = entry.metadata() else {
+            self.summary.unreadable += 1;
+            return None;
+        };
+        if is_link(&metadata) {
+            self.summary.links_skipped += 1;
+            return None;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let wanted =
+            !skipped(&name) || (name != ".git" && classify(&entry.path(), self.root).is_some());
+        (metadata.is_dir() && wanted).then(|| entry.path())
+    }
 }
 
 fn skipped(name: &str) -> bool {
-    name.starts_with('.')
-        || SKIPPED.iter().any(|entry| {
-            if cfg!(windows) {
-                entry.eq_ignore_ascii_case(name)
-            } else {
-                *entry == name
-            }
-        })
+    let same = |entry: &&str| {
+        if cfg!(windows) {
+            entry.eq_ignore_ascii_case(name)
+        } else {
+            *entry == name
+        }
+    };
+    HIDDEN.iter().any(same) || SKIPPED.iter().any(same)
 }
 
 fn is_link(metadata: &fs::Metadata) -> bool {
@@ -244,22 +284,32 @@ fn is_link(metadata: &fs::Metadata) -> bool {
 }
 
 fn read_text(path: &Path) -> Option<String> {
+    if !fs::symlink_metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW);
+    }
+    let file = options.open(path).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
     let mut text = String::new();
-    fs::File::open(path)
-        .ok()?
-        .take(TEXT_LIMIT)
-        .read_to_string(&mut text)
-        .ok()?;
+    file.take(TEXT_LIMIT).read_to_string(&mut text).ok()?;
     Some(text)
 }
 
-fn classify(dir: &Path) -> Option<(RepoKind, Head)> {
+fn classify(dir: &Path, root: &Path) -> Option<(RepoKind, Head)> {
     let marker = dir.join(".git");
     match fs::symlink_metadata(&marker) {
         Ok(metadata) if metadata.is_dir() => {
             return Some((RepoKind::Normal, read_head(&marker.join("HEAD"))))
         }
-        Ok(metadata) if metadata.is_file() => return Some(linked_repository(dir, &marker)),
+        Ok(metadata) if metadata.is_file() => return Some(linked_repository(dir, &marker, root)),
         Ok(_) => return None,
         Err(_) => {}
     }
@@ -274,44 +324,63 @@ fn is_bare(dir: &Path) -> bool {
         && kind("refs").is_ok_and(|kind| kind.is_dir())
 }
 
-fn linked_repository(dir: &Path, marker: &Path) -> (RepoKind, Head) {
-    let target = read_text(marker)
-        .and_then(|text| {
-            text.lines().find_map(|line| {
-                line.strip_prefix("gitdir:")
-                    .map(|rest| PathBuf::from(rest.trim()))
-            })
+fn linked_repository(dir: &Path, marker: &Path, root: &Path) -> (RepoKind, Head) {
+    let target = read_text(marker).and_then(|text| {
+        text.lines().find_map(|line| {
+            line.strip_prefix("gitdir:")
+                .map(|rest| normalize(&dir.join(rest.trim())))
         })
-        .map(|target| {
-            if target.is_absolute() {
-                target
-            } else {
-                dir.join(target)
-            }
-        });
+    });
     let Some(target) = target else {
-        return (
-            RepoKind::Worktree,
-            Head {
-                branch: None,
-                detached: false,
-            },
-        );
+        return (RepoKind::Worktree, no_head());
     };
-    let names: Vec<_> = target
+    let nearest = target
         .components()
-        .filter_map(|part| part.as_os_str().to_str())
-        .collect();
-    let nearest = names
-        .iter()
         .rev()
-        .find(|name| matches!(**name, "worktrees" | "modules"));
-    let kind = if nearest == Some(&"modules") {
+        .filter_map(|part| part.as_os_str().to_str())
+        .find(|name| matches!(*name, "worktrees" | "modules"));
+    let kind = if nearest == Some("modules") {
         RepoKind::Submodule
     } else {
         RepoKind::Worktree
     };
+    if !gitdir_allowed(&target, root) {
+        return (kind, no_head());
+    }
     (kind, read_head(&target.join("HEAD")))
+}
+
+fn no_head() -> Head {
+    Head {
+        branch: None,
+        detached: false,
+    }
+}
+
+fn normalize(path: &Path) -> PathBuf {
+    let mut parts = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::ParentDir => {
+                parts.pop();
+            }
+            Component::CurDir => {}
+            other => parts.push(other.as_os_str()),
+        }
+    }
+    parts
+}
+
+fn gitdir_allowed(target: &Path, root: &Path) -> bool {
+    #[cfg(windows)]
+    if !matches!(target.components().next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), std::path::Prefix::Disk(_)))
+    {
+        return false;
+    }
+    target.starts_with(root)
+        && target
+            .to_str()
+            .is_some_and(|text| crate::git::valid_path(text, true).is_ok())
 }
 
 fn read_head(path: &Path) -> Head {

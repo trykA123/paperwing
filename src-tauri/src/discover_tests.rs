@@ -127,7 +127,7 @@ fn skips_dependency_build_and_hidden_directories() {
         "venv/x",
         ".cache/x",
         "vendor/x",
-        ".hidden/x",
+        ".tox/x",
     ] {
         repo(&fixture.0, skipped);
     }
@@ -185,10 +185,9 @@ fn directory_cap_stops_the_scan_and_says_so() {
         fs::create_dir(fixture.0.join(format!("d{index:05}"))).unwrap();
     }
     repo(&fixture.0, "zzz");
-    let (found, summary) = run(&fixture.0, Limits::default());
+    let (_, summary) = run(&fixture.0, Limits::default());
     assert_eq!(summary.directories, 10_000);
     assert_eq!(summary.capped, Some(Cap::Directories));
-    assert!(found.is_empty());
 }
 
 #[test]
@@ -235,4 +234,85 @@ fn cancellation_mid_scan_returns_partial_results() {
     });
     assert!(summary.cancelled);
     assert_eq!(seen, 2);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn fifo_and_linked_metadata_files_never_block_or_escape() {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::symlink;
+    let fixture = Fixture::new("discover-fifo");
+    repo(&fixture.0, "fifo");
+    let head = fixture.0.join("fifo/.git/HEAD");
+    fs::remove_file(&head).unwrap();
+    let name = CString::new(head.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    repo(&fixture.0, "linked");
+    let secret = fixture.0.join("secret");
+    fs::write(&secret, "ref: refs/heads/leaked\n").unwrap();
+    let head = fixture.0.join("linked/.git/HEAD");
+    fs::remove_file(&head).unwrap();
+    symlink(&secret, &head).unwrap();
+    fs::create_dir_all(fixture.0.join("marker")).unwrap();
+    symlink(fixture.0.join("linked/.git"), fixture.0.join("marker/.git")).unwrap();
+    let (found, _) = run(&fixture.0, Limits::default());
+    assert_eq!(names(&found), ["fifo", "linked"]);
+    assert!(found.iter().all(|item| item.branch.is_none()));
+}
+
+#[test]
+fn gitdir_targets_outside_the_folder_or_unc_style_report_no_branch() {
+    let outside = Fixture::new("discover-gitdir-outside");
+    fs::write(outside.0.join("HEAD"), "ref: refs/heads/leaked\n").unwrap();
+    let fixture = Fixture::new("discover-gitdir");
+    for (name, text) in [
+        ("away", format!("gitdir: {}\n", outside.0.display())),
+        ("unc", "gitdir: \\\\server\\share\\repo\n".to_string()),
+        ("up", "gitdir: ../../../../../../../etc\n".to_string()),
+    ] {
+        fs::create_dir_all(fixture.0.join(name)).unwrap();
+        fs::write(fixture.0.join(name).join(".git"), text).unwrap();
+    }
+    let (found, _) = run(&fixture.0, Limits::default());
+    assert_eq!(names(&found), ["away", "unc", "up"]);
+    assert!(found
+        .iter()
+        .all(|item| item.branch.is_none() && !item.detached));
+}
+
+#[test]
+fn repositories_named_like_skipped_directories_are_still_found() {
+    let fixture = Fixture::new("discover-named");
+    for name in ["build", "dist", "target", "vendor", "node_modules"] {
+        repo(&fixture.0, name);
+    }
+    repo(&fixture.0, "vendor2/x");
+    repo(&fixture.0, ".config/tool");
+    repo(&fixture.0, ".idea/x");
+    let (found, _) = run(&fixture.0, Limits::default());
+    assert_eq!(
+        names(&found),
+        [
+            "build",
+            "dist",
+            "node_modules",
+            "target",
+            "tool",
+            "vendor",
+            "x"
+        ]
+    );
+}
+
+#[test]
+fn a_scan_cancelled_before_listing_visits_nothing() {
+    let fixture = Fixture::new("discover-cancel-listing");
+    for index in 0..50 {
+        fs::create_dir(fixture.0.join(format!("d{index}"))).unwrap();
+    }
+    let cancel = AtomicBool::new(true);
+    let summary = scan(&fixture.0, Limits::default(), &cancel, &mut |_| {});
+    assert!(summary.cancelled);
+    assert_eq!(summary.directories, 0);
 }

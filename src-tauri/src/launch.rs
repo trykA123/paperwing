@@ -37,6 +37,7 @@ pub fn parse_args(args: &[String], cwd: &Path) -> LaunchRequest {
     let mut folders: Vec<String> = Vec::new();
     let mut ignored = Vec::new();
     for arg in args.iter().filter(|arg| !arg.is_empty()) {
+        let arg = &unquote_drive_root(arg);
         match accept(arg, cwd, &folders) {
             Ok(path) => folders.push(path),
             Err(reason) => ignored.push(Ignored {
@@ -58,6 +59,14 @@ pub fn parse_args(args: &[String], cwd: &Path) -> LaunchRequest {
         _ => None,
     };
     LaunchRequest { action, ignored }
+}
+
+fn unquote_drive_root(arg: &str) -> String {
+    let bytes = arg.as_bytes();
+    if cfg!(windows) && bytes.len() == 3 && bytes[0].is_ascii_alphabetic() && &arg[1..] == ":\"" {
+        return format!("{}:\\", &arg[..1]);
+    }
+    arg.to_string()
 }
 
 fn accept(arg: &str, cwd: &Path, taken: &[String]) -> Result<String, String> {
@@ -116,7 +125,6 @@ impl Pending {
 pub fn single_instance<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri_plugin_single_instance::init(|app, argv, cwd| {
         let request = parse_args(argv.get(1..).unwrap_or_default(), Path::new(&cwd));
-        eprintln!("launch forwarded from a second instance: {request:?}");
         if app.state::<Pending>().push(request) {
             let _ = app.emit(LAUNCH_EVENT, ());
         }
@@ -136,11 +144,7 @@ fn focus_main<R: Runtime>(app: &AppHandle<R>) {
 pub async fn launch_request(
     pending: tauri::State<'_, Pending>,
 ) -> Result<Vec<LaunchRequest>, String> {
-    let requests = pending.drain();
-    if !requests.is_empty() {
-        eprintln!("launch requests delivered to the window: {requests:?}");
-    }
-    Ok(requests)
+    Ok(pending.drain())
 }
 
 #[cfg(test)]
@@ -242,11 +246,20 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn a_linked_argument_resolves_to_its_real_folder() {
+    fn a_linked_argument_is_ignored_with_a_reason() {
         let (fixture, one, _) = folders();
         std::os::unix::fs::symlink(&one, fixture.0.join("link")).unwrap();
         let request = parse_args(&strings(&["link"]), &fixture.0);
-        assert_eq!(request.action, Some(LaunchAction::OpenFolder { path: one }));
+        assert_eq!(request.action, None);
+        assert_eq!(request.ignored.len(), 1);
+        assert!(request.ignored[0].reason.contains("Linked"));
+    }
+
+    #[test]
+    fn a_quoted_drive_root_argument_regains_its_separator_on_windows() {
+        let fixed = unquote_drive_root("C:\"");
+        assert_eq!(fixed, if cfg!(windows) { "C:\\" } else { "C:\"" });
+        assert_eq!(unquote_drive_root("C:\\work"), "C:\\work");
     }
 
     #[test]

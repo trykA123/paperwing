@@ -168,6 +168,7 @@ pub fn run() {
             launch::launch_request,
             discover_job::discover_start,
             discover_job::discover_cancel,
+            discover_job::discover_cancel_all,
         ])
         .run(context)
         .expect("error while running PaperWing");

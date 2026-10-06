@@ -3,19 +3,20 @@ import { beforeEach, expect, test } from 'bun:test';
 
 const { OpenFolderStore, describeScan, folderName } = await import('./open-folder.svelte.ts');
 
-let notices, scans, handlers, queue;
+let notices, scans, handlers, queue, cancelAll;
 const repo = (path, extra = {}) => ({ path, name: folderName(path), kind: 'normal', branch: 'main', detached: false, parent: null, ...extra });
 const summary = (extra = {}) => ({ repositories: 0, directories: 1, unreadable: 0, linksSkipped: 0, capped: null, cancelled: false, ...extra });
 const transport = {
     drainRequests: async () => queue.splice(0),
     startScan: async path => { scans.push(path); return scans.length; },
     cancelScan: async id => { scans.push(`cancel:${id}`); return true; },
+    cancelAllScans: async () => { cancelAll += 1; return 0; },
     subscribe: async next => { handlers = next; return () => { handlers = null; }; },
 };
 const notify = (message, kind) => notices.push([message, kind]);
 const make = () => new OpenFolderStore(transport, notify);
 
-beforeEach(() => { notices = []; scans = []; handlers = null; queue = []; });
+beforeEach(() => { notices = []; cancelAll = 0; scans = []; handlers = null; queue = []; });
 
 test('A startup folder request starts one scan and creates a scanning temporary set', async () => {
     queue.push({ action: { kind: 'openFolder', path: '/home/u/code' }, ignored: [] });
@@ -90,6 +91,27 @@ test('Dismissing a scanning set cancels it and discards its late events', async 
     expect(scans).toContain('cancel:1');
     expect(store.sets).toHaveLength(0);
     expect(notices).toEqual([]);
+});
+
+test('Starting cancels scans left by a previous page load', async () => {
+    await make().start();
+    expect(cancelAll).toBe(1);
+});
+
+test('Events for scans this page never started are dropped, and early buffers are capped', async () => {
+    const store = make();
+    await store.start();
+    handlers.onBatch({ id: 99, repos: [repo('/stray/a')] });
+    expect(store.early.size).toBe(0);
+    let release;
+    const slow = new OpenFolderStore({ ...transport, startScan: () => new Promise(resolve => { release = () => resolve(1); }) }, notify);
+    await slow.start();
+    const opening = slow.open('/r');
+    for (let id = 10; id < 30; id += 1) handlers.onBatch({ id, repos: [repo('/x/a')] });
+    expect(slow.early.size).toBe(8);
+    release();
+    await opening;
+    expect(slow.early.size).toBe(0);
 });
 
 test('A failed scan start is reported and leaves no set', async () => {

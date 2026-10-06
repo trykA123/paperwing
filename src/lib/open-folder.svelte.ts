@@ -14,6 +14,7 @@ export type Transport = {
   drainRequests: () => Promise<LaunchRequest[]>;
   startScan: (path: string) => Promise<number>;
   cancelScan: (id: number) => Promise<boolean>;
+  cancelAllScans: () => Promise<number>;
   subscribe: (handlers: { onSignal: () => void; onBatch: (batch: DiscoverBatch) => void; onDone: (done: DiscoverDone) => void }) => Promise<() => void>;
 };
 
@@ -21,6 +22,7 @@ export const tauriTransport: Transport = {
   drainRequests: () => api.launchRequest(),
   startScan: path => api.discoverStart(path),
   cancelScan: id => api.discoverCancel(id),
+  cancelAllScans: () => api.discoverCancelAll(),
   subscribe: async ({ onSignal, onBatch, onDone }) => {
     const stops = await Promise.all([
       listen(events.launchRequest, onSignal),
@@ -43,6 +45,9 @@ export function describeScan(set: Pick<TempSet, 'name' | 'path' | 'repos' | 'cap
   return `Found ${set.repos.length} ${noun} in ${set.name}${set.capped ? ' (scan stopped at its limit)' : ''}`;
 }
 
+const EARLY_SCANS = 8;
+const EARLY_EVENTS = 600;
+
 export class OpenFolderStore {
   sets = $state<TempSet[]>([]);
   compare = $state<FolderCompareRequest | null>(null);
@@ -53,6 +58,7 @@ export class OpenFolderStore {
   private readonly dismissed = new Set<number>();
   private stopListening: (() => void) | undefined;
   private active = false;
+  private starting = 0;
 
   constructor(transport: Transport, notify: Notify) {
     this.transport = transport;
@@ -68,6 +74,7 @@ export class OpenFolderStore {
     });
     if (!this.active) { stop(); return; }
     this.stopListening = stop;
+    await this.transport.cancelAllScans().catch(() => 0);
     await this.drain();
   }
 
@@ -86,6 +93,7 @@ export class OpenFolderStore {
   }
 
   async open(path: string): Promise<TempSet | null> {
+    this.starting += 1;
     try {
       const scanId = await this.transport.startScan(path);
       const set: TempSet = { id: `temp-${scanId}`, scanId, name: folderName(path), path, repos: [], scanning: true, capped: null, cancelled: false, summary: null };
@@ -97,6 +105,9 @@ export class OpenFolderStore {
     } catch (reason) {
       this.notify(`Could not scan ${path}: ${reason}`, 'error');
       return null;
+    } finally {
+      this.starting -= 1;
+      if (this.starting === 0) this.early.clear();
     }
   }
 
@@ -113,11 +124,19 @@ export class OpenFolderStore {
     const scanId = event.type === 'batch' ? event.batch.id : event.done.id;
     const set = this.sets.find(entry => entry.scanId === scanId);
     if (!set) {
-      if (this.active && !this.dismissed.has(scanId)) this.early.set(scanId, [...(this.early.get(scanId) ?? []), event]);
+      this.buffer(scanId, event);
       return;
     }
     if (event.type === 'batch') this.merge(set, event.batch.repos);
     else this.finish(set, event.done.summary);
+  }
+
+  private buffer(scanId: number, event: ScanEvent): void {
+    if (!this.active || this.starting === 0 || this.dismissed.has(scanId)) return;
+    const held = this.early.get(scanId);
+    if (!held && this.early.size >= EARLY_SCANS) return;
+    if (held && held.length >= EARLY_EVENTS) return;
+    this.early.set(scanId, [...(held ?? []), event]);
   }
 
   private async drain(): Promise<void> {

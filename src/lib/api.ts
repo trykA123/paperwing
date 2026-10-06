@@ -189,4 +189,5 @@ export const api = {
   launchRequest: () => invoke<LaunchRequest[]>('launch_request'),
   discoverStart: (path: string, maxDepth?: number) => invoke<number>('discover_start', { path, maxDepth: maxDepth ?? null }),
   discoverCancel: (id: number) => invoke<boolean>('discover_cancel', { id }),
+  discoverCancelAll: () => invoke<number>('discover_cancel_all'),
 };
