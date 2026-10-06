@@ -210,6 +210,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
         assert!(cleared.running.iter().any(|entry| entry.context == "runner-clone"));
     });
     let result = execute(Request { args: &["clone", "--no-local", "--progress", "--", source, clone], context: "runner-clone", expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text }, Some(callback)).await.unwrap();
+    assert_eq!(activity_snapshot().iter().filter(|entry| entry.context == "runner-clone").count(), 1);
     assert_eq!(result.code, Some(0));
     assert!(lines.lock().unwrap().iter().any(|(stream, text)| stream == "stderr" && text.contains("Receiving objects:")));
     let status = buffered(&["-C", clone, "status", "--branch"], "runner-status", &[0]).await.unwrap();
@@ -298,7 +299,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     assert!(cancelled.is_err());
     assert!(requested.load(AtomicOrdering::Relaxed));
     let entries = activity_snapshot();
-    assert_eq!(entries.iter().filter(|entry| entry.context == "runner-clone").count(), 1);
+    assert!(entries.iter().filter(|entry| entry.context == "runner-clone").count() <= 1);
     assert!(entries.iter().any(|entry| entry.context == "runner-failure" && entry.state == "failed"));
     assert!(entries.iter().any(|entry| entry.context == "runner-timeout" && entry.state == "timedOut"));
     assert!(entries.iter().any(|entry| entry.context == "runner-cancel" && entry.state == "cancelled"));
