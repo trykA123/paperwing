@@ -104,6 +104,11 @@ export type RepoChanges = {
   author: string | null; authorError: string | null; stagedFiles: number; stagedAdded: number; stagedRemoved: number;
 };
 export type DiffArea = 'staged' | 'unstaged' | 'untracked';
+export type TagInfo = { name: string; commit: string; object: string; annotated: boolean; subject: string | null };
+export type CreateTagRequest = { name: string; message?: string | null; target?: string | null; moveExisting?: boolean };
+export type CreatedTag = { name: string; commit: string; object: string; annotated: boolean; previousObject: string | null };
+export type PushedTag = { remote: string; name: string; forced: boolean };
+export type DeletedTag = { name: string; object: string };
 export type TrashOutcome = { itemId: string; path: string; state: 'trashed' | 'missing' | 'skipped' | 'failed'; reason: string | null };
 export type ChangeContent = { original: string; modified: string; originalLabel: string; modifiedLabel: string; binary: boolean };
 
@@ -187,6 +192,11 @@ export const api = {
   createBranch: (path: string, name: string, start: string | null, switchTo: boolean) => invoke<void>('create_branch', { path, name, start, switch: switchTo }),
   pushBranch: (path: string) => invoke<{ remote: string; branch: string; upstreamSet: boolean }>('push_branch', { path }),
   deleteBranch: (path: string, name: string, force: boolean) => invoke<{ sha: string }>('delete_branch', { path, name, force }),
+  listTags: (path: string) => invoke<TagInfo[]>('list_tags', { path }),
+  createTag: (path: string, request: CreateTagRequest) => invoke<CreatedTag>('create_tag', { path, request }),
+  pushTag: (path: string, remote: string, name: string, lease: string | null) => invoke<PushedTag>('push_tag', { path, remote, name, lease }),
+  deleteTag: (path: string, name: string) => invoke<DeletedTag>('delete_tag', { path, name }),
+  deleteRemoteTag: (path: string, remote: string, name: string) => invoke<PushedTag>('delete_remote_tag', { path, remote, name }),
   trashSetFolders: (setId: string) => invoke<TrashOutcome[]>('trash_set_folders', { setId }),
   openComparison: (left: CompareEndpoint, right: CompareEndpoint) =>
     invoke<{ id: string; generation: number }>('comparison_open', { left, right }),

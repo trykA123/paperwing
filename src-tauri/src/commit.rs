@@ -57,7 +57,7 @@ pub struct CommitResult {
 }
 
 /// Runs git in `path` with literal pathspecs and without fsmonitor hooks; fails on any unexpected exit code.
-async fn run(path: &str, args: &[&str], context: &str, expected: &[i32], policy: OutputPolicy, input: Option<&[u8]>, timeout: Duration) -> Result<Captured, String> {
+pub(crate) async fn run(path: &str, args: &[&str], context: &str, expected: &[i32], policy: OutputPolicy, input: Option<&[u8]>, timeout: Duration) -> Result<Captured, String> {
     let mut argv = vec!["-C", path, "-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "--literal-pathspecs"];
     argv.extend_from_slice(args);
     let output = execute_cancellable_input(Request { args: &argv, context, expected, policy, timeout }, Arc::new(AtomicBool::new(false)), input).await?;
@@ -67,11 +67,11 @@ async fn run(path: &str, args: &[&str], context: &str, expected: &[i32], policy:
     Ok(output)
 }
 
-async fn quick(path: &str, args: &[&str], context: &str, expected: &[i32]) -> Result<Captured, String> {
+pub(crate) async fn quick(path: &str, args: &[&str], context: &str, expected: &[i32]) -> Result<Captured, String> {
     run(path, args, context, expected, OutputPolicy::Text, None, Duration::from_secs(45)).await
 }
 
-fn idle_check() -> Result<(), String> {
+pub(crate) fn idle_check() -> Result<(), String> {
     if crate::clone::busy() { return Err("A clone, fetch or pull is running; try again when it finishes".into()); }
     Ok(())
 }

@@ -4,6 +4,7 @@ mod benchmark;
 mod test_profile;
 mod clone;
 mod commit;
+mod tags;
 mod compare;
 mod file_guard;
 #[cfg(target_os = "linux")]
@@ -141,6 +142,11 @@ pub fn run() {
             commit::create_branch,
             commit::push_branch,
             commit::delete_branch,
+            tags::list_tags,
+            tags::create_tag,
+            tags::push_tag,
+            tags::delete_tag,
+            tags::delete_remote_tag,
             trash::trash_set_folders,
             compare::comparison_open,
             compare::comparison_refresh,
