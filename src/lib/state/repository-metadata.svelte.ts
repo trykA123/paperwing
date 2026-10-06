@@ -1,6 +1,7 @@
 import { api, type Commit, type Repo, type RefsResult, type SetItem, type Source } from '../api';
 import { ForegroundRequests } from './foreground-requests';
 import { commitHistoryKey, sourceFingerprint } from './metadata-keys';
+import { newFailures } from '../source-status';
 
 export type RefsEntry = {
   branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean; stale?: boolean; failures?: number; retryAt?: number;
@@ -47,7 +48,13 @@ export class RepositoryMetadata {
   private commitOwners = new Map<string, { source: string; url: string }>();
   private requests = new ForegroundRequests();
 
-  constructor(private sources: () => Source[], private items: () => SetItem[] = () => []) {}
+  private raisedFailures = new Map<string, string>();
+
+  constructor(private sources: () => Source[], private items: () => SetItem[] = () => [], private onListingFailure: (source: Source, message: string) => void = () => {}) {}
+
+  private noteListing(src: Source) {
+    for (const { message } of newFailures(this.raisedFailures, this.repoErrors, [src.id])) this.onListingFailure(src, message);
+  }
 
   private sourceScope(source: Source) {
     return JSON.stringify(['source-v2', source.id, sourceFingerprint(source), this.revisions[source.id] ?? 0]);
@@ -69,6 +76,7 @@ export class RepositoryMetadata {
     }
     delete this.repos[sourceId];
     delete this.repoErrors[sourceId];
+    this.raisedFailures.delete(sourceId);
     delete this.staleRepos[sourceId];
     delete this.repoWarnings[sourceId];
     this.listingScopes.delete(sourceId);
@@ -145,10 +153,12 @@ export class RepositoryMetadata {
         this.staleRepos[src.id] = offline;
         this.repoWarnings[src.id] = list.warnings ?? [];
         this.listingScopes.set(src.id, currentScope);
+        this.noteListing(src);
       } },
       fail: error => { if (current()) {
         this.repoErrors[src.id] = [String(error)];
         this.staleRepos[src.id] = !!this.repos[src.id];
+        this.noteListing(src);
       } },
       settled: () => { if (this.loadingListingKeys.get(src.id) === key) {
         this.loadingRepos[src.id] = false;

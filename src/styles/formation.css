@@ -136,8 +136,8 @@
     min-width: 0;
 }
 
-.activity-filters select {
-    width: 96px;
+.activity-filters .sel {
+    width: 104px;
 }
 
 .panel-activity .activity-state {
@@ -318,16 +318,18 @@
     color: var(--dim);
     font-size: var(--fs-xs);
     font-weight: 600;
-    letter-spacing: .06em;
+    letter-spacing: .04em;
     text-transform: uppercase;
 }
 
 .fm-row:not(.fm-head):hover {
-    background: var(--hover);
+    background: color-mix(in oklch, var(--acc) 4%, transparent);
 }
 
-.fm-row.sel {
-    background: color-mix(in oklch, var(--acc) 7%, transparent);
+.fm-row.sel,
+.fm-row.sel:not(.fm-head):hover {
+    background: color-mix(in oklch, var(--acc) 10%, transparent);
+    box-shadow: inset 2px 0 var(--acc);
 }
 
 .fm-row.focus {
@@ -363,6 +365,44 @@
 
 .fm-name:hover {
     color: var(--acc);
+}
+
+.fm-table.compact .fm-repo {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--sp-2);
+}
+
+.fm-table.compact .fm-name {
+    flex: none;
+    max-width: 60%;
+}
+
+.fm-table.compact .fm-ondisk {
+    display: none;
+}
+
+.fm-table.compact .fm-branch {
+    flex-direction: row;
+    gap: var(--sp-1);
+}
+
+.fm-table.compact .fm-branch .fm-ref {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.fm-table.compact .fm-note {
+    display: none;
+}
+
+.fm-note-icon {
+    display: none;
+}
+
+.fm-table.compact .fm-note-icon {
+    display: inline-flex;
+    flex: none;
 }
 
 .fm-sub {
@@ -413,6 +453,7 @@
     background: var(--panel);
     font-family: var(--mono);
     font-size: var(--fs-sm);
+    font-weight: 500;
 }
 
 button.fm-ref:hover {
@@ -461,7 +502,8 @@ button.fm-ref:hover {
 
 .fm-rails {
     flex: none;
-    overflow: visible;
+    max-inline-size: 100%;
+    overflow: hidden;
 }
 
 .fm-rails .rail {
@@ -506,6 +548,7 @@ button.fm-ref:hover {
     display: inline-flex;
     gap: 6px;
     font: 600 12px var(--mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .fm-counts .up {
@@ -644,7 +687,8 @@ button.fm-ref:hover {
     padding: 1px 5px;
     border-radius: 4px;
     background: var(--bar-chip);
-    font: 500 11px var(--mono);
+    font: 500 var(--fs-xs) var(--mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .fm-bar button:focus-visible {
@@ -704,9 +748,8 @@ button.fm-ref:hover {
     transform: rotate(90deg);
 }
 
-.activity-filters input,
-.activity-filters select {
-    height: var(--ctl-h-sm);
+.activity-filters input {
+    height: var(--ctl-h);
     padding: 0 var(--sp-2);
     border: 1px solid var(--line-ctl);
     border-radius: var(--r-ctl);
@@ -715,8 +758,7 @@ button.fm-ref:hover {
     font-size: var(--fs-sm);
 }
 
-.activity-filters input:focus-visible,
-.activity-filters select:focus-visible {
+.activity-filters input:focus-visible {
     outline: none;
     border-color: var(--acc);
     box-shadow: var(--ring);

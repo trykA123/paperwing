@@ -141,7 +141,8 @@ class AppState {
   ready = $state(false);
   sources = $state<Source[]>([]);
   ws = $state<Workspace>(defaultWorkspace('unsupported'));
-  private repositoryMetadata = new RepositoryMetadata(() => this.sources, () => this.ws.sets.flatMap(set => set.items));
+  private repositoryMetadata = new RepositoryMetadata(() => this.sources, () => this.ws.sets.flatMap(set => set.items),
+    (source, message) => this.toast(`Can't reach ${source.name}`, 'error', { label: 'Open Settings', run: () => this.openView({ kind: 'settings' }) }, { detail: message }));
   credentials = new Credentials(sourceId => {
     const paths = this.ws.sets.flatMap(set => set.items.filter(item => item.repoId.startsWith(`${sourceId}:`)).map(item => this.dest(item, set.id)));
     this.#invalidateTrees(paths);

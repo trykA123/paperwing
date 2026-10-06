@@ -535,3 +535,45 @@ test('the backoff keeps growing when a loading picker is closed and reopened', a
     } finally { setSystemTime(); }
   });
 });
+
+test('a repeated demand keeps its in-flight request and release cancels it', async () => {
+  const { createDemand } = await import('./metadata-demand.ts');
+  const rows = [{ url: item.url, branches: ['main'], tags: [] }];
+  await fixture(async (state, calls) => {
+    const demand = createDemand((urls, signal) => state.ensureRefs(urls, false, signal));
+    demand.request([item.url]);
+    demand.request([item.url]);
+    expect(calls).toHaveLength(1);
+    calls[0].resolve(rows);
+    await Promise.resolve();
+    await new Promise(done => setTimeout(done, 0));
+    expect(state.refState(item)).toBe('ok');
+    expect(state.needsRefs(item.url)).toBe(false);
+  });
+  await fixture(async (state, calls) => {
+    const demand = createDemand((urls, signal) => state.ensureRefs(urls, false, signal));
+    demand.request([item.url]);
+    demand.release();
+    demand.request([item.url]);
+    calls[0].resolve(rows);
+    await new Promise(done => setTimeout(done, 0));
+    expect(calls).toHaveLength(1);
+    expect(state.needsRefs(item.url)).toBe(true);
+  });
+});
+
+test('a failing listing raises one error notice that stays dismissed until the error changes or clears', async () => {
+  await withIpc(command => (command === 'list_repos' ? Promise.resolve({ repos: [], errors: [state401], warnings: [] }) : Promise.resolve(null)), async () => {
+    const state = new app.constructor();
+    state.sources = [structuredClone(source)];
+    const errors = () => state.notices.items.filter(entry => entry.kind === 'error');
+    await state.loadRepos(state.sources[0], true);
+    expect(errors().map(entry => entry.msg)).toEqual([`Can't reach admin`]);
+    expect(errors()[0].detail).toBe(state401);
+    state.notices.dismiss(errors()[0].id);
+    await state.loadRepos(state.sources[0], true);
+    expect(errors()).toHaveLength(0);
+  });
+});
+
+const state401 = 'HTTP 401 Unauthorized';

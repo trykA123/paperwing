@@ -152,11 +152,6 @@
     line-height: 1.4;
     box-shadow: var(--shadow-2);
     pointer-events: none;
-    transform: translateX(-50%);
-}
-
-.tooltip.above {
-    transform: translate(-50%, -100%);
 }
 
 .tooltip:popover-open {
@@ -276,3 +271,42 @@
     }
 }
 
+
+.src-error {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    margin: 0 var(--sp-2) var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--warn-line);
+    border-radius: var(--r-ctl);
+    background: var(--warn-bg);
+    color: var(--text);
+    font-size: var(--fs-sm);
+}
+
+.src-error-text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+}
+
+.src-error-actions {
+    display: flex;
+    gap: var(--sp-3);
+}
+
+.src-error .link:disabled {
+    opacity: .6;
+    cursor: default;
+}
+
+.nav .cnt-skel {
+    flex: none;
+    width: 40px;
+    height: 12px;
+    margin-left: auto;
+    background: linear-gradient(90deg, var(--line) 30%, color-mix(in oklch, var(--line) 55%, var(--line-ctl)) 50%, var(--line) 70%) 0 0 / 200% 100%;
+}

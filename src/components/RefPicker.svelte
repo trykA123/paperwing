@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { ago, app, matches, type RefsEntry } from '../lib/state.svelte';
   import type { Commit, Ref, RefKind, SetItem } from '../lib/api';
+  import { createDemand } from '../lib/metadata-demand';
   import Icon from './Icon.svelte';
 
   let { items, anchor, onclose, onpick }: {
@@ -17,7 +18,7 @@
     | { k: 'note'; text: string; err?: boolean };
 
   const W = 600, ROW_H = 46, LANE_W = 14, MAX_LANES = 8;
-  const LANE_COLORS = ['#6a48f5', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#8b5cf6'];
+  const LANE_COLORS = ['var(--lane-1)', 'var(--lane-2)', 'var(--lane-3)', 'var(--lane-4)', 'var(--lane-5)', 'var(--lane-6)'];
   // Open on whichever side of the clicked button has more room, sized to fit, so it stays attached to the row.
   const MAX_H = 620, MIN_H = 320, GAP = 6, EDGE = 8;
   const below = untrack(() => innerHeight - anchor.bottom - GAP - EDGE);
@@ -39,20 +40,20 @@
   let input: HTMLInputElement;
   let listEl: HTMLDivElement;
 
-  onMount(() => input.focus());
-  $effect(() => {
-    const urls = items.map(i => i.url).filter(url => app.needsRefs(url));
-    if (!urls.length) return;
-    const consumer = new AbortController();
-    untrack(() => { void app.ensureRefs(urls, false, consumer.signal); });
-    return () => consumer.abort();
+  // One consumer for the picker's lifetime: a per-run abort would cancel its own request when the entry flips to loading.
+  const refsDemand = createDemand<string>((urls, signal) => app.ensureRefs(urls, false, signal));
+  const commitsDemand = createDemand<SetItem>(([item], signal) => app.ensureCommits(item, false, signal));
+  onMount(() => {
+    input.focus();
+    return () => { refsDemand.release(); commitsDemand.release(); };
   });
   $effect(() => {
-    if (single && tab === 'commit' && app.needsCommits(items[0])) {
-      const consumer = new AbortController();
-      untrack(() => { void app.ensureCommits(items[0], false, consumer.signal); });
-      return () => consumer.abort();
-    }
+    const urls = items.map(i => i.url).filter(url => app.needsRefs(url));
+    untrack(() => refsDemand.request(urls));
+  });
+  $effect(() => {
+    const wanted = single && tab === 'commit' && app.needsCommits(items[0]) ? [items[0]] : [];
+    untrack(() => commitsDemand.request(wanted));
   });
 
   const entries = $derived(items.map(i => app.refs[i.url]));
