@@ -1,6 +1,6 @@
 # 17 — Cold path, phase 1: batched Git and in-process work
 
-Status: in progress (uncommitted Codex run in `.crew/paperwing-api-builder-sfzxd`, third run)
+Status: phase 1 built (uncommitted in `.crew/paperwing-api-builder-sfzxd`); review says fix first, see "Phase 1 review fixes"
 Platform: Windows first (Defender on), Linux parity
 Size: L
 Role: api-builder (gpt-6.1-sol xhigh), one writer
@@ -67,3 +67,14 @@ Uncommitted in the Codex worktree (16 files changed, +1591/-671, plus new files)
 
 ## Report
 Commit sha, files changed, the before/after table (Linux and Windows), gate results, anything skipped.
+
+## Phase 1 review fixes (decided 2026-10-06 23:20)
+Reviewer verdict on sfzxd: fix first. Git starts across repos fell from 1062 to 32, so keep the design. Start from main after `merge/perf` lands. Carry over the sfzxd diff without its formatting churn: revert the whole-file rustfmt of `git/runner.rs` and the CRLF→LF change in `git.rs`. Rename the leftover `PAPERWING_COLD_*`, `.paperwing-disposable` and `paperwing-diff-` names to Skein names (see `docs/naming.md`).
+1. In-process line counts never run in the app: `compare/line_counts.rs` requires `GIT_ATTR_NOSYSTEM=1` in the app's environment. Decide eligibility per storage root, cached: the counter is used only when no gitattributes can apply (no system, global or `core.attributesFile` attributes, no `.gitattributes` or `info/attributes` in the repository). Otherwise fall back to Git. Decide before writing any temp files. Results must equal `git diff --numstat`.
+2. Batch readers must not hold runner slots. Give them their own cap (6 sessions), close a reader after 30 s idle, and restart it at most once after a read error. Linked worktrees (`.git` is a file) must work through `--git-dir`/common dir rather than falling back.
+3. Close all readers for a root before trash, branch cleanup, worktree removal and any write that can rename or delete the root.
+4. Normal close: close stdin, wait up to 500 ms, use `taskkill` only if the process is still alive. `release_sessions` closes readers concurrently and does not block the UI thread.
+5. `diff-tree` must honour the user's `diff.algorithm` and `diff.renameLimit`. Read them once per root and pass them with `-c`. Add fixtures with a user config (`histogram`, a high `renameLimit`) on both the fast and the fallback path. The fingerprint suite also runs with whitespace ignored and with EOL normalisation off.
+6. Working-tree speed: keep one `ReadCache` per worker, not per 128-path chunk. Set `[profile.dev.package.sha1] opt-level = 3`. Measure before and after with a release build.
+7. Frontend: `compare-state.svelte.ts` must not default an unknown entry kind to `'file'`. Use the server's kind, or fetch the row.
+Done when: all phase 1 tests plus the new tests pass; Linux release-build medians are no worse than before on every workload; Git starts are reported; and the Windows CI job is green. Windows VM measurements follow as a separate step.
