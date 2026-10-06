@@ -1,5 +1,5 @@
 use super::{filesystem, lock, Environment, Record, Service};
-use crate::linux_journal::Journal;
+use crate::{linux_guard::Root, linux_journal::Journal};
 
 pub(super) fn records(journal: &Journal) -> Result<Vec<Record>, String> {
     let mut records = journal
@@ -18,6 +18,12 @@ pub(super) fn records(journal: &Journal) -> Result<Vec<Record>, String> {
     Ok(records)
 }
 pub(super) fn get(journal: &Journal, id: &str) -> Result<Record, String> {
+    if !id.starts_with("p-") {
+        return journal
+            .get(id)
+            .map(Record::from)
+            .map_err(|error| error.to_string());
+    }
     records(journal)?
         .into_iter()
         .find(|record| record.id == id)
@@ -25,6 +31,9 @@ pub(super) fn get(journal: &Journal, id: &str) -> Result<Record, String> {
 }
 impl Service {
     pub(crate) fn list(&self, environment: &Environment) -> Result<Vec<Record>, String> {
+        let _filesystem = crate::git::filesystem_gate()
+            .try_read()
+            .map_err(|_| "Another file operation is running; retry after it finishes")?;
         let Some(journal) =
             Journal::open_existing(&environment.app_data).map_err(|error| error.to_string())?
         else {
@@ -51,10 +60,12 @@ impl Service {
             crate::compare::registered_write_root(&settings, &record.root, &record.path).await?;
         let _filesystem = filesystem()?;
         environment.revalidate(&settings)?;
-        safe.linux_value()?;
-        let journal = Journal::open_existing(&environment.app_data)
-            .map_err(|error| error.to_string())?
-            .ok_or("Recovery storage is absent")?;
+        let value = safe.linux_value()?;
+        Root::reopen(&value)
+            .and_then(|root| root.probe_write())
+            .map_err(|error| error.to_string())?;
+        let journal = Journal::open_guarded(&environment.app_data, &[value])
+            .map_err(|error| error.to_string())?;
         journal.undo(id).map_err(|error| {
             format!(
                 "{}; recovery record: {}; applied: {}",

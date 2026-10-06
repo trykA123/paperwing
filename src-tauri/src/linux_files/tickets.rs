@@ -140,7 +140,7 @@ impl Service {
             comparisons,
             environment,
         } = operation;
-        if lock(&self.tickets)?.len() >= 32 {
+        if self.open_tickets()? >= 32 {
             return Err("Too many open editable files; close an editor first".into());
         }
         let settings = environment.load()?;
@@ -156,12 +156,18 @@ impl Service {
             exists: entry.expected.bytes().is_some(),
         };
         let mut tickets = lock(&self.tickets)?;
+        tickets.retain(|_, ticket| ticket.check().is_ok());
         if tickets.len() >= 32 {
             return Err("Too many open editable files; close an editor first".into());
         }
         entry.check()?;
         tickets.insert(id, entry);
         Ok(result)
+    }
+    fn open_tickets(&self) -> Result<usize, String> {
+        let mut tickets = lock(&self.tickets)?;
+        tickets.retain(|_, ticket| ticket.check().is_ok());
+        Ok(tickets.len())
     }
     pub(crate) fn close(&self, id: &str) -> Result<bool, String> {
         let Some(ticket) = lock(&self.tickets)?.remove(id) else {

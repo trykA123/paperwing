@@ -106,7 +106,7 @@ impl PrivateDir {
             Err(error) => return Err(error),
         };
         rustix::fs::flock(&file.handle, FlockOperation::NonBlockingLockExclusive)
-            .map_err(|_| Error::conflict("Another PaperWing process owns the Linux recovery lock"))?;
+            .map_err(|_| Error::conflict("Another Skein process owns the Linux recovery lock"))?;
         file.revalidate()?;
         Ok(Lock(file))
     }

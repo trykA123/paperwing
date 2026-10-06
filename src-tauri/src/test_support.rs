@@ -57,7 +57,9 @@ impl Drop for Shared {
 
 pub(crate) struct Exclusive;
 impl Exclusive {
+    // Current-thread tests only: the fixtures of an exclusive test must be built on its own thread.
     pub(crate) fn new() -> Self {
+        debug_assert!(!OWNS_EXCLUSIVE.get(), "Exclusive is not reentrant");
         let mut state = BUDGET.wait(BUDGET.lock(), |held| held != 0);
         *state = -1;
         OWNS_EXCLUSIVE.set(true);

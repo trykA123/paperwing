@@ -5,7 +5,10 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
-struct Fixture(PathBuf, #[allow(dead_code)] crate::test_support::Shared);
+struct Fixture {
+    path: PathBuf,
+    _budget: crate::test_support::Shared,
+}
 impl Fixture {
     fn new() -> Self {
         let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -36,15 +39,15 @@ impl Fixture {
         std::fs::write(path.join("left/file"), b"source-left").unwrap();
         std::fs::write(path.join("right/file"), b"source-right").unwrap();
         std::fs::write(path.join("outside"), b"outside-sentinel").unwrap();
-        let fixture = Self(path.canonicalize().unwrap(), crate::test_support::Shared::new());
+        let fixture = Self { path: path.canonicalize().unwrap(), _budget: crate::test_support::Shared::new() };
         let before = fixture.snapshot();
-        let bytes = std::fs::read(fixture.0.join("left/file")).unwrap();
-        std::fs::write(fixture.0.join("restore-backup"), &bytes).unwrap();
-        std::fs::write(fixture.0.join("left/file"), b"restore-drill").unwrap();
-        std::fs::write(fixture.0.join("left/file"), &bytes).unwrap();
+        let bytes = std::fs::read(fixture.path.join("left/file")).unwrap();
+        std::fs::write(fixture.path.join("restore-backup"), &bytes).unwrap();
+        std::fs::write(fixture.path.join("left/file"), b"restore-drill").unwrap();
+        std::fs::write(fixture.path.join("left/file"), &bytes).unwrap();
         assert_eq!(fixture.snapshot(), before);
         std::fs::write(
-            fixture.0.join("restore-proof.json"),
+            fixture.path.join("restore-proof.json"),
             serde_json::to_vec(&before).unwrap(),
         )
         .unwrap();
@@ -54,7 +57,7 @@ impl Fixture {
         ["left", "right"]
             .into_iter()
             .map(|name| {
-                Root::open(&self.0.join(name), &[self.0.join("metadata")])
+                Root::open(&self.path.join(name), &[self.path.join("metadata")])
                     .unwrap()
                     .value()
                     .unwrap()
@@ -62,7 +65,7 @@ impl Fixture {
             .collect()
     }
     fn storage(&self) -> Storage {
-        Storage::new(self.0.join("data")).unwrap()
+        Storage::new(self.path.join("data")).unwrap()
     }
     fn snapshot(&self) -> serde_json::Value {
         let mut entries = Vec::new();
@@ -81,7 +84,7 @@ impl Fixture {
             }
         }
         for name in ["left", "right", "metadata", "outside"] {
-            walk(&self.0.join(name), &self.0, &mut entries);
+            walk(&self.path.join(name), &self.path, &mut entries);
         }
         serde_json::json!(entries)
     }
@@ -94,21 +97,21 @@ impl Fixture {
 fn configuration_does_not_create_storage_and_missing_suffix_is_private() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    let parent = fixture.0.join("missing/app/data");
+    let parent = fixture.path.join("missing/app/data");
     let storage = Storage::new(parent.clone()).unwrap();
     assert!(!parent.exists());
     let directory = storage.initialize(&fixture.roots()).unwrap();
     assert_eq!(directory.path(), parent.join("linux-diff-v1"));
     for path in [
-        fixture.0.join("missing"),
-        fixture.0.join("missing/app"),
+        fixture.path.join("missing"),
+        fixture.path.join("missing/app"),
         parent,
         directory.path().to_path_buf(),
     ] {
         assert_eq!(std::fs::metadata(path).unwrap().mode() & 0o777, 0o700);
     }
     assert_eq!(
-        std::fs::metadata(fixture.0.join("data")).unwrap().mode() & 0o777,
+        std::fs::metadata(fixture.path.join("data")).unwrap().mode() & 0o777,
         0o755
     );
     fixture.unchanged(&before);
@@ -119,7 +122,7 @@ fn missing_or_stale_authority_and_direct_source_or_metadata_overlap_refuse_befor
     let fixture = Fixture::new();
     let before = fixture.snapshot();
     for name in ["left/new/data", "right/new/data", "metadata/new/data"] {
-        let parent = fixture.0.join(name);
+        let parent = fixture.path.join(name);
         assert!(Storage::new(parent.clone())
             .unwrap()
             .initialize(&fixture.roots())
@@ -127,9 +130,9 @@ fn missing_or_stale_authority_and_direct_source_or_metadata_overlap_refuse_befor
         assert!(!parent.exists());
         fixture.unchanged(&before);
     }
-    let absent = fixture.0.join("absent-meta");
+    let absent = fixture.path.join("absent-meta");
     let roots = vec![
-        Root::open(&fixture.0.join("left"), std::slice::from_ref(&absent))
+        Root::open(&fixture.path.join("left"), std::slice::from_ref(&absent))
             .unwrap()
             .value()
             .unwrap(),
@@ -140,14 +143,14 @@ fn missing_or_stale_authority_and_direct_source_or_metadata_overlap_refuse_befor
         .is_err());
     assert!(!absent.exists());
     assert!(fixture.storage().initialize(&[]).is_err());
-    assert!(!fixture.0.join("data/linux-diff-v1").exists());
+    assert!(!fixture.path.join("data/linux-diff-v1").exists());
     let roots = fixture.roots();
-    std::fs::rename(fixture.0.join("left"), fixture.0.join("saved-left")).unwrap();
-    std::fs::create_dir(fixture.0.join("left")).unwrap();
+    std::fs::rename(fixture.path.join("left"), fixture.path.join("saved-left")).unwrap();
+    std::fs::create_dir(fixture.path.join("left")).unwrap();
     assert!(fixture.storage().initialize(&roots).is_err());
-    assert!(!fixture.0.join("data/linux-diff-v1").exists());
-    std::fs::remove_dir(fixture.0.join("left")).unwrap();
-    std::fs::rename(fixture.0.join("saved-left"), fixture.0.join("left")).unwrap();
+    assert!(!fixture.path.join("data/linux-diff-v1").exists());
+    std::fs::remove_dir(fixture.path.join("left")).unwrap();
+    std::fs::rename(fixture.path.join("saved-left"), fixture.path.join("left")).unwrap();
     fixture.unchanged(&before);
 }
 
@@ -155,14 +158,14 @@ fn missing_or_stale_authority_and_direct_source_or_metadata_overlap_refuse_befor
 fn linked_and_substituted_initializer_parents_refuse_without_outside_writes() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    std::os::unix::fs::symlink(fixture.0.join("metadata"), fixture.0.join("linked")).unwrap();
-    assert!(Storage::new(fixture.0.join("linked/new/data"))
+    std::os::unix::fs::symlink(fixture.path.join("metadata"), fixture.path.join("linked")).unwrap();
+    assert!(Storage::new(fixture.path.join("linked/new/data"))
         .unwrap()
         .initialize(&fixture.roots())
         .is_err());
-    let parent = fixture.0.join("data");
-    let saved = fixture.0.join("saved-data");
-    let outside = fixture.0.join("metadata");
+    let parent = fixture.path.join("data");
+    let saved = fixture.path.join("saved-data");
+    let outside = fixture.path.join("metadata");
     storage::INITIALIZE_HOOK.with(|hook| {
         *hook.borrow_mut() = Some(Box::new(move |_| {
             if !saved.exists() {
@@ -171,14 +174,14 @@ fn linked_and_substituted_initializer_parents_refuse_without_outside_writes() {
             }
         }))
     });
-    assert!(Storage::new(fixture.0.join("data/new/data"))
+    assert!(Storage::new(fixture.path.join("data/new/data"))
         .unwrap()
         .initialize(&fixture.roots())
         .is_err());
     storage::INITIALIZE_HOOK.with(|hook| *hook.borrow_mut() = None);
-    assert!(!fixture.0.join("metadata/new").exists());
-    std::fs::remove_file(fixture.0.join("data")).unwrap();
-    std::fs::rename(fixture.0.join("saved-data"), fixture.0.join("data")).unwrap();
+    assert!(!fixture.path.join("metadata/new").exists());
+    std::fs::remove_file(fixture.path.join("data")).unwrap();
+    std::fs::rename(fixture.path.join("saved-data"), fixture.path.join("data")).unwrap();
     fixture.unchanged(&before);
 }
 
@@ -186,8 +189,8 @@ fn linked_and_substituted_initializer_parents_refuse_without_outside_writes() {
 fn whole_and_nested_bind_aliases_refuse_storage_before_creation() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    std::fs::create_dir(fixture.0.join("left/nested")).unwrap();
-    std::fs::create_dir(fixture.0.join("alias")).unwrap();
+    std::fs::create_dir(fixture.path.join("left/nested")).unwrap();
+    std::fs::create_dir(fixture.path.join("alias")).unwrap();
     let namespace = std::fs::read_link("/proc/self/ns/mnt").unwrap();
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
@@ -202,20 +205,20 @@ for source in ['left','left/nested']:
 "#;
     let output = std::process::Command::new("unshare")
         .args(["-Urnm", "python3", "-c", script])
-        .arg(&fixture.0)
+        .arg(&fixture.path)
         .arg(std::env::current_exe().unwrap())
         .arg(&namespace)
         .output()
         .unwrap();
-    std::fs::write(fixture.0.join("bind-stdout.log"), &output.stdout).unwrap();
-    std::fs::write(fixture.0.join("bind-stderr.log"), &output.stderr).unwrap();
+    std::fs::write(fixture.path.join("bind-stdout.log"), &output.stdout).unwrap();
+    std::fs::write(fixture.path.join("bind-stderr.log"), &output.stderr).unwrap();
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(std::fs::read_link("/proc/self/ns/mnt").unwrap(), namespace);
-    std::fs::remove_dir(fixture.0.join("left/nested")).unwrap();
+    std::fs::remove_dir(fixture.path.join("left/nested")).unwrap();
     fixture.unchanged(&before);
 }
 
@@ -229,20 +232,20 @@ fn native_child() {
         std::fs::read(path.join(".paperwing-diff-fixture")).unwrap(),
         b"paperwing-diff-fixture-v1\n"
     );
-    let fixture = Fixture(path, crate::test_support::Shared::new());
+    let fixture = Fixture { path, _budget: crate::test_support::Shared::new() };
     let before = fixture.snapshot();
     let mode = std::env::var("PAPERWING_DIFF_MODE").unwrap();
     if mode == "bind" {
-        assert!(Storage::new(fixture.0.join("alias/new/data"))
+        assert!(Storage::new(fixture.path.join("alias/new/data"))
             .unwrap()
             .initialize(&fixture.roots())
             .is_err());
-        assert!(!fixture.0.join("alias/new").exists());
+        assert!(!fixture.path.join("alias/new").exists());
         fixture.unchanged(&before);
     } else if mode == "reserve" || mode == "bootstrap" || mode == "holder" {
         let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
         if mode == "reserve" {
-            let base = fixture.0.clone();
+            let base = fixture.path.clone();
             let id = id.clone();
             storage::DIFF_STORAGE_HOOK.with(|hook| {
                 *hook.borrow_mut() = Some(Box::new(move |phase| {
@@ -255,7 +258,7 @@ fn native_child() {
             });
         }
         if mode == "bootstrap" {
-            let base = fixture.0.clone();
+            let base = fixture.path.clone();
             let id = id.clone();
             storage::DIFF_STORAGE_HOOK.with(|hook| {
                 *hook.borrow_mut() = Some(Box::new(move |phase| {
@@ -270,7 +273,7 @@ fn native_child() {
         if mode == "holder" {
             let directory = storage.initialize(&fixture.roots()).unwrap();
             let _lock = admission::acquire(&directory, &storage.policy, None).unwrap();
-            checkpoint(&fixture.0, &id, "held");
+            checkpoint(&fixture.path, &id, "held");
         } else {
             let reservation = storage
                 .reserve(
@@ -280,7 +283,7 @@ fn native_child() {
                 )
                 .unwrap();
             std::fs::write(
-                fixture.0.join(format!("child-{id}-result.json")),
+                fixture.path.join(format!("child-{id}-result.json")),
                 serde_json::to_vec(&reservation.claim).unwrap(),
             )
             .unwrap();
@@ -289,7 +292,7 @@ fn native_child() {
     } else if mode == "manifest" {
         let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
         let mut storage = fixture.storage();
-        let base = fixture.0.clone();
+        let base = fixture.path.clone();
         storage.hook = Some(Arc::new(move |phase| {
             if phase == "manifest-created" {
                 checkpoint(&base, &id, phase);
@@ -315,7 +318,7 @@ fn native_child() {
     } else if mode == "counts-bootstrap" || mode == "counts-waiter" {
         let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
         let mut storage = fixture.storage();
-        let base = fixture.0.clone();
+        let base = fixture.path.clone();
         let child_id = id.clone();
         let bootstrap = mode == "counts-bootstrap";
         storage.hook = Some(Arc::new(move |phase| {
@@ -344,7 +347,7 @@ fn native_child() {
         assert_eq!(result["lines"], serde_json::json!({"added":2,"removed":1}));
         assert_eq!(result["commands"], serde_json::json!({"diff":1}));
         std::fs::write(
-            fixture.0.join(format!("child-{id}-result.json")),
+            fixture.path.join(format!("child-{id}-result.json")),
             serde_json::to_vec(&result).unwrap(),
         )
         .unwrap();
@@ -360,12 +363,12 @@ fn native_child() {
             rustix::fs::fchown(&file,Some(rustix::fs::Uid::from_raw(1)),Some(rustix::fs::Gid::from_raw(1))).unwrap();
             assert!(lease.finish().await.is_err());assert!(storage.reserve(&fixture.roots(),&AtomicBool::new(false),&[vec![],vec![]]).is_err());
             rustix::fs::fchown(&file,Some(rustix::fs::Uid::from_raw(0)),Some(rustix::fs::Gid::from_raw(0))).unwrap();assert_eq!(std::fs::read(&path).unwrap(),b"l");assert_eq!(usage(&fixture,&storage).allocations,1);
-            std::fs::write(fixture.0.join("foreign-owner-proof.json"),b"{\"cleanupRefused\":true,\"admissionRefused\":true,\"fullClaimRetained\":true,\"fixtureOwnershipRestored\":true}\n").unwrap();
+            std::fs::write(fixture.path.join("foreign-owner-proof.json"),b"{\"cleanupRefused\":true,\"admissionRefused\":true,\"fullClaimRetained\":true,\"fixtureOwnershipRestored\":true}\n").unwrap();
         });
         fixture.unchanged(&before);
     } else if mode == "reservation-pause" || mode == "cleanup-pause" {
         let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
-        let base = fixture.0.clone();
+        let base = fixture.path.clone();
         let target = if mode == "reservation-pause" {
             "before-directory"
         } else {
@@ -479,7 +482,7 @@ fn unsafe_unknown_malformed_linked_nested_and_foreign_artifacts_block_admission(
             )
             .unwrap(),
             "link" => {
-                std::os::unix::fs::symlink(fixture.0.join("outside"), directory.path().join("left"))
+                std::os::unix::fs::symlink(fixture.path.join("outside"), directory.path().join("left"))
                     .unwrap()
             }
             "nested" => {
@@ -500,7 +503,7 @@ fn unsafe_unknown_malformed_linked_nested_and_foreign_artifacts_block_admission(
             }
             "hardlink" => {
                 directory.write_new("left", b"ab").unwrap();
-                std::fs::hard_link(directory.path().join("left"), fixture.0.join("extra-link"))
+                std::fs::hard_link(directory.path().join("left"), fixture.path.join("extra-link"))
                     .unwrap();
             }
             "attribute" => {
@@ -646,9 +649,9 @@ struct OwnedChild {
 impl OwnedChild {
     fn spawn(fixture: &Fixture, mode: &str, id: &str) -> Self {
         let stdout =
-            std::fs::File::create(fixture.0.join(format!("child-{id}-stdout.log"))).unwrap();
+            std::fs::File::create(fixture.path.join(format!("child-{id}-stdout.log"))).unwrap();
         let stderr =
-            std::fs::File::create(fixture.0.join(format!("child-{id}-stderr.log"))).unwrap();
+            std::fs::File::create(fixture.path.join(format!("child-{id}-stderr.log"))).unwrap();
         let child = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
@@ -657,7 +660,7 @@ impl OwnedChild {
                 "--nocapture",
                 "--test-threads=1",
             ])
-            .env("PAPERWING_DIFF_FIXTURE", &fixture.0)
+            .env("PAPERWING_DIFF_FIXTURE", &fixture.path)
             .env("PAPERWING_DIFF_MODE", mode)
             .env("PAPERWING_DIFF_CHILD_ID", id)
             .stdout(stdout)
@@ -666,7 +669,7 @@ impl OwnedChild {
             .unwrap();
         Self {
             child,
-            base: fixture.0.clone(),
+            base: fixture.path.clone(),
             id: id.into(),
         }
     }
@@ -763,7 +766,7 @@ fn missing_lock_bootstrap_does_not_adopt_a_link_or_unsafe_winner() {
         let fixture = Fixture::new();
         let directory = fixture.storage().initialize(&fixture.roots()).unwrap();
         let path = directory.path().join("lock");
-        let sentinel = fixture.0.join("outside");
+        let sentinel = fixture.path.join("outside");
         storage::DIFF_STORAGE_HOOK.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(move |phase| {
                 if phase == "missing-lock" {
@@ -780,7 +783,7 @@ fn missing_lock_bootstrap_does_not_adopt_a_link_or_unsafe_winner() {
         storage::DIFF_STORAGE_HOOK.with(|hook| *hook.borrow_mut() = None);
         assert_eq!(directory.names(2).unwrap(), vec!["lock"]);
         assert_eq!(
-            std::fs::read(fixture.0.join("outside")).unwrap(),
+            std::fs::read(fixture.path.join("outside")).unwrap(),
             b"outside-sentinel"
         );
     }
@@ -868,7 +871,7 @@ async fn changed_content_identity_metadata_and_substituted_directory_retain_full
         match kind {
             "bytes" => std::fs::write(path.join("left"), b"foreign-left").unwrap(),
             "inode" => {
-                std::fs::rename(path.join("left"), fixture.0.join("saved-file")).unwrap();
+                std::fs::rename(path.join("left"), fixture.path.join("saved-file")).unwrap();
                 std::fs::write(path.join("left"), b"private-left").unwrap();
                 std::fs::set_permissions(path.join("left"), std::fs::Permissions::from_mode(0o600))
                     .unwrap();
@@ -891,7 +894,7 @@ async fn changed_content_identity_metadata_and_substituted_directory_retain_full
                     .unwrap();
             }
             "directory" => {
-                std::fs::rename(&path, fixture.0.join("saved-allocation")).unwrap();
+                std::fs::rename(&path, fixture.path.join("saved-allocation")).unwrap();
                 std::fs::create_dir(&path).unwrap();
                 std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
             }
@@ -899,7 +902,7 @@ async fn changed_content_identity_metadata_and_substituted_directory_retain_full
         }
         assert!(lease.finish().await.is_err(), "{kind}");
         assert_eq!(storage.work.available_permits(), 4);
-        let namespace = fixture.0.join("data/linux-diff-v1");
+        let namespace = fixture.path.join("data/linux-diff-v1");
         assert!(std::fs::read_dir(&namespace).unwrap().any(|entry| entry
             .unwrap()
             .file_name()
@@ -1031,7 +1034,7 @@ fn manifest_publication_is_serialized_and_a_crashed_torn_manifest_refuses_admiss
         let before = fixture.snapshot();
         let mut publisher = OwnedChild::spawn(&fixture, "manifest", "publisher");
         publisher.ready("manifest-created");
-        let namespace = fixture.0.join("data/linux-diff-v1");
+        let namespace = fixture.path.join("data/linux-diff-v1");
         let manifests = std::fs::read_dir(&namespace)
             .unwrap()
             .map(|entry| entry.unwrap().path())
@@ -1111,7 +1114,7 @@ async fn final_line_counts_initialize_missing_suffix_and_leave_only_the_private_
     let _serial = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    let path = fixture.0.join("fresh/app/data");
+    let path = fixture.path.join("fresh/app/data");
     let storage = Arc::new(Storage::new(path.clone()).unwrap());
     assert!(!path.exists());
     let result = crate::compare::native_diff_counts(crate::compare::NativeDiffTest {
@@ -1230,7 +1233,7 @@ fn initializer_create_races_verify_safe_winners_and_refuse_unsafe_winners() {
     for safe in [true, false] {
         let fixture = Fixture::new();
         let before = fixture.snapshot();
-        let root = fixture.0.clone();
+        let root = fixture.path.clone();
         storage::INITIALIZE_HOOK.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(move |parent| {
                 let winner = parent.join("new");
@@ -1245,12 +1248,12 @@ fn initializer_create_races_verify_safe_winners_and_refuse_unsafe_winners() {
                 }
             }))
         });
-        let result = Storage::new(fixture.0.join("data/new/app"))
+        let result = Storage::new(fixture.path.join("data/new/app"))
             .unwrap()
             .initialize(&fixture.roots());
         assert_eq!(result.is_ok(), safe);
         storage::INITIALIZE_HOOK.with(|hook| *hook.borrow_mut() = None);
-        assert!(!fixture.0.join("metadata/app").exists());
+        assert!(!fixture.path.join("metadata/app").exists());
         fixture.unchanged(&before);
     }
 }
@@ -1261,7 +1264,7 @@ async fn source_capture_is_bounded_and_memory_admission_precedes_owned_inputs_or
     let before = fixture.snapshot();
     let storage = Arc::new(fixture.storage());
     let root =
-        crate::paths::ReadRoot::new(&fixture.0.join("left"), vec![fixture.0.join("metadata")])
+        crate::paths::ReadRoot::new(&fixture.path.join("left"), vec![fixture.path.join("metadata")])
             .unwrap();
     let expected = root.linux_value().unwrap();
     let values = storage
@@ -1289,7 +1292,7 @@ async fn source_capture_is_bounded_and_memory_admission_precedes_owned_inputs_or
         )
         .await
         .is_err());
-    assert!(!fixture.0.join("data/linux-diff-v1").exists());
+    assert!(!fixture.path.join("data/linux-diff-v1").exists());
     drop(budget);
     assert_eq!(storage.work.available_permits(), 4);
     fixture.unchanged(&before);
@@ -1303,7 +1306,7 @@ fn a_live_storage_owner_refuses_namespace_replacement_before_new_claims() {
         .reserve(&fixture.roots(), &AtomicBool::new(false), &[vec![], vec![]])
         .unwrap();
     let namespace = reservation.namespace.path().to_path_buf();
-    std::fs::rename(&namespace, fixture.0.join("saved-namespace")).unwrap();
+    std::fs::rename(&namespace, fixture.path.join("saved-namespace")).unwrap();
     std::fs::create_dir(&namespace).unwrap();
     std::fs::set_permissions(&namespace, std::fs::Permissions::from_mode(0o700)).unwrap();
     assert!(storage
@@ -1335,18 +1338,18 @@ subprocess.run([exe,'--exact','linux_diff::tests::native_child','--ignored','--n
             "-c",
             script,
         ])
-        .arg(&fixture.0)
+        .arg(&fixture.path)
         .arg(std::env::current_exe().unwrap())
         .output()
         .unwrap();
-    std::fs::write(fixture.0.join("foreign-owner-stdout.log"), &output.stdout).unwrap();
-    std::fs::write(fixture.0.join("foreign-owner-stderr.log"), &output.stderr).unwrap();
+    std::fs::write(fixture.path.join("foreign-owner-stdout.log"), &output.stdout).unwrap();
+    std::fs::write(fixture.path.join("foreign-owner-stderr.log"), &output.stderr).unwrap();
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(fixture.0.join("foreign-owner-proof.json").exists());
+    assert!(fixture.path.join("foreign-owner-proof.json").exists());
     fixture.unchanged(&before);
 }
 
@@ -1386,7 +1389,7 @@ fn shutdown_without_cleanup_dispatch_retains_artifacts_and_releases_owned_capaci
 async fn stale_source_after_reservation_refuses_before_creating_the_allocation_directory() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    let root = fixture.0.clone();
+    let root = fixture.path.clone();
     let created = Arc::new(AtomicBool::new(false));
     let observed = created.clone();
     let mut storage = fixture.storage();
@@ -1409,8 +1412,8 @@ async fn stale_source_after_reservation_refuses_before_creating_the_allocation_d
         )
         .await
         .is_err());
-    std::fs::remove_dir(fixture.0.join("left")).unwrap();
-    std::fs::rename(fixture.0.join("saved-left"), fixture.0.join("left")).unwrap();
+    std::fs::remove_dir(fixture.path.join("left")).unwrap();
+    std::fs::rename(fixture.path.join("saved-left"), fixture.path.join("left")).unwrap();
     fixture.unchanged(&before);
     assert!(!created.load(Ordering::Relaxed));
 }
@@ -1466,7 +1469,7 @@ fn killed_reservation_and_preclaim_cleanup_keep_full_charges_after_restart() {
         let before = fixture.snapshot();
         let mut child = OwnedChild::spawn(&fixture, mode, "interrupted");
         child.ready(phase);
-        let namespace = fixture.0.join("data/linux-diff-v1");
+        let namespace = fixture.path.join("data/linux-diff-v1");
         let mut names = std::fs::read_dir(&namespace)
             .unwrap()
             .map(|entry| entry.unwrap().file_name())
@@ -1503,7 +1506,7 @@ fn killed_reservation_and_preclaim_cleanup_keep_full_charges_after_restart() {
             .collect::<Vec<_>>();
         after.sort();
         assert_eq!(after, names);
-        std::fs::write(fixture.0.join("interruption-proof.json"),serde_json::to_vec(&serde_json::json!({"phase":phase,"reservedBytes":claim.reserved_bytes,"inventoryBytes":inventory.bytes,"fullChargeRetained":true,"processReaped":true,"powerLoss":false})).unwrap()).unwrap();
+        std::fs::write(fixture.path.join("interruption-proof.json"),serde_json::to_vec(&serde_json::json!({"phase":phase,"reservedBytes":claim.reserved_bytes,"inventoryBytes":inventory.bytes,"fullChargeRetained":true,"processReaped":true,"powerLoss":false})).unwrap()).unwrap();
         fixture.unchanged(&before);
     }
 }
@@ -1512,14 +1515,14 @@ fn killed_reservation_and_preclaim_cleanup_keep_full_charges_after_restart() {
 fn missing_suffix_does_not_create_an_ancestor_of_absent_protected_metadata() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    let metadata = fixture.0.join("uncreated/metadata");
-    let roots = vec![Root::open(&fixture.0.join("left"), &[metadata])
+    let metadata = fixture.path.join("uncreated/metadata");
+    let roots = vec![Root::open(&fixture.path.join("left"), &[metadata])
         .unwrap()
         .value()
         .unwrap()];
-    let storage = Storage::new(fixture.0.join("uncreated/app")).unwrap();
+    let storage = Storage::new(fixture.path.join("uncreated/app")).unwrap();
     assert!(storage.initialize(&roots).is_err());
-    assert!(!fixture.0.join("uncreated").exists());
+    assert!(!fixture.path.join("uncreated").exists());
     fixture.unchanged(&before);
 }
 
@@ -1548,7 +1551,7 @@ fn admission_precharges_namespace_growth_before_accepting_another_reservation() 
 async fn materialization_retains_artifacts_when_native_overhead_exceeds_its_reservation() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    let namespace = fixture.0.join("data/linux-diff-v1");
+    let namespace = fixture.path.join("data/linux-diff-v1");
     let observed = namespace.clone();
     let mut storage = fixture.storage();
     storage.hook = Some(Arc::new(move |phase| {
@@ -1619,11 +1622,11 @@ fn grow_private_directory(path: &Path, minimum: u64) {
 fn insufficient_namespace_prepayment_refuses_before_missing_app_data_is_created() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    let parent = fixture.0.join("missing/app");
+    let parent = fixture.path.join("missing/app");
     let mut storage = Storage::new(parent.clone()).unwrap();
     storage.policy.bytes = storage::DIFF_NAMESPACE_BYTES + 4095;
     assert!(storage.initialize(&fixture.roots()).is_err());
-    assert!(!fixture.0.join("missing").exists());
+    assert!(!fixture.path.join("missing").exists());
     fixture.unchanged(&before);
 }
 
@@ -1717,7 +1720,7 @@ async fn late_namespace_exhaustion_preserves_claims_before_directory_and_manifes
     for phase in ["before-directory", "directory-created"] {
         let fixture = Fixture::new();
         let before = fixture.snapshot();
-        let namespace = fixture.0.join("data/linux-diff-v1");
+        let namespace = fixture.path.join("data/linux-diff-v1");
         let observed = namespace.clone();
         let mut storage = fixture.storage();
         storage.hook = Some(Arc::new(move |current| {
@@ -1754,7 +1757,7 @@ async fn late_namespace_exhaustion_preserves_claims_before_directory_and_manifes
 async fn disproved_namespace_growth_retains_claim_contents_and_releases_work() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
-    let namespace = fixture.0.join("data/linux-diff-v1");
+    let namespace = fixture.path.join("data/linux-diff-v1");
     let observed = namespace.clone();
     let armed = Arc::new(AtomicBool::new(false));
     let mut storage = fixture.storage();

@@ -58,7 +58,7 @@ impl Fixture {
         Self::with_format(None).await
     }
     async fn with_format(format: Option<&str>) -> Self {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::test_support::tmp_root().join(format!(
             "paperwing-compare-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
@@ -181,7 +181,7 @@ fn custom_layout_matches_typescript_goldens_and_registered_destination() {
         ("ref", "feature-x".into()),
     ]);
     let fixture =
-        Fixture(std::env::temp_dir().join(format!("paperwing-layout-{}", std::process::id())));
+        Fixture(crate::test_support::tmp_root().join(format!("paperwing-layout-{}", std::process::id())));
     std::fs::create_dir_all(&fixture.0).unwrap();
     let mut settings = fixture.settings();
     settings.workspace["layout"] = "custom".into();

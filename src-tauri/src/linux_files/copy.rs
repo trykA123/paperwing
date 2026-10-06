@@ -97,6 +97,15 @@ pub(super) struct Plan {
     pub started: AtomicBool,
     pub cancel: Arc<AtomicBool>,
 }
+impl Plan {
+    fn is_live(&self) -> bool {
+        self.started.load(Ordering::Acquire)
+            || self
+                .entries
+                .iter()
+                .all(|entry| entry.ticket.check().is_ok())
+    }
+}
 struct Scope {
     ids: Vec<String>,
     retained: usize,
@@ -168,7 +177,9 @@ impl Outcome {
                     record: error.record.map(|record| *record),
                     error: Some(error.message),
                 },
-                Vec::new(),
+                error
+                    .published
+                    .map_or_else(Vec::new, |published| published.created),
             ),
         }
     }
@@ -193,7 +204,10 @@ fn rebase(plan: &ParentPlan, created: &[AncestorValue]) -> Result<ParentPlan, St
         || current.existing[plan.existing.len()..]
             .iter()
             .any(|entry| !created.contains(entry))
-        || current.missing != plan.missing[current.existing.len() - plan.existing.len()..]
+        || plan
+            .missing
+            .get(current.existing.len() - plan.existing.len()..)
+            .is_none_or(|rest| current.missing != rest)
     {
         return Err("Destination parents changed after preview; destination retained".into());
     }
@@ -229,7 +243,7 @@ impl Service {
         request: Request,
         mut content: impl AsyncContent,
     ) -> Result<Preview, String> {
-        if lock(&self.copies)?.len() >= 4 {
+        if self.pending_copies()? >= 4 {
             return Err("Too many pending copy previews; cancel one first".into());
         }
         let scope = Scope::capture(operation, &request).await?;
@@ -257,12 +271,19 @@ impl Service {
         })
     }
 
+    fn pending_copies(&self) -> Result<usize, String> {
+        let mut copies = lock(&self.copies)?;
+        copies.retain(|_, plan| plan.is_live());
+        Ok(copies.len())
+    }
+
     fn remember(
         &self,
         entries: Vec<Entry>,
         generation_cancel: &AtomicBool,
     ) -> Result<String, String> {
         let mut copies = lock(&self.copies)?;
+        copies.retain(|_, plan| plan.is_live());
         if copies.len() >= 4 {
             return Err("Too many pending copy previews; cancel one first".into());
         }

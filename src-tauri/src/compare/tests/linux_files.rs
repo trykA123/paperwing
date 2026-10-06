@@ -127,6 +127,62 @@ impl Native {
             rows: prepared.rows.clone(),
         }
     }
+    async fn rebind(&mut self, left: CompareRef) {
+        let settings = self.environment.load().unwrap();
+        let endpoint = |item: &str, reference| Endpoint {
+            set_id: "set".into(),
+            item_id: item.into(),
+            reference,
+        };
+        let opened = self
+            .comparisons
+            .open(
+                &settings,
+                endpoint("left", left),
+                endpoint("right", CompareRef::WorkingTree),
+            )
+            .await
+            .unwrap();
+        self.id = opened.id;
+        self.refresh().await;
+    }
+    fn commit_left(&self) {
+        for args in [vec!["add", "-A"], vec!["commit", "-m", "snapshot"]] {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(self.path.join("left"))
+                .args([
+                    "-c",
+                    "user.name=admin",
+                    "-c",
+                    "user.email=admin@example.test",
+                    "-c",
+                    "core.hooksPath=",
+                    "-c",
+                    "commit.gpgSign=false",
+                ])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+        }
+    }
+    async fn save_record(&self, path: &str, bytes: &[u8]) -> (String, String) {
+        let opened = self.open(path, "right").await;
+        let ticket = opened["ticket"].as_str().unwrap().to_string();
+        let record = self
+            .files
+            .save(self.context(), &ticket, bytes.to_vec())
+            .await
+            .unwrap();
+        (
+            ticket,
+            serde_json::to_value(record).unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+        )
+    }
     async fn refresh(&mut self) {
         let RefreshResult::Ready { snapshot } = self
             .comparisons
@@ -186,6 +242,13 @@ impl Native {
                 .unwrap(),
         )
         .unwrap()
+    }
+    async fn apply_raw(&self, preview: &serde_json::Value) -> Result<serde_json::Value, String> {
+        let outcomes = self
+            .files
+            .apply(self.context(), preview["id"].as_str().unwrap(), true)
+            .await?;
+        Ok(serde_json::to_value(outcomes).unwrap())
     }
     async fn apply(&self, preview: &serde_json::Value) -> serde_json::Value {
         serde_json::to_value(
@@ -271,7 +334,8 @@ async fn linux_stale_generation_refuses_save() {
             b"bad".to_vec()
         )
         .await
-        .is_err());
+        .unwrap_err()
+        .contains("edit ticket closed"));
     assert_eq!(
         std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
         b"\xef\xbb\xbfright\r\n"
@@ -290,7 +354,8 @@ async fn linux_external_edit_between_open_and_save_is_retained() {
             b"bad".to_vec()
         )
         .await
-        .is_err());
+        .unwrap_err()
+        .contains("Destination bytes, identity or metadata changed"));
     assert_eq!(
         std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
         b"external"
@@ -311,12 +376,14 @@ async fn linux_replaced_root_refuses_save_and_new_tickets() {
             b"bad".to_vec()
         )
         .await
-        .is_err());
+        .unwrap_err()
+        .contains("Repository root identity changed"));
     assert!(fixture
         .files
         .open(fixture.context(), fixture.request("file.txt", "right"))
         .await
-        .is_err());
+        .unwrap_err()
+        .contains("Repository root"));
     assert_eq!(
         std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
         b"replacement"
@@ -440,7 +507,8 @@ async fn linux_undo_restores_exact_bytes_and_refuses_later_external_edits() {
         .files
         .undo(&fixture.environment, record["id"].as_str().unwrap())
         .await
-        .is_err());
+        .unwrap_err()
+        .contains("Later destination changes were preserved"));
     assert_eq!(
         std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
         b"external"
@@ -476,7 +544,8 @@ async fn linux_tickets_and_copy_plans_release_on_close_cancel_and_page_load() {
             b"bad".to_vec()
         )
         .await
-        .is_err());
+        .unwrap_err()
+        .contains("Unknown or closed edit ticket"));
 }
 #[tokio::test]
 async fn linux_settings_changes_refuse_save_and_stale_copy_sources_refuse_apply() {
@@ -494,7 +563,8 @@ async fn linux_settings_changes_refuse_save_and_stale_copy_sources_refuse_apply(
             b"bad".to_vec()
         )
         .await
-        .is_err());
+        .unwrap_err()
+        .contains("Unknown or duplicate set identity"));
 }
 
 #[tokio::test]
@@ -606,7 +676,9 @@ async fn linux_close_during_parent_creation_revokes_file_publication_and_retains
         .save(fixture.context(), &ticket, b"saved".to_vec())
         .await;
     crate::linux_guard::mutation::set_parent_hook(None);
-    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .contains("Comparison or file operation cancelled"));
     assert!(!fixture.path.join("right/missing/a.txt").exists());
     assert!(fixture.path.join("right/missing").is_dir());
     assert_eq!(fixture.files.ticket_count(), 0);
@@ -710,7 +782,9 @@ async fn linux_source_layout_changes_after_validation_refuse_publication() {
             b"must-be-retained".to_vec(),
         )
         .await;
-    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .contains("Registered settings changed or unavailable"));
     assert_eq!(
         std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
         b"\xef\xbb\xbfright\r\n"
@@ -730,10 +804,201 @@ async fn linux_fresh_git_root_reads_refuse_adopting_a_replacement_root_with_equa
         .files
         .open(fixture.context(), fixture.request("file.txt", "right"))
         .await;
-    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .contains("Repository root changed during validation"));
     assert_eq!(fixture.files.ticket_count(), 0);
     assert_eq!(
         std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
         b"\xef\xbb\xbfright\r\n"
+    );
+}
+
+#[tokio::test]
+async fn linux_folder_copy_toward_left_overwrites_and_creates_files() {
+    let fixture = Native::new().await;
+    let preview = fixture.preview("folder", "left").await;
+    assert_eq!(preview["retained"], 0);
+    let outcomes = fixture.apply(&preview).await;
+    assert!(outcomes
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|outcome| outcome["state"] == "applied"));
+    for name in ["a", "b", "c"] {
+        assert_eq!(
+            std::fs::read(fixture.path.join(format!("left/folder/nested/{name}.txt"))).unwrap(),
+            b"right"
+        );
+    }
+    assert_eq!(
+        std::fs::read(fixture.path.join("left/folder/retained.txt")).unwrap(),
+        b"retained"
+    );
+}
+
+#[tokio::test]
+async fn linux_copy_from_a_git_ref_uses_bytes_frozen_at_preview_and_refuses_ref_destinations() {
+    let mut fixture = Native::new().await;
+    fixture.commit_left();
+    fixture.rebind(CompareRef::Head).await;
+    let preview = fixture.preview("file.txt", "right").await;
+    std::fs::write(fixture.path.join("left/file.txt"), b"changed-after-preview").unwrap();
+    let outcomes = fixture.apply(&preview).await;
+    assert_eq!(outcomes[0]["state"], "applied");
+    assert_eq!(
+        std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
+        b"\xef\xbb\xbfleft\r\n"
+    );
+    let refused = fixture
+        .files
+        .preview(
+            fixture.context(),
+            fixture.request("file.txt", "left"),
+            Content { fixture: &fixture },
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        refused.contains("Historical references are read-only"),
+        "{refused}"
+    );
+}
+
+#[tokio::test]
+async fn linux_real_refresh_between_open_and_save_or_preview_and_apply_refuses_both() {
+    let mut fixture = Native::new().await;
+    let opened = fixture.open("file.txt", "right").await;
+    let preview = fixture.preview("file.txt", "right").await;
+    fixture.refresh().await;
+    let saved = fixture
+        .files
+        .save(
+            fixture.context(),
+            opened["ticket"].as_str().unwrap(),
+            b"bad".to_vec(),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        saved.contains("Comparison changed or edit ticket closed"),
+        "{saved}"
+    );
+    let applied = fixture.apply_raw(&preview).await.unwrap();
+    assert_eq!(applied[0]["state"], "failed");
+    assert!(applied[0]["error"]
+        .as_str()
+        .unwrap()
+        .contains("Comparison changed or edit ticket closed"));
+    assert_eq!(
+        std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
+        b"\xef\xbb\xbfright\r\n"
+    );
+}
+
+#[tokio::test]
+async fn linux_revoked_tickets_and_copy_plans_free_their_slots_after_refresh() {
+    let mut fixture = Native::new().await;
+    for _ in 0..32 {
+        fixture.open("file.txt", "right").await;
+    }
+    for _ in 0..4 {
+        fixture.preview("file.txt", "right").await;
+    }
+    fixture.refresh().await;
+    fixture.open("file.txt", "right").await;
+    assert_eq!(fixture.files.ticket_count(), 1);
+    fixture.preview("file.txt", "right").await;
+    assert_eq!(fixture.files.copy_count(), 1);
+}
+
+#[tokio::test]
+async fn linux_undo_refuses_a_read_only_or_replaced_root_and_keeps_bytes() {
+    let fixture = Native::new().await;
+    let (_, id) = fixture.save_record("file.txt", b"saved").await;
+    let right = fixture.path.join("right");
+    std::fs::set_permissions(&right, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let readonly = fixture.files.undo(&fixture.environment, &id).await;
+    std::fs::set_permissions(&right, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(readonly.unwrap_err().contains("access was denied"));
+    assert_eq!(std::fs::read(right.join("file.txt")).unwrap(), b"saved");
+    std::fs::rename(&right, fixture.path.join("old-right")).unwrap();
+    std::fs::create_dir(&right).unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .arg(&right)
+        .output()
+        .unwrap()
+        .status
+        .success());
+    std::fs::write(right.join("file.txt"), b"replacement").unwrap();
+    let replaced = fixture.files.undo(&fixture.environment, &id).await;
+    assert!(replaced.unwrap_err().contains("root or metadata changed"));
+    assert_eq!(
+        std::fs::read(right.join("file.txt")).unwrap(),
+        b"replacement"
+    );
+}
+
+#[tokio::test]
+async fn linux_resolve_and_cleanup_handle_conflict_records() {
+    let fixture = Native::new().await;
+    let (ticket, id) = fixture.save_record("file.txt", b"saved").await;
+    std::fs::write(fixture.path.join("right/file.txt"), b"external").unwrap();
+    fixture.files.close(&ticket).unwrap();
+    assert!(fixture
+        .files
+        .undo(&fixture.environment, &id)
+        .await
+        .unwrap_err()
+        .contains("Later destination changes were preserved"));
+    let listed = serde_json::to_value(fixture.files.list(&fixture.environment).unwrap()).unwrap();
+    let stage = listed[0]["stage"].as_str().unwrap().to_string();
+    assert_eq!(stage, "conflict");
+    let cleanup = fixture
+        .files
+        .cleanup(&fixture.environment, std::slice::from_ref(&id), true)
+        .unwrap_err();
+    assert!(cleanup.contains("not eligible for cleanup"), "{cleanup}");
+    let unconfirmed = fixture
+        .files
+        .resolve(&fixture.environment, &id, false)
+        .unwrap_err();
+    assert!(unconfirmed.contains("explicit confirmation"));
+    let resolved = fixture
+        .files
+        .resolve(&fixture.environment, &id, true)
+        .unwrap();
+    assert_eq!(serde_json::to_value(resolved).unwrap()["stage"], "resolved");
+    assert_eq!(
+        fixture
+            .files
+            .cleanup(&fixture.environment, &[id], true)
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        std::fs::read(fixture.path.join("right/file.txt")).unwrap(),
+        b"external"
+    );
+}
+
+#[tokio::test]
+async fn linux_undo_of_a_copy_created_file_keeps_created_parents() {
+    let fixture = Native::new().await;
+    let preview = fixture.preview("missing", "right").await;
+    let outcomes = fixture.apply(&preview).await;
+    let record = outcomes[0]["record"]["id"].as_str().unwrap().to_string();
+    let path = outcomes[0]["path"].as_str().unwrap().to_string();
+    fixture
+        .files
+        .undo(&fixture.environment, &record)
+        .await
+        .unwrap();
+    assert!(!fixture.path.join("right").join(&path).exists());
+    assert!(fixture.path.join("right/missing").is_dir());
+    assert_eq!(
+        std::fs::read(fixture.path.join("right/missing/b.txt")).unwrap(),
+        b"b"
     );
 }
