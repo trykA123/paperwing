@@ -109,3 +109,38 @@ async fn current_branch_is_never_deleted() {
     let results = delete(&fixture, &["feature"], vec![fixture.tip("feature")]).await;
     assert_eq!(error_of(&results[0]), "feature is the current branch");
 }
+
+#[tokio::test]
+async fn symbolic_alias_is_not_listed_and_never_deletes_its_target() {
+    let fixture = fixture();
+    git_in(&fixture.work, &["switch", "-q", "-c", "other"]);
+    git_in(
+        &fixture.work,
+        &["symbolic-ref", "refs/heads/alias", "refs/heads/main"],
+    );
+    let list = merged_branches(fixture.path(), Some("main".into()), None)
+        .await
+        .unwrap();
+    assert!(list.local.iter().all(|branch| branch.name != "alias"));
+    let main = fixture.tip("main");
+    let results = delete(&fixture, &["alias"], vec![main.clone()]).await;
+    assert_eq!(error_of(&results[0]), "alias is a symbolic ref");
+    assert_eq!(fixture.tip("main"), main);
+}
+
+#[tokio::test]
+async fn removes_branch_config_section_on_delete() {
+    let fixture = fixture();
+    branch_with_commit(&fixture, "done", true);
+    git_in(
+        &fixture.work,
+        &["push", "-q", "-u", "origin", "main", "done"],
+    );
+    git_in(&fixture.work, &["switch", "-q", "-c", "other"]);
+    let results = delete(&fixture, &["done"], vec![fixture.tip("done")]).await;
+    assert!(results[0].deleted, "{:?}", results[0].error);
+    let config = git_in(&fixture.work, &["config", "--local", "--list"]);
+    assert!(!config.contains("branch.done."), "{config}");
+    let results = delete(&fixture, &["done"], vec![fixture.tip("main")]).await;
+    assert!(!results[0].deleted);
+}

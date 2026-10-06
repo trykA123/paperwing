@@ -3,7 +3,7 @@ use super::{LocalCandidate, MergedBranches, RemoteCandidate};
 use std::collections::HashSet;
 
 const FIELD: char = '\0';
-const LOCAL_FORMAT: &str = "%(refname)%00%(objectname)%00%(upstream:short)%00%(upstream:track)%00%(worktreepath)%00%(committerdate:unix)%00%(contents:subject)";
+const LOCAL_FORMAT: &str = "%(refname)%00%(objectname)%00%(upstream:short)%00%(upstream:track)%00%(worktreepath)%00%(committerdate:unix)%00%(contents:subject)%00%(symref)";
 const REMOTE_FORMAT: &str =
     "%(refname)%00%(objectname)%00%(committerdate:unix)%00%(contents:subject)";
 
@@ -53,6 +53,9 @@ async fn local_candidates(target: &Target) -> Result<Vec<LocalCandidate>, String
             let reference = field(row, 0);
             let name = short(&reference).to_string();
             if target.protected.contains(&name) {
+                return None;
+            }
+            if !field(row, 7).is_empty() {
                 return None;
             }
             let upstream = Some(field(row, 2)).filter(|value| !value.is_empty());

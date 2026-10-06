@@ -16,6 +16,8 @@ fn git_in(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
+static SERIAL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 struct Fixture {
     root: PathBuf,
     work: PathBuf,
@@ -70,7 +72,11 @@ fn fixture() -> Fixture {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let root = base.join(format!("paperwing-cleanup-{}-{nonce}", std::process::id()));
+    let serial = SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = base.join(format!(
+        "paperwing-cleanup-{}-{nonce}-{serial}",
+        std::process::id()
+    ));
     let bare = root.join("remote.git");
     let work = root.join("work");
     std::fs::create_dir_all(&work).unwrap();

@@ -45,7 +45,7 @@ async fn one_leased_push_maps_each_branch() {
     assert_eq!(error_of(&results[1]), "wip is not merged into origin/main");
     assert_eq!(
         error_of(&results[2]),
-        "raced changed on origin since it was listed; refresh"
+        "raced changed on origin since it was listed; fetch, then refresh"
     );
     assert_eq!(error_of(&results[3]), "main is protected");
     assert_eq!(error_of(&results[4]), "master is protected");
@@ -90,7 +90,7 @@ async fn lease_mismatch_is_refused() {
     let results = delete(&fixture, &["done"], vec![other]).await;
     assert_eq!(
         error_of(&results[0]),
-        "done changed on origin since it was listed; refresh"
+        "done changed on origin since it was listed; fetch, then refresh"
     );
     assert!(fixture.remote_tip("done").is_some());
 }
@@ -179,4 +179,17 @@ async fn validates_remote_and_names() {
             "{name}"
         );
     }
+}
+
+#[tokio::test]
+async fn stale_lease_on_a_vanished_remote_branch_says_it_is_gone() {
+    let fixture = fixture();
+    branch_with_commit(&fixture, "done", true);
+    git_in(&fixture.work, &["push", "-q", "origin", "main", "done"]);
+    git_in(&fixture.bare, &["update-ref", "-d", "refs/heads/done"]);
+    let results = delete(&fixture, &["done"], vec![fixture.tip("done")]).await;
+    assert_eq!(
+        error_of(&results[0]),
+        "done is already gone on origin; fetch to refresh"
+    );
 }

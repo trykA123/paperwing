@@ -1,7 +1,7 @@
 use super::delete::is_ancestor;
 use super::resolve::{short, valid_branch, valid_oid, Target};
 use super::BranchOutcome;
-use crate::commit::run;
+use crate::commit::{quick, run};
 use crate::git::OutputPolicy;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -20,9 +20,23 @@ async fn verdict(target: &Target, base: &str, name: &str, oid: &str) -> Result<(
     Ok(())
 }
 
+const STALE_HINT: &str = "fetch, then refresh";
+
+async fn already_gone(path: &str, remote: &str, name: &str) -> bool {
+    let reference = format!("refs/heads/{name}");
+    quick(
+        path,
+        &["ls-remote", remote, &reference],
+        &format!("Remote branch probe: {path}"),
+        &[0],
+    )
+    .await
+    .is_ok_and(|output| output.stdout.iter().all(u8::is_ascii_whitespace))
+}
+
 fn porcelain_error(remote: &str, name: &str, summary: &str) -> String {
     if summary.contains("stale info") {
-        return format!("{name} changed on {remote} since it was listed; refresh");
+        return format!("{name} changed on {remote} since it was listed; fetch, then refresh");
     }
     match summary.split_once("] (") {
         Some((_, reason)) => reason.trim_end_matches(')').to_string(),
@@ -86,6 +100,22 @@ async fn push_deletes(
             let mut parsed = parse_porcelain(remote, &String::from_utf8_lossy(&output.stdout));
             let fallback = output.last_error();
             for (name, _) in pending {
+                if parsed.get(*name).is_some_and(|result| {
+                    result
+                        .as_ref()
+                        .err()
+                        .is_some_and(|e| e.ends_with(STALE_HINT))
+                }) {
+                    let gone = already_gone(path, remote, name).await;
+                    if gone {
+                        parsed.insert(
+                            name.to_string(),
+                            Err(format!(
+                                "{name} is already gone on {remote}; fetch to refresh"
+                            )),
+                        );
+                    }
+                }
                 parsed
                     .entry(name.to_string())
                     .or_insert_with(|| Err(fallback.clone()));

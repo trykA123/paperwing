@@ -44,6 +44,17 @@ pub(super) async fn delete_local_one(target: &Target, name: &str, oid: &str) -> 
         return Err(format!("{name} is protected"));
     }
     let reference = format!("refs/heads/{name}");
+    if text(
+        path,
+        &["symbolic-ref", "-q", &reference],
+        "Symbolic ref",
+        &[0, 1],
+    )
+    .await?
+    .is_some()
+    {
+        return Err(format!("{name} is a symbolic ref"));
+    }
     let tip = text(
         path,
         &["rev-parse", "--verify", "--quiet", &reference],
@@ -66,12 +77,20 @@ pub(super) async fn delete_local_one(target: &Target, name: &str, oid: &str) -> 
     }
     run(
         path,
-        &["update-ref", "-d", &reference, oid],
+        &["update-ref", "--no-deref", "-d", &reference, oid],
         &format!("Delete local branch: {path}"),
         &[0],
         OutputPolicy::Text,
         None,
         Duration::from_secs(45),
+    )
+    .await?;
+    let section = format!("branch.{name}");
+    quick(
+        path,
+        &["config", "--remove-section", &section],
+        &format!("Branch config: {path}"),
+        &[0, 128],
     )
     .await
     .map(|_| ())
