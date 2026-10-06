@@ -69,7 +69,7 @@
           <span>Repository URLs, one per line</span>
           <textarea rows="8" bind:value={urlsText} spellcheck="false"
             placeholder={'git@github.com:example-org/demo-project.git\nssh://git@git.example.com:7999/projects/demo-project.git'}></textarea>
-          <small class="hint">For hosts PaperWing cannot list. The folder/org name comes from the URL path; branches and tags are read with <code>git ls-remote</code>.</small>
+          <small class="hint">For hosts Skein cannot list. The folder/org name comes from the URL path; branches and tags are read with <code>git ls-remote</code>.</small>
         </label>
       {/if}
 

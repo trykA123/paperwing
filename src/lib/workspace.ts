@@ -33,7 +33,7 @@ export function defaultWorkspace(platform: PlatformInfo['platform'] = 'windows')
     sets: [{ id, name: 'My first set', items: [] }], stars: [], activeSet: id,
     root: platform === 'windows' ? 'C:\\Dev\\repos' : '', layout: 'flat', pathTemplate: DEFAULT_TEMPLATE, cols: { ...DEFAULT_COLS },
     shallow: false, parallel: 4, onExisting: 'fetch', pageSize: 25, rightWidth: 380,
-    theme: 'system', uiFont: 'system', codeFont: 'cascadia',
+    theme: 'system', uiFont: 'geist', codeFont: 'geist-mono',
     shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true },
   };
 }

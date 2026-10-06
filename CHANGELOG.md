@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon. The bundle identifier, settings folder and credential service names are unchanged.
 - Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
 - Add durable Linux diff reservations with bounded admission, namespace prepayment and safe cleanup; application writes remain disabled.
 - Add durable Linux recovery with verified backups, restart reconciliation, conditional undo and owned cleanup; application writes remain disabled.

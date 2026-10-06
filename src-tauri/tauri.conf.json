@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PaperWing",
+  "productName": "Skein",
   "version": "0.2.0",
   "identifier": "dev.paperwing.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "PaperWing",
+        "title": "Skein",
         "width": 1440,
         "height": 900,
         "minWidth": 1100,

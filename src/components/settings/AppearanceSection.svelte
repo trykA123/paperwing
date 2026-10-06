@@ -6,6 +6,9 @@
     theme: Theme; uiFont: string; codeFont: string;
   } = $props();
 
+  $effect(() => { if (!UI_FONTS.some(f => f.id === uiFont)) uiFont = UI_FONTS[0].id; });
+  $effect(() => { if (!CODE_FONTS.some(f => f.id === codeFont)) codeFont = CODE_FONTS[0].id; });
+
   const THEMES: { id: Theme; label: string }[] = [
     { id: 'system', label: 'System' },
     { id: 'light', label: 'Light' },

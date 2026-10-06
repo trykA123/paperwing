@@ -9,6 +9,7 @@
   import { commands, execute, shortcut } from './lib/commands';
   import { applyAppearance, onSystemThemeChange } from './lib/appearance';
   import Sidebar from './components/Sidebar.svelte';
+  import BrandMark from './components/BrandMark.svelte';
   import SetView from './components/SetView.svelte';
   import RepoList from './components/RepoList.svelte';
   import RightPanel from './components/RightPanel.svelte';
@@ -33,6 +34,7 @@
   const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings');
   const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
   let reducedMotion = $state(false), panelsMoving = $state(false);
+  const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activity.some(entry => entry.state === 'running'));
   let previousPanels: string | undefined;
   $effect.pre(() => {
     const visibility = `${app.ws.shell.sidebarVisible}:${rightVisible}`;
@@ -131,7 +133,7 @@
 
 <div id="shell" class:noright={!rightVisible} class:noside={!app.ws.shell.sidebarVisible} class:panels-moving={panelsMoving}
   style:--lw="{app.ws.shell.sidebarVisible ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
-  <div class="shell-brand"><div class="logo" aria-hidden="true"></div><span>PaperWing</span></div>
+  <div class="shell-brand"><BrandMark busy={gitBusy} /><span>Skein</span></div>
   <Tabs />
   <div class="shell-side" inert={!app.ws.shell.sidebarVisible} aria-hidden={!app.ws.shell.sidebarVisible} style:--panel-width="{app.ws.shell.sidebarWidth}px">
     {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><Sidebar /></div>{/if}

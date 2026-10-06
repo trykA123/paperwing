@@ -1,16 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img"
     aria-labelledby="title desc">
-    <title id="title">Paperwing</title>
-    <desc id="desc">A folded-paper bird in flight, built from five flat facets, on a deep teal
-        rounded square.</desc>
-    <rect x="16" y="16" width="224" height="224" rx="48" fill="oklch(0.4 0.066 215)" />
-    <g transform="translate(0 14)" stroke-linejoin="round">
-        <path d="M46 168 84 132 150 120 172 100 208 118 150 176Z" fill="oklch(0.955 0.019 80)"
-            stroke="oklch(0.955 0.019 80)"
-            stroke-width="4" />
-        <path d="M84 132 96 52 150 120Z" fill="oklch(0.89 0.039 186)" stroke="oklch(0.89 0.039 186)"
-            stroke-width="4" />
-        <path d="M96 52 122 92 150 120Z" fill="oklch(0.77 0.071 186)" />
-        <path d="M190 107 208 118 172 134Z" fill="oklch(0.77 0.137 36)" />
+    <title id="title">Skein</title>
+    <desc id="desc">An S-shaped rail in pale blue on a blue rounded square, with a yellow dot at its
+        end.</desc>
+    <g transform="translate(16 16) scale(3.5)">
+        <rect width="64" height="64" rx="15" fill="#006eb8" />
+        <path d="M14 21H24C34 21 30 43 40 43H50" fill="none" stroke="#a7d4e4" stroke-width="5"
+            stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="14" cy="21" r="6" fill="#a7d4e4" />
+        <circle cx="50" cy="43" r="6.5" fill="#fff200" />
     </g>
 </svg>

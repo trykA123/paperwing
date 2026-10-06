@@ -4,19 +4,13 @@ import type { Theme } from './api';
 export type FontChoice = { id: string; label: string; css: string };
 
 export const UI_FONTS: FontChoice[] = [
-  { id: 'system', label: 'Segoe UI (system)', css: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif' },
-  { id: 'inter', label: 'Inter', css: '"Inter Variable", Inter, system-ui, sans-serif' },
-  { id: 'plex', label: 'IBM Plex Sans', css: '"IBM Plex Sans", system-ui, sans-serif' },
-  { id: 'jetbrains', label: 'JetBrains Mono', css: '"JetBrains Mono Variable", "JetBrains Mono", monospace' },
-  { id: 'fira', label: 'Fira Code', css: '"Fira Code Variable", "Fira Code", monospace' },
+  { id: 'geist', label: 'Geist', css: '"Geist Variable", system-ui, sans-serif' },
+  { id: 'native', label: 'System UI', css: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif' },
 ];
 
 export const CODE_FONTS: FontChoice[] = [
-  { id: 'cascadia', label: 'Cascadia Code (system)', css: '"Cascadia Code", Consolas, monospace' },
-  { id: 'jetbrains', label: 'JetBrains Mono', css: '"JetBrains Mono Variable", "JetBrains Mono", monospace' },
-  { id: 'fira', label: 'Fira Code', css: '"Fira Code Variable", "Fira Code", monospace' },
-  { id: 'plexmono', label: 'IBM Plex Mono', css: '"IBM Plex Mono", monospace' },
-  { id: 'source', label: 'Source Code Pro', css: '"Source Code Pro Variable", "Source Code Pro", monospace' },
+  { id: 'geist-mono', label: 'Geist Mono', css: '"Geist Mono Variable", ui-monospace, monospace' },
+  { id: 'native', label: 'System monospace', css: '"Cascadia Code", Consolas, ui-monospace, monospace' },
 ];
 
 const dark = window.matchMedia('(prefers-color-scheme: dark)');

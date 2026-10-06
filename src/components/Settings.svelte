@@ -52,7 +52,7 @@
 
   const tokenUrl = $derived(
     draft && draft.kind !== 'manual' && draft.host
-      ? `https://${draft.host}/settings/tokens/new?scopes=repo,read:org&description=PaperWing`
+      ? `https://${draft.host}/settings/tokens/new?scopes=repo,read:org&description=Skein`
       : '',
   );
 
@@ -183,7 +183,7 @@
 
 <div class="settings">
   <header class="mh">
-    <div class="grow"><div class="crumb">PaperWing</div><h1>Settings</h1></div>
+    <div class="grow"><div class="crumb">Skein</div><h1>Settings</h1></div>
   </header>
 
   <div class="settings-body">
@@ -199,7 +199,7 @@
   {#if section === 'sources'}
   <section class="settings-section">
     <div class="section-head">
-      <div class="grow"><h2>Sources</h2><p class="mut">Where PaperWing finds repositories. Listing uses the host's API; cloning always uses your git + SSH setup.</p></div>
+      <div class="grow"><h2>Sources</h2><p class="mut">Where Skein finds repositories. Listing uses the host's API; cloning always uses your git + SSH setup.</p></div>
       {#if !draft}<button class="btn dark" onclick={startNew}><Icon name="plus" /> Add source</button>{/if}
     </div>
 

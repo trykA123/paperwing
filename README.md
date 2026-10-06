@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="app-icon.svg" width="88" alt="PaperWing logo" />
+<img src="app-icon.svg" width="88" alt="Skein logo" />
 
-# PaperWing
+# Skein
 
 **A desktop workspace for Git repository sets, local comparison, and reviewed changes.**
 
@@ -10,24 +10,24 @@
 
 </div>
 
-PaperWing organizes related Git repositories into reusable sets. Clone a workspace,
+Skein organizes related Git repositories into reusable sets. Clone a workspace,
 inspect local changes, compare folders or Git snapshots, copy selected differences,
 and stage and commit your work from one desktop app.
 
 Use the same repository in several folders when you need separate checkouts.
-PaperWing remembers each folder and reference, so tomorrow starts with a workspace,
+Skein remembers each folder and reference, so tomorrow starts with a workspace,
 not another round of "which terminal was that?"
 
-PaperWing was previously named Flock. When the new settings file is absent, the app
+Skein was previously named PaperWing, and before that Flock. When the new settings file is absent, the app
 attempts to copy settings from `%APPDATA%\dev.flock.app\`. Token lookup also supports
 the old Credential Manager service `flock`. The published v0.1.0 installers retain
-their original Flock branding; new builds use PaperWing.
+their original Flock branding; new builds use Skein.
 
 ---
 
 ## Contents
 
-- [What PaperWing does](#what-paperwing-does)
+- [What Skein does](#what-skein-does)
 - [The workspace model](#the-workspace-model)
 - [A typical workflow](#a-typical-workflow)
 - [Comparing folders and references](#comparing-folders-and-references)
@@ -40,9 +40,9 @@ their original Flock branding; new builds use PaperWing.
 - [Build from source](#build-from-source)
 - [Where things are stored](#where-things-are-stored)
 
-## What PaperWing does
+## What Skein does
 
-PaperWing is a Windows-first desktop app for work that spans several Git repositories.
+Skein is a Windows-first desktop app for work that spans several Git repositories.
 Use named sets for a product, customer workspace, release, or experiment.
 Each row remembers its repository URL, folder name, and checkout reference.
 
@@ -59,9 +59,9 @@ The main capabilities are:
 | Recoverable copies | Confirmed file/folder copy previews, per-file outcomes, saved-operation undo, and persisted recovery records. |
 | Desktop workflow | Tabs, a command palette, Git Activity, resizable panels, light/dark/system themes, bundled fonts, and VS Code integration. |
 
-Search filters repository lists that PaperWing has loaded. It is not server-wide code search.
+Search filters repository lists that Skein has loaded. It is not server-wide code search.
 The app uses ordinary Git repositories, so terminal commands and other editors still work.
-PaperWing reduces terminal juggling; Git retains its right to complain about conflicts.
+Skein reduces terminal juggling; Git retains its right to complain about conflicts.
 
 ## The workspace model
 
@@ -132,7 +132,7 @@ Activity is a diagnostic preview, not a permanent audit log.
 ## Comparing folders and references
 
 Comparison works with repository folders represented in your sets.
-PaperWing is not currently a general-purpose picker for arbitrary non-Git folders.
+Skein is not currently a general-purpose picker for arbitrary non-Git folders.
 
 The default **Compare repository refs** view compares **HEAD** on the left with
 **Working tree** on the right. This shows the current local commit against disk files.
@@ -144,7 +144,7 @@ Both panes then represent local files. There is no remote folder receiving edits
 
 Each endpoint supports these reference types:
 
-| Reference | What PaperWing reads | Writable? |
+| Reference | What Skein reads | Writable? |
 |---|---|---|
 | Working tree | Current local disk files | Yes, where the safe-write policy permits |
 | HEAD | Current local commit | No |
@@ -207,7 +207,7 @@ Choose whether to switch to the new branch. A shared start point must exist in e
 Batch creation reports each repository's result; it does not roll back earlier successes.
 
 For one repository, **Keep it in its own folder** adds a row and clones a separate checkout.
-PaperWing creates and checks out the new branch there, leaving the original folder on its branch.
+Skein creates and checks out the new branch there, leaving the original folder on its branch.
 This is a fresh clone, not a copy of the original uncommitted files.
 The branch starts locally; publishing still requires Push.
 
@@ -232,7 +232,7 @@ it is less useful when future-you becomes the incident investigator.
 ### Push and delete local branches
 
 Push sends the current branch to its configured upstream without force pushing.
-For a branch without an upstream, PaperWing selects `origin`, or the only configured remote,
+For a branch without an upstream, Skein selects `origin`, or the only configured remote,
 and publishes the branch with an upstream. Ambiguous remotes need a terminal selection.
 Detached HEAD cannot be pushed through this action. Multi-repository Push asks for confirmation
 and reports failures without rolling back successful pushes.
@@ -278,7 +278,7 @@ The development build is not a signed-off release; live acceptance and UX work r
 
 ## How it works
 
-PaperWing combines a Svelte/TypeScript interface with a Rust backend through Tauri.
+Skein combines a Svelte/TypeScript interface with a Rust backend through Tauri.
 The interface owns sets, tabs, dialogs, and editor buffers. Tauri commands request
 repository listings, Git operations, comparison snapshots, and authorized filesystem writes.
 
@@ -305,18 +305,18 @@ The implementation is organized around these areas:
 ## Install
 
 This repository contains source code and design plans, not prebuilt downloads.
-Build from source for the current PaperWing development version.
+Build from source for the current Skein development version.
 
 The desktop app needs Windows 10/11, [Git for Windows](https://git-scm.com/download/win),
 and the [Microsoft Edge WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
-Git must be available on `PATH`. New installer builds use the PaperWing product name.
+Git must be available on `PATH`. New installer builds use the Skein product name.
 Unsigned builds can trigger Windows SmartScreen warnings; run only builds that you trust.
 
 ## Setup
 
 Git authentication and repository discovery use separate credentials.
 Configure Git access first. GitHub/GitHub Enterprise listing also requires a source API token.
-Manual URL sources do not require an API token in PaperWing.
+Manual URL sources do not require an API token in Skein.
 
 ### Configure Git access
 
@@ -336,7 +336,7 @@ ssh-keygen -t ed25519 -C "you@example.com"
 Get-Content $HOME\.ssh\id_ed25519.pub | Set-Clipboard
 ```
 
-PaperWing runs Git without interactive credential prompts. Load passphrase-protected keys
+Skein runs Git without interactive credential prompts. Load passphrase-protected keys
 into an SSH agent before running Git operations. To use the Windows OpenSSH agent,
 an administrator can enable the service once. Then load the key in your own session:
 
@@ -366,7 +366,7 @@ Configure one source in **Settings**:
 The source form links to token creation. Classic GitHub tokens use `repo` for private
 repositories and `read:org` for organization discovery. Apply any required single-sign-on authorization.
 Store only tokens whose permissions and lifetime fit your organization's policy.
-PaperWing stores source tokens in Windows Credential Manager on Windows and a persistent
+Skein stores source tokens in Windows Credential Manager on Windows and a persistent
 desktop Secret Service store on Linux. Tokens do not enter the settings file. Unlock or
 configure your desktop wallet before testing a Linux API source. A failed or uncertain
 save retains the entered token; retry explicitly after checking the wallet. Manual URL
@@ -385,7 +385,7 @@ git config --global user.email "you@example.com"
 ```
 
 Use repository-local Git configuration instead when different projects need different identities.
-Git hooks and signing settings still apply to commits made from PaperWing.
+Git hooks and signing settings still apply to commits made from Skein.
 
 ## Troubleshooting
 
@@ -444,7 +444,7 @@ bun run --bun tauri dev      # hot-reloading desktop app
 ### Build an installer
 
 ```powershell
-bun run --bun tauri build    # → src-tauri/target/release/bundle/nsis/PaperWing_*_x64-setup.exe
+bun run --bun tauri build    # → src-tauri/target/release/bundle/nsis/Skein_*_x64-setup.exe
 ```
 
 The release executable is also built under `src-tauri/target/release/`.

@@ -1,5 +1,5 @@
 {
-  "productName": "PaperWing Testing",
+  "productName": "Skein Testing",
   "identifier": "dev.paperwing.testing",
   "build": {
     "beforeBuildCommand": "VITE_PAPERWING_BENCHMARK=1 bun run --bun build"
@@ -9,7 +9,7 @@
       {
         "label": "main",
         "create": false,
-        "title": "PaperWing Testing",
+        "title": "Skein Testing",
         "width": 1440,
         "height": 900,
         "minWidth": 1100,
