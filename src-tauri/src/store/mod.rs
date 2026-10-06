@@ -55,6 +55,19 @@ struct Inner {
     path: PathBuf,
 }
 
+impl Inner {
+    fn close(&self) {
+        self.readers.close();
+        self.writer.close();
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
 #[derive(Clone)]
 pub struct Store {
     slot: Arc<OnceLock<Option<Arc<Inner>>>>,
@@ -139,8 +152,16 @@ impl Store {
         matches!(self.slot.get(), Some(Some(_)))
     }
 
+    #[cfg(test)]
+    pub fn close(&self) {
+        if let Ok(inner) = self.inner() {
+            inner.close();
+        }
+    }
+
     pub fn mark_clean(&self) {
         if let Ok(inner) = self.inner() {
+            inner.close();
             open::mark_clean(&inner.path);
         }
     }

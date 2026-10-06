@@ -29,6 +29,7 @@ fn repo(fixture: &Fixture, name: &str, files: &[(&str, &[u8])]) -> String {
     git(&dir, &["config", "user.name", "Test"]);
     git(&dir, &["config", "user.email", "t@example.test"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
+    git(&dir, &["config", "core.autocrlf", "false"]);
     for (path, content) in files {
         let file = dir.join(path);
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();

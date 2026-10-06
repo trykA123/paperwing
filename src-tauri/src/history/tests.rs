@@ -56,6 +56,7 @@ fn init(dir: &Path) {
         ("user.name", "Test User"),
         ("user.email", "test@example.test"),
         ("commit.gpgsign", "false"),
+        ("core.autocrlf", "false"),
     ] {
         git_in(dir, &["config", key, value]);
     }

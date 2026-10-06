@@ -41,6 +41,7 @@ fn repo_with_remote() -> (PathBuf, PathBuf) {
         ("user.name", "Test User"),
         ("user.email", "test@example.test"),
         ("commit.gpgsign", "false"),
+        ("core.autocrlf", "false"),
         ("tag.gpgsign", "false"),
     ] {
         git_out(&dir, &["config", key, value]);
