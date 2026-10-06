@@ -35,7 +35,8 @@
   const pages = $derived(size === 'all' ? 1 : Math.max(1, Math.ceil(shown.length / size)));
   const cur = $derived(Math.min(page, pages - 1));
   const rows = $derived(size === 'all' ? shown : shown.slice(cur * size, cur * size + size));
-  const density = $derived(app.ws.density ?? (items.length > COMPACT_ABOVE ? 'compact' : 'comfortable'));
+  const autoDensity = $derived.by(() => { void set.id; return untrack(() => items.length) > COMPACT_ABOVE ? 'compact' : 'comfortable'; });
+  const density = $derived(app.ws.density ?? autoDensity);
   const selected = $derived(app.selected);
   const allOn = $derived(shown.length > 0 && shown.every(item => item.on));
   const targets = $derived(bulkTargets(selected, rowFacts));
@@ -129,7 +130,7 @@
 
 <div class="fm-wrap">
   <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
-    {#key `${set.id}|${filter}|${cur}|${size}|${density}`}
+    {#key `${set.id}|${filter}|${cur}|${size}`}
       <VirtualList items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
         {#snippet header()}
           <div class="fm-row fm-head">

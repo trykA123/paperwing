@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import { app } from '../lib/state.svelte';
-  import { countLabel, errorSummary, newFailures } from '../lib/source-status';
+  import { countLabel, errorSummary } from '../lib/source-status';
   import type { Repo } from '../lib/api';
   import Icon from './Icon.svelte';
 
@@ -17,17 +16,6 @@
     const query = app.query;
     app.openView(query.trim() ? { kind: 'search' } : { kind: 'set' }, app.ws.activeSet, query);
   }
-
-  const raised = new Map<string, string>();
-  $effect(() => {
-    const fresh = newFailures(raised, app.repoErrors, app.sources.map(source => source.id));
-    untrack(() => {
-      for (const { id, message } of fresh) {
-        const name = app.sources.find(source => source.id === id)?.name ?? id;
-        app.toast(`Can't reach ${name}`, 'error', { label: 'Open Settings', run: () => app.openView({ kind: 'settings' }) }, { detail: message });
-      }
-    });
-  });
 
   function openSet(id: string) {
     app.openView({ kind: 'set' }, id);

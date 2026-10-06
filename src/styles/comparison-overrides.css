@@ -198,3 +198,9 @@
     background: var(--warn-bg);
     color: var(--warn-text);
 }
+
+.set-compare-table .set-compare-empty {
+    height: 64px;
+    color: var(--dim);
+    text-align: center;
+}

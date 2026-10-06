@@ -65,6 +65,10 @@
         <td class="num">{view.different ?? UNKNOWN}</td><td class="num">{view.leftOnly ?? UNKNOWN}</td><td class="num">{view.rightOnly ?? UNKNOWN}</td>
         <td class="num">{#if row.added === null}N/A{:else}<span class="set-added">+{row.added}</span> <span class="set-removed">−{row.removed}</span>{/if}</td>
         <td class="num">{row.snapshot?.history.available ? `${row.snapshot.history.rightCount} / ${row.snapshot.history.leftCount}` : 'N/A'}</td></tr>
+    {:else}
+      {#if differences && !comparison.busy && comparison.rows.length}
+        <tr><td colspan={COLUMNS.length} class="set-compare-empty">All {comparison.rows.length} repositories are identical. <button class="link" onclick={() => (differences = false)}>Show all</button></td></tr>
+      {/if}
     {/each}
   </tbody></table></div>
 </section>

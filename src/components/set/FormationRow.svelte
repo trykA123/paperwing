@@ -60,7 +60,10 @@
       <button class="fm-ref" class:bad={row.refBad} onclick={event => handlers.pickRef(event.currentTarget)} title={row.refTitle}>
         <span class="t-{row.refType}"><Icon name={row.refType} /></span><span class="nm">{row.refLabel}</span><span class="car" aria-hidden="true">▾</span>
       </button>
-      {#if row.localNote}<small class="fm-note" title="The folder has a different branch checked out">{row.localNote}</small>{/if}
+      {#if row.localNote}
+        <small class="fm-note" title="The folder has a different branch checked out">{row.localNote}</small>
+        <span class="fm-note-icon" role="img" aria-label="{row.localNote}: the folder has a different branch checked out" title="{row.localNote}: the folder has a different branch checked out"><Icon name="alert" size={14} tone="warn" /></span>
+      {/if}
     {/if}
   </div>
   <div class="fm-cell fm-syncc"><SyncRails view={row.sync} /></div>

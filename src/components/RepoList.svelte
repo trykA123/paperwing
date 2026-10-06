@@ -39,6 +39,7 @@
     previousQuery = query;
   });
 
+  const errorText = $derived(mode === 'org' ? errorSummary(errors) : failing.map(s => `${s.name}: ${errorSummary(app.repoErrors[s.id])}`).join(' \u00b7 '));
   const retry = () => failing.forEach(s => void app.loadRepos(s, true));
 
   async function addAll() {
@@ -75,7 +76,7 @@
 
 {#if errors.length}
   <Alert kind="err" role="status" title="Can't reach {failing.map(s => s.name).join(', ') || 'the source'}">
-    {errorSummary(errors)}
+    {errorText}
     {#snippet action()}<button class="btn small" disabled={loading} onclick={retry}>Retry</button>{/snippet}
   </Alert>
 {/if}

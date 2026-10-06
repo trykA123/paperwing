@@ -384,10 +384,25 @@
 
 .fm-table.compact .fm-branch {
     flex-direction: row;
+    gap: var(--sp-1);
+}
+
+.fm-table.compact .fm-branch .fm-ref {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 .fm-table.compact .fm-note {
     display: none;
+}
+
+.fm-note-icon {
+    display: none;
+}
+
+.fm-table.compact .fm-note-icon {
+    display: inline-flex;
+    flex: none;
 }
 
 .fm-sub {

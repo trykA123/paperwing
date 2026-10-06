@@ -32,6 +32,8 @@
   function place() {
     if (!tip) return;
     const { rect, side } = tip;
+    host.style.left = '0px';
+    host.style.top = '0px';
     const width = host.offsetWidth;
     const height = host.offsetHeight;
     const clampX = (x: number) => Math.max(EDGE, Math.min(innerWidth - width - EDGE, x));

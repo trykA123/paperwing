@@ -561,3 +561,19 @@ test('a repeated demand keeps its in-flight request and release cancels it', asy
     expect(state.needsRefs(item.url)).toBe(true);
   });
 });
+
+test('a failing listing raises one error notice that stays dismissed until the error changes or clears', async () => {
+  await withIpc(command => (command === 'list_repos' ? Promise.resolve({ repos: [], errors: [state401], warnings: [] }) : Promise.resolve(null)), async () => {
+    const state = new app.constructor();
+    state.sources = [structuredClone(source)];
+    const errors = () => state.notices.items.filter(entry => entry.kind === 'error');
+    await state.loadRepos(state.sources[0], true);
+    expect(errors().map(entry => entry.msg)).toEqual([`Can't reach admin`]);
+    expect(errors()[0].detail).toBe(state401);
+    state.notices.dismiss(errors()[0].id);
+    await state.loadRepos(state.sources[0], true);
+    expect(errors()).toHaveLength(0);
+  });
+});
+
+const state401 = 'HTTP 401 Unauthorized';
