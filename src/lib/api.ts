@@ -119,6 +119,18 @@ export type Progress = { id: string; phase: Phase; pct: number; msg: string };
 export type CloneJob = { id: string; url: string; dest: string; refType: RefKind; refName: string };
 export type CloneOpts = { parallel: number; shallow: boolean; onExisting: OnExisting };
 
+export type LaunchAction = { kind: 'openFolder'; path: string } | { kind: 'compareFolders'; left: string; right: string };
+export type LaunchRequest = { action: LaunchAction | null; ignored: { arg: string; reason: string }[] };
+export type FoundRepoKind = 'normal' | 'worktree' | 'bare' | 'submodule';
+export type FoundRepo = { path: string; name: string; kind: FoundRepoKind; branch: string | null; detached: boolean; parent: string | null };
+export type DiscoverBatch = { id: number; repos: FoundRepo[] };
+export type DiscoverSummary = {
+  repositories: number; directories: number; unreadable: number; linksSkipped: number;
+  capped: 'directories' | 'repositories' | null; cancelled: boolean;
+};
+export type DiscoverDone = { id: number; summary: DiscoverSummary };
+export const events = { launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done' } as const;
+
 export const api = {
   platformInfo: () => invoke<PlatformInfo>('platform_info'),
   probeRoot: (root: string) => invoke<RootSupport>('probe_root', { root }),
@@ -174,4 +186,7 @@ export const api = {
   comparisonCommits: (id: string, generation: number, offset = 0, limit = 200) =>
     invoke<CompareCommit[]>('comparison_commits', { id, generation, offset, limit }),
   openInVscode: (path: string) => invoke<void>('open_in_vscode', { path }),
+  launchRequest: () => invoke<LaunchRequest[]>('launch_request'),
+  discoverStart: (path: string, maxDepth?: number) => invoke<number>('discover_start', { path, maxDepth: maxDepth ?? null }),
+  discoverCancel: (id: number) => invoke<boolean>('discover_cancel', { id }),
 };
