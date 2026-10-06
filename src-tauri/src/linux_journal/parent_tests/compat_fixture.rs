@@ -155,12 +155,12 @@ fn preserve(manifest: &Manifest) {
 }
 pub(super) fn produce() {
     let row: Case = serde_json::from_value(
-        std::env::var("PAPERWING_PARENT_COMPAT_CASE")
+        crate::env_names::var("SKEIN_PARENT_COMPAT_CASE")
             .unwrap()
             .into(),
     )
     .unwrap();
-    let path = PathBuf::from(std::env::var("PAPERWING_PARENT_COMPAT_FIXTURE").unwrap());
+    let path = PathBuf::from(crate::env_names::var("SKEIN_PARENT_COMPAT_FIXTURE").unwrap());
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../.skillify/evidence/paperwing/14/a2/compatibility/fixtures")
         .canonicalize()

@@ -65,7 +65,7 @@ impl Drop for Fixture {
 }
 
 fn fixture() -> Fixture {
-    let base = std::env::var_os("PAPERWING_TEST_TMP")
+    let base = crate::env_names::var_os("SKEIN_TEST_TMP")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
     let nonce = std::time::SystemTime::now()
@@ -74,7 +74,7 @@ fn fixture() -> Fixture {
         .as_nanos();
     let serial = SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = base.join(format!(
-        "paperwing-cleanup-{}-{nonce}-{serial}",
+        "skein-cleanup-{}-{nonce}-{serial}",
         std::process::id()
     ));
     let bare = root.join("remote.git");

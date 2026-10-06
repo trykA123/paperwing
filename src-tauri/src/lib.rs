@@ -2,6 +2,8 @@
 mod benchmark;
 #[cfg(feature = "test-profile")]
 mod test_profile;
+#[cfg(any(test, feature = "test-profile"))]
+mod env_names;
 mod clone;
 mod branch_cleanup;
 mod commit;
@@ -224,7 +226,7 @@ pub fn run() {
             search_service::search_capabilities,
         ])
         .build(context)
-        .expect("error while building PaperWing")
+        .expect("error while building Skein")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 app.state::<store::Store>().mark_clean();

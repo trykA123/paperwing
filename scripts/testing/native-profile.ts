@@ -51,7 +51,7 @@ export function profileEnvironment(profile: string, sample = 1) {
   if (!Number.isSafeInteger(sample) || sample < 1 || sample > 0xffffffff) throw new Error('Sample must be a positive u32 integer');
   const environment = { ...process.env };
   for (const name of Object.keys(environment)) if (name.startsWith('GIT_')) delete environment[name];
-  return { ...environment, PAPERWING_TEST_PROFILE: root, PAPERWING_BENCHMARK_SAMPLE: String(sample), XDG_CONFIG_HOME: join(root, 'config'), XDG_DATA_HOME: join(root, 'data'), XDG_CACHE_HOME: join(root, 'cache'), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.attributesFile', GIT_CONFIG_VALUE_0: '/dev/null', GIT_ATTR_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' };
+  return { ...environment, SKEIN_TEST_PROFILE: root, SKEIN_BENCHMARK_SAMPLE: String(sample), XDG_CONFIG_HOME: join(root, 'config'), XDG_DATA_HOME: join(root, 'data'), XDG_CACHE_HOME: join(root, 'cache'), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.attributesFile', GIT_CONFIG_VALUE_0: '/dev/null', GIT_ATTR_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' };
 }
 
 export function requireDisplay(environment = process.env) {
@@ -185,7 +185,7 @@ finally:
 }
 
 async function selfTest() {
-  const parent = mkdtempSync(join(tmpdir(), 'paperwing-profile-self-test-'));
+  const parent = mkdtempSync(join(tmpdir(), 'skein-profile-self-test-'));
   const fixtures = join(parent, 'fixtures'), profile = join(parent, 'profile');
   createFixtures(fixtures, 8);
   prepareProfile(profile, fixtures);

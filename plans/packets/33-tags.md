@@ -47,7 +47,7 @@ The user creates, pushes and deletes tags for one repository or a whole set in o
 
 ## Gates
 - `bun run --bun check`, `bun test src/lib`, `bun run --bun build`, `bun scripts/testing/css-order.ts`
-- `cd src-tauri && cargo test --offline tags github` (set `PAPERWING_TEST_TMP` to an ext4 directory), `rustfmt --check`, clippy on touched files
+- `cd src-tauri && cargo test --offline tags github` (set `SKEIN_TEST_TMP` to an ext4 directory), `rustfmt --check`, clippy on touched files
 - UI: screenshots at 1440 and 1100 px, both themes
 
 ## Stop and report if

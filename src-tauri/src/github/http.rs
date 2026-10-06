@@ -79,7 +79,7 @@ impl<'a> Http<'a> {
             return Err(changed());
         }
         let client = reqwest::Client::builder()
-            .user_agent("paperwing")
+            .user_agent("skein")
             .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none())
             .build()

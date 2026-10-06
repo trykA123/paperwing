@@ -1,11 +1,11 @@
 [package]
-name = "paperwing"
+name = "skein"
 version = "0.2.0"
 description = "Manage Git repository sets, compare local checkouts, and review changes"
 edition = "2021"
 
 [lib]
-name = "paperwing_lib"
+name = "skein_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -2,7 +2,7 @@
   "productName": "Skein Testing",
   "identifier": "dev.paperwing.testing",
   "build": {
-    "beforeBuildCommand": "VITE_PAPERWING_BENCHMARK=1 bun run --bun build"
+    "beforeBuildCommand": "VITE_SKEIN_BENCHMARK=1 bun run --bun build"
   },
   "app": {
     "windows": [

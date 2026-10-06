@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn junction_probe_positive_control_converts_unprotected_empty_directory() {
-        let base = std::env::temp_dir().join(format!("paperwing-positive-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!("skein-positive-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         let directory = base.join("directory"); let outside = base.join("outside");
         std::fs::create_dir_all(&directory).unwrap(); std::fs::create_dir(&outside).unwrap(); std::fs::write(outside.join("sentinel"), b"outside").unwrap();
         let changed = attempt_junction(&directory, &outside); let reaches_outside = directory.join("sentinel").exists();
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn native_atomic_replace_refuses_share_locked_destination() {
         use std::io::Write;
-        let base = std::env::temp_dir().join(format!("paperwing-native-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!("skein-native-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir(&base).unwrap(); std::fs::write(base.join("target"), b"old").unwrap();
         let mut parent = PinnedPath::existing_directory(&base).unwrap();
         let target = OpenOptions::new().read(true).share_mode(FILE_SHARE_READ).open(base.join("target")).unwrap();
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn transaction_replaces_atomically_without_unlocked_destination_gap() {
         use std::io::Write;
-        let base = std::env::temp_dir().join(format!("paperwing-transaction-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!("skein-transaction-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir(&base).unwrap(); std::fs::write(base.join("target"), b"old").unwrap();
         let mut parent = PinnedPath::existing_directory(&base).unwrap();
         let keeper = OpenOptions::new().read(true).write(true).create_new(true).access_mode(0xc001_0000).share_mode(FILE_SHARE_READ).open(base.join("keeper")).unwrap();
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn pinned_ancestors_block_substitution_and_reject_aliases() {
-        let base = std::env::temp_dir().join(format!("paperwing-pins-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!("skein-pins-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         let root = base.join("repo");
         std::fs::create_dir_all(root.join("nested")).unwrap();
         let guard = PinnedPath::relative_parent(&root, "nested/file.txt").unwrap();
@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn atomic_move_never_overwrites_an_existing_destination() {
-        let base = std::env::temp_dir().join(format!("paperwing-move-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!("skein-move-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir(&base).unwrap();
         std::fs::write(base.join("source"), b"incoming").unwrap();
         std::fs::write(base.join("target"), b"keep").unwrap();
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn directory_pin_blocks_in_place_junction_substitution() {
-        let base = std::env::temp_dir().join(format!("paperwing-reparse-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!("skein-reparse-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         let root = base.join("repo"); let outside = base.join("outside");
         std::fs::create_dir_all(root.join("nested")).unwrap(); std::fs::create_dir(&outside).unwrap();
         std::fs::write(outside.join("sentinel"), b"outside").unwrap();
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn held_staged_file_blocks_in_place_junction_with_parent_write_sharing() {
-        let base = std::env::temp_dir().join(format!("paperwing-nonempty-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!("skein-nonempty-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         let directory = base.join("parent"); let outside = base.join("outside");
         std::fs::create_dir_all(&directory).unwrap(); std::fs::create_dir(&outside).unwrap();
         let mut parent = PinnedPath::existing_directory(&directory).unwrap();

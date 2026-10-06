@@ -45,7 +45,7 @@ The backend publishes the list of changed files as soon as it knows it, then fil
 - Stale generation, ref, root, cancel and cleanup cases are correct on both platforms.
 
 ## Gates
-- `cd src-tauri && cargo test --offline` (`PAPERWING_TEST_TMP` on ext4), `rustfmt --check`, clippy
+- `cd src-tauri && cargo test --offline` (`SKEIN_TEST_TMP` on ext4), `rustfmt --check`, clippy
 - Windows VM: serial `cargo test --locked`
 - `bun run --bun check`, `bun test src/lib` (legacy IPC unchanged)
 

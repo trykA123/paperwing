@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Rename the remaining PaperWing names in code and docs to Skein: the Cargo package (`skein`, `skein_lib`), the HTTP user agent, and test variables (`SKEIN_*`, with `PAPERWING_*` still read as a fallback). Identifiers stored on disk keep the old name; see `docs/naming.md`.
 - Add a Rust-owned SQLite local store (`skein-store.sqlite3`) for repository listings and commit histories. It opens in the background, so startup never waits for it, and a corrupt file is moved aside while other open errors only disable the store. Old `repos-*.json` caches are deleted. Packet 34 gaps: commit recall is unused and the ref epoch is constant, pruning goes by oldest fetch time rather than LRU, vacuum runs only over the size cap, and the schema version uses `user_version`.
 - Add the Formation layout: a dense repository table with one next action per row (Clone, Commit, Switch, Pull, Push, or a Diverged marker that opens History), inline sync rails, filter chips with live counts, and a floating bulk bar. Add an activity rail (Sets, Compare, Recovery, Activity, Settings; Ctrl+1 to Ctrl+5), a repository details panel, and temporary sets for folders opened with Skein that you can save or discard. Fetch, Pull and Push show one loading notice with Retry. Folders opened in place are never cloned, pulled, switched, compared or trashed by Skein.
 - Fix pull request reviews, status summaries, fork targets and publication checks; support separate Enterprise hosts with scoped tokens and typed rate-limit errors.

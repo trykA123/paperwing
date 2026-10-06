@@ -81,7 +81,7 @@ pub(crate) struct Serial {
 }
 
 pub(crate) fn tmp_root() -> PathBuf {
-    let root = std::env::var_os("PAPERWING_TEST_TMP")
+    let root = crate::env_names::var_os("SKEIN_TEST_TMP")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp"));
     let _ = std::fs::create_dir_all(&root);

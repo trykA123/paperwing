@@ -51,7 +51,7 @@ async fn stopped_outcome_survives_output_drain_failure() {
         });
         let after_exit: ExitObserver = Arc::new(|_, _| Err("Injected Git output drain failure".into()));
         let timeout = if state == "timedOut" { Duration::ZERO } else { Duration::from_secs(45) };
-        let result = execute_inner(Request { args: &["-c", "alias.paperwing-fixture-wait=!echo cancel-ready; sleep 2", "paperwing-fixture-wait"], context: &context, expected: &[0], timeout, policy: OutputPolicy::Text }, (state == "cancelled").then_some(observer), None, None, Some(after_exit)).await;
+        let result = execute_inner(Request { args: &["-c", "alias.skein-fixture-wait=!echo cancel-ready; sleep 2", "skein-fixture-wait"], context: &context, expected: &[0], timeout, policy: OutputPolicy::Text }, (state == "cancelled").then_some(observer), None, None, Some(after_exit)).await;
         assert_eq!(result.err().unwrap(), "Injected Git output drain failure");
         let entry = activity_snapshot().into_iter().find(|entry| entry.context == context).unwrap();
         assert_eq!(entry.state, state);
@@ -192,7 +192,7 @@ async fn concurrent_streams_redact_split_records_and_bound_content() {
 #[tokio::test]
 async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     let _guard = TEST_RUNNER_LOCK.lock().await;
-    let root = std::env::temp_dir().join(format!("paperwing-runner-{}-{}", std::process::id(), NEXT_ID.fetch_add(1, AtomicOrdering::Relaxed)));
+    let root = std::env::temp_dir().join(format!("skein-runner-{}-{}", std::process::id(), NEXT_ID.fetch_add(1, AtomicOrdering::Relaxed)));
     std::fs::create_dir_all(&root).unwrap();
     let source = root.join("source");
     let clone = root.join("clone");
@@ -286,7 +286,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     assert!(valid_ref("-option").is_err());
     assert!(valid_path(&root.join("../escape").to_string_lossy(), false).is_err());
     assert!(repository_tree(root.join("missing").to_string_lossy().into()).await.is_err());
-    let timeout = execute(Request { args: &["-c", "alias.paperwing-fixture-timeout=!sleep 2", "paperwing-fixture-timeout"], context: "runner-timeout", expected: &[0], timeout: Duration::ZERO, policy: OutputPolicy::Text }, None).await;
+    let timeout = execute(Request { args: &["-c", "alias.skein-fixture-timeout=!sleep 2", "skein-fixture-timeout"], context: "runner-timeout", expected: &[0], timeout: Duration::ZERO, policy: OutputPolicy::Text }, None).await;
     assert!(timeout.is_err());
     assert!(activity_snapshot().iter().any(|entry| entry.context == "runner-timeout" && entry.state == "timedOut"));
     let requested = Arc::new(AtomicBool::new(false));
@@ -297,7 +297,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
             assert!(cancel_activity(entry.id));
         }
     });
-    let cancelled = execute(Request { args: &["-c", "alias.paperwing-fixture-wait=!echo cancel-ready; sleep 2", "paperwing-fixture-wait"], context: "runner-cancel", expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text }, Some(cancel_callback)).await;
+    let cancelled = execute(Request { args: &["-c", "alias.skein-fixture-wait=!echo cancel-ready; sleep 2", "skein-fixture-wait"], context: "runner-cancel", expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text }, Some(cancel_callback)).await;
     assert!(cancelled.is_err());
     assert!(requested.load(AtomicOrdering::Relaxed));
     assert!(activity_snapshot().iter().any(|entry| entry.context == "runner-cancel" && entry.state == "cancelled"));
@@ -319,8 +319,8 @@ async fn inaccessible_credentials_allow_quiet_git_without_observer_or_diagnostic
         ]));
         let observed = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
         let records = observed.clone();
-        let alias = "alias.paperwing-quiet-fixture=!printf 'unknown-secret stdout\\n'; printf 'unknown-secret stderr\\n' >&2; exit 7";
-        let output = execute(Request { args: &["-c", alias, "paperwing-quiet-fixture"], context: "unknown-secret context",
+        let alias = "alias.skein-quiet-fixture=!printf 'unknown-secret stdout\\n'; printf 'unknown-secret stderr\\n' >&2; exit 7";
+        let output = execute(Request { args: &["-c", alias, "skein-quiet-fixture"], context: "unknown-secret context",
             expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text },
             Some(Arc::new(move |_, text| records.lock().unwrap().push(text.into())))).await.unwrap();
         assert_eq!(output.code, Some(7));
@@ -346,8 +346,8 @@ async fn operation_redaction_survives_token_replacement_and_preserves_raw_bytes(
     ]));
     let observed = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let records = observed.clone();
-    let alias = "alias.paperwing-capture-fixture=!printf 'synthetic-old-token stdout\\n'; printf 'synthetic-old-token stderr\\n' >&2";
-    let output = execute(Request { args: &["-c", alias, "paperwing-capture-fixture"], context: "synthetic-old-token context",
+    let alias = "alias.skein-capture-fixture=!printf 'synthetic-old-token stdout\\n'; printf 'synthetic-old-token stderr\\n' >&2";
+    let output = execute(Request { args: &["-c", alias, "skein-capture-fixture"], context: "synthetic-old-token context",
         expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text },
         Some(Arc::new(move |_, text| {
             CredentialFixture::replace("managed-manual", "synthetic-new-token");
@@ -360,8 +360,8 @@ async fn operation_redaction_survives_token_replacement_and_preserves_raw_bytes(
     let activity = activity_snapshot().into_iter().last().unwrap();
     assert!(!serde_json::to_string(&activity).unwrap().contains("synthetic-old-token"));
     let bytes = b"synthetic-new-token\0blob\xff";
-    let alias = "alias.paperwing-byte-fixture=!printf 'synthetic-new-token\\0blob\\377'";
-    let output = execute(Request { args: &["-c", alias, "paperwing-byte-fixture"], context: "byte capture",
+    let alias = "alias.skein-byte-fixture=!printf 'synthetic-new-token\\0blob\\377'";
+    let output = execute(Request { args: &["-c", alias, "skein-byte-fixture"], context: "byte capture",
         expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Metadata }, None).await.unwrap();
     assert_eq!(output.stdout, bytes);
 }
@@ -379,7 +379,7 @@ async fn displayed_git_metadata_redacts_managed_manual_tokens_and_keeps_action_n
         ("managed-manual".into(), Ok(Some("synthetic-display-token".into()))),
     ]));
     let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    let dir = std::env::temp_dir().join(format!("paperwing-display-{}-{nonce}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("skein-display-{}-{nonce}", std::process::id()));
     std::fs::create_dir(&dir).unwrap();
     let fixture = DisplayFixture(dir);
     let dir = &fixture.0;

@@ -69,7 +69,7 @@ preserved_home = os.environ['HOME']
 display_runtime = os.environ.get('XDG_RUNTIME_DIR', '/run/user/' + str(os.getuid()))
 wayland_display = os.environ.get('WAYLAND_DISPLAY', 'wayland-1')
 assert Path(display_runtime, wayland_display).is_socket()
-os.environ.update(DBUS_SESSION_BUS_ADDRESS=address, XDG_CONFIG_HOME=str(root / 'config'), XDG_DATA_HOME=str(root / 'data'), XDG_CACHE_HOME=str(root / 'cache'), XDG_RUNTIME_DIR=str(root / 'runtime'), QT_QPA_PLATFORM='wayland', QT_ACCESSIBILITY='1', QT_LINUX_ACCESSIBILITY_ALWAYS_ON='1', WAYLAND_DISPLAY=wayland_display, PAPERWING_TEST_PROFILE=str(root), PAPERWING_BENCHMARK_SAMPLE='1')
+os.environ.update(DBUS_SESSION_BUS_ADDRESS=address, XDG_CONFIG_HOME=str(root / 'config'), XDG_DATA_HOME=str(root / 'data'), XDG_CACHE_HOME=str(root / 'cache'), XDG_RUNTIME_DIR=str(root / 'runtime'), QT_QPA_PLATFORM='wayland', QT_ACCESSIBILITY='1', QT_LINUX_ACCESSIBILITY_ALWAYS_ON='1', WAYLAND_DISPLAY=wayland_display, SKEIN_TEST_PROFILE=str(root), SKEIN_BENCHMARK_SAMPLE='1')
 os.environ.pop('PAM_KWALLET5_LOGIN', None)
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -181,7 +181,7 @@ def unlock(daemon):
 try:
     http = ThreadingHTTPServer(('127.0.0.1', 5951), ApiHandler)
     threading.Thread(target=http.serve_forever, daemon=True).start()
-    os.environ['PAPERWING_TEST_GITHUB_API'] = 'http://127.0.0.1:5951/'
+    os.environ['SKEIN_TEST_GITHUB_API'] = 'http://127.0.0.1:5951/'
     launcher = subprocess.Popen(['/usr/lib/at-spi-bus-launcher'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     children.append(launcher)
     pump(.5)

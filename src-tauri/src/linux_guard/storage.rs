@@ -132,7 +132,7 @@ pub(crate) struct Temporary { directory: PrivateDir, files: Vec<(PrivateFile, Ve
 
 impl Temporary {
     pub(crate) fn new(parent: &Path) -> Result<Self, Error> {
-        Ok(Self { directory: PrivateDir::open(parent, &unique_name("paperwing-diff-")?)?, files: Vec::new() })
+        Ok(Self { directory: PrivateDir::open(parent, &unique_name("skein-diff-")?)?, files: Vec::new() })
     }
     pub(crate) fn path(&self) -> Result<PathBuf, Error> { self.directory.revalidate()?; Ok(self.directory.0.path.clone()) }
     pub(crate) fn write(&mut self, name: &str, bytes: &[u8]) -> Result<PathBuf, Error> {

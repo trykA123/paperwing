@@ -62,7 +62,7 @@ impl Temporary {
             .unwrap_or_default()
             .as_nanos();
         let path = parent.join(format!(
-            "paperwing-diff-{}-{nonce}-{}",
+            "skein-diff-{}-{nonce}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));

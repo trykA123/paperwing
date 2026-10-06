@@ -45,7 +45,7 @@ Local status updates by itself when files change in an open set. An optional tim
 
 ## Gates
 - `bun run --bun check`, `bun test src/lib`, `bun run --bun build`
-- `cd src-tauri && cargo test --offline` (set `PAPERWING_TEST_TMP` to an ext4 directory), `rustfmt --check`, clippy on touched files
+- `cd src-tauri && cargo test --offline` (set `SKEIN_TEST_TMP` to an ext4 directory), `rustfmt --check`, clippy on touched files
 - UI: screenshots of the settings row and the notice, both themes
 
 ## Stop and report if

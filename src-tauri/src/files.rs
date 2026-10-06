@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn atomic_replacement_restart_and_conflict_safe_undo() {
-        let base = std::env::temp_dir().join(format!("paperwing-recovery-{}", unique()));
+        let base = std::env::temp_dir().join(format!("skein-recovery-{}", unique()));
         let root = base.join("repo"); let backup = base.join("recovery");
         fs::create_dir_all(root.join(".git")).unwrap(); fs::create_dir_all(&backup).unwrap();
         fs::write(root.join("file.txt"), b"original\r\n").unwrap();
@@ -497,7 +497,7 @@ mod tests {
     }
 
     fn fixture() -> (PathBuf, PathBuf, PathBuf) {
-        let base = std::env::temp_dir().join(format!("paperwing-recovery-{}", unique()));
+        let base = std::env::temp_dir().join(format!("skein-recovery-{}", unique()));
         let root = base.join("repo"); let backup = base.join("recovery");
         fs::create_dir_all(root.join(".git")).unwrap(); fs::create_dir_all(&backup).unwrap();
         (base, root, backup)

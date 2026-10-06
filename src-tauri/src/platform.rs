@@ -437,7 +437,7 @@ impl Fixture {
             .unwrap()
             .as_nanos();
         let path =
-            std::env::temp_dir().join(format!("paperwing-09-{label}-{}-{id}", std::process::id()));
+            std::env::temp_dir().join(format!("skein-09-{label}-{}-{id}", std::process::id()));
         #[cfg(unix)]
         {
             use std::os::unix::fs::DirBuilderExt;

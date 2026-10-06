@@ -21,7 +21,7 @@ pub(super) fn repo() -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("paperwing-stash-{}-{nonce}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("skein-stash-{}-{nonce}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     git_in(&dir, &["init", "-q", "-b", "main"]);
     git_in(&dir, &["config", "user.name", "Test User"]);

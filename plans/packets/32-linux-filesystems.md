@@ -45,7 +45,7 @@ Save, copy and recovery work on the file systems people keep repositories on, wi
 - ext4 results are byte-identical to before.
 
 ## Gates
-- `cd src-tauri && cargo test --offline` (set `PAPERWING_TEST_TMP` to an ext4 directory, never `/tmp`), `rustfmt --check`, clippy on touched files
+- `cd src-tauri && cargo test --offline` (set `SKEIN_TEST_TMP` to an ext4 directory, never `/tmp`), `rustfmt --check`, clippy on touched files
 - `bun run --bun check`, `bun test src/lib`
 
 ## Stop and report if

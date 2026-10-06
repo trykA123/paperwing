@@ -11,13 +11,13 @@ pub(super) struct Fixture(pub(super) PathBuf);
 
 impl Fixture {
     pub(super) fn new() -> Self {
-        let parent = std::env::var_os("PAPERWING_PROCESS_EVIDENCE").map_or_else(std::env::temp_dir, |path| {
+        let parent = crate::env_names::var_os("SKEIN_PROCESS_EVIDENCE").map_or_else(std::env::temp_dir, |path| {
             let path = PathBuf::from(path);
             assert!(path.is_absolute() && path.canonicalize().unwrap() == path);
             assert_eq!(std::fs::read_to_string(path.join(".paperwing-process-evidence")).unwrap(), "paperwing-process-evidence-v1\n");
             path
         });
-        let root = parent.join(format!("paperwing-process-{}-{}", std::process::id(), NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)));
+        let root = parent.join(format!("skein-process-{}-{}", std::process::id(), NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir(&root).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -31,7 +31,7 @@ impl Fixture {
 
     fn alias(&self, mode: &str) -> String {
         let quote = |value: &Path| format!("'{}'", value.to_str().unwrap().replace('\'', "'\\''"));
-        format!("alias.paperwing-process-fixture=!python3 {} {} {mode}", quote(&Self::helper()), quote(&self.0))
+        format!("alias.skein-process-fixture=!python3 {} {} {mode}", quote(&Self::helper()), quote(&self.0))
     }
 
     fn processes(&self) -> Vec<u32> {
@@ -58,7 +58,7 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         self.cleanup();
-        if std::env::var_os("PAPERWING_PROCESS_EVIDENCE").is_none() { std::fs::remove_dir_all(&self.0).unwrap(); }
+        if crate::env_names::var_os("SKEIN_PROCESS_EVIDENCE").is_none() { std::fs::remove_dir_all(&self.0).unwrap(); }
     }
 }
 
@@ -81,7 +81,7 @@ async fn linux_descendant_cleanup_closes_pipes_and_retains_completed_mutations()
         let fixture = Fixture::new();
         let alias = fixture.alias(mode);
         let start = Instant::now();
-        let result = execute(Request { args: &["-c", &alias, "paperwing-process-fixture"], context: "linux-held-pipes",
+        let result = execute(Request { args: &["-c", &alias, "skein-process-fixture"], context: "linux-held-pipes",
             timeout: Duration::from_secs(5), expected: &[0], policy: OutputPolicy::Text }, None).await;
         assert!(result.is_ok(), "{}", result.err().unwrap());
         assert_eq!(result.unwrap().code, Some(0));
@@ -104,7 +104,7 @@ async fn linux_repeated_cancellation_stops_helpers_and_keeps_an_unrelated_proces
         assert!(cancel_activity(entry.id.clone()));
         assert!(cancel_activity(entry.id));
     });
-    let result = execute(Request { args: &["-c", &alias, "paperwing-process-fixture"], context: "linux-helper-cancel",
+    let result = execute(Request { args: &["-c", &alias, "skein-process-fixture"], context: "linux-helper-cancel",
         timeout: Duration::from_secs(5), expected: &[0], policy: OutputPolicy::Text }, Some(observer)).await;
     assert_eq!(result.err().unwrap(), "Git command cancelled");
     fixture.gone().await;
@@ -138,7 +138,7 @@ async fn linux_dropped_callers_finish_owned_cleanup_and_publish_a_final_activity
     let fixture = Fixture::new();
     let alias = fixture.alias("running");
     let task = tokio::spawn(async move {
-        execute(Request { args: &["-c", &alias, "paperwing-process-fixture"], context: "linux-dropped-caller",
+        execute(Request { args: &["-c", &alias, "skein-process-fixture"], context: "linux-dropped-caller",
             timeout: Duration::from_secs(5), expected: &[0], policy: OutputPolicy::Text }, None).await
     });
     let deadline = Instant::now() + Duration::from_secs(2);
@@ -167,7 +167,7 @@ async fn linux_timeout_reaps_helpers_and_releases_job_resources() {
     let fixture = Fixture::new();
     let alias = fixture.alias("running");
     let start = Instant::now();
-    let result = execute(Request { args: &["-c", &alias, "paperwing-process-fixture"], context: "linux-helper-timeout",
+    let result = execute(Request { args: &["-c", &alias, "skein-process-fixture"], context: "linux-helper-timeout",
         timeout: Duration::from_millis(500), expected: &[0], policy: OutputPolicy::Text }, None).await;
     assert_eq!(result.err().unwrap(), "Git command timed out");
     assert!(start.elapsed() < Duration::from_secs(2));
@@ -182,7 +182,7 @@ async fn linux_detached_helpers_report_failure_and_release_owned_resources() {
     let _guard = TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new();
     let alias = fixture.alias("escape");
-    let result = execute(Request { args: &["-c", &alias, "paperwing-process-fixture"], context: "linux-detached-helper",
+    let result = execute(Request { args: &["-c", &alias, "skein-process-fixture"], context: "linux-detached-helper",
         timeout: Duration::from_secs(5), expected: &[0], policy: OutputPolicy::Text }, None).await;
     assert!(result.err().unwrap().contains("helper may have detached"));
     let entry = activity_snapshot().into_iter().find(|entry| entry.context == "linux-detached-helper").unwrap();
@@ -207,7 +207,7 @@ async fn linux_observed_completion_wins_against_cancel_and_deadline_during_reap(
         let external = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = external.clone();
         let task = tokio::spawn(async move {
-            execute_inner(Request { args: &["-c", &alias, "paperwing-process-fixture"], context: "linux-completed-before-reap",
+            execute_inner(Request { args: &["-c", &alias, "skein-process-fixture"], context: "linux-completed-before-reap",
                 timeout: Duration::from_millis(500), expected: &[0], policy: OutputPolicy::Text }, None, Some(flag), None, None).await
         });
         tokio::time::timeout(Duration::from_secs(2), reached).await.unwrap().unwrap();
@@ -256,7 +256,7 @@ async fn linux_post_spawn_capture_failure_retains_registration_and_permits_until
     let (release, blocked) = tokio::sync::oneshot::channel();
     inject_capture_failure(CaptureHook { ready: Some(fixture.0.join("pids.json")), entered, release: blocked });
     let task = tokio::spawn(async move {
-        execute(Request { args: &["-c", &alias, "paperwing-process-fixture"], context: "linux-capture-failure",
+        execute(Request { args: &["-c", &alias, "skein-process-fixture"], context: "linux-capture-failure",
             timeout: Duration::from_secs(5), expected: &[0], policy: OutputPolicy::Text }, None).await
     });
     let pid = tokio::time::timeout(Duration::from_secs(2), reached).await.unwrap().unwrap();
@@ -278,7 +278,7 @@ async fn linux_post_spawn_capture_failure_retains_registration_and_permits_until
 async fn linux_sink_stop_of_an_endless_writer_is_completed_and_counts_bytes() {
     let _guard = TEST_RUNNER_LOCK.lock().await;
     let sink: super::runner::StdoutSink = Arc::new(|_| true);
-    let result = super::runner::execute_streaming(Request { args: &["-c", "alias.paperwing-endless=!yes", "paperwing-endless"], context: "linux-sink-endless",
+    let result = super::runner::execute_streaming(Request { args: &["-c", "alias.skein-endless=!yes", "skein-endless"], context: "linux-sink-endless",
         timeout: Duration::from_secs(30), expected: &[0], policy: OutputPolicy::Metadata }, Arc::new(std::sync::atomic::AtomicBool::new(false)), sink).await;
     assert!(result.is_ok());
     let entry = activity_snapshot().into_iter().find(|entry| entry.context == "linux-sink-endless").unwrap();

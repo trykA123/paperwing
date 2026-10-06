@@ -188,7 +188,7 @@ Additional controls inject changed roots, metadata, proven prefixes and absent, 
 corrupt, foreign or mismatched linked file intents. Cleanup reports removed record files.
 
 The ignored `linux_journal::parent_tests::frozen13_fixture_producer` runs only with explicit
-`PAPERWING_PARENT_COMPAT_FIXTURE` and typed `PAPERWING_PARENT_COMPAT_CASE`. Its four cases are
+`SKEIN_PARENT_COMPAT_FIXTURE` and typed `SKEIN_PARENT_COMPAT_CASE`. Its four cases are
 `proofWithDirectory`, `proofOnly`, `laterEditWithDirectory` and `laterEditProofOnly`.
 Each uses real guarded publication and a distinct real parent-cleanup proof. Producer and
 consumer processes run sequentially at the same absolute fixture path after releasing flock.
