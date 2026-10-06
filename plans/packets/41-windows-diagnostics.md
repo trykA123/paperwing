@@ -22,6 +22,7 @@ The owner installs a test build at work, uses Skein normally, then clicks "Gener
 - Repos are numbered `repo-1..n` in a random order per export. No hashes of names.
 - Sizes and counts are rounded to 2 significant figures (1534 → 1500, 42.7 MB → 43 MB). Durations, memory and CPU are not rounded.
 - Leak check before writing: build a denylist at runtime: OS username, computer name, every path component of the home dir and of each repo root, set names, repo folder names, remote URL host/owner/repo parts, configured GitHub/GHES hostnames and account logins. Keep tokens of 3+ characters. Search the serialized JSON case-insensitively for each token. Any hit refuses the export with "Diagnostics contained identifying text; nothing was written". The error does not name the token.
+- Running Git for `scale` through the public runner with `-C <repo path>` is fine. The runner's activity list is the local Activity panel, which already shows paths for every feature. The export must never read `activity_snapshot()`, stderr or error text.
 - Export only on click. No upload, no network, no background writing to disk. The sampler keeps data in memory only.
 - No new crates. Windows memory, CPU and processes use `windows-sys` (add only the needed feature flags: `Win32_System_ProcessStatus`, `Win32_System_Threading`, `Win32_System_Diagnostics_ToolHelp`, `Win32_System_SystemInformation`). Linux reads `/proc`.
 
