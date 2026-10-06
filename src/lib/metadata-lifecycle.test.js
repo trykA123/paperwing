@@ -93,7 +93,7 @@ test('commit verification reads only the default branch history for commit refs'
 });
 
 test('denied or unavailable credentials and status errors invalidate permission scoped state', async () => {
-  for (const status of ['locked', 'unavailable', 'permissionDenied', 'uncertain', 'missing', 'error']) {
+  for (const status of ['locked', 'unavailable', 'permissionDenied', 'uncertain', 'error']) {
     await withIpc(() => status === 'error' ? Promise.reject(new Error('offline'))
       : { sourceId: source.id, revision: 0, state: status, backend: 'secretService' }, async () => {
       const state = new app.constructor();
@@ -105,6 +105,19 @@ test('denied or unavailable credentials and status errors invalidate permission 
       expect(state.refState(item)).toBe('unknown');
     });
   }
+});
+
+test('a missing token leaves public discovery and loaded refs intact when credentials refresh', async () => {
+  await withIpc(() => ({ sourceId: source.id, revision: 0, state: 'missing', backend: 'secretService' }), async () => {
+    const state = new app.constructor();
+    state.sources = [source];
+    state.repos = { [source.id]: [repo] };
+    state.refs = { [item.url]: { branches: ['main'], tags: [] } };
+    await state.credentials.refresh(source.id);
+    expect(state.credentials.statuses[source.id].state).toBe('missing');
+    expect(state.repos[source.id]).toEqual([repo]);
+    expect(state.refState(item)).toBe('ok');
+  });
 });
 
 test('physical root changes and tree errors cannot reuse old path entries', async () => {
@@ -167,17 +180,140 @@ test('new physical path observations invalidate trees before another consumer ca
   });
 });
 
-test('focus invalidates loaded refs and histories while retaining foreground repository browsing', async () => {
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('focus marks refs and histories stale while keeping their last values visible', async () => {
   await fixture(async (state, calls) => {
     const loading = state.ensureCommits(item);
     calls[0].resolve([{ sha: 'before-focus' }]);
     await loading;
     state.refs = { [item.url]: { branches: ['main'], tags: [] } };
-    state.invalidateMetadata();
-    expect(state.commitsFor(item)).toBeUndefined();
-    expect(state.refState(item)).toBe('unknown');
+    state.markMetadataStale();
+    expect(state.commitsFor(item)).toEqual([{ sha: 'before-focus' }]);
+    expect(state.refState(item)).toBe('ok');
+    expect(state.refStale(item)).toBe(true);
+    expect(state.needsRefs(item.url)).toBe(true);
+    expect(state.needsCommits(item)).toBe(true);
     expect(state.repos[source.id]).toEqual([repo]);
     expect(calls).toHaveLength(1);
+  });
+});
+
+test('focus while the picker is open reloads refs and histories without hanging in loading', async () => {
+  await fixture(async (state, calls) => {
+    const consumer = new AbortController();
+    const first = state.ensureRefs([item.url], false, consumer.signal);
+    calls[0].resolve([{ url: item.url, branches: ['main'], tags: [] }]);
+    await first;
+    const histories = state.ensureCommits(item, false, consumer.signal);
+    calls[1].resolve([{ sha: 'one' }]);
+    await histories;
+    expect(state.needsRefs(item.url) || state.needsCommits(item)).toBe(false);
+    state.markMetadataStale();
+    expect(state.needsRefs(item.url)).toBe(true);
+    const reload = state.ensureRefs([item.url], false, consumer.signal);
+    const reloadHistory = state.ensureCommits(item, false, consumer.signal);
+    expect(calls.map(call => call.command)).toEqual(['get_refs_many', 'get_commits', 'get_refs_many', 'get_commits']);
+    expect(state.refs[item.url].loading).toBeUndefined();
+    expect(state.refState(item)).toBe('ok');
+    expect(state.commitsFor(item)).toEqual([{ sha: 'one' }]);
+    calls[2].resolve([{ url: item.url, branches: ['main', 'next'], tags: [] }]);
+    calls[3].resolve([{ sha: 'two' }]);
+    await Promise.all([reload, reloadHistory]);
+    expect(state.refs[item.url].branches).toEqual(['main', 'next']);
+    expect(state.refStale(item)).toBe(false);
+    expect(state.needsRefs(item.url) || state.needsCommits(item)).toBe(false);
+    expect(state.commitsFor(item)).toEqual([{ sha: 'two' }]);
+  });
+});
+
+test('badge keeps the last value while stale and a failed reload does not erase it', async () => {
+  await fixture(async (state, calls) => {
+    const first = state.ensureRefs([item.url]);
+    calls[0].resolve([{ url: item.url, branches: ['main'], tags: [] }]);
+    await first;
+    state.markMetadataStale();
+    expect(state.refState(item)).toBe('ok');
+    const reload = state.ensureRefs([item.url]);
+    calls[1].reject(new Error('offline'));
+    await reload;
+    expect(state.refState(item)).toBe('ok');
+    expect(state.refStale(item)).toBe(true);
+  });
+});
+
+test('listing rows from disk are shown stale before the network answers and replaced by it', async () => {
+  await fixture(async (state, calls) => {
+    state.repos = {};
+    const pending = state.loadRepos(state.sources[0], false);
+    expect(calls.map(call => call.command)).toEqual(['list_repos', 'list_cached_repos']);
+    calls[1].resolve({ repos: [repo], errors: [], stale: true });
+    await settle();
+    expect(state.repos[source.id]).toEqual([repo]);
+    expect(state.staleRepos[source.id]).toBe(true);
+    expect(state.loadingRepos[source.id]).toBe(true);
+    const other = { ...repo, id: 'admin-source:admin/other', name: 'other' };
+    calls[0].resolve({ repos: [other], errors: [] });
+    await pending;
+    expect(state.repos[source.id]).toEqual([other]);
+    expect(state.staleRepos[source.id]).toBe(false);
+  });
+});
+
+test('offline listing keeps the stale rows and reports the error', async () => {
+  for (const mode of ['rejected', 'owner errors']) {
+    await fixture(async (state, calls) => {
+      state.repos = {};
+      const pending = state.loadRepos(state.sources[0], false);
+      calls[1].resolve({ repos: [repo], errors: [], stale: true });
+      await settle();
+      if (mode === 'rejected') calls[0].reject(new Error('offline'));
+      else calls[0].resolve({ repos: [], errors: ['admin: offline'] });
+      await pending;
+      expect(state.repos[source.id]).toEqual([repo]);
+      expect(state.staleRepos[source.id]).toBe(true);
+      expect(state.repoErrors[source.id][0]).toContain('offline');
+    });
+  }
+});
+
+test('a late disk read cannot replace network rows', async () => {
+  await fixture(async (state, calls) => {
+    state.repos = {};
+    const pending = state.loadRepos(state.sources[0], false);
+    calls[0].resolve({ repos: [repo], errors: [] });
+    await pending;
+    calls[1].resolve({ repos: [{ ...repo, name: 'old' }], errors: [], stale: true });
+    await settle();
+    expect(state.repos[source.id]).toEqual([repo]);
+    expect(state.staleRepos[source.id]).toBe(false);
+  });
+});
+
+test('a pending root probe does not change the scope of already loaded trees', async () => {
+  const state = new app.constructor();
+  state.ws.root = '/fixture-root';
+  const calls = [];
+  await withIpc(command => {
+    const response = deferred();
+    calls.push({ command, ...response });
+    return response.promise;
+  }, async () => {
+    const support = { root: '/fixture-root', valid: true, identity: 'root-1', capabilities: state.platform.capabilities };
+    const first = state.probeRoot();
+    calls[0].resolve(support);
+    await first;
+    const tree = state.loadTree('/fixture-root/repo');
+    calls[1].resolve({ identity: 'git-1', branches: [] });
+    await tree;
+    const reprobe = state.probeRoot();
+    await state.loadTree('/fixture-root/repo');
+    expect(calls.map(call => call.command)).toEqual(['probe_root', 'repository_tree', 'probe_root']);
+    calls[2].resolve(support);
+    await reprobe;
+    await state.loadTree('/fixture-root/repo');
+    expect(calls).toHaveLength(3);
+    expect(state.trees['/fixture-root/repo'].data.identity).toBe('git-1');
   });
 });
 

@@ -39,14 +39,16 @@
   let input: HTMLInputElement;
   let listEl: HTMLDivElement;
 
-  onMount(() => {
-    input.focus();
+  onMount(() => input.focus());
+  $effect(() => {
+    const urls = items.map(i => i.url).filter(url => app.needsRefs(url));
+    if (!urls.length) return;
     const consumer = new AbortController();
-    void app.ensureRefs(items.map(i => i.url), false, consumer.signal);
+    untrack(() => { void app.ensureRefs(urls, false, consumer.signal); });
     return () => consumer.abort();
   });
   $effect(() => {
-    if (single && tab === 'commit') {
+    if (single && tab === 'commit' && app.needsCommits(items[0])) {
       const consumer = new AbortController();
       untrack(() => { void app.ensureCommits(items[0], false, consumer.signal); });
       return () => consumer.abort();

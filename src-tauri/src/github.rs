@@ -27,6 +27,8 @@ pub struct RepoList {
     pub repos: Vec<Repo>,
     pub fetched_at: u64,
     pub errors: Vec<String>,
+    #[serde(default)]
+    pub stale: bool,
 }
 
 #[derive(Serialize)]
@@ -166,12 +168,7 @@ fn parse_manual(source: &Source, url: &str) -> Option<Repo> {
 }
 
 #[tauri::command]
-pub async fn list_repos(
-    app: AppHandle,
-    source: Source,
-    refresh: bool,
-    metadata_epoch: Option<u64>,
-) -> Result<RepoList, String> {
+pub async fn list_repos(app: AppHandle, source: Source, refresh: bool) -> Result<RepoList, String> {
     valid_id(&source.id)?;
     let fetched_at = cache::now();
     if source.kind == "manual" {
@@ -183,28 +180,34 @@ pub async fn list_repos(
         return Ok(RepoList {
             repos,
             fetched_at,
-            errors: vec![],
+            ..Default::default()
         });
     }
-    let request = cache::ListingRequest::new(&source, refresh, metadata_epoch.unwrap_or(0))?;
+    let request = cache::ListingRequest::new(&source, refresh)?;
     let http = http::Http::connect_at(&source, request.revision())
         .await
         .map_err(|(_, reason)| reason)?;
-    let login = listing::authenticated_login(&http).await?;
-    let scope = request.scope(login);
-    let file = app
+    let file = cache_file(&app, &source.id)?;
+    listing::revalidate(&source, &request, file, &http).await
+}
+
+#[tauri::command]
+pub async fn list_cached_repos(app: AppHandle, source: Source) -> Result<Option<RepoList>, String> {
+    valid_id(&source.id)?;
+    if source.kind == "manual" {
+        return Ok(None);
+    }
+    cache::ListingRequest::new(&source, false)?
+        .read_stale(cache_file(&app, &source.id)?)
+        .await
+}
+
+fn cache_file(app: &AppHandle, source_id: &str) -> Result<std::path::PathBuf, String> {
+    Ok(app
         .path()
         .app_cache_dir()
         .map_err(|error| error.to_string())?
-        .join(format!("repos-{}.json", source.id));
-    if !refresh {
-        if let Some(list) = request.read_cache(file.clone(), scope.clone()).await? {
-            return Ok(list);
-        }
-    }
-    let list = listing::fetch_listing(&source, &http, scope.login.as_deref()).await;
-    request.finish(file, scope, &list).await?;
-    Ok(list)
+        .join(format!("repos-{source_id}.json")))
 }
 
 #[tauri::command]

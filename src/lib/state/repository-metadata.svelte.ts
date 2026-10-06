@@ -3,7 +3,7 @@ import { ForegroundRequests } from './foreground-requests';
 import { commitHistoryKey, sourceFingerprint } from './metadata-keys';
 
 export type RefsEntry = {
-  branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean;
+  branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean; stale?: boolean;
 };
 export type CommitsEntry = Commit[] | 'loading' | { error: string };
 export type RefState = 'ok' | 'missing' | 'unknown' | 'unverified';
@@ -14,8 +14,10 @@ export class RepositoryMetadata {
   repos = $state<Record<string, Repo[]>>({});
   repoErrors = $state<Record<string, string[]>>({});
   loadingRepos = $state<Record<string, boolean>>({});
+  staleRepos = $state<Record<string, boolean>>({});
   refs = $state<Record<string, RefsEntry>>({});
   commits = $state<Record<string, CommitsEntry>>({});
+  private staleCommits = $state<Record<string, boolean>>({});
   allRepos = $derived(Object.values(this.repos).flat());
   repoById = $derived(new Map(this.allRepos.map(r => [r.id, r])));
   private revisions = $state<Record<string, number>>({});
@@ -57,17 +59,30 @@ export class RepositoryMetadata {
     this.revisions[sourceId] = (this.revisions[sourceId] ?? 0) + 1;
     for (const [key, owner] of this.commitOwners) if (owner.source === sourceId) {
       delete this.commits[key];
+      delete this.staleCommits[key];
       this.commitOwners.delete(key);
     }
     delete this.repos[sourceId];
     delete this.repoErrors[sourceId];
+    delete this.staleRepos[sourceId];
     this.listingScopes.delete(sourceId);
     this.loadingListingKeys.delete(sourceId);
     this.loadingRepos[sourceId] = false;
   }
 
-  invalidateAll() {
-    this.invalidateRefs([...Object.keys(this.refs), ...this.sources().flatMap(source => this.urlsOf(source.id))]);
+  markStale() {
+    for (const entry of Object.values(this.refs)) if (!entry.loading) entry.stale = true;
+    for (const [key, entry] of Object.entries(this.commits)) if (entry !== 'loading') this.staleCommits[key] = true;
+  }
+
+  needsRefs(url: string) {
+    const entry = this.refs[url];
+    return !entry || entry.stale === true;
+  }
+
+  needsCommits(item: SetItem) {
+    const key = this.commitKey(item);
+    return this.commits[key] === undefined || this.staleCommits[key] === true;
   }
 
   invalidateRefs(urls: string[]) {
@@ -78,6 +93,7 @@ export class RepositoryMetadata {
       for (const [key, owner] of this.commitOwners) {
         if (owner.url === url) {
           delete this.commits[key];
+          delete this.staleCommits[key];
           this.commitOwners.delete(key);
         }
       }
@@ -104,21 +120,35 @@ export class RepositoryMetadata {
     this.loadingRepos[src.id] = true;
     this.loadingListingKeys.set(src.id, key);
     return this.requests.run(key, { signal,
-      produce: () => api.listRepos($state.snapshot(src) as Source, refresh, this.revisions[src.id] ?? 0),
+      produce: () => {
+        const network = api.listRepos($state.snapshot(src) as Source, refresh);
+        if (!refresh && !this.repos[src.id]) void this.showCachedRepos(src, current);
+        return network;
+      },
       publish: list => { if (current()) {
-        this.repos[src.id] = list.repos;
+        const offline = list.errors.length > 0 && !list.repos.length && !!this.repos[src.id]?.length;
+        if (!offline) this.repos[src.id] = list.repos;
         this.repoErrors[src.id] = list.errors;
+        this.staleRepos[src.id] = offline;
         this.listingScopes.set(src.id, currentScope);
       } },
       fail: error => { if (current()) {
-        delete this.repos[src.id];
         this.repoErrors[src.id] = [String(error)];
+        this.staleRepos[src.id] = !!this.repos[src.id];
       } },
       settled: () => { if (this.loadingListingKeys.get(src.id) === key) {
         this.loadingRepos[src.id] = false;
         this.loadingListingKeys.delete(src.id);
       } },
     });
+  }
+
+  private async showCachedRepos(src: Source, current: () => boolean) {
+    const cached = await api.listCachedRepos($state.snapshot(src) as Source).catch(() => null);
+    if (!cached || !current() || this.repos[src.id]) return;
+    this.repos[src.id] = cached.repos;
+    this.repoErrors[src.id] = [];
+    this.staleRepos[src.id] = true;
   }
 
   orgsOf(src: Source) {
@@ -158,8 +188,9 @@ export class RepositoryMetadata {
     if (force) this.invalidateRefs([url]);
     const key = this.refsKey(url);
     const cached = this.refs[url];
-    if (!force && cached && !cached.loading && !cached.error && this.refScopes.get(url) === key) return Promise.resolve();
-    this.refs[url] = { branches: [], tags: [], loading: true };
+    if (!force && cached && !cached.loading && !cached.error && !cached.stale && this.refScopes.get(url) === key) return Promise.resolve();
+    const keepData = !!cached?.stale && !cached.loading && !cached.error;
+    if (!keepData) this.refs[url] = { branches: [], tags: [], loading: true };
     const current = () => this.refsKey(url) === key;
     return this.requests.run(key, { signal,
       produce: () => api.getRefsMany([url]),
@@ -170,7 +201,7 @@ export class RepositoryMetadata {
           ...(row.branchLabels ? { branchLabels: row.branchLabels } : {}), ...(row.tagLabels ? { tagLabels: row.tagLabels } : {}), error: row.error ?? undefined };
         this.refScopes.set(url, key);
       } },
-      fail: error => { if (current()) this.refs[url] = { branches: [], tags: [], error: String(error) }; },
+      fail: error => { if (current() && !keepData) this.refs[url] = { branches: [], tags: [], error: String(error) }; },
       settled: () => { if (this.refs[url]?.loading && !this.requests.has(this.refsKey(url))) delete this.refs[url]; },
     });
   }
@@ -193,19 +224,26 @@ export class RepositoryMetadata {
     const branch = item.ref.type === 'branch' ? item.ref.name : repo?.defaultBranch ?? '';
     const requested = { ...($state.snapshot(item) as SetItem), ref: { type: 'branch' as const, name: branch } };
     const key = this.commitKey(requested);
-    if (Array.isArray(this.commits[key])) return Promise.resolve();
-    if (!repo || !src) {
-      this.commits[key] = { error: 'Repository metadata is unavailable; refresh its source and retry' };
+    if (Array.isArray(this.commits[key]) && !this.staleCommits[key]) return Promise.resolve();
+    if (!repo || !src || src.kind === 'manual') {
+      delete this.staleCommits[key];
+      this.commits[key] = repo && src ? [] : { error: 'Repository metadata is unavailable; refresh its source and retry' };
       return Promise.resolve();
     }
-    if (src.kind === 'manual') { this.commits[key] = []; return Promise.resolve(); }
     this.commitOwners.set(key, { source: src.id, url: item.url ?? repo.url ?? '' });
-    this.commits[key] = 'loading';
+    const keepData = Array.isArray(this.commits[key]);
+    if (!keepData) this.commits[key] = 'loading';
     const current = () => this.commitKey(requested) === key;
     return this.requests.run(key, { signal,
       produce: () => api.getCommits($state.snapshot(src) as Source, repo.org, repo.name, branch),
-      publish: commits => { if (current()) this.commits[key] = commits; },
-      fail: error => { if (current()) this.commits[key] = { error: String(error) }; },
+      publish: commits => { if (current()) {
+        this.commits[key] = commits;
+        delete this.staleCommits[key];
+      } },
+      fail: error => { if (current() && !keepData) {
+        this.commits[key] = { error: String(error) };
+        delete this.staleCommits[key];
+      } },
       settled: () => { if (this.commits[key] === 'loading') delete this.commits[key]; },
     });
   }

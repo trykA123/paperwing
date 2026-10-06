@@ -2,6 +2,7 @@ import { Credentials } from './state/credentials.svelte';
 import { RepositoryMetadata, type RefState } from './state/repository-metadata.svelte';
 import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
+import { RootProbes } from './state/root-probes.svelte';
 import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
 import { pendingPlatform, unavailableRoot } from './platform';
 import { benchmarkEnabled, benchmarkPlan } from './benchmark';
@@ -52,11 +53,11 @@ export const PATH_TOKENS = [
 
 class AppState {
   platform = $state<PlatformInfo>(pendingPlatform);
-  rootProbes = $state<Record<string, RootSupport>>({});
+  private rootProbing = new RootProbes(() => this.#invalidateTrees(this.repositoryTrees.paths()));
+  get rootProbes() { return this.rootProbing.probes; }
+  set rootProbes(value: RootProbes['probes']) { this.rootProbing.probes = value; }
   pathIdentities = $state<Record<string, PathIdentity>>({});
   private identityRevision = 0;
-  private rootProbeRevisions = new Map<string, number>();
-  private rootProbeRequests = new Map<string, Promise<RootSupport>>();
   get nativePlatform() { return this.platform.platform === 'linux' ? 'linux' : 'windows'; }
   get rootSupport() { return this.rootProbes[this.ws.root] ?? unavailableRoot(this.ws.root, 'Choose a valid native destination folder.'); }
   capability(operation: keyof Capabilities, root = this.ws.root): Capability {
@@ -64,25 +65,7 @@ class AppState {
     if (!capability.supported || operation === 'recovery') return capability;
     return (this.rootProbes[root] ?? unavailableRoot(root, 'Choose a valid native destination folder.')).capabilities[operation];
   }
-  async probeRoot(root = this.ws.root) {
-    const previousIdentity = this.rootProbes[root]?.identity;
-    const current = (this.rootProbeRevisions.get(root) ?? 0) + 1;
-    this.rootProbeRevisions.set(root, current);
-    this.rootProbes[root] = unavailableRoot(root, 'Checking native root support.');
-    const request = (async () => {
-      let support: RootSupport;
-      try { support = await api.probeRoot(root); }
-      catch (reason) { support = unavailableRoot(root, String(reason)); }
-      if (this.rootProbeRevisions.get(root) !== current) return this.rootProbeRequests.get(root)
-        ?? this.rootProbes[root] ?? unavailableRoot(root, 'Root support changed. Try again.');
-      if (previousIdentity && support.identity !== previousIdentity) this.#invalidateTrees(this.repositoryTrees.paths());
-      this.rootProbes[root] = support;
-      return support;
-    })();
-    this.rootProbeRequests.set(root, request);
-    try { return await request; }
-    finally { if (this.rootProbeRequests.get(root) === request) this.rootProbeRequests.delete(root); }
-  }
+  probeRoot(root = this.ws.root) { return this.rootProbing.probe(root); }
   async chooseRoot(root: string) {
     if (this.running || this.clonePreparing || this.gitBusy || !await this.guardBuffers()) return false;
     const support = await this.probeRoot(root);
@@ -156,6 +139,7 @@ class AppState {
   set repos(value: RepositoryMetadata['repos']) { this.repositoryMetadata.repos = value; }
   get repoErrors() { return this.repositoryMetadata.repoErrors; }
   set repoErrors(value: RepositoryMetadata['repoErrors']) { this.repositoryMetadata.repoErrors = value; }
+  get staleRepos() { return this.repositoryMetadata.staleRepos; }
   get loadingRepos() { return this.repositoryMetadata.loadingRepos; }
   set loadingRepos(value: RepositoryMetadata['loadingRepos']) { this.repositoryMetadata.loadingRepos = value; }
   get refs() { return this.repositoryMetadata.refs; }
@@ -172,7 +156,7 @@ class AppState {
   get activity() { return this.gitActivity.activity; }
   set activity(value: Activity[]) { this.gitActivity.activity = value; }
   private repositoryTrees = new RepositoryTrees(path => JSON.stringify([this.ws.root,
-    this.rootProbes[this.ws.root]?.identity ?? '', this.pathIdentities[path]?.identity ?? '']));
+    this.rootProbing.identity(this.ws.root), this.pathIdentities[path]?.identity ?? '']));
   get trees() { return this.repositoryTrees.trees; }
   set trees(value: RepositoryTrees['trees']) { this.repositoryTrees.trees = value; }
   openTreePaths: string[] = [];
@@ -281,7 +265,7 @@ class AppState {
 
   loadRepos(src: Source, refresh: boolean, signal?: AbortSignal) { return this.repositoryMetadata.loadRepos(src, refresh, signal); }
 
-  invalidateMetadata() { this.repositoryMetadata.invalidateAll(); }
+  markMetadataStale() { this.repositoryMetadata.markStale(); }
 
   openView(view: View, setId = this.ws.activeSet, query?: string) {
     const id = tabId(view, setId);
@@ -398,6 +382,12 @@ class AppState {
   }
 
   refState(item: SetItem): RefState { return this.repositoryMetadata.refState(item); }
+
+  refStale(item: SetItem) { return this.repositoryMetadata.refs[item.url]?.stale === true; }
+
+  needsRefs(url: string) { return this.repositoryMetadata.needsRefs(url); }
+
+  needsCommits(item: SetItem) { return this.repositoryMetadata.needsCommits(item); }
 
   ensureRefs(urls: string[], force = false, signal?: AbortSignal) { return this.repositoryMetadata.ensureRefs(urls, force, signal); }
 

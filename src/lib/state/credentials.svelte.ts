@@ -40,7 +40,7 @@ export class Credentials {
         && status.revision >= (this.revisions.get(sourceId) ?? 0)) {
         const revisionChanged = status.revision > (this.revisions.get(sourceId) ?? 0);
         if (revisionChanged) this.invalidate(sourceId, status.revision);
-        else if (status.state !== 'saved') this.invalidateMetadata(sourceId);
+        else if (status.state !== 'saved' && status.state !== 'missing') this.invalidateMetadata(sourceId);
         this.revisions.set(sourceId, status.revision);
         this.statuses[sourceId] = status;
       }

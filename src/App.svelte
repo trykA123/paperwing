@@ -96,10 +96,10 @@
   $effect(() => applyAppearance(app.ws.theme, app.ws.uiFont, app.ws.codeFont));
   $effect(() => onSystemThemeChange(() => applyAppearance(app.ws.theme, app.ws.uiFont, app.ws.codeFont)));
 
-  // Branches may have been switched in a terminal meanwhile; re-read local state when the window regains focus.
+  // Branches may have been switched in a terminal meanwhile; mark remote metadata stale when the window regains focus.
   function onFocus() {
     if (!benchmarkEnabled && app.ready && !app.running) {
-      app.invalidateMetadata();
+      app.markMetadataStale();
       void app.checkExists(app.set.items.map(i => app.dest(i)));
     }
   }

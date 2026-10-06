@@ -18,10 +18,11 @@ test('Repository metadata discards older source responses after a forced refresh
         const source = { id: 'source', kind: 'github', name: 'Fixture' };
         state.sources = [source];
         const older = state.loadRepos(source, false), newer = state.loadRepos(source, true);
-        expect(calls.map(call => [call.command, call.args.refresh])).toEqual([['list_repos', false], ['list_repos', true]]);
-        calls[1].resolve({ repos: [{ id: 'newer' }], errors: ['newer warning'] });
+        const listings = calls.filter(call => call.command === 'list_repos');
+        expect(listings.map(call => call.args.refresh)).toEqual([false, true]);
+        listings[1].resolve({ repos: [{ id: 'newer' }], errors: ['newer warning'] });
         await newer;
-        calls[0].resolve({ repos: [{ id: 'older' }], errors: ['older warning'] });
+        listings[0].resolve({ repos: [{ id: 'older' }], errors: ['older warning'] });
         await older;
         expect(state.repos.source).toEqual([{ id: 'newer' }]);
         expect(state.repoErrors.source).toEqual(['newer warning']);
@@ -34,9 +35,10 @@ test('Repository metadata discards an older failure after a forced refresh', asy
         const source = { id: 'source', kind: 'github', name: 'Fixture' };
         state.sources = [source];
         const older = state.loadRepos(source, false), newer = state.loadRepos(source, true);
-        calls[1].resolve({ repos: [{ id: 'newer' }], errors: [] });
+        const listings = calls.filter(call => call.command === 'list_repos');
+        listings[1].resolve({ repos: [{ id: 'newer' }], errors: [] });
         await newer;
-        calls[0].reject('older failure');
+        listings[0].reject('older failure');
         await older;
         expect(state.repos.source).toEqual([{ id: 'newer' }]);
         expect(state.repoErrors.source).toEqual([]);

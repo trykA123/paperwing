@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Progress, RefKind } from '../../lib/api';
 
-  let { j, st, refErr, phaseLabel, jobRunning, clash, destination, refKind, onopen }: {
-    j: Progress | undefined; st: string; refErr: string | undefined; phaseLabel: string; jobRunning: boolean;
+  let { j, st, stale = false, refErr, phaseLabel, jobRunning, clash, destination, refKind, onopen }: {
+    j: Progress | undefined; st: string; stale?: boolean; refErr: string | undefined; phaseLabel: string; jobRunning: boolean;
     clash: boolean; destination: string; refKind: RefKind; onopen: () => void;
   } = $props();
 </script>
@@ -26,6 +26,6 @@
   {:else if st === 'unverified'}
     <div class="ph ph-ready">Commit is checked while cloning</div>
   {:else}
-    <div class="ph ph-ready">{st === 'ok' ? 'Ready · ref verified' : 'Ready'}</div>
+    <div class="ph ph-ready">{st === 'ok' ? (stale ? 'Ready · ref verified earlier' : 'Ready · ref verified') : 'Ready'}</div>
   {/if}
 </div>
