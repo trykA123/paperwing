@@ -12,10 +12,10 @@ Base commit: `a4935bf` on `feat/paperwing-linux-completion` (snapshot of accepte
 ## Tracks
 | Track | Packets | Owner | Status |
 |---|---|---|---|
-| T1 backend writes | 14 (B/C/D), then 15 | api-builder gpt-6.1-sol xhigh | running |
-| T2 metadata | 16 | api-builder gpt-6.1-sol xhigh | running |
-| T3 Skein design | Skein steps 1–2 (tokens, Geist, rename, Rails icon) | ui-builder Sonnet 5.5 | running |
-| T4 performance | 17 → 18–20 → 21 → 22 | api-builder after T1 | queued |
+| T1 backend writes | 14 (B/C/D), then 15 | api-builder gpt-6.1-sol xhigh | merged |
+| T2 metadata | 16 | api-builder gpt-6.1-sol xhigh | merged |
+| T3 Skein design | Skein steps 1–5 | ui-builder Sonnet 5.5 | merged; step 6 waits for editor spike |
+| T4 performance | 17 → 18–20 → 21 → 22 | api-builder | 17 running |
 | T5 Skein layout | Skein steps 3–6 | ui-builder after T2/T3 | queued |
 | T6 Windows | VM install (Codex), then 06 + Windows rows of 14/15/23 | Codex, then api-builder | VM install running |
 | T7 acceptance | 23, 24 | orchestrator + deployer | last |
@@ -26,3 +26,5 @@ Each branch gets a `reviewer` pass before merging into `feat/paperwing-linux-com
 Design spec: `~/.claude/handoffs/2026-10-05/skein-design/SPEC.md` (Skein, Formation, Benzol, Geist + Geist Mono, Rails icon).
 
 Backlog of approved ideas without packets: `.skillify/plans/2026-10-06-skein-backlog/packet.md`.
+
+Current status and next steps: `plans/2026-10-06/handoff.md`.
