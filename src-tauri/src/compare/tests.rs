@@ -437,6 +437,7 @@ async fn scaled_working_inventory_is_lazy_bounded_and_cancellable() {
     let _guard = git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new().await;
     fixture.git(&["config", "core.autocrlf", "false"]).await;
+    fixture.git(&["config", "core.fsync", "none"]).await;
     let mut bytes = vec![b'x'; 8400];
     for index in 0u32..5000 {
         bytes[..4].copy_from_slice(&index.to_le_bytes());
@@ -743,7 +744,7 @@ async fn fetch_recovers_missing_objects_without_checkout_or_index_changes() {
         .is_none());
     assert_eq!(
         service
-            .fetch_state(&std::fs::canonicalize(&clone).unwrap())
+            .fetch_state(&crate::platform::canonical_path(&clone).unwrap())
             .await
             .unwrap()
             .lock()
@@ -1153,7 +1154,7 @@ async fn missing_refs_share_one_fetch_and_network_errors_are_separate() {
     );
     assert_eq!(first.err().unwrap().kind, "missingLeft");
     assert_eq!(second.err().unwrap().kind, "missingLeft");
-    let root = std::fs::canonicalize(fixture.0.join("repo")).unwrap();
+    let root = crate::platform::canonical_path(&fixture.0.join("repo")).unwrap();
     assert_eq!(
         service.fetch_state(&root).await.unwrap().lock().await.epoch,
         1

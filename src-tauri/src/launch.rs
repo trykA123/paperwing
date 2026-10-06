@@ -162,12 +162,12 @@ mod tests {
         fs::create_dir(fixture.0.join("one")).unwrap();
         fs::create_dir(fixture.0.join("two")).unwrap();
         fs::write(fixture.0.join("file.txt"), "x").unwrap();
-        let one = fs::canonicalize(fixture.0.join("one"))
+        let one = crate::platform::canonical_path(&fixture.0.join("one"))
             .unwrap()
             .to_str()
             .unwrap()
             .to_string();
-        let two = fs::canonicalize(fixture.0.join("two"))
+        let two = crate::platform::canonical_path(&fixture.0.join("two"))
             .unwrap()
             .to_str()
             .unwrap()
@@ -253,6 +253,17 @@ mod tests {
         assert_eq!(request.action, None);
         assert_eq!(request.ignored.len(), 1);
         assert!(request.ignored[0].reason.contains("Linked"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_verbatim_prefixed_argument_is_ignored_with_a_reason() {
+        let (fixture, one, _) = folders();
+        let verbatim = format!("\\\\?\\{one}");
+        let request = parse_args(&strings(&[&verbatim]), &fixture.0);
+        assert_eq!(request.action, None);
+        assert_eq!(request.ignored.len(), 1);
+        assert_eq!(request.ignored[0].arg, verbatim);
     }
 
     #[test]
