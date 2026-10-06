@@ -99,6 +99,7 @@ export type RepositoryTree = {
   remotes: { name: string; urls: string[]; refs: TreeRef[] }[];
   stashes: { name: string; sha: string; subject: string }[];
   submodules: { path: string; sha: string; url: string | null }[];
+  warning?: string;
 };
 
 export type HistoryCommit = { sha: string; short: string; subject: string; author: string; date: string };

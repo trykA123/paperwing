@@ -4,26 +4,60 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 
 fn git(dir: &std::path::Path, args: &[&str]) {
-    let out = Command::new("git").current_dir(dir).args(args).output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let out = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 fn big_repo(root: &std::path::Path, files: usize, remote_branches: usize) {
     std::fs::create_dir_all(root).unwrap();
     git(root, &["init", "-q", "-b", "main"]);
-    let mut child = Command::new("git").current_dir(root).args(["fast-import", "--quiet"]).stdin(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new("git")
+        .current_dir(root)
+        .args(["fast-import", "--quiet"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
     {
         let mut input = std::io::BufWriter::new(child.stdin.take().unwrap());
-        write!(input, "commit refs/heads/main\ncommitter a <a@b> 1 +0000\ndata 1\nx\n").unwrap();
+        write!(
+            input,
+            "commit refs/heads/main\ncommitter a <a@b> 1 +0000\ndata 1\nx\n"
+        )
+        .unwrap();
         for index in 0..files {
-            write!(input, "M 100644 inline src/module{:04}/component/file{index:06}.rs\ndata 2\nx\n", index % 1000).unwrap();
+            write!(
+                input,
+                "M 100644 inline src/module{:04}/component/file{index:06}.rs\ndata 2\nx\n",
+                index % 1000
+            )
+            .unwrap();
         }
         for index in 0..remote_branches {
-            write!(input, "\nreset refs/remotes/origin/feature/branch-{index:06}\nfrom refs/heads/main\n").unwrap();
+            write!(
+                input,
+                "\nreset refs/remotes/origin/feature/branch-{index:06}\nfrom refs/heads/main\n"
+            )
+            .unwrap();
         }
     }
     assert!(child.wait().unwrap().success());
-    git(root, &["remote", "add", "origin", "https://example.invalid/org/repo.git"]);
+    git(
+        root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/org/repo.git",
+        ],
+    );
     git(root, &["reset", "-q", "--mixed", "HEAD"]);
 }
 
@@ -31,24 +65,98 @@ fn big_repo(root: &std::path::Path, files: usize, remote_branches: usize) {
 #[ignore]
 async fn measure_repository_tree_on_large_repo() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
-    let files: usize = std::env::var("TREE_FILES").ok().and_then(|v| v.parse().ok()).unwrap_or(120_000);
-    let branches: usize = std::env::var("TREE_BRANCHES").ok().and_then(|v| v.parse().ok()).unwrap_or(2_000);
-    let root = std::path::PathBuf::from(std::env::var("PAPERWING_TEST_TMP").unwrap()).join(format!("big-tree-{files}-{branches}"));
-    if !root.join(".git").exists() { big_repo(&root, files, branches); }
+    let files: usize = std::env::var("TREE_FILES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(120_000);
+    let branches: usize = std::env::var("TREE_BRANCHES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(2_000);
+    let root = std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap())
+        .join(format!("big-tree-{files}-{branches}"));
+    if !root.join(".git").exists() {
+        big_repo(&root, files, branches);
+    }
     let start = Instant::now();
     let result = repository_tree(root.to_string_lossy().into_owned()).await;
     match &result {
-        Ok(tree) => println!("files={files} branches={branches}: ok, {} remote refs, {:?}", tree.remotes.iter().map(|r| r.refs.len()).sum::<usize>(), start.elapsed()),
-        Err(error) => println!("files={files} branches={branches}: ERR {error:?} after {:?}", start.elapsed()),
+        Ok(tree) => println!(
+            "files={files} branches={branches}: ok, {} remote refs, {:?}",
+            tree.remotes.iter().map(|r| r.refs.len()).sum::<usize>(),
+            start.elapsed()
+        ),
+        Err(error) => println!(
+            "files={files} branches={branches}: ERR {error:?} after {:?}",
+            start.elapsed()
+        ),
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn tree_with_many_tracked_files_still_lists_remote_branches() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
-    let root = std::path::PathBuf::from(std::env::var("PAPERWING_TEST_TMP").unwrap()).join("big-tree-test-150000");
+    let root = std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap())
+        .join("big-tree-test-150000");
     let _ = std::fs::remove_dir_all(&root);
     big_repo(&root, 150_000, 3);
-    let tree = repository_tree(root.to_string_lossy().into_owned()).await.expect("repository_tree must not fail for a large index");
+    let tree = repository_tree(root.to_string_lossy().into_owned())
+        .await
+        .expect("repository_tree must not fail for a large index");
     assert_eq!(tree.remotes[0].refs.len(), 3);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn tree_lists_gitlinks_declared_in_gitmodules_with_urls() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let root =
+        std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap()).join("tree-gitlinks");
+    let _ = std::fs::remove_dir_all(&root);
+    big_repo(&root, 5, 1);
+    let sha = "1111111111111111111111111111111111111111";
+    git(
+        &root,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{sha},libs/dep"),
+        ],
+    );
+    std::fs::write(
+        root.join(".gitmodules"),
+        "[submodule \"dep\"]\n\tpath = libs/dep\n\turl = https://example.invalid/dep.git\n",
+    )
+    .unwrap();
+    let tree = repository_tree(root.to_string_lossy().into_owned())
+        .await
+        .unwrap();
+    assert_eq!(tree.submodules.len(), 1);
+    assert_eq!(tree.submodules[0].path, "libs/dep");
+    assert_eq!(tree.submodules[0].sha, sha);
+    assert_eq!(
+        tree.submodules[0].url.as_deref(),
+        Some("https://example.invalid/dep.git")
+    );
+    assert!(tree.warning.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn broken_optional_parts_keep_branches_and_report_a_warning() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let root =
+        std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap()).join("tree-warning");
+    let _ = std::fs::remove_dir_all(&root);
+    big_repo(&root, 5, 2);
+    std::fs::write(root.join(".gitmodules"), vec![b'#'; 300 * 1024]).unwrap();
+    let tree = repository_tree(root.to_string_lossy().into_owned())
+        .await
+        .unwrap();
+    assert_eq!(tree.remotes[0].refs.len(), 2);
+    assert_eq!(tree.branches.len(), 1);
+    assert!(tree
+        .warning
+        .as_deref()
+        .unwrap()
+        .contains("Submodules unavailable"));
 }
