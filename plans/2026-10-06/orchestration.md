@@ -19,7 +19,10 @@ Base commit: `a4935bf` on `feat/paperwing-linux-completion` (snapshot of accepte
 | T5 Skein layout | Skein steps 3–6 | ui-builder after T2/T3 | queued |
 | T6 Windows | VM install (Codex), then 06 + Windows rows of 14/15/23 | Codex, then api-builder | VM install running |
 | T7 acceptance | 23, 24 | orchestrator + deployer | last |
+| T8 features | 25 open-with (after 15; menus with 24), 26 stash, 27 snapshots, 28 PRs, 29 discard/partial staging, 30 auto-refresh | api-builder + ui-builder | queued, approved 2026-10-06 |
 
 Each branch gets a `reviewer` pass before merging into `feat/paperwing-linux-completion`.
 
 Design spec: `~/.claude/handoffs/2026-10-05/skein-design/SPEC.md` (Skein, Formation, Benzol, Geist + Geist Mono, Rails icon).
+
+Backlog of approved ideas without packets: `.skillify/plans/2026-10-06-skein-backlog/packet.md`.
