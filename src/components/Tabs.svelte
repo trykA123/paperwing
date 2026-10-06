@@ -33,7 +33,7 @@
       </div>
     {/each}
   </div>
-  <div class="drag-spacer" data-tauri-drag-region={titlebar}></div>
+  <div class="drag-spacer" class:grip={titlebar} data-tauri-drag-region={titlebar} aria-hidden="true"></div>
   <div class="topbtns">
     <button class="kbtn" title="Command palette (Ctrl+K)" onclick={() => (app.paletteOpen = true)}><Icon name="search" /><span>Search or run a command...</span><kbd>Ctrl K</kbd></button>
     <button class="icon shell-control" class:on={app.ws.shell.sidebarVisible} title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.ws.shell.sidebarVisible}
@@ -55,5 +55,44 @@
     flex: none;
     align-self: stretch;
     width: var(--drag-min);
+  }
+
+  .drag-spacer.grip {
+    position: relative;
+    color: var(--faint-text);
+    transition: background-color 120ms ease-out, color 120ms ease-out;
+  }
+
+  .drag-spacer.grip:hover {
+    background: var(--soft);
+    color: var(--dim);
+  }
+
+  .drag-spacer.grip::before {
+    content: '';
+    position: absolute;
+    inset: 25% 0;
+    border-inline: 1px solid var(--line);
+    pointer-events: none;
+  }
+
+  .drag-spacer.grip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 2px;
+    margin: -5px 0 0 -3px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 4px 0 currentColor, 0 4px currentColor, 4px 4px currentColor, 0 8px currentColor, 4px 8px currentColor;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drag-spacer.grip {
+      transition: none;
+    }
   }
 </style>
