@@ -3768,6 +3768,7 @@ dependencies = [
  "chrono",
  "dbus",
  "dbus-secret-service",
+ "futures-util",
  "keyring",
  "libc",
  "reqwest 0.12.28",

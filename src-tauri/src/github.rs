@@ -32,6 +32,10 @@ pub struct RepoList {
     pub errors: Vec<String>,
     #[serde(default)]
     pub stale: bool,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+    #[serde(default)]
+    pub partial: bool,
 }
 
 pub use crate::store::CommitRow as Commit;
