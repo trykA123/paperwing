@@ -479,3 +479,19 @@ test('refs for more than 32 repositories all load as the queue drains', async ()
     expect(urls.filter(url => state.refs[url]?.branches.includes('main'))).toHaveLength(100);
   });
 });
+
+test('listing warning and partial flags are stored and cleared with the next listing', async () => {
+  await fixture(async (state, calls) => {
+    const first = state.loadRepos(state.sources[0], true);
+    calls[0].resolve({ repos: [repo], errors: [], warning: 'Stopped at 400 repositories', partial: true });
+    await first;
+    expect(state.repos[source.id]).toEqual([repo]);
+    expect(state.partialRepos[source.id]).toBe(true);
+    expect(state.repoWarnings[source.id]).toBe('Stopped at 400 repositories');
+    const second = state.loadRepos(state.sources[0], true);
+    calls[1].resolve({ repos: [repo], errors: [] });
+    await second;
+    expect(state.partialRepos[source.id]).toBe(false);
+    expect(state.repoWarnings[source.id]).toBe('');
+  });
+});

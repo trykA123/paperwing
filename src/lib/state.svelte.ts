@@ -148,6 +148,8 @@ class AppState {
   set repos(value: RepositoryMetadata['repos']) { this.repositoryMetadata.repos = value; }
   get repoErrors() { return this.repositoryMetadata.repoErrors; }
   set repoErrors(value: RepositoryMetadata['repoErrors']) { this.repositoryMetadata.repoErrors = value; }
+  get partialRepos() { return this.repositoryMetadata.partialRepos; }
+  get repoWarnings() { return this.repositoryMetadata.repoWarnings; }
   get staleRepos() { return this.repositoryMetadata.staleRepos; }
   get loadingRepos() { return this.repositoryMetadata.loadingRepos; }
   set loadingRepos(value: RepositoryMetadata['loadingRepos']) { this.repositoryMetadata.loadingRepos = value; }

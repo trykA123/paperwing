@@ -18,6 +18,8 @@ export class RepositoryMetadata {
   repoErrors = $state<Record<string, string[]>>({});
   loadingRepos = $state<Record<string, boolean>>({});
   staleRepos = $state<Record<string, boolean>>({});
+  partialRepos = $state<Record<string, boolean>>({});
+  repoWarnings = $state<Record<string, string>>({});
   refs = $state<Record<string, RefsEntry>>({});
   commits = $state<Record<string, CommitsEntry>>({});
   private staleCommits = $state<Record<string, boolean>>({});
@@ -68,6 +70,8 @@ export class RepositoryMetadata {
     delete this.repos[sourceId];
     delete this.repoErrors[sourceId];
     delete this.staleRepos[sourceId];
+    delete this.partialRepos[sourceId];
+    delete this.repoWarnings[sourceId];
     this.listingScopes.delete(sourceId);
     this.loadingListingKeys.delete(sourceId);
     this.loadingRepos[sourceId] = false;
@@ -134,6 +138,8 @@ export class RepositoryMetadata {
         if (!offline) this.repos[src.id] = list.repos;
         this.repoErrors[src.id] = list.errors;
         this.staleRepos[src.id] = offline;
+        this.partialRepos[src.id] = !!list.partial;
+        this.repoWarnings[src.id] = list.warning ?? '';
         this.listingScopes.set(src.id, currentScope);
       } },
       fail: error => { if (current()) {

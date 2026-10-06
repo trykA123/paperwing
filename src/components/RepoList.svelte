@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { confirm } from '../lib/confirm';
   import { ago, app, matches } from '../lib/state.svelte';
+  import { splitListingErrors } from '../lib/repo-notices';
   import type { Repo } from '../lib/api';
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
@@ -26,7 +27,11 @@
   const cur = $derived(Math.min(page, pages - 1));
   const rows = $derived(size === 'all' ? list : list.slice(cur * size, cur * size + size));
   const loading = $derived(mode === 'org' ? !!app.loadingRepos[source] : Object.values(app.loadingRepos).some(Boolean));
-  const errors = $derived(mode === 'org' ? (app.repoErrors[source] ?? []) : Object.values(app.repoErrors).flat());
+  const listingErrors = $derived(mode === 'org' ? (app.repoErrors[source] ?? []) : Object.values(app.repoErrors).flat());
+  const notices = $derived(mode === 'org' ? splitListingErrors(listingErrors, org) : { orgWarnings: [], errors: listingErrors });
+  const partial = $derived(mode === 'org' ? !!app.partialRepos[source] : Object.values(app.partialRepos).some(Boolean));
+  const warning = $derived(mode === 'org' ? (app.repoWarnings[source] ?? '') : Object.values(app.repoWarnings).filter(Boolean).join(' · '));
+  const caveats = $derived([...(partial && !warning ? ['The list is partial.'] : []), ...(warning ? [warning] : []), ...notices.orgWarnings]);
 
   let previousQuery = untrack(() => query);
   $effect(() => {
@@ -66,7 +71,8 @@
   </div>
 </header>
 
-{#if errors.length}<Alert kind="err">{errors.join(' · ')}</Alert>{/if}
+{#if notices.errors.length}<Alert kind="err">{notices.errors.join(' · ')}</Alert>{/if}
+{#if caveats.length}<Alert kind="warn" role="status" title={partial ? 'Partial list' : 'Some repositories may be missing'}>{caveats.join(' · ')}</Alert>{/if}
 
 <div class="card fill">
   {#key `${cur}|${size}|${query}`}
