@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { benchmarkEnabled } from './lib/benchmark';
   import { fly } from 'svelte/transition';
   import { isTauri } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -97,7 +98,7 @@
 
   // Branches may have been switched in a terminal meanwhile; re-read local state when the window regains focus.
   function onFocus() {
-    if (app.ready && !app.running) app.checkExists(app.set.items.map(i => app.dest(i)));
+    if (!benchmarkEnabled && app.ready && !app.running) app.checkExists(app.set.items.map(i => app.dest(i)));
   }
 
   // Persist sources + workspace shortly after any change.
@@ -108,11 +109,20 @@
     return () => clearTimeout(t);
   });
 
-  // Keep "already on disk" markers in sync with the destination.
   $effect(() => {
     if (!app.ready) return;
+    const root = app.ws.root;
+    void app.probeRoot(root);
+  });
+
+  // Keep "already on disk" markers in sync with the destination.
+  $effect(() => {
+    if (benchmarkEnabled || !app.ready || !app.rootSupport.valid) return;
     const dests = app.set.items.map(i => app.dest(i));
-    const t = setTimeout(() => app.checkExists(dests), 300);
+    const t = setTimeout(() => {
+      void app.checkExists(dests);
+      void app.refreshPathIdentities(dests).catch(reason => app.toast(String(reason), 'warn'));
+    }, 300);
     return () => clearTimeout(t);
   });
 </script>

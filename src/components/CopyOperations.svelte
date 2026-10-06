@@ -14,9 +14,14 @@
     if (!busy) app.copyRequest = null;
   }
   async function apply() {
-    if (!preview || busy) return;
+    if (!preview || busy || !app.platform.capabilities.copy.supported) return;
     busy = true; error = '';
     try {
+      const snapshot = app.comparisons[request.comparisonId]?.snapshot;
+      if (!snapshot || snapshot.id !== request.id || snapshot.generation !== request.generation) throw new Error('Comparison changed. Reopen the copy preview.');
+      await app.probeEndpoints([snapshot[request.side].endpoint]);
+      const capability = app.endpointCapability(snapshot[request.side].endpoint, 'copy');
+      if (!capability.supported) throw new Error(capability.reason ?? 'Copy is unavailable.');
       outcomes = await api.copyApply(preview.id, true);
       const comparison = app.comparisons[request.comparisonId];
       if (comparison?.snapshot?.id === request.id) { await comparison.refresh(); await comparison.loadAllFiles(); }
@@ -24,7 +29,7 @@
     finally { busy = false; }
   }
   async function undo() {
-    if (!outcomes || busy || !await app.prepareDiskMutation()) return;
+    if (!app.capability('recovery').supported || !outcomes || busy || !await app.prepareDiskMutation()) return;
     busy = true; error = '';
     try {
       for (const outcome of [...outcomes].reverse()) {
@@ -39,6 +44,11 @@
   onMount(() => {
     dialog.showModal();
     (async () => {
+      const snapshot = app.comparisons[request.comparisonId]?.snapshot;
+      if (!snapshot || snapshot.id !== request.id || snapshot.generation !== request.generation) throw new Error('Comparison changed. Reopen the copy preview.');
+      await app.probeEndpoints([snapshot[request.side].endpoint]);
+      const capability = app.endpointCapability(snapshot[request.side].endpoint, 'copy');
+      if (!capability.supported) throw new Error(capability.reason ?? 'Copy is unavailable.');
       if (!await app.prepareDiskMutation()) { app.copyRequest = null; return; }
       const result = await api.copyPreview(request.id, request.generation, request.fileId, request.side);
       if (disposed) { await api.copyCancel(result.id); return; }
@@ -56,7 +66,7 @@
     <div class="operation-list">{#each preview.files as file}<div><span class="mono grow">{file.path}</span><span>{file.action}</span><span>{file.bytes.toLocaleString()} B</span></div>{/each}</div>
   {/if}
   {#if outcomes}<h3>Results</h3><div class="operation-list">{#each outcomes as outcome}<div><span class="mono grow">{outcome.path}</span><span class:warn={outcome.state !== 'applied'}>{outcome.record && undone.includes(outcome.record.id) ? 'undone' : outcome.state}</span></div>{#if outcome.error}<p class="warn">{outcome.error}</p>{/if}{/each}</div>{/if}
-  <footer><button class="btn" disabled={busy} onclick={() => app.recoveryOpen = true}><Icon name="refresh" /> Recovery</button><span class="grow"></span>
+  <footer><button class="btn" title={app.capability('recovery').reason ?? 'Filesystem recovery'} disabled={busy || !app.capability('recovery').supported} onclick={() => app.recoveryOpen = true}><Icon name="refresh" /> Recovery</button><span class="grow"></span>
     {#if outcomes}<button class="btn" disabled={busy || !outcomes.some(outcome => outcome.record && !undone.includes(outcome.record.id))} onclick={undo}><Icon name="refresh" /> Undo batch</button>
     {:else}<button class="btn dark" disabled={busy || !preview || !!error} onclick={apply}><Icon name="copy" /> Confirm copy</button>{/if}
     <button class="btn" onclick={() => void close()}>{busy ? 'Cancel remaining' : 'Close'}</button></footer>

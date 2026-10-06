@@ -1,22 +1,24 @@
+import { Credentials } from './state/credentials.svelte';
+import { RepositoryMetadata, type RefState } from './state/repository-metadata.svelte';
+import { GitActivity } from './state/git-activity.svelte';
+import { RepositoryTrees } from './state/repository-trees.svelte';
+import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
+import { pendingPlatform, unavailableRoot } from './platform';
+import { benchmarkEnabled, benchmarkPlan } from './benchmark';
 import { listen } from '@tauri-apps/api/event';
 import {
     api, type Activity,
-    type Commit, type GitAction, type LocalStatus, type Phase, type Progress, type Ref, type Repo,
-    type RepositoryTree,
+    type GitAction, type LocalStatus, type Phase, type Progress, type Ref, type Repo,
+    type Capability, type Capabilities, type CompareEndpoint, type PathIdentity, type PlatformInfo, type RootSupport,
     type SetItem, type Source, type Workspace,
 } from './api';
 import { CompareState, SetCompareState, type SetCompareRow } from './compare.svelte';
 import { confirm } from './confirm';
-import { DEFAULT_TEMPLATE, defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } from './workspace';
+import { defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } from './workspace';
 export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
 export type { View } from './workspace';
 
-export type RefsEntry = {
-  branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; error?: string; loading?: boolean;
-};
-export type CommitsEntry = Commit[] | 'loading' | { error: string };
-export type RefState = 'ok' | 'missing' | 'unknown' | 'unverified';
-
+export type { RefsEntry, CommitsEntry, RefState } from './state/repository-metadata.svelte';
 export const uid = () => Math.random().toString(36).slice(2, 10);
 export const RUNNING: Phase[] = ['resolving', 'cloning', 'fetching', 'checkout'];
 export const PHASE: Record<Phase, string> = {
@@ -29,7 +31,6 @@ const TOAST_MS: Record<ToastKind, number> = { info: 4000, success: 4000, warn: 7
 export const refText = (r: Ref) => (r.type === 'commit' ? r.name.slice(0, 8) : r.name);
 export const matches = (text: string, query: string) =>
   query.toLowerCase().split(/\s+/).filter(Boolean).every(w => text.toLowerCase().includes(w));
-const isHex = (s: string) => /^[0-9a-f]{7,40}$/i.test(s);
 
 export function ago(iso: string) {
   if (!iso) return '';
@@ -50,15 +51,77 @@ export const PATH_TOKENS = [
 ];
 
 class AppState {
+  platform = $state<PlatformInfo>(pendingPlatform);
+  rootProbes = $state<Record<string, RootSupport>>({});
+  pathIdentities = $state<Record<string, PathIdentity>>({});
+  private identityRevision = 0;
+  private rootProbeRevisions = new Map<string, number>();
+  private rootProbeRequests = new Map<string, Promise<RootSupport>>();
+  get nativePlatform() { return this.platform.platform === 'linux' ? 'linux' : 'windows'; }
+  get rootSupport() { return this.rootProbes[this.ws.root] ?? unavailableRoot(this.ws.root, 'Choose a valid native destination folder.'); }
+  capability(operation: keyof Capabilities, root = this.ws.root): Capability {
+    const capability = this.platform.capabilities[operation];
+    if (!capability.supported || operation === 'recovery') return capability;
+    return (this.rootProbes[root] ?? unavailableRoot(root, 'Choose a valid native destination folder.')).capabilities[operation];
+  }
+  async probeRoot(root = this.ws.root) {
+    const current = (this.rootProbeRevisions.get(root) ?? 0) + 1;
+    this.rootProbeRevisions.set(root, current);
+    this.rootProbes[root] = unavailableRoot(root, 'Checking native root support.');
+    const request = (async () => {
+      let support: RootSupport;
+      try { support = await api.probeRoot(root); }
+      catch (reason) { support = unavailableRoot(root, String(reason)); }
+      if (this.rootProbeRevisions.get(root) !== current) return this.rootProbeRequests.get(root)
+        ?? this.rootProbes[root] ?? unavailableRoot(root, 'Root support changed. Try again.');
+      this.rootProbes[root] = support;
+      return support;
+    })();
+    this.rootProbeRequests.set(root, request);
+    try { return await request; }
+    finally { if (this.rootProbeRequests.get(root) === request) this.rootProbeRequests.delete(root); }
+  }
+  async chooseRoot(root: string) {
+    if (this.running || this.clonePreparing || this.gitBusy || !await this.guardBuffers()) return false;
+    const support = await this.probeRoot(root);
+    if (!support.valid) { this.toast(support.reason ?? 'Choose a valid native destination folder.', 'warn'); return false; }
+    this.ws.root = root;
+    this.pathIdentities = {};
+    return true;
+  }
+  endpointRoot(endpoint: CompareEndpoint) {
+    const item = this.ws.sets.find(set => set.id === endpoint.setId)?.items.find(item => item.id === endpoint.itemId);
+    return item ? this.dest(item, endpoint.setId) : '';
+  }
+  endpointCapability(endpoint: CompareEndpoint, operation: keyof Capabilities) {
+    return this.capability(operation, this.endpointRoot(endpoint));
+  }
+  async probeEndpoints(endpoints: CompareEndpoint[]) {
+    await Promise.all([...new Set(endpoints.map(endpoint => this.endpointRoot(endpoint)))].map(root => this.probeRoot(root)));
+  }
+  async refreshPathIdentities(paths: string[]) {
+    const current = ++this.identityRevision;
+    const results = await api.pathIdentities(paths);
+    if (current === this.identityRevision) this.pathIdentities = Object.fromEntries(results.map(result => [result.path, result]));
+    return results;
+  }
+  collisionKey(path: string) { return collisionKey(path, this.nativePlatform, this.pathIdentities); }
   copyRequest = $state<{ comparisonId: string; id: string; generation: number; fileId: string; side: 'left' | 'right' } | null>(null);
   recoveryOpen = $state(false);
+  readonlyBenchmark = false;
   gitDialog = $state<{ kind: 'commit' | 'branch'; path: string; name: string; itemId?: string; targets?: { path: string; name: string }[] } | null>(null);
   /** True while a push or branch deletion runs; clone jobs use `running` instead. */
   gitBusy = $state(false);
-  copyActions = $state<Record<string, { left: boolean; right: boolean; copy: (side: 'left' | 'right') => void }>>({});
-  requestCopy(comparisonId: string, fileId: string, side: 'left' | 'right') {
+  copyActions = $state<Record<string, { left: boolean; right: boolean; copy: (side: 'left' | 'right') => void; leftReason?: string | null; rightReason?: string | null }>>({});
+  async requestCopy(comparisonId: string, fileId: string, side: 'left' | 'right') {
     const snapshot = this.comparisons[comparisonId]?.snapshot;
     if (!snapshot || this.copyRequest) return;
+    const endpoint = snapshot[side].endpoint;
+    if (!this.platform.capabilities.copy.supported) { this.toast(this.platform.capabilities.copy.reason ?? 'Copy is unavailable.', 'warn'); return; }
+    await this.probeEndpoints([endpoint]);
+    const capability = this.endpointCapability(endpoint, 'copy');
+    if (!capability.supported) { this.toast(capability.reason ?? 'Copy is unavailable for this root.', 'warn'); return; }
+    if (this.copyRequest || this.comparisons[comparisonId]?.snapshot !== snapshot) return;
     this.copyRequest = { comparisonId, id: snapshot.id, generation: snapshot.generation, fileId, side };
   }
   async prepareDiskMutation() {
@@ -69,30 +132,39 @@ class AppState {
   bufferGuards = new Map<string, () => Promise<boolean>>();
   editorActions = $state<Record<string, { save: (side?: number) => Promise<void>; dirty: boolean; next: (direction: number) => void;
     copy: (side: 'left' | 'right') => void; canCopyLeft: boolean; canCopyRight: boolean;
-    canSave: boolean; canSaveLeft: boolean; canSaveRight: boolean; canNavigate: boolean; canUndo: boolean; undo: () => Promise<void> }>>({});
+    canSave: boolean; canSaveLeft: boolean; canSaveRight: boolean; canNavigate: boolean; canUndo: boolean; undo: () => Promise<void>; saveReasons?: (string | null)[]; undoReason?: string | null }>>({});
   async guardBuffers(ids?: Set<string>) {
     for (const [id, guard] of this.bufferGuards) if ((!ids || ids.has(id)) && !await guard()) return false;
     return true;
   }
   ready = $state(false);
   sources = $state<Source[]>([]);
-  ws = $state<Workspace>(defaultWorkspace());
-  repos = $state<Record<string, Repo[]>>({});
-  repoErrors = $state<Record<string, string[]>>({});
-  loadingRepos = $state<Record<string, boolean>>({});
-  refs = $state<Record<string, RefsEntry>>({});
-  commits = $state<Record<string, CommitsEntry>>({});
+  ws = $state<Workspace>(defaultWorkspace('unsupported'));
+  private repositoryMetadata = new RepositoryMetadata(() => this.sources);
+  credentials = new Credentials(sourceId => this.repositoryMetadata.invalidateSource(sourceId));
+  get repos() { return this.repositoryMetadata.repos; }
+  set repos(value: RepositoryMetadata['repos']) { this.repositoryMetadata.repos = value; }
+  get repoErrors() { return this.repositoryMetadata.repoErrors; }
+  set repoErrors(value: RepositoryMetadata['repoErrors']) { this.repositoryMetadata.repoErrors = value; }
+  get loadingRepos() { return this.repositoryMetadata.loadingRepos; }
+  set loadingRepos(value: RepositoryMetadata['loadingRepos']) { this.repositoryMetadata.loadingRepos = value; }
+  get refs() { return this.repositoryMetadata.refs; }
+  set refs(value: RepositoryMetadata['refs']) { this.repositoryMetadata.refs = value; }
+  get commits() { return this.repositoryMetadata.commits; }
+  set commits(value: RepositoryMetadata['commits']) { this.repositoryMetadata.commits = value; }
   exists = $state<Record<string, boolean>>({});
   local = $state<Record<string, LocalStatus>>({});
   jobs = $state<Record<string, Progress>>({});
   running = $state(false);
+  clonePreparing = $state(false);
   activityOpen = $state(false);
-  activity = $state<Activity[]>([]);
-  trees = $state<Record<string, { data?: RepositoryTree; loading?: boolean; error?: string }>>({});
+  private gitActivity = new GitActivity();
+  get activity() { return this.gitActivity.activity; }
+  set activity(value: Activity[]) { this.gitActivity.activity = value; }
+  private repositoryTrees = new RepositoryTrees();
+  get trees() { return this.repositoryTrees.trees; }
+  set trees(value: RepositoryTrees['trees']) { this.repositoryTrees.trees = value; }
   openTreePaths: string[] = [];
-  #treeGeneration = new Map<string, number>();
-  #activityThrough = 0;
-  #activityRetained = new Set<string>();
   tabs = $state<ShellTab[]>([]);
   activeTabId = $state('');
   comparisons = $state<Record<string, CompareState>>({});
@@ -115,8 +187,10 @@ class AppState {
   #runMode: GitAction = 'clone';
   #cloneWaiters: (() => void)[] = [];
 
-  allRepos = $derived(Object.values(this.repos).flat());
-  repoById = $derived(new Map(this.allRepos.map(r => [r.id, r])));
+  get allRepos() { return this.repositoryMetadata.allRepos; }
+  set allRepos(value: RepositoryMetadata['allRepos']) { this.repositoryMetadata.allRepos = value; }
+  get repoById() { return this.repositoryMetadata.repoById; }
+  set repoById(value: RepositoryMetadata['repoById']) { this.repositoryMetadata.repoById = value; }
   set = $derived(this.ws.sets.find(s => s.id === this.ws.activeSet) ?? this.ws.sets[0]);
   selected = $derived(this.set.items.filter(i => i.on));
   runProgress = $derived.by(() => {
@@ -129,28 +203,31 @@ class AppState {
     };
   });
   actionItems = $derived(this.view.kind === 'item' ? (this.focusedItem ? [this.focusedItem] : []) : this.selected);
-  clashes = $derived.by(() => {
-    const m = new Map<string, number>();
-    for (const i of this.selected) {
-      const d = this.dest(i).toLowerCase();
-      m.set(d, (m.get(d) ?? 0) + 1);
-    }
-    return m;
-  });
+  clashes = $derived(pathClashes(this.selected.map(item => this.dest(item)), this.nativePlatform, this.pathIdentities));
 
   async init() {
-    const saved = await api.loadSettings();
-    const ws = migrateWorkspace(saved.workspace);
+    const [saved, platform] = await Promise.all([api.loadSettings(), api.platformInfo()]);
+    this.platform = platform;
+    const ws = migrateWorkspace(saved.workspace, platform.platform);
     this.sources = saved.sources ?? [];
     this.ws = ws;
+    await this.probeRoot();
     this.openView({ kind: 'set' });
     await listen<Progress>('clone-progress', e => { this.jobs[e.payload.id] = e.payload; });
     await listen('clone-finished', () => this.#finished());
+    await listen<{ sourceId: string; revision: number }>('credential-changed', event => this.credentials.invalidate(event.payload.sourceId, event.payload.revision));
     await listen<Activity>('git-activity', event => this.mergeActivity(event.payload));
     await this.refreshActivity();
     this.ready = true;
     if (!this.sources.length) this.openView({ kind: 'settings' });
     await Promise.all(this.sources.map(s => this.loadRepos(s, false)));
+    if (benchmarkEnabled) {
+      const plan = await benchmarkPlan();
+      this.readonlyBenchmark = plan.scenario === 'linux-read-only';
+      const comparisonId = 'fixture-benchmark';
+      this.comparisons[comparisonId] = new CompareState();
+      this.openView({ kind: 'compare', comparisonId, left: plan.left, right: plan.right });
+    }
   }
 
   toast(msg: string, kind: ToastKind = 'info', action?: ToastItem['action']) {
@@ -179,63 +256,17 @@ class AppState {
     if (item) this.#armToast(item);
   }
 
-  mergeActivity(entry: Activity) {
-    const serial = Number(entry.id.slice(4));
-    if (serial <= this.#activityThrough && !this.#activityRetained.has(entry.id)) return;
-    const current = this.activity.find(activity => activity.id === entry.id);
-    if (current && current.sequence >= entry.sequence) return;
-    this.activity = [...this.activity.filter(activity => activity.id !== entry.id), entry].sort((left, right) => left.startedAt - right.startedAt);
-    while (this.activity.length > 64) {
-      const index = this.activity.findIndex(activity => activity.state !== 'running');
-      if (index < 0) break;
-      this.activity.splice(index, 1);
-    }
-  }
+  mergeActivity(entry: Activity) { return this.gitActivity.mergeActivity(entry); }
 
-  async refreshActivity() {
-    for (const entry of await api.activitySnapshot()) this.mergeActivity(entry);
-  }
+  refreshActivity() { return this.gitActivity.refreshActivity(); }
 
-  async clearActivity() {
-    const cleared = await api.clearActivity();
-    this.#activityThrough = cleared.through;
-    this.#activityRetained = new Set(cleared.retained);
-    this.activity = this.activity.filter(entry => Number(entry.id.slice(4)) > cleared.through || this.#activityRetained.has(entry.id));
-    for (const entry of cleared.running) this.mergeActivity(entry);
-  }
+  clearActivity() { return this.gitActivity.clearActivity(); }
 
-  async loadTree(path: string, force = false) {
-    if (!force && this.trees[path]) return;
-    const generation = (this.#treeGeneration.get(path) ?? 0) + 1;
-    this.#treeGeneration.set(path, generation);
-    this.trees[path] = { ...this.trees[path], loading: true, error: undefined };
-    try {
-      const data = await api.repositoryTree(path);
-      if (this.#treeGeneration.get(path) === generation) this.trees[path] = { data };
-    } catch (error) {
-      if (this.#treeGeneration.get(path) === generation) this.trees[path] = { error: String(error) };
-    }
-  }
+  loadTree(path: string, force = false) { return this.repositoryTrees.loadTree(path, force); }
 
-  #invalidateTrees(paths: string[]) {
-    for (const path of paths) {
-      this.#treeGeneration.set(path, (this.#treeGeneration.get(path) ?? 0) + 1);
-      delete this.trees[path];
-    }
-  }
+  #invalidateTrees(paths: string[]) { this.repositoryTrees.invalidate(paths); }
 
-  async loadRepos(src: Source, refresh: boolean) {
-    this.loadingRepos[src.id] = true;
-    try {
-      const list = await api.listRepos($state.snapshot(src) as Source, refresh);
-      this.repos[src.id] = list.repos;
-      this.repoErrors[src.id] = list.errors;
-    } catch (e) {
-      this.repoErrors[src.id] = [String(e)];
-    } finally {
-      this.loadingRepos[src.id] = false;
-    }
-  }
+  loadRepos(src: Source, refresh: boolean) { return this.repositoryMetadata.loadRepos(src, refresh); }
 
   openView(view: View, setId = this.ws.activeSet, query?: string) {
     const id = tabId(view, setId);
@@ -332,82 +363,30 @@ class AppState {
     this.openView({ kind: 'compare', comparisonId, left: JSON.parse(JSON.stringify(row.left)), right: JSON.parse(JSON.stringify(row.right)) }, row.left.setId);
   }
 
-  orgsOf(src: Source) {
-    return src.kind === 'manual' ? [...new Set((this.repos[src.id] ?? []).map(r => r.org))] : src.orgs;
-  }
+  orgsOf(src: Source) { return this.repositoryMetadata.orgsOf(src); }
 
-  reposOf(sourceId: string, org: string) {
-    const o = org.toLowerCase();
-    return (this.repos[sourceId] ?? []).filter(r => r.org.toLowerCase() === o);
-  }
+  reposOf(sourceId: string, org: string) { return this.repositoryMetadata.reposOf(sourceId, org); }
 
   /** Folder path below the root, one entry per folder level. */
   segments(item: SetItem, setName = this.set.name): string[] {
-    const folder = this.folderOf(item);
-    if (this.ws.layout !== 'custom') return [folder];
-    const flat = (s: string) => s.replace(/[\\/]+/g, '-');
-    const source = this.sources.find(s => s.id === item.repoId.split(':')[0])?.name ?? '';
-    const values: Record<string, string> = {
-      folder, repo: item.name, org: item.org, set: flat(setName), source: flat(source),
-      ref: flat(item.ref.type === 'commit' ? item.ref.name.slice(0, 8) : item.ref.name),
-    };
-    let tpl = this.ws.pathTemplate.trim() || DEFAULT_TEMPLATE;
-    // Without a per-repo token every row would land in the same folder.
-    if (!/\{(folder|repo)\}/.test(tpl)) tpl += '\\{folder}';
-    return tpl
-      .replace(/\{(\w+)\}/g, (m, k: string) => values[k] ?? m)
-      .split(/[\\/]+/)
-      .map(s => s.replace(/[:*?"<>|\x00-\x1f]/g, '').trim().replace(/[. ]+$/, ''))
-      .filter(s => s && s !== '.' && s !== '..');
+    return segments(this.ws, this.sources, item, setName, this.nativePlatform);
   }
 
   dest(item: SetItem, setId = this.set.id) {
-    const sep = this.ws.root.includes('/') && !this.ws.root.includes('\\') ? '/' : '\\';
-    const root = this.ws.root.replace(/[\\/]+$/, '');
-    return [root, ...this.segments(item, this.ws.sets.find(set => set.id === setId)?.name ?? this.set.name)].join(sep);
+    return destination(this.ws, this.sources, item, this.ws.sets.find(set => set.id === setId)?.name ?? this.set.name, this.nativePlatform);
   }
 
-  folderOf(item: SetItem) {
-    return item.folder || item.name;
-  }
+  folderOf(item: SetItem) { return folderOf(item); }
 
   hasClash(item: SetItem) {
-    return (this.clashes.get(this.dest(item).toLowerCase()) ?? 0) > 1;
+    return (this.clashes.get(this.collisionKey(this.dest(item))) ?? 0) > 1;
   }
 
-  refState(item: SetItem): RefState {
-    if (item.ref.type === 'commit') {
-      const c = this.commits[item.repoId];
-      if (Array.isArray(c) && c.some(x => x.sha.startsWith(item.ref.name))) return 'ok';
-      return isHex(item.ref.name) ? 'unverified' : 'missing';
-    }
-    const r = this.refs[item.url];
-    if (!r || r.loading || r.error) return 'unknown';
-    return (item.ref.type === 'branch' ? r.branches : r.tags).includes(item.ref.name) ? 'ok' : 'missing';
-  }
+  refState(item: SetItem): RefState { return this.repositoryMetadata.refState(item); }
 
-  async ensureRefs(urls: string[], force = false) {
-    const need = [...new Set(urls)].filter(u => force || !this.refs[u] || this.refs[u].error);
-    if (!need.length) return;
-    for (const u of need) this.refs[u] = { branches: [], tags: [], loading: true };
-    for (const r of await api.getRefsMany(need)) {
-      this.refs[r.url] = { branches: r.branches, tags: r.tags, branchShas: r.branchShas, tagShas: r.tagShas, error: r.error ?? undefined };
-    }
-  }
+  ensureRefs(urls: string[], force = false) { return this.repositoryMetadata.ensureRefs(urls, force); }
 
-  async ensureCommits(item: SetItem) {
-    if (this.commits[item.repoId]) return;
-    const repo = this.repoById.get(item.repoId);
-    const src = this.sources.find(s => s.id === repo?.source);
-    if (!repo || !src || src.kind === 'manual') { this.commits[item.repoId] = []; return; }
-    this.commits[item.repoId] = 'loading';
-    try {
-      const branch = item.ref.type === 'branch' ? item.ref.name : repo.defaultBranch;
-      this.commits[item.repoId] = await api.getCommits($state.snapshot(src) as Source, repo.org, repo.name, branch);
-    } catch (e) {
-      this.commits[item.repoId] = { error: String(e) };
-    }
-  }
+  ensureCommits(item: SetItem) { return this.repositoryMetadata.ensureCommits(item); }
 
   inSet(repoId: string) {
     return this.set.items.some(i => i.repoId === repoId);
@@ -418,13 +397,7 @@ class AppState {
   }
 
   /** `base`, or `base_2`, `base_3`… — whichever is not yet used in the set. */
-  uniqueFolder(base: string) {
-    const taken = new Set(this.set.items.map(i => this.folderOf(i).toLowerCase()));
-    if (!taken.has(base.toLowerCase())) return base;
-    let n = 2;
-    while (taken.has(`${base}_${n}`.toLowerCase())) n++;
-    return `${base}_${n}`;
-  }
+  uniqueFolder(base: string) { return uniqueFolder(base, this.set.items, this.nativePlatform); }
 
   addRepo(repo: Repo, notify = true) {
     const id = uid();
@@ -463,8 +436,9 @@ class AppState {
   }
 
   renameFolder(item: SetItem, value: string) {
-    // Folder names are one path segment: no separators, reserved characters or leading dots.
-    const v = value.replace(/[\\/:*?"<>|\x00-\x1f]/g, '').replace(/^[.\s]+|[.\s]+$/g, '');
+    const v = this.nativePlatform === 'linux' ? value.replace(/[\/\x00]/g, '')
+      : value.replace(/[\\/:*?"<>|\x00-\x1f]/g, '').replace(/^[.\s]+|[.\s]+$/g, '');
+    if (v === '.' || v === '..' || v.toLowerCase() === '.git') { this.toast('Choose a safe folder name.', 'warn'); return; }
     if (v && v !== item.name) item.folder = v;
     else delete item.folder;
   }
@@ -502,8 +476,9 @@ class AppState {
   }
 
   async deleteSet(id: string, trashFolders = false) {
+    if (trashFolders && !this.capability('trash').supported) { this.toast(this.capability('trash').reason ?? 'Folder removal is unavailable.', 'warn'); return; }
     if (this.bufferGuards.size && !await this.guardBuffers()) return;
-    if (trashFolders && (this.running || this.gitBusy)) { this.toast('Wait for the running Git operation to finish first', 'warn'); return; }
+    if (trashFolders && (this.running || this.clonePreparing || this.gitBusy)) { this.toast('Wait for the running Git operation to finish first', 'warn'); return; }
     for (const tab of [...this.tabs]) {
       if (tab.setId === id && tab.view.kind === 'setCompare') await this.closeTab(tab.id);
       if (tab.view.kind === 'compare' && (tab.setId === id || [tab.view.left, tab.view.right].some(endpoint => endpoint.setId === id))) await this.closeTab(tab.id);
@@ -586,9 +561,9 @@ class AppState {
   }
 
   /** Deletes a local branch after confirmation. The remote branch is never touched. */
-  async deleteLocalBranch(path: string, repo: string, name: string) {
+  async deleteLocalBranch(path: string, repo: string, name: string, label = name) {
     if (this.gitBusy || this.running) return;
-    const ok = await confirm(`Delete the local branch "${name}" in ${repo}?\n\nOnly your local copy is removed. A branch with the same name on the remote, if there is one, is not touched.`,
+    const ok = await confirm(`Delete the local branch "${label}" in ${repo}?\n\nOnly your local copy is removed. A branch with the same name on the remote, if there is one, is not touched.`,
       { title: 'Delete local branch', kind: 'warning', okLabel: 'Delete', destructive: true });
     if (!ok) return;
     this.gitBusy = true;
@@ -597,12 +572,12 @@ class AppState {
       for (;;) {
         try {
           const result = await api.deleteBranch(path, name, force);
-          this.toast(`Deleted ${name} (was ${result.sha}). The remote branch is untouched.`, 'success');
+          this.toast(`Deleted ${label} (was ${result.sha}). The remote branch is untouched.`, 'success');
           break;
         } catch (reason) {
           const text = String(reason);
           if (force || !text.includes('not fully merged')) { this.toast(text, 'error'); return; }
-          const again = await confirm(`"${name}" has commits that are not merged into the branch you are on, and no other branch contains them.\n\nDelete it anyway? Git keeps the commits for a while, so a mistake can still be undone from the reflog.`,
+          const again = await confirm(`"${label}" has commits that are not merged into the branch you are on, and no other branch contains them.\n\nDelete it anyway? Git keeps the commits for a while, so a mistake can still be undone from the reflog.`,
             { title: 'Unmerged branch', kind: 'warning', okLabel: 'Delete anyway', destructive: true });
           if (!again) return;
           force = true;
@@ -633,6 +608,21 @@ class AppState {
     await Promise.all(this.openTreePaths.filter(path => dests.includes(path)).map(path => this.loadTree(path, true)));
   }
 
+  refLabel(item: SetItem) {
+    if (item.ref.type === 'commit') return refText(item.ref);
+    const refs = this.refs[item.url];
+    const names = item.ref.type === 'branch' ? refs?.branches : refs?.tags;
+    const labels = item.ref.type === 'branch' ? refs?.branchLabels : refs?.tagLabels;
+    const index = names?.indexOf(item.ref.name) ?? -1;
+    if (labels?.[index]) return labels[index];
+    const path = this.dest(item), local = this.local[path];
+    if (item.ref.type === 'branch' && local?.branch === item.ref.name && local.branchLabel) return local.branchLabel;
+    if (item.ref.type === 'tag' && local?.tag === item.ref.name && local.tagLabel) return local.tagLabel;
+    const tree = this.trees[path]?.data;
+    const reference = (item.ref.type === 'branch' ? tree?.branches : tree?.tags)?.find(ref => ref.name === item.ref.name);
+    return reference?.label ?? item.ref.name;
+  }
+
   /** True when the folder is already on the ref the row asks for. */
   onRef(item: SetItem) {
     const l = this.local[this.dest(item)];
@@ -644,33 +634,44 @@ class AppState {
   }
 
   async startClone(items: SetItem[] = this.selected, mode: GitAction = 'clone') {
-    if (this.running || !items.length) return;
-    if (this.bufferGuards.size && !await this.guardBuffers()) return;
-    const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i), refType: i.ref.type, refName: i.ref.name }));
-    const seen = new Set<string>();
-    const dup = jobs.find(j => seen.size === seen.add(j.dest.toLowerCase()).size);
-    if (dup) {
-      this.toast(`Two rows would clone into ${dup.dest}. Give one of them a different folder name.`, 'warn');
-      return;
-    }
-    if (mode === 'clone' && this.ws.onExisting === 'reclone') {
-      const n = jobs.filter(j => this.exists[j.dest]).length;
-      const ok = !n || await confirm(
-        `${n} folder(s) already exist. They will be renamed to <name>.bak-<timestamp> and cloned fresh.`,
-        { title: 'Re-clone', kind: 'warning', okLabel: 'Re-clone', destructive: true });
-      if (!ok) return;
-    }
-    this.#runIds = jobs.map(j => j.id);
-    this.#runMode = mode;
-    for (const j of jobs) this.jobs[j.id] = { id: j.id, phase: 'queued', pct: 0, msg: 'Waiting for a slot' };
-    this.running = true;
+    if (this.running || this.clonePreparing || !items.length) return;
+    this.clonePreparing = true;
     try {
-      await api.saveSettings({ sources: this.sources, workspace: this.ws });
-      await api.startClone(jobs, { parallel: this.ws.parallel, shallow: this.ws.shallow, onExisting: this.ws.onExisting }, mode);
-    } catch (e) {
-      this.running = false;
-      this.toast(String(e), 'error');
-    }
+      const support = await this.probeRoot();
+      if (!support.valid) { this.toast(support.reason ?? 'Choose a valid native destination folder.', 'warn'); return; }
+      if (this.bufferGuards.size && !await this.guardBuffers()) return;
+      const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i), refType: i.ref.type, refName: i.ref.name }));
+      let observations: PathIdentity[];
+      try { observations = await this.refreshPathIdentities(jobs.map(job => job.dest)); }
+      catch (reason) { this.toast(String(reason), 'error'); return; }
+      const identities = Object.fromEntries(observations.map(observation => [observation.path, observation]));
+      const invalid = jobs.find(job => identities[job.dest]?.reason);
+      if (invalid) { this.toast(identities[invalid.dest].reason!, 'warn'); return; }
+      const seen = new Set<string>();
+      const dup = jobs.find(j => seen.size === seen.add(collisionKey(j.dest, this.nativePlatform, identities)).size);
+      if (dup) {
+        this.toast(`Two rows would clone into ${dup.dest}. Give one of them a different folder name.`, 'warn');
+        return;
+      }
+      if (mode === 'clone' && this.ws.onExisting === 'reclone') {
+        const n = jobs.filter(j => this.exists[j.dest]).length;
+        const ok = !n || await confirm(
+          `${n} folder(s) already exist. They will be renamed to <name>.bak-<timestamp> and cloned fresh.`,
+          { title: 'Re-clone', kind: 'warning', okLabel: 'Re-clone', destructive: true });
+        if (!ok) return;
+      }
+      this.#runIds = jobs.map(j => j.id);
+      this.#runMode = mode;
+      for (const j of jobs) this.jobs[j.id] = { id: j.id, phase: 'queued', pct: 0, msg: 'Waiting for a slot' };
+      this.running = true;
+      try {
+        await api.saveSettings({ sources: this.sources, workspace: this.ws });
+        await api.startClone(jobs, { parallel: this.ws.parallel, shallow: this.ws.shallow, onExisting: this.ws.onExisting }, mode);
+      } catch (e) {
+        this.running = false;
+        this.toast(String(e), 'error');
+      }
+    } finally { this.clonePreparing = false; }
   }
 
   #finished() {
@@ -681,7 +682,7 @@ class AppState {
     const verb = { clone: 'Clone', fetch: 'Fetch', pull: 'Pull', switch: 'Switch' }[this.#runMode];
     this.toast(`${verb} finished: ${done.length - failed} ok${failed ? `, ${failed} failed` : ''}`, failed ? 'error' : 'success',
       failed ? { label: 'View activity', run: () => { this.activityOpen = true; } } : undefined);
-    this.#invalidateTrees([...this.#treeGeneration.keys()]);
+    this.#invalidateTrees(this.repositoryTrees.paths());
     this.checkExists(this.set.items.map(i => this.dest(i)));
   }
 }

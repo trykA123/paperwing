@@ -1,0 +1,258 @@
+[
+  {
+    "platform": "windows",
+    "root": "C:\\Repos\\\\",
+    "layout": "custom",
+    "pathTemplate": "{org}\\{folder}",
+    "folder": "repo-folder",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set/Name",
+    "source": "Source/Name",
+    "ref": "feature/x",
+    "segments": [
+      "org",
+      "repo-folder"
+    ],
+    "destination": "C:\\Repos\\org\\repo-folder"
+  },
+  {
+    "platform": "windows",
+    "root": "C:\\Repos\\",
+    "layout": "custom",
+    "pathTemplate": " {set}/{source}/{ref}/{folder} ",
+    "folder": "répo λ",
+    "repo": "repo",
+    "org": "组织",
+    "set": "Set/Name",
+    "source": "Source\\Name",
+    "ref": "feature/x",
+    "segments": [
+      "Set-Name",
+      "Source-Name",
+      "feature-x",
+      "répo λ"
+    ],
+    "destination": "C:\\Repos\\Set-Name\\Source-Name\\feature-x\\répo λ"
+  },
+  {
+    "platform": "windows",
+    "root": "C:\\",
+    "layout": "custom",
+    "pathTemplate": "{org}",
+    "folder": "repo-folder",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "org",
+      "repo-folder"
+    ],
+    "destination": "C:\\org\\repo-folder"
+  },
+  {
+    "platform": "windows",
+    "root": "C:\\Repos",
+    "layout": "custom",
+    "pathTemplate": "{{folder}}/{unknown}",
+    "folder": "repo-folder",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "{repo-folder}",
+      "{unknown}"
+    ],
+    "destination": "C:\\Repos\\{repo-folder}\\{unknown}"
+  },
+  {
+    "platform": "windows",
+    "root": "C:\\Repos",
+    "layout": "custom",
+    "pathTemplate": "{folder}/. /../a:... ",
+    "folder": "repo-folder",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "repo-folder",
+      "a"
+    ],
+    "destination": "C:\\Repos\\repo-folder\\a"
+  },
+  {
+    "platform": "windows",
+    "root": "C:\\Repos",
+    "layout": "custom",
+    "pathTemplate": "{folder}",
+    "folder": "repo.  ",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "repo"
+    ],
+    "destination": "C:\\Repos\\repo"
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/repos///",
+    "layout": "custom",
+    "pathTemplate": "{org}\\{folder}",
+    "folder": "repo-folder",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set/Name",
+    "source": "Source/Name",
+    "ref": "feature/x",
+    "segments": [
+      "org",
+      "repo-folder"
+    ],
+    "destination": "/tmp/repos/org/repo-folder"
+  },
+  {
+    "platform": "linux",
+    "root": "/",
+    "layout": "custom",
+    "pathTemplate": "",
+    "folder": "repo λ",
+    "repo": "repo",
+    "org": "组织",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "组织",
+      "repo λ"
+    ],
+    "destination": "/组织/repo λ"
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/repos/",
+    "layout": "custom",
+    "pathTemplate": " {set}\\{source}/{ref}\\{folder} ",
+    "folder": "repo\\literal:CON. ",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set/Name\\Tail",
+    "source": "Source/Name\\Tail",
+    "ref": "feature/x\\y",
+    "segments": [
+      "Set-Name\\Tail",
+      "Source-Name\\Tail",
+      "feature-x\\y",
+      "repo\\literal:CON. "
+    ],
+    "destination": "/tmp/repos/Set-Name\\Tail/Source-Name\\Tail/feature-x\\y/repo\\literal:CON. "
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/repos",
+    "layout": "custom",
+    "pathTemplate": "{folder}",
+    "folder": "NUL.txt",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "NUL.txt"
+    ],
+    "destination": "/tmp/repos/NUL.txt"
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/repos",
+    "layout": "flat",
+    "pathTemplate": "ignored",
+    "folder": "CON:repo\\. ",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "CON:repo\\. "
+    ],
+    "destination": "/tmp/repos/CON:repo\\. "
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/root\\literal/",
+    "layout": "custom",
+    "pathTemplate": " {org} ",
+    "folder": "trailing. ",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "org",
+      "trailing. "
+    ],
+    "destination": "/tmp/root\\literal/org/trailing. "
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/repos",
+    "layout": "custom",
+    "pathTemplate": "{{folder}}/{unknown}",
+    "folder": "repo\\literal",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "{repo\\literal}",
+      "{unknown}"
+    ],
+    "destination": "/tmp/repos/{repo\\literal}/{unknown}"
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/repos",
+    "layout": "custom",
+    "pathTemplate": "{folder}/. /../a:... ",
+    "folder": "repo-folder",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "repo-folder",
+      "a:..."
+    ],
+    "destination": "/tmp/repos/repo-folder/a:..."
+  },
+  {
+    "platform": "linux",
+    "root": "/tmp/repos",
+    "layout": "custom",
+    "pathTemplate": "{folder}/{org:}",
+    "folder": "repo-folder",
+    "repo": "repo",
+    "org": "org",
+    "set": "Set",
+    "source": "Source",
+    "ref": "main",
+    "segments": [
+      "repo-folder",
+      "{org:}"
+    ],
+    "destination": "/tmp/repos/repo-folder/{org:}"
+  }
+]

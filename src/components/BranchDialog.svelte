@@ -106,9 +106,9 @@
       };
       groups = [
         HEAD_GROUP,
-        { label: 'Branches', icon: 'branch', tone: 'branch', names: common(tree => tree.branches.map(item => item.name)) },
-        { label: 'Tags', icon: 'tag', tone: 'tag', names: common(tree => tree.tags.map(item => item.name)) },
-        { label: 'Remote branches', icon: 'branch', tone: 'repo', names: common(tree => tree.remotes.flatMap(remote => remote.refs.map(item => item.name)).filter(item => !item.endsWith('/HEAD'))) },
+        { label: 'Branches', icon: 'branch', tone: 'branch', names: common(tree => tree.branches.map(item => item.name)), labels: Object.fromEntries(trees.flatMap(tree => tree.branches.map(item => [item.name, item.label ?? item.name]))) },
+        { label: 'Tags', icon: 'tag', tone: 'tag', names: common(tree => tree.tags.map(item => item.name)), labels: Object.fromEntries(trees.flatMap(tree => tree.tags.map(item => [item.name, item.label ?? item.name]))) },
+        { label: 'Remote branches', icon: 'branch', tone: 'repo', names: common(tree => tree.remotes.flatMap(remote => remote.refs.map(item => item.name)).filter(item => !item.endsWith('/HEAD'))), labels: Object.fromEntries(trees.flatMap(tree => tree.remotes.flatMap(remote => remote.refs.map(item => [item.name, item.label ?? item.name])))) },
       ].filter(group => group.names.length) as RefGroup[];
     }).catch(() => {});
   });
@@ -139,7 +139,7 @@
     </label>
     {#if problem}<div class="banner warn">{problem}</div>{/if}
 
-    <div class="fld"><label for="branch-start"><span>Start from <em class="mut">{many ? 'must exist in every repository; defaults to each current commit' : `defaults to the current commit${local?.branch ? ` (${local.branch})` : ''}`}</em></span></label>
+    <div class="fld"><label for="branch-start"><span>Start from <em class="mut">{many ? 'must exist in every repository; defaults to each current commit' : `defaults to the current commit${local?.branch ? ` (${local.branchLabel ?? local.branch})` : ''}`}</em></span></label>
       <RefSelect id="branch-start" bind:value={start} {groups} placeholder="HEAD" disabled={busy} />
     </div>
 

@@ -1,0 +1,200 @@
+/* Local column */
+.local {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.lhead {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.lref {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.lref.match {
+    font-weight: 600;
+}
+
+.ab {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    border-radius: 99px;
+    padding: 0 6px;
+    flex: none;
+    background: var(--soft);
+    color: var(--dim);
+}
+
+.ab.up {
+    color: var(--acc);
+}
+
+.ab.down {
+    color: var(--c-ro-text);
+    background: color-mix(in oklch, var(--c-ro) 12%, var(--panel));
+}
+
+.ab.dirty {
+    color: var(--dim);
+    background: var(--soft);
+}
+
+.lacts {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    min-width: 0;
+}
+
+.mini {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--acc);
+    background: var(--accs);
+    border-radius: 6px;
+    padding: 1px 7px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.mini:hover:not(:disabled) {
+    background: var(--accs);
+}
+
+.lok {
+    font-size: var(--fs-xs);
+    color: var(--ok-text);
+}
+
+/* commit rows in the picker */
+.pi.cm {
+    padding: 0 10px 0 4px;
+    gap: 8px;
+    border-radius: 6px;
+}
+
+.pi.cm .graph {
+    flex: none;
+    overflow: visible;
+}
+
+.pi.cm .graph line,
+.pi.cm .graph path {
+    stroke-width: 2;
+    fill: none;
+}
+
+.pi.cm .graph circle {
+    stroke-width: 2;
+}
+
+.cmi {
+    width: 20px;
+    display: grid;
+    place-items: center;
+    flex: none;
+}
+
+.cmt {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    gap: 1px;
+}
+
+.cmt .msg {
+    font-size: var(--fs-md);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+}
+
+.cmt .sub {
+    font-size: var(--fs-xs);
+    color: var(--faint-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cmt .sha {
+    font-family: var(--mono);
+    color: var(--dim);
+}
+
+.clbl {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    border-radius: 5px;
+    padding: 0 6px;
+    margin-right: 6px;
+    vertical-align: 1px;
+}
+
+.clbl.l-branch {
+    background: color-mix(in oklch, var(--c-lo) 12%, var(--panel));
+    color: var(--c-lo-text);
+}
+
+.clbl.l-tag {
+    background: color-mix(in oklch, var(--ok) 12%, var(--panel));
+    color: var(--ok-text);
+}
+
+.nb {
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    background: var(--accs);
+    color: var(--acc);
+    border-radius: 99px;
+    padding: 0 6px;
+}
+
+.mini-seg {
+    padding: 2px;
+}
+
+.mini-seg button {
+    padding: 2px 10px;
+    font-size: var(--fs-sm);
+}
+
+/* appearance */
+.theme-seg {
+    max-width: 360px;
+}
+
+.fld select {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 8px 10px;
+    background: var(--panel);
+}
+
+.preview {
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--fs-md);
+}
+

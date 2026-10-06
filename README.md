@@ -366,8 +366,11 @@ Configure one source in **Settings**:
 The source form links to token creation. Classic GitHub tokens use `repo` for private
 repositories and `read:org` for organization discovery. Apply any required single-sign-on authorization.
 Store only tokens whose permissions and lifetime fit your organization's policy.
-PaperWing stores source tokens in Windows Credential Manager, not in its settings file.
-Replace an expired token through the source editor.
+PaperWing stores source tokens in Windows Credential Manager on Windows and a persistent
+desktop Secret Service store on Linux. Tokens do not enter the settings file. Unlock or
+configure your desktop wallet before testing a Linux API source. A failed or uncertain
+save retains the entered token; retry explicitly after checking the wallet. Manual URL
+sources work without a token store. Replace an expired token through the source editor.
 
 Repository lists are cached. **Refresh** requests a new list from the host.
 Manual sources also work with other Git hosts, such as Bitbucket or Gitea.
@@ -391,6 +394,8 @@ Git hooks and signing settings still apply to commits made from PaperWing.
 | SSH authentication fails | Verify the registered public key, SSH agent, selected host key, and access using `git ls-remote`. |
 | Unknown SSH host key | Connect from a terminal and verify the host fingerprint before accepting it. |
 | Source token is missing or invalid | Replace the token and use **Test connection**. |
+| Linux credential store is locked or unavailable | Unlock or configure a persistent Secret Service desktop wallet, then use **Check again** and retry. |
+| Token outcome is uncertain | Reconnect or unlock the wallet, then explicitly retry saving or deleting. |
 | Access denied, not found, or rate limited | Check the host, owner name, permissions, single-sign-on authorization, and rate limits. |
 | *Folder already holds a different repository* | That folder is another repo's clone — give the row another folder name. |
 | Pull cannot fast-forward | Resolve diverged history or blocking local changes with Git tools. |
@@ -445,6 +450,28 @@ bun run --bun tauri build    # → src-tauri/target/release/bundle/nsis/PaperWin
 The release executable is also built under `src-tauri/target/release/`.
 The configured installer target is NSIS; the commands above do not publish a release.
 
+### Linux development status
+
+The desktop executable builds on the tested Linux GTK3/WebKitGTK environment with:
+
+```sh
+bun install --frozen-lockfile
+bun run --bun tauri build --no-bundle -- --offline --locked
+```
+
+Linux supports native root selection, path validation, physical identity and read-only diffs.
+Existing Windows roots remain saved until you explicitly choose a native folder. Save,
+recoverable copy, undo and folder trash remain unavailable with visible reasons. Linux
+credentials use a persistent desktop Secret Service store, with private native restart and
+error-path evidence. Configure the store separately; the app does not activate a wallet.
+Git operations stop helpers within their owned process group and finish output cleanup
+before releasing runner resources. Detached helpers are outside that boundary; see
+[Linux Git lifecycle](docs/linux-git-lifecycle.md). Protected filesystem guards and
+[durable Linux recovery](docs/linux-recovery.md) pass isolated native tests. Application
+save/copy/recovery integration and folder workflows still need packets 14–15. The accepted
+[Linux write contract](docs/linux-write-contract.md) records concurrent-writer race limits.
+See [implementation status](docs/implementation-status.md) and [isolated testing](docs/testing.md).
+
 ### Check a source change
 
 The repository provides frontend checks and Rust tests:
@@ -477,13 +504,13 @@ Use these details when organizing a workspace:
 | Sets, favorites, options | `%APPDATA%\dev.paperwing.app\settings.json` |
 | Cached repo lists | App cache directory, normally `%LOCALAPPDATA%\dev.paperwing.app\repos-<source-id>.json` |
 | Filesystem recovery records and backup bytes | `%APPDATA%\dev.paperwing.app\recovery-v2\` |
-| Tokens | Windows Credential Manager, service `paperwing`, keyed by source ID |
+| Tokens | Windows Credential Manager or Linux Secret Service, service `paperwing`, keyed by source ID |
 | Cloned repositories | Your configured destination root and path layout |
 
 Settings save automatically after changes. Theme and font choices belong to workspace settings;
 some dialog preferences also use WebView local storage. Comparison results and Activity are transient.
 The Flock migration copies legacy settings only when the new settings file is absent.
-Token lookup also supports the legacy `flock` service and attempts to copy tokens into `paperwing`.
+Windows token lookup also supports the legacy `flock` service and attempts to copy tokens into `paperwing`.
 Builds with a different Tauri identifier use different app storage locations.
 
 ---

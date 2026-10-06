@@ -38,6 +38,15 @@ export type CompareSnapshot = {
 export type CompareResult =
   | { status: 'ready'; snapshot: CompareSnapshot }
   | { status: 'unavailable' | 'invalidRef' | 'missingLeft' | 'missingRight' | 'networkError'; problem: CompareProblem };
+export type Capability = { supported: boolean; reason: string | null };
+export type Capabilities = { readCompare: Capability; edit: Capability; copy: Capability; recovery: Capability; trash: Capability };
+export type CredentialBackend = 'windowsCredentialManager' | 'secretService' | 'unsupported';
+export type CredentialCapability = { backend: CredentialBackend; persistent: boolean; supported: boolean; reason: string | null };
+export type CredentialStatus = { sourceId: string; backend: CredentialBackend; state: 'saved' | 'missing' | 'locked' | 'unavailable' | 'permissionDenied' | 'uncertain' | 'error'; revision: number; reason: string | null };
+export type PlatformInfo = { platform: 'windows' | 'linux' | 'unsupported'; separator: '/' | '\\'; capabilities: Capabilities; credentials: CredentialCapability };
+export type RootSupport = { root: string; valid: boolean; reason: string | null; identity: string | null;
+  casePolicy: 'unknown' | 'sensitive' | 'insensitive'; capabilities: Capabilities };
+export type PathIdentity = { path: string; identity: string | null; exists: boolean; reason: string | null };
 export type CompareContent = { generation: number; side: 'left' | 'right'; kind: CompareEntryKind; bytes: number[]; binary: boolean };
 export type CompareCommit = { side: 'left' | 'right'; sha: string; subject: string; author: string; date: string };
 export type RecoveryRecord = { id: string; root: string; path: string; existed: boolean; stage: string; createdAt: number; warning?: string | null };
@@ -48,7 +57,7 @@ export type SourceKind = 'github' | 'ghe' | 'manual';
 export type OnExisting = 'fetch' | 'skip' | 'reclone';
 export type PageSize = 10 | 25 | 50 | 'all';
 
-export type Source = { id: string; name: string; kind: SourceKind; host: string; orgs: string[]; urls: string[] };
+export type Source = { id: string; name: string; kind: SourceKind; host: string; orgs: string[]; urls: string[]; credentialManaged?: boolean };
 export type Repo = {
   id: string; source: string; org: string; name: string; description: string;
   url: string; defaultBranch: string; pushedAt: string; archived: boolean;
@@ -56,11 +65,11 @@ export type Repo = {
 export type RepoList = { repos: Repo[]; fetchedAt: number; errors: string[] };
 export type Commit = { sha: string; message: string; author: string; date: string; parents: string[] };
 export type RefsResult = {
-  url: string; branches: string[]; tags: string[]; branchShas: string[]; tagShas: string[]; error: string | null;
+  url: string; branches: string[]; tags: string[]; branchShas: string[]; tagShas: string[]; branchLabels?: string[]; tagLabels?: string[]; error: string | null;
 };
 export type LocalStatus = {
-  path: string; exists: boolean; repo: boolean; branch: string | null; tag: string | null; sha: string;
-  upstream: string | null; ahead: number; behind: number; dirty: number; error: string | null;
+  path: string; exists: boolean; repo: boolean; branch: string | null; tag: string | null; branchLabel?: string | null; tagLabel?: string | null; sha: string;
+  upstream: string | null; upstreamLabel?: string | null; ahead: number; behind: number; dirty: number; error: string | null;
 };
 export type Theme = 'system' | 'light' | 'dark';
 export type GitAction = 'clone' | 'fetch' | 'pull' | 'switch';
@@ -69,7 +78,7 @@ export type Activity = {
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'timedOut'; exitCode: number | null;
   output: { sequence: number; stream: string; text: string }[]; truncated: boolean; stdoutBytes: number; stderrBytes: number;
 };
-export type TreeRef = { name: string; sha: string; current: boolean; symbolic: string };
+export type TreeRef = { name: string; label?: string; sha: string; current: boolean; symbolic: string };
 export type RepositoryTree = {
   branches: TreeRef[]; tags: TreeRef[];
   remotes: { name: string; urls: string[]; refs: TreeRef[] }[];
@@ -111,6 +120,9 @@ export type CloneJob = { id: string; url: string; dest: string; refType: RefKind
 export type CloneOpts = { parallel: number; shallow: boolean; onExisting: OnExisting };
 
 export const api = {
+  platformInfo: () => invoke<PlatformInfo>('platform_info'),
+  probeRoot: (root: string) => invoke<RootSupport>('probe_root', { root }),
+  pathIdentities: (paths: string[]) => invoke<PathIdentity[]>('path_identities', { paths }),
   copyPreview: (id: string, generation: number, fileId: string, side: 'left' | 'right') => invoke<CopyPreview>('copy_preview', { id, generation, fileId, side }),
   copyApply: (id: string, confirmed: boolean) => invoke<CopyOutcome[]>('copy_apply', { id, confirmed }),
   copyCancel: (id: string) => invoke<boolean>('copy_cancel', { id }),
@@ -123,6 +135,8 @@ export const api = {
   recoveryResolve: (id: string, confirmed: boolean) => invoke<RecoveryRecord>('recovery_resolve', { id, confirmed }),
   loadSettings: () => invoke<{ sources: Source[]; workspace: Partial<Workspace> | null }>('load_settings'),
   saveSettings: (settings: { sources: Source[]; workspace: Workspace }) => invoke<void>('save_settings', { settings }),
+  sourceRevision: (sourceId: string) => invoke<number>('source_revision', { sourceId }),
+  credentialStatus: (sourceId: string) => invoke<CredentialStatus>('credential_status', { sourceId }),
   setToken: (sourceId: string, token: string) => invoke<void>('set_token', { sourceId, token }),
   hasToken: (sourceId: string) => invoke<boolean>('has_token', { sourceId }),
   deleteToken: (sourceId: string) => invoke<void>('delete_token', { sourceId }),

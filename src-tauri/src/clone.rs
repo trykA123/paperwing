@@ -1,4 +1,4 @@
-use crate::git::{buffered, execute, last_error, safe, valid_path, valid_ref, valid_root, valid_url, OutputPolicy, Request};
+use crate::git::{buffered, execute, safe, valid_path, valid_ref, valid_root, valid_url, OutputPolicy, Request};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -44,7 +44,11 @@ struct Progress<'a> {
 }
 
 fn emit(app: &AppHandle, id: &str, phase: &str, pct: f32, msg: impl Into<String>) {
-    let _ = app.emit("clone-progress", Progress { id, phase, pct, msg: safe(&msg.into()) });
+    emit_clean(app, id, phase, pct, safe(&msg.into()));
+}
+
+fn emit_clean(app: &AppHandle, id: &str, phase: &str, pct: f32, msg: impl Into<String>) {
+    let _ = app.emit("clone-progress", Progress { id, phase, pct, msg: msg.into() });
 }
 
 fn validate(job: &Job) -> Result<(), String> {
@@ -102,14 +106,14 @@ async fn run(app: &AppHandle, job: &Job, phase: &str, args: &[&str]) -> Result<(
                 let mut last = last.lock().unwrap();
                 if pct as i32 != *last {
                     *last = pct as i32;
-                    emit(&app, &job.id, &phase, pct, text.trim_start_matches("remote: "));
+                    emit_clean(&app, &job.id, &phase, pct, text.trim_start_matches("remote: "));
                 }
             }
         }))).await?;
     if output.code == Some(0) {
         Ok(())
     } else {
-        Err(last_error(&String::from_utf8_lossy(&output.stderr)))
+        Err(output.last_error())
     }
 }
 
@@ -144,7 +148,7 @@ async fn check_origin(dir: &str, expected: &str) -> Result<(), String> {
     }
     let actual = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if repo_key(&actual) != repo_key(expected) {
-        return Err(format!("Folder already holds a different repository ({})", safe(&actual)));
+        return Err(format!("Folder already holds a different repository ({})", out.safe(&actual)));
     }
     Ok(())
 }
@@ -276,13 +280,22 @@ async fn run_job(app: &AppHandle, job: &Job, opts: &Opts) -> Result<(&'static st
     Ok(("done", done))
 }
 
+fn validate_jobs(settings: &crate::settings::Settings, jobs: &[Job]) -> Result<(), String> {
+    let mut destinations = std::collections::HashSet::new();
+    for job in jobs {
+        validate(job)?;
+        crate::compare::registered_clone_destination(settings, &job.id, Path::new(&job.dest), &job.url)?;
+        if !destinations.insert(crate::platform::destination_key(Path::new(&job.dest))?) {
+            return Err("Clone jobs share a destination; run it once.".into());
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<String>) -> Result<(), String> {
     let settings = crate::settings::load_settings(app.clone())?;
-    for job in &jobs {
-        validate(job)?;
-        crate::compare::registered_clone_destination(&settings, &job.id, Path::new(&job.dest), &job.url)?;
-    }
+    validate_jobs(&settings, &jobs)?;
     let sem = Arc::new(Semaphore::new(opts.parallel.clamp(1, 16)));
     let mode = mode.unwrap_or_else(|| "clone".into());
     tauri::async_runtime::spawn(async move {
@@ -330,4 +343,27 @@ pub fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<Stri
         let _ = app.emit("clone-finished", ());
     });
     Ok(())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn clone_batches_refuse_duplicate_destinations_but_keep_case_distinct_roots() {
+        let fixture = crate::platform::Fixture::new("clone-dedup");
+        for name in ["Folder", "folder"] { std::fs::create_dir(fixture.0.join(name)).unwrap(); }
+        let item = |id: &str, name: &str| serde_json::json!({"id":id, "name":name, "url":"https://example.test/repo", "repoId":"source:repo", "org":"o", "ref":{"type":"branch", "name":"main"}});
+        let settings = crate::settings::Settings { sources: vec![], workspace: serde_json::json!({
+            "root":fixture.0, "layout":"flat", "sets":[{"id":"set", "name":"Set", "items":[item("one", "Folder"), item("two", "Folder"), item("three", "folder"), item("four", "Missing"), item("five", "Missing")]}]
+        }) };
+        let job = |id: &str, name: &str| Job { id:id.into(), dest:fixture.0.join(name).to_str().unwrap().into(), url:"https://example.test/repo".into(), ref_type:"branch".into(), ref_name:"main".into() };
+        assert!(validate_jobs(&settings, &[job("one", "Folder"), job("three", "folder")]).is_ok());
+        assert!(validate_jobs(&settings, &[job("one", "Folder"), job("two", "Folder/")]).unwrap_err().contains("share a destination"));
+        assert!(validate_jobs(&settings, &[job("four", "Missing"), job("five", "Missing")]).unwrap_err().contains("share a destination"));
+        assert!(validate_jobs(&settings, &[job("one", "folder")]).is_err());
+        assert!(validate_jobs(&settings, &[job("one", ".git/hidden")]).is_err());
+        assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 3);
+    }
 }

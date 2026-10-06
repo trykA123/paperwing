@@ -1,6 +1,9 @@
+#[cfg(any(windows, test))]
 use crate::settings::Settings;
 use serde::Serialize;
+#[cfg(any(windows, test))]
 use std::collections::HashSet;
+#[cfg(any(windows, test))]
 use std::path::Path;
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -13,21 +16,27 @@ pub struct TrashOutcome {
     reason: Option<String>,
 }
 
+#[cfg(any(windows, test))]
 fn outcome(item_id: &str, path: &Path, state: &str, reason: Option<String>) -> TrashOutcome {
     TrashOutcome { item_id: item_id.into(), path: path.to_string_lossy().into_owned(), state: state.into(), reason }
 }
 
 /// Moves each cloned folder of a saved set to the Recycle Bin. Only registered, plain Git repositories
 /// that no other set uses are touched; anything else is reported and left alone.
+#[cfg(any(windows, test))]
 fn trash_folders(settings: &Settings, set_id: &str, recycle: impl Fn(&Path) -> Result<(), String>) -> Result<Vec<TrashOutcome>, String> {
     let (own, others) = crate::compare::set_roots(settings, set_id)?;
     let mut seen = HashSet::new();
     let mut outcomes = Vec::new();
     for (item_id, root) in own {
-        if !seen.insert(root.to_string_lossy().to_lowercase()) { continue; }
+        let key = match crate::platform::destination_key(&root) {
+            Ok(key) => key,
+            Err(reason) => { outcomes.push(outcome(&item_id, &root, "skipped", Some(reason))); continue; }
+        };
+        if !seen.insert(key) { continue; }
         if !root.exists() {
             outcomes.push(outcome(&item_id, &root, "missing", None));
-        } else if others.contains(&root.to_string_lossy().to_lowercase()) {
+        } else if others.contains(&crate::platform::destination_key(&root)?) {
             outcomes.push(outcome(&item_id, &root, "skipped", Some("Another set uses this folder".into())));
         } else if let Err(reason) = root.to_str().ok_or("Unsupported folder path".to_string()).and_then(crate::git::valid_root) {
             outcomes.push(outcome(&item_id, &root, "skipped", Some(reason)));
@@ -60,11 +69,7 @@ fn recycle(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(windows))]
-fn recycle(_path: &Path) -> Result<(), String> {
-    Err("The Recycle Bin is only available on Windows".into())
-}
-
+#[cfg(windows)]
 #[tauri::command]
 pub async fn trash_set_folders(app: tauri::AppHandle, set_id: String) -> Result<Vec<TrashOutcome>, String> {
     if crate::clone::busy() { return Err("A clone, fetch or pull is running; try again when it finishes".into()); }
@@ -73,6 +78,13 @@ pub async fn trash_set_folders(app: tauri::AppHandle, set_id: String) -> Result<
     tauri::async_runtime::spawn_blocking(move || trash_folders(&settings, &set_id, recycle))
         .await
         .map_err(|_| "Could not move the folders".to_string())?
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub async fn trash_set_folders(set_id: String) -> Result<Vec<TrashOutcome>, String> {
+    let _ = set_id;
+    Err(crate::platform::unavailable_reason("trash"))
 }
 
 #[cfg(test)]
@@ -117,6 +129,31 @@ mod tests {
         assert_eq!(moved.borrow().as_slice(), [root.join("alpha")]);
         assert!(trash_folders(&settings(&root), "unknown", |_| Ok(())).is_err());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn sharing_and_dedup_keep_case_distinct_native_directories_separate() {
+        let fixture = crate::platform::Fixture::new("trash-identity");
+        for name in ["Folder", "folder"] { repo(&fixture.0, name); }
+        let mut settings = settings(&fixture.0);
+        settings.workspace["sets"][0]["items"] = serde_json::json!([
+            {"id":"upper", "name":"Folder"}, {"id":"duplicate", "name":"Folder"}, {"id":"lower", "name":"folder"}
+        ]);
+        settings.workspace["sets"][1]["items"] = serde_json::json!([{"id":"shared", "name":"folder"}]);
+        let moved = RefCell::new(Vec::new());
+        let outcomes = trash_folders(&settings, "one", |path| { moved.borrow_mut().push(path.to_path_buf()); Ok(()) }).unwrap();
+        assert_eq!(outcomes.len(), 2);
+        assert_eq!(outcomes[0].item_id, "upper");
+        assert_eq!(outcomes[0].state, "trashed");
+        assert_eq!(outcomes[1].state, "skipped");
+        assert_eq!(moved.borrow().as_slice(), [fixture.0.join("Folder")]);
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn direct_trash_call_refuses_without_loading_or_mutating_settings() {
+        assert_eq!(trash_set_folders("arbitrary-set".into()).await.unwrap_err(), crate::platform::unavailable_reason("trash"));
     }
 
     #[cfg(windows)]

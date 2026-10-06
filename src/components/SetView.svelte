@@ -1,9 +1,11 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { confirmWith } from '../lib/confirm';
-  import { app, DEFAULT_COLS, PHASE, refText, RUNNING } from '../lib/state.svelte';
+  import { app, DEFAULT_COLS, PHASE, RUNNING } from '../lib/state.svelte';
   import type { Ref, SetItem } from '../lib/api';
   import VirtualList from './VirtualList.svelte';
+  import LocalCell from './set/LocalCell.svelte';
+  import StatusCell from './set/StatusCell.svelte';
   import Pager from './Pager.svelte';
   import RefPicker from './RefPicker.svelte';
   import Icon from './Icon.svelte';
@@ -101,7 +103,7 @@
     ok.forEach(i => app.setRef(i, ref));
     const miss = targets.filter(i => !ok.includes(i)).map(i => i.name);
     const tail = miss.length ? ` (not in ${miss.slice(0, 4).join(', ')}${miss.length > 4 ? ` +${miss.length - 4} more` : ''})` : '';
-    app.toast(`${ref.name} applied to ${ok.length} of ${targets.length} repos${tail}`, miss.length ? 'warn' : 'success');
+    app.toast(`${app.refLabel({ ...targets[0], ref })} applied to ${ok.length} of ${targets.length} repos${tail}`, miss.length ? 'warn' : 'success');
   }
 
   async function checkRefs() {
@@ -113,11 +115,13 @@
   async function deleteSet() {
     const folders = items.filter(item => app.exists[app.dest(item, set.id)]);
     const risky = folders.filter(item => { const l = app.local[app.dest(item, set.id)]; return !!l && (l.dirty > 0 || l.ahead > 0); }).length;
+    const trash = app.capability('trash');
     const result = await confirmWith(`Delete the set "${set.name}"? The repositories stay on disk unless you also remove them below.`, {
       title: 'Delete set', kind: 'warning', okLabel: 'Delete', destructive: true,
       check: folders.length ? {
         label: `Also move the ${folders.length} cloned folder${folders.length === 1 ? '' : 's'} to the Recycle Bin`,
-        hint: risky ? `${risky} of them ${risky === 1 ? 'has' : 'have'} uncommitted changes or unpushed commits that would go with the folder.` : 'Folders used by another set, and anything that is not a Git repository, are left alone.',
+        disabled: !trash.supported,
+        hint: !trash.supported ? trash.reason ?? 'Folder removal is unavailable.' : risky ? `${risky} of them ${risky === 1 ? 'has' : 'have'} uncommitted changes or unpushed commits that would go with the folder.` : 'Folders used by another set, and anything that is not a Git repository, are left alone.',
       } : undefined,
     });
     if (result.accepted) await app.deleteSet(set.id, result.checked);
@@ -178,7 +182,7 @@
       title={gitBusy ? 'A Git operation is already running' : cloned.length > 1 ? `Create the same new branch in ${cloned.length} repositories` : cloned.length ? 'Create a new local branch in the selected repository' : 'Select cloned repositories first'}><Icon name="plus" tone="branch" /> New branch…</button>
 </div>
 
-<div class="card fill repository-table" class:running={app.running} style:--cols={colsCss} style:--rowmin="{rowMin}px">
+<div class="card fill repository-table" class:running={app.running || app.clonePreparing} style:--cols={colsCss} style:--rowmin="{rowMin}px">
   {#key `${set.id}|${cur}|${size}`}
     <VirtualList items={rows} rowHeight={88} key={i => i.id}>
       {#snippet header()}
@@ -221,11 +225,13 @@
           </div>
           <div>
             <button class="refpill" class:bad={st === 'missing'} onclick={e => openPicker([item], e.currentTarget)} title="Change branch, tag or commit">
-              <span class="t-{item.ref.type}"><Icon name={item.ref.type} /></span><span class="nm">{refText(item.ref)}</span><span class="car">▾</span>
+              <span class="t-{item.ref.type}"><Icon name={item.ref.type} /></span><span class="nm">{app.refLabel(item)}</span><span class="car">▾</span>
             </button>
           </div>
-          <div>{@render localCell(item)}</div>
-          <div>{@render status(item, st)}</div>
+          <LocalCell l={app.local[app.dest(item)]} on={app.onRef(item)} checkoutRef={app.refLabel(item)} running={app.running || app.clonePreparing} {gitBusy}
+            actions={{ commit: () => app.openGitDialog('commit', item), switch: () => app.startClone([item], 'switch'), pull: () => app.startClone([item], 'pull'), push: () => app.pushRepos([{ path: app.dest(item), name: app.folderOf(item) }]) }} />
+          <StatusCell j={app.jobs[item.id]} {st} refErr={app.refs[item.url]?.error} phaseLabel={app.jobs[item.id] ? PHASE[app.jobs[item.id].phase] : ''}
+            jobRunning={!!app.jobs[item.id] && RUNNING.includes(app.jobs[item.id].phase)} clash={item.on && app.hasClash(item)} destination={app.dest(item)} refKind={item.ref.type} onopen={() => app.openVscode(app.dest(item))} />
           <div class="acts">
             <button class="x" title="Compare repository refs" onclick={() => app.openCompare(item)}><Icon name="code" tone="inspect" /></button>
             <button class="x" title="Open repository details" onclick={() => app.openView({ kind: 'item', itemId: item.id })}><Icon name="folder" tone="inspect" /></button>
@@ -239,71 +245,9 @@
   {#if items.length}<Pager total={items.length} bind:page bind:size={app.ws.pageSize} />{/if}
 </div>
 
-{#snippet localCell(item: SetItem)}
-  {@const l = app.local[app.dest(item)]}
-  {#if !l || !l.exists}
-    <div class="ph ph-ready">Not cloned yet</div>
-  {:else if !l.repo}
-    <div class="ph ph-warn"><b>!</b>Folder is not a git repo</div>
-  {:else if l.error}
-    <div class="ph ph-warn" title={l.error}><b>!</b>{l.error}</div>
-  {:else}
-    {@const on = app.onRef(item)}
-    {@const kind = l.branch ? 'branch' : l.tag ? 'tag' : 'commit'}
-    <div class="local">
-      <div class="lhead">
-        <span class="t-{kind}"><Icon name={kind} /></span>
-        <span class="lref" class:match={on} title={l.upstream ? `Tracks ${l.upstream}` : 'No upstream branch'}>{l.branch ?? l.tag ?? l.sha}</span>
-        {#if on}<span class="lok" title="On the checkout ref"><Icon name="check" size={12} /></span>{/if}
-        {#if l.ahead}<span class="ab up" title="{l.ahead} local commit(s) not pushed">↑{l.ahead}</span>{/if}
-        {#if l.behind}<span class="ab down" title="{l.behind} commit(s) to pull, as of the last fetch">↓{l.behind}</span>{/if}
-        {#if l.dirty}<span class="ab dirty" title="{l.dirty} changed or untracked file(s)">{l.dirty} changed</span>{/if}
-      </div>
-      {#if l.dirty || !on || (l.branch && (l.behind || l.ahead || !l.upstream))}
-        <div class="lacts">
-          {#if l.dirty}
-            <button class="mini record" disabled={app.running} title="Review, stage and commit the {l.dirty} changed file(s)" onclick={() => app.openGitDialog('commit', item)}>Commit…</button>
-          {/if}
-          {#if !on}
-            <button class="mini branch" disabled={app.running} title="Fetch and check out {refText(item.ref)}" onclick={() => app.startClone([item], 'switch')}>Switch to {refText(item.ref)}</button>
-          {/if}
-          {#if l.branch && l.behind}
-            <button class="mini sync" disabled={app.running} title="Fast-forward {l.branch} to {l.upstream} ({l.behind} commit(s))" onclick={() => app.startClone([item], 'pull')}>Pull</button>
-          {/if}
-          {#if l.branch && (l.ahead || !l.upstream)}
-            <button class="mini sync" disabled={gitBusy} title={l.upstream ? `Push ${l.ahead} commit(s) to ${l.upstream}` : `Push ${l.branch} to the remote and track it`}
-              onclick={() => app.pushRepos([{ path: app.dest(item), name: app.folderOf(item) }])}>{l.upstream ? 'Push' : 'Publish'}</button>
-          {/if}
-        </div>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
 
-{#snippet status(item: SetItem, st: string)}
-  {@const j = app.jobs[item.id]}
-  {@const refErr = app.refs[item.url]?.error}
-  {#if j}
-    <div class="status">
-      <div class="ph ph-{j.phase}" title={j.msg}><b>{PHASE[j.phase]}</b>{j.msg}</div>
-      {#if RUNNING.includes(j.phase)}
-        <div class="bar"><i style:width="{j.pct}%"></i></div>
-      {:else if j.phase === 'done' || j.phase === 'skipped'}
-        <button class="link" style="text-align:left" onclick={() => app.openVscode(app.dest(item))}>Open in VS Code</button>
-      {/if}
-    </div>
-  {:else if st === 'missing'}
-    <div class="ph ph-warn"><b>!</b>{item.ref.type === 'tag' ? 'Tag' : item.ref.type === 'branch' ? 'Branch' : 'Commit'} not found</div>
-  {:else if item.on && app.hasClash(item)}
-    <div class="ph ph-failed" title={app.dest(item)}><b>!</b>Same folder as another row</div>
-  {:else if refErr}
-    <div class="ph ph-warn" title={refErr}><b>!</b>{refErr}</div>
-  {:else if st === 'unverified'}
-    <div class="ph ph-ready">Commit is checked while cloning</div>
-  {:else}
-    <div class="ph ph-ready">{st === 'ok' ? 'Ready · ref verified' : 'Ready'}</div>
-  {/if}
-{/snippet}
+
+
 
 {#if picker}
   <RefPicker items={picker.items} anchor={picker.anchor} onclose={() => (picker = null)} onpick={pick} />
@@ -316,7 +260,7 @@
     <button role="menuitem" onclick={() => { app.openView({ kind: 'item', itemId: item.id }); menu = null; }}><Icon name="folder" />Open repository details</button>
     <button role="menuitem" disabled={gitBusy || !app.local[app.dest(item)]?.repo} title="Read-only comparison of branches, tags or commits" onclick={() => { app.openCompare(item, true); menu = null; }}><Icon name="code" tone="inspect" />Compare</button>
     {#each commands([item]).filter(command => ['clone', 'fetch', 'pull', 'push', 'switch', 'commit', 'new-branch', 'code'].includes(command.id)) as command (command.id)}
-      <button role="menuitem" disabled={!command.enabled} onclick={() => { execute(command); menu = null; }}><Icon name={command.icon} tone={command.tone} />{command.label}</button>
+      <button role="menuitem" title={command.reason ?? command.label} disabled={!command.enabled} onclick={() => { execute(command); menu = null; }}><Icon name={command.icon} tone={command.tone} />{command.label}</button>
     {/each}
     <button role="menuitem" onclick={() => { editingId = item.id; menu = null; }}>Rename folder</button>
     <button role="menuitem" onclick={() => { app.duplicateItem(item.id); menu = null; }}><Icon name="copy" />Duplicate into another folder</button>

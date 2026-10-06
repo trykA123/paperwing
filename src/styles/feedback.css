@@ -1,0 +1,221 @@
+/* ---------- notifications, tooltips, empty and loading states ---------- */
+.toasts {
+    position: fixed;
+    right: 16px;
+    bottom: 38px;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(380px, calc(100vw - 32px));
+    pointer-events: none;
+}
+
+.toast {
+    --kind: var(--acc);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 8px 10px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--kind);
+    border-radius: 10px;
+    box-shadow: var(--shadow-2);
+    font-size: var(--fs-md);
+    pointer-events: auto;
+}
+
+.toast.success {
+    --kind: var(--ok);
+}
+
+.toast.warn {
+    --kind: var(--warn);
+}
+
+.toast.error {
+    --kind: var(--err);
+}
+
+.toast-icon {
+    display: grid;
+    place-items: center;
+    height: 20px;
+    color: var(--kind);
+}
+
+.toast-msg {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    padding-top: 1px;
+}
+
+.toast-action {
+    flex: none;
+    padding: 2px 8px;
+    border-radius: 6px;
+    color: var(--acc);
+    font-weight: 600;
+    font-size: var(--fs-sm);
+}
+
+.toast-action:hover {
+    background: var(--accs);
+}
+
+.toast-close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    color: var(--faint-text);
+}
+
+.toast-close:hover {
+    background: var(--soft);
+    color: var(--text);
+}
+
+.tooltip {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 5px 9px;
+    max-width: 320px;
+    border: 0;
+    border-radius: 6px;
+    overflow: visible;
+    background: var(--text);
+    color: var(--bg);
+    font-size: var(--fs-sm);
+    line-height: 1.4;
+    box-shadow: var(--shadow-2);
+    pointer-events: none;
+    transform: translateX(-50%);
+}
+
+.tooltip.above {
+    transform: translate(-50%, -100%);
+}
+
+.tooltip:popover-open {
+    animation: fade-in var(--dur-fast) var(--ease-out);
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--dim);
+}
+
+.empty-state h3 {
+    margin: 0;
+    font-size: var(--fs-lg);
+    font-weight: 650;
+    color: var(--text);
+}
+
+.empty-state p {
+    margin: 0;
+    max-width: 360px;
+}
+
+.empty-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 6px;
+    border-radius: 50%;
+    background: var(--accs);
+    color: var(--acc);
+}
+
+.empty-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    font-size: var(--fs-sm);
+}
+
+.skeleton {
+    display: flex;
+    flex-direction: column;
+}
+
+.skel-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.skel {
+    display: block;
+    height: 10px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--soft) 30%, color-mix(in oklch, var(--soft) 60%, var(--line)) 50%, var(--soft) 70%) 0 0 / 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+.compare-loading {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.status-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--acc);
+    font-variant-numeric: tabular-nums;
+}
+
+.status-progress .bar {
+    width: 120px;
+}
+
+.badge-err {
+    padding: 0 6px;
+    border-radius: 99px;
+    background: var(--err-bg);
+    color: var(--err-text);
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+
+    .spin {
+        animation-duration: 2s !important;
+        animation-iteration-count: infinite !important;
+    }
+}
+

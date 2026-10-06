@@ -1,0 +1,21 @@
+{
+  "productName": "PaperWing Testing",
+  "identifier": "dev.paperwing.testing",
+  "build": {
+    "beforeBuildCommand": "VITE_PAPERWING_BENCHMARK=1 bun run --bun build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "PaperWing Testing",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 640
+      }
+    ]
+  },
+  "bundle": { "active": false }
+}

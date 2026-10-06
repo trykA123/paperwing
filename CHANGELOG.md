@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
+- Add durable Linux diff reservations with bounded admission, namespace prepayment and safe cleanup; application writes remain disabled.
+- Add durable Linux recovery with verified backups, restart reconciliation, conditional undo and owned cleanup; application writes remain disabled.
+- Add bounded Linux file guards, private diff files and responsive root probes; recoverable writes remain disabled.
+- Keep local Git usable during credential-store outages, preserve captured redaction after token changes, and reject stale credentials before HTTP dispatch.
+- Add shared layout and lifecycle characterization with isolated Linux native benchmark fixtures.
+- Extract comparison inventory, text diff, history, registration and tests without changing behavior.
+- Extract workspace path helpers, state owners and comparison classes behind existing façades.
+- Extract file comparison, set-row and settings presentation components with browser parity checks.
+- Split CSS into ordered chapters with source and compiled-output parity verification.
+- Extract Git validation, redaction, repository trees, remote refs, runner and tests.
+- Record the accepted practical Linux write contract and sacrificial race probes.
+- Add native roots, path identity and capability reporting with read-only Linux diffs.
+- Add persistent Linux Secret Service credentials, distinct wallet failures and scoped metadata invalidation.
+- Use fallible OS entropy for Linux Secret Service DH keys and CBC initialization vectors.
+- Preserve source drafts after failed credential changes and remove Manual sources without a wallet.
+- Fix Tooltip cleanup during rendering and make the Git timeout fixture deterministic.
+- Stop Linux Git process groups and retain cleanup ownership after cancellation or dropped callers.
+- Join failed Git stream tasks and keep Activity registration through Linux output cleanup.
+- Preserve completed Linux Git outcomes and retain Activity and permits through failed setup cleanup.
+
 ## v0.2.0 - PaperWing preview (2026-10-02)
 
 ### Highlights

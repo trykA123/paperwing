@@ -1,6 +1,6 @@
 <script lang="ts" module>
   import type { IconName, IconTone } from './Icon.svelte';
-  export type RefGroup = { label: string; icon: IconName; tone: IconTone; names: string[]; notes?: Record<string, string> };
+  export type RefGroup = { label: string; icon: IconName; tone: IconTone; names: string[]; labels?: Record<string, string>; notes?: Record<string, string> };
 </script>
 
 <script lang="ts">
@@ -18,16 +18,17 @@
   let box = $state<{ left: number; width: number; top: number; bottom: number } | null>(null);
 
   // The list only filters once the user types, so an existing value never hides the other refs.
+  const displayValue = $derived(typed ? value : groups.find(group => group.names.includes(value))?.labels?.[value] ?? value);
   const query = $derived(typed ? value.trim() : '');
-  type Row = { kind: 'head'; label: string } | { kind: 'ref'; name: string; positions: number[]; note?: string; icon: IconName; tone: IconTone; index: number };
+  type Row = { kind: 'head'; label: string } | { kind: 'ref'; name: string; label: string; positions: number[]; note?: string; icon: IconName; tone: IconTone; index: number };
   const rows = $derived.by(() => {
     const out: Row[] = [];
     let index = 0;
     for (const group of groups) {
-      const found = rank(query, group.names, name => name);
+      const found = rank(query, group.names, name => group.labels?.[name] ?? name);
       if (!found.length) continue;
       out.push({ kind: 'head', label: group.label });
-      for (const { item: name, positions } of found) out.push({ kind: 'ref', name, positions, note: group.notes?.[name], icon: group.icon, tone: group.tone, index: index++ });
+      for (const { item: name, positions } of found) out.push({ kind: 'ref', name, label: group.labels?.[name] ?? name, positions, note: group.notes?.[name], icon: group.icon, tone: group.tone, index: index++ });
     }
     return out;
   });
@@ -70,8 +71,8 @@
 </script>
 
 <div class="refselect">
-  <input bind:this={input} bind:value {id} {placeholder} {disabled} aria-label={label} role="combobox" aria-expanded={open} aria-controls="{id}-list" aria-autocomplete="list"
-    spellcheck="false" autocomplete="off" onfocus={() => { typed = false; show(); }} onclick={show} oninput={() => { typed = true; active = -1; show(); }} onkeydown={key} onblur={() => (open = false)} />
+  <input bind:this={input} value={displayValue} {id} {placeholder} {disabled} aria-label={label} role="combobox" aria-expanded={open} aria-controls="{id}-list" aria-autocomplete="list"
+    spellcheck="false" autocomplete="off" onfocus={() => { typed = false; show(); }} onclick={show} oninput={event => { value = event.currentTarget.value; typed = true; active = -1; show(); }} onkeydown={key} onblur={() => (open = false)} />
   <button type="button" class="refselect-toggle" tabindex="-1" aria-label="Show references" {disabled}
     onpointerdown={event => event.preventDefault()} onclick={() => { if (open) open = false; else { typed = false; input.focus(); show(); } }}>
     <Icon name="disclosure" size={12} />
@@ -87,7 +88,7 @@
         {:else}
           <div class="refselect-opt" class:on={row.index === active} role="option" tabindex="-1" aria-selected={row.index === active} data-index={row.index}
             onpointerenter={() => (active = row.index)} onclick={() => choose(row.name)} onkeydown={() => {}}>
-            <Icon name={row.icon} size={12} tone={row.tone} /><span>{#if row.name === 'HEAD'}HEAD · current commit{:else}{#each segments(row.name, row.positions) as part}{#if part.hit}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}{/if}</span>{#if row.note}<small>{row.note}</small>{/if}
+            <Icon name={row.icon} size={12} tone={row.tone} /><span>{#if row.name === 'HEAD'}HEAD · current commit{:else}{#each segments(row.label, row.positions) as part}{#if part.hit}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}{/if}</span>{#if row.note}<small>{row.note}</small>{/if}
           </div>
         {/if}
       {:else}

@@ -1,29 +1,18 @@
+import './test-support/svelte-loader.js';
 import { emit } from '@tauri-apps/api/event';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { expect, test } from 'bun:test';
-import { compile, compileModule, parse } from 'svelte/compiler';
+import { parse } from 'svelte/compiler';
 import { render } from 'svelte/server';
 import { refChoices } from './compare-refs';
 import { compareRows, detailFile, pathMatches } from './compare-view';
 import { copyHunk, decodeText, encodeText } from './editor';
 import { fuzzy, rank, segments } from './fuzzy';
 import { tabId } from './workspace';
+import { windowsPlatform, supportedRoot } from './test-support/platform-fixture';
+import layoutGoldens from './test-support/layout-vectors.json';
 import './workspace.test.ts';
 
-Bun.plugin({
-    name: 'app-state-regression',
-    setup(build) {
-        build.onLoad({ filter: /\.svelte$/ }, async ({ path }) => ({
-            contents: compile(await Bun.file(path).text(), { filename: path, generate: 'server' }).js.code,
-            loader: 'js',
-        }));
-        build.onLoad({ filter: /(?:state|compare)\.svelte\.ts$/ }, async ({ path }) => ({
-            contents: compileModule(new Bun.Transpiler({ loader: 'ts' }).transformSync(await Bun.file(path).text()),
-                { filename: path, generate: 'server' }).js.code,
-            loader: 'js',
-        }));
-    },
-});
 const { app } = await import('./state.svelte.ts');
 const { commands, shortcut } = await import('./commands');
 const { CompareState, SetCompareState } = await import('./compare.svelte.ts');
@@ -312,23 +301,6 @@ test('P4 compare closing releases its session and dependent previews only', asyn
     }
 });
 
-const layoutGoldens = JSON.parse(String.raw`[
-    ["{folder}-{", ["repo-folder-{"]],
-    ["{{folder}}", ["{repo-folder}"]],
-    ["{{{folder}}}", ["{{repo-folder}}"]],
-    ["{unknown}/{folder}", ["{unknown}", "repo-folder"]],
-    ["{folder}/{}", ["repo-folder", "{}"]],
-    ["{org}/{", ["org", "{", "repo-folder"]],
-    ["{org}", ["org", "repo-folder"]],
-    ["{folder}// . / .. / {org}... ", ["repo-folder", "org"]],
-    ["{folder}/{org:}", ["repo-folder", "{org}"]],
-    [" {set}/{source}/{ref}/{folder} ", ["Set-Name", "Source-Name", "feature-x", "repo-folder"]],
-    ["{folder}/a\u0000b\u001fc\u007fd\u0085e", ["repo-folder", "abc\u007fd\u0085e"]],
-    ["\ufeff{folder}\ufeff", ["repo-folder"]],
-    ["\u0085{folder}\u0085", ["\u0085repo-folder\u0085"]],
-    ["", ["org", "repo-folder"]]
-]`);
-
 test('P3 custom layout shares unmatched/nested brace and sanitization goldens with Rust', () => {
     const previous = { ws: app.ws, sources: app.sources };
     const item = { id: 'item', repoId: 'source:repo', name: 'repo', folder: 'repo-folder', org: 'org', ref: { type: 'branch', name: 'feature/x' } };
@@ -428,6 +400,8 @@ async function treeFixture(run) {
     const reads = [], statuses = [];
     mockIPC((command, args) => {
         if (command === 'load_settings') return { sources: [], workspace: null };
+        if (command === 'platform_info') return windowsPlatform;
+        if (command === 'probe_root') return supportedRoot(args.root);
         if (command === 'activity_snapshot') return [];
         if (command === 'repository_tree') return new Promise((resolve, reject) => reads.push({ path: args.path, resolve, reject }));
         if (command === 'local_status') return new Promise(resolve => statuses.push({ paths: args.paths, resolve }));

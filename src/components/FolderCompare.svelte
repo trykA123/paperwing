@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { benchmarkEnabled, benchmarkFinished } from '../lib/benchmark';
   import { api, type Source, type Workspace, type CompareFile } from '../lib/api';
   import { app } from '../lib/state.svelte';
   import { commands, execute } from '../lib/commands';
@@ -17,6 +18,23 @@
   const summary = $derived(comparison.snapshot?.display);
   const failure = $derived(comparison.error ?? (comparison.result?.status !== 'ready' ? comparison.result?.problem : null));
   let preparing = $state(false);
+  let measured = false;
+  $effect(() => {
+    if (!benchmarkEnabled || measured || preparing || comparison.busy || !rows.length) return;
+    measured = true;
+    void tick().then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))).then(() => {
+      if (!mounted || preparing || comparison.busy || !rows.length) return;
+      const row = document.getElementById(`compare-row-${view.comparisonId}-${rows[0].id}`);
+      if (!(row instanceof HTMLElement) || !row.isConnected || !row.getBoundingClientRect().height) return;
+      row.click();
+      if (comparison.selectedId !== rows[0].id) return;
+      comparison.rendered();
+      if (app.readonlyBenchmark) {
+        const file = comparison.files.find(file => file.path === 'normalized/00000.txt');
+        if (file) openFile(file);
+      } else if (comparison.snapshot) void benchmarkFinished(comparison.snapshot, comparison.files);
+    });
+  });
   let mounted = true;
   let localError = $state('');
   let menu = $state<{ file: CompareFile; x: number; y: number } | null>(null);
@@ -24,13 +42,19 @@
   const actions = $derived(commands());
   function command(id: string) { return actions.find(action => action.id === id)!; }
   $effect(() => {
+    const snapshot = comparison.snapshot;
+    if (snapshot) void app.probeEndpoints([snapshot.left.endpoint, snapshot.right.endpoint]);
+  });
+  $effect(() => {
     const identity = tabId(view, '');
     const snapshot = comparison.snapshot;
     const enabled = !comparison.busy && !preparing && !!snapshot && !!selected;
     const source = (side: 'left' | 'right') => !!selected?.[side] && !selected[side]?.reason && ['file', 'directory'].includes(selected[side]!.kind);
     app.copyActions[identity] = {
-      left: enabled && snapshot?.left.endpoint.reference.kind === 'workingTree' && source('right'),
-      right: enabled && snapshot?.right.endpoint.reference.kind === 'workingTree' && source('left'),
+      leftReason: snapshot ? app.endpointCapability(snapshot.left.endpoint, 'copy').reason : null,
+      rightReason: snapshot ? app.endpointCapability(snapshot.right.endpoint, 'copy').reason : null,
+      left: enabled && !!snapshot && app.endpointCapability(snapshot.left.endpoint, 'copy').supported && snapshot?.left.endpoint.reference.kind === 'workingTree' && source('right'),
+      right: enabled && !!snapshot && app.endpointCapability(snapshot.right.endpoint, 'copy').supported && snapshot?.right.endpoint.reference.kind === 'workingTree' && source('left'),
       copy: side => { if (selected) app.requestCopy(view.comparisonId, selected.id, side); },
     };
     return () => { delete app.copyActions[identity]; };
@@ -110,8 +134,8 @@
     <div class="compare-filters"><div class="seg">{#each ['all', 'differences', 'same', 'orphans'] as filter}<button class:on={comparison.filter === filter} onclick={() => comparison.filter = filter as typeof comparison.filter}>{filter[0].toUpperCase() + filter.slice(1)}</button>{/each}</div>
       <button onclick={() => comparison.expanded = comparison.files.filter(expandable).map(file => file.path)}>Expand all</button><button onclick={() => comparison.expanded = []}>Collapse all</button>
       <input aria-label="Filter files" placeholder="Filter files (e.g. *.c)" bind:value={comparison.query} />
-      <button class="btn" title="Copy selected file or folder to left" disabled={!command('copy-left').enabled} onclick={() => execute(command('copy-left'))}><Icon name="copy" /> To left</button>
-      <button class="btn" title="Copy selected file or folder to right" disabled={!command('copy-right').enabled} onclick={() => execute(command('copy-right'))}><Icon name="copy" /> To right</button>
+      <button class="btn" title={command('copy-left').reason ?? 'Copy selected file or folder to left'} disabled={!command('copy-left').enabled} onclick={() => execute(command('copy-left'))}><Icon name="copy" /> To left</button>
+      <button class="btn" title={command('copy-right').reason ?? 'Copy selected file or folder to right'} disabled={!command('copy-right').enabled} onclick={() => execute(command('copy-right'))}><Icon name="copy" /> To right</button>
     </div>
   {/if}
   {#if preparing || comparison.busy}<div class="compare-loading" role="status"><span class="sr-only">Comparing…</span><Skeleton rows={9} height={32} /></div>
@@ -152,6 +176,6 @@
 </section>
 {#if menu}<div class="row-menu compare-menu" use:focusMenu style:left="{menu.x}px" style:top="{menu.y}px" role="menu" tabindex="-1">
   <button role="menuitem" disabled={directory(menu.file)} onclick={() => { if (menu) openFile(menu.file); menu = null; }}><Icon name="code" /> Open diff</button>
-  <button role="menuitem" disabled={!command('copy-left').enabled} onclick={() => { execute(command('copy-left')); menu = null; }}><Icon name="copy" /> Copy to left</button>
-  <button role="menuitem" disabled={!command('copy-right').enabled} onclick={() => { execute(command('copy-right')); menu = null; }}><Icon name="copy" /> Copy to right</button>
+  <button role="menuitem" title={command('copy-left').reason ?? undefined} disabled={!command('copy-left').enabled} onclick={() => { execute(command('copy-left')); menu = null; }}><Icon name="copy" /> Copy to left</button>
+  <button role="menuitem" title={command('copy-right').reason ?? undefined} disabled={!command('copy-right').enabled} onclick={() => { execute(command('copy-right')); menu = null; }}><Icon name="copy" /> Copy to right</button>
 </div>{/if}

@@ -1,0 +1,122 @@
+/* ---------- Select: custom dropdown that matches the ref list ---------- */
+.sel {
+    position: relative;
+    flex: none;
+    min-width: 0;
+}
+
+.sel-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    width: 100%;
+    height: var(--ctl-h);
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--line-ctl);
+    border-radius: var(--r-ctl);
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.sel-trigger:hover:not(:disabled) {
+    background: var(--soft);
+}
+
+.sel-trigger:focus-visible,
+.sel-trigger.open {
+    border-color: var(--acc);
+    outline: none;
+}
+
+.sel-trigger:disabled {
+    opacity: .6;
+    cursor: default;
+}
+
+.sel-trigger>span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sel-trigger>span.placeholder {
+    color: var(--dim);
+}
+
+.sel-trigger svg {
+    flex: none;
+    color: var(--dim);
+    transform: rotate(90deg);
+    transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.sel-trigger.open svg {
+    transform: rotate(-90deg);
+}
+
+.sel-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.sel-rows {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: var(--sp-1);
+    overflow: auto;
+}
+
+.sel-search {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--sp-2);
+    height: 40px;
+    padding: 0 var(--sp-3);
+    border-bottom: 1px solid var(--line);
+    color: var(--dim);
+}
+
+.sel-search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text);
+    outline: none;
+}
+
+.sel-list .refselect-opt {
+    min-height: 32px;
+}
+
+.sel-list .refselect-opt>span {
+    flex: 1 1 auto;
+}
+
+.refselect-opt.current {
+    font-weight: 600;
+}
+
+.refselect-opt mark {
+    background: transparent;
+    color: var(--acc);
+    font-weight: 700;
+}
+
+.refselect-opt.on mark {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}

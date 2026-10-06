@@ -30,7 +30,7 @@
   const groups = $derived.by((): RefGroup[] => {
     if (reference.kind === 'head' || reference.kind === 'workingTree') return [];
     const choices = refChoices(reference.kind, app.trees, paths);
-    return [{ ...GROUPS[reference.kind], names: choices.map(choice => choice.value),
+    return [{ ...GROUPS[reference.kind], names: choices.map(choice => choice.value), labels: Object.fromEntries(choices.map(choice => [choice.value, choice.label])),
       notes: Object.fromEntries(choices.filter(choice => choice.note).map(choice => [choice.value, choice.note])) }];
   });
   $effect(() => {

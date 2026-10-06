@@ -11,7 +11,7 @@
     clearTimeout(timer);
     if (target?.dataset.tip !== undefined) { target.title = target.dataset.tip; delete target.dataset.tip; }
     target = null;
-    tip = null;
+    queueMicrotask(() => { tip = null; });
   }
 
   function show() {

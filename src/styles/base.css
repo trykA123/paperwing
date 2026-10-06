@@ -1,0 +1,197 @@
+:root {
+    --font: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+    --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    --bg: oklch(0.975 0.005 210);
+    --panel: oklch(1 0 210);
+    --sidebar: oklch(0.955 0.009 210);
+    --editor: oklch(1 0 210);
+    --line: oklch(0.903 0.014 210);
+    --soft: oklch(0.962 0.007 210);
+    --hover: oklch(0.969 0.006 210);
+    --text: oklch(0.255 0.025 210);
+    --dim: oklch(0.513 0.026 210);
+    --faint: oklch(0.613 0.024 210);
+    --acc: oklch(0.46 0.079 215);
+    --acc-h: oklch(0.4 0.066 215);
+    --acc-fg: oklch(1 0 0);
+    --accs: oklch(0.94 0.018 215);
+    --focus: oklch(0.46 0.079 215);
+    --ok: oklch(0.627 0.17 149.2);
+    --warn: oklch(0.605 0.135 65.7);
+    --err: oklch(0.577 0.215 27.3);
+    --c-diff: oklch(0.577 0.215 27.3);
+    --c-lo: oklch(0.541 0.247 293);
+    --c-ro: oklch(0.546 0.215 262.9);
+    --ok-text: oklch(0.512 0.143 149.2);
+    --warn-text: oklch(0.53 0.117 65.7);
+    --err-text: oklch(0.552 0.215 27.3);
+    --c-diff-text: oklch(0.552 0.215 27.3);
+    --c-lo-text: oklch(0.541 0.247 293);
+    --c-ro-text: oklch(0.536 0.215 262.9);
+    --c-same: oklch(0.255 0.025 210);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    margin: 0;
+    height: 100%;
+}
+
+body {
+    font: var(--fs-base)/1.4 var(--font);
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 0;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+}
+
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+input[type="checkbox"] {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex: none;
+    border: 1px solid var(--faint);
+    border-radius: 4px;
+    background: var(--panel);
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+input[type="checkbox"]::before {
+    content: '';
+    width: 8px;
+    height: 4px;
+    border-left: 2px solid var(--acc-fg);
+    border-bottom: 2px solid var(--acc-fg);
+    transform: translateY(-1px) rotate(-45deg) scale(0);
+}
+
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate {
+    background: var(--acc);
+    border-color: var(--acc);
+}
+
+input[type="checkbox"]:checked::before {
+    transform: translateY(-1px) rotate(-45deg);
+}
+
+input[type="checkbox"]:indeterminate::before {
+    height: 0;
+    border-left: 0;
+    transform: none;
+}
+
+input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+}
+
+input[type="checkbox"]:disabled {
+    opacity: .5;
+    cursor: default;
+}
+
+@media (forced-colors: active) {
+    input[type="checkbox"] {
+        appearance: auto;
+    }
+
+    input[type="checkbox"]::before {
+        display: none;
+    }
+}
+
+code {
+    font-family: var(--mono);
+    font-size: .92em;
+    background: var(--soft);
+    border-radius: 4px;
+    padding: 0 4px;
+}
+
+.mono {
+    font-family: var(--mono);
+}
+
+.mut {
+    color: var(--dim);
+}
+
+.grow {
+    flex: 1;
+}
+
+.warn {
+    color: var(--warn-text);
+}
+
+.err {
+    color: var(--err-text);
+}
+
+.okc {
+    color: var(--ok-text);
+}
+
+svg.i {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    flex: none;
+    vertical-align: -2px;
+}
+
+.logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    flex: none;
+    background: url('../../app-icon.svg') center / contain no-repeat;
+}
+
+.spin {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--line);
+    border-top-color: var(--acc);
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin .7s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+

@@ -1,4 +1,4 @@
-use crate::git::{execute_cancellable_input, last_error, valid_ref, valid_root, Captured, OutputPolicy, Request};
+use crate::git::{execute_cancellable_input, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, Arc};
@@ -62,7 +62,7 @@ async fn run(path: &str, args: &[&str], context: &str, expected: &[i32], policy:
     argv.extend_from_slice(args);
     let output = execute_cancellable_input(Request { args: &argv, context, expected, policy, timeout }, Arc::new(AtomicBool::new(false)), input).await?;
     if !output.code.is_some_and(|code| expected.contains(&code)) {
-        return Err(last_error(&String::from_utf8_lossy(&output.stderr)));
+        return Err(output.last_error());
     }
     Ok(output)
 }
@@ -181,6 +181,7 @@ pub async fn repo_changes(path: String) -> Result<RepoChanges, String> {
     valid_root(&path)?;
     let status = run(&path, &["status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all"], &format!("Changes: {path}"), &[0], OutputPolicy::Metadata, None, Duration::from_secs(45)).await?;
     let mut changes = parse_status(&status.stdout);
+    changes.branch = changes.branch.map(|branch| status.safe(&branch));
     let numstat = run(&path, &["diff", "--cached", "--numstat", "-z", "-M", "--no-ext-diff", "--no-textconv"], &format!("Staged summary: {path}"), &[0], OutputPolicy::Metadata, None, Duration::from_secs(45)).await?;
     let stats = parse_numstat(&numstat.stdout);
     for file in &mut changes.files {
@@ -197,7 +198,7 @@ pub async fn repo_changes(path: String) -> Result<RepoChanges, String> {
         Ok(output) => {
             let ident = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let words: Vec<&str> = ident.split(' ').collect();
-            changes.author = Some(if words.len() > 2 { words[..words.len() - 2].join(" ") } else { ident.clone() });
+            changes.author = Some(output.safe(&if words.len() > 2 { words[..words.len() - 2].join(" ") } else { ident.clone() }));
         }
         Err(error) => changes.author_error = Some(error),
     }
@@ -211,11 +212,10 @@ async fn blob(path: &str, spec: &str) -> Result<Option<Vec<u8>>, String> {
         if output.stdout.len() > crate::paths::CONTENT_LIMIT { return Err("The file is too large to preview".into()); }
         return Ok(Some(output.stdout));
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if ["does not exist", "exists on disk, but not in", "Not a valid object name", "invalid object name"].iter().any(|text| stderr.contains(text)) {
+    if ["does not exist", "exists on disk, but not in", "Not a valid object name", "invalid object name"].iter().any(|text| output.stderr_contains(text)) {
         return Ok(None);
     }
-    Err(last_error(&stderr))
+    Err(output.last_error())
 }
 
 fn text_of(bytes: Option<Vec<u8>>) -> (String, bool) {
@@ -292,7 +292,7 @@ pub async fn commit_staged(path: String, message: String) -> Result<CommitResult
     let subject = quick(&path, &["log", "-1", "--format=%s"], &format!("Commit subject: {path}"), &[0]).await?;
     Ok(CommitResult {
         sha: String::from_utf8_lossy(&sha.stdout).trim().to_string(),
-        subject: crate::git::safe(String::from_utf8_lossy(&subject.stdout).trim()),
+        subject: subject.safe(String::from_utf8_lossy(&subject.stdout).trim()),
     })
 }
 
@@ -306,13 +306,13 @@ pub async fn create_branch(path: String, name: String, start: Option<String>, sw
     if format.code != Some(0) { return Err("Invalid branch name".into()); }
     let reference = format!("refs/heads/{name}");
     let exists = quick(&path, &["show-ref", "--verify", "--quiet", &reference], &format!("Branch probe: {path}"), &[0, 1]).await?;
-    if exists.code == Some(0) { return Err(format!("A branch named {name} already exists")); }
+    if exists.code == Some(0) { return Err(exists.safe(&format!("A branch named {name} already exists"))); }
     let start = start.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
     if let Some(start) = &start {
         valid_ref(start).map_err(|_| "Invalid start point".to_string())?;
         let target = format!("{start}^{{commit}}");
         let found = quick(&path, &["rev-parse", "--verify", "--quiet", &target], &format!("Start point: {path}"), &[0, 1]).await?;
-        if found.code != Some(0) { return Err(format!("Start point {start} was not found")); }
+        if found.code != Some(0) { return Err(found.safe(&format!("Start point {start} was not found"))); }
     }
     let mut args = if switch { vec!["switch", "-c", &name] } else { vec!["branch", &name] };
     if let Some(start) = &start { args.push(start); }
@@ -373,7 +373,7 @@ pub async fn delete_branch(path: String, name: String, force: bool) -> Result<De
     valid_ref(&name).map_err(|_| "Invalid branch name".to_string())?;
     let reference = format!("refs/heads/{name}");
     let exists = quick(&path, &["show-ref", "--verify", "--quiet", &reference], &format!("Branch probe: {path}"), &[0, 1]).await?;
-    if exists.code != Some(0) { return Err(format!("There is no local branch named {name}")); }
+    if exists.code != Some(0) { return Err(exists.safe(&format!("There is no local branch named {name}"))); }
     let tip = quick(&path, &["rev-parse", "--short", &reference], &format!("Branch tip: {path}"), &[0]).await?;
     let flag = if force { "-D" } else { "-d" };
     run(&path, &["branch", flag, &name], &format!("Delete local branch: {path}"), &[0], OutputPolicy::Text, None, Duration::from_secs(45)).await?;

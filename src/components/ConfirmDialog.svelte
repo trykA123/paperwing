@@ -29,13 +29,13 @@
       <h2>{request.title ?? 'Confirm'}</h2>
       <p>{request.message}</p>
       {#if request.check}
-        <label class="confirm-check"><input type="checkbox" bind:checked /><span><b>{request.check.label}</b>{#if request.check.hint}<small>{request.check.hint}</small>{/if}</span></label>
+        <label class="confirm-check"><input type="checkbox" disabled={request.check.disabled} bind:checked /><span><b>{request.check.label}</b>{#if request.check.hint}<small>{request.check.hint}</small>{/if}</span></label>
       {/if}
     </div>
   </div>
   <footer>
     <span class="grow"></span>
     <button class="btn" bind:this={cancelButton} onclick={() => answer(false)}>{request.cancelLabel ?? 'Cancel'}</button>
-    <button class="btn {request.destructive ? 'danger' : 'dark'}" bind:this={okButton} onclick={() => answer(true, checked)}>{request.okLabel ?? 'OK'}</button>
+    <button class="btn {request.destructive ? 'danger' : 'dark'}" bind:this={okButton} onclick={() => answer(true, checked && !request.check?.disabled)}>{request.okLabel ?? 'OK'}</button>
   </footer>
 </dialog>

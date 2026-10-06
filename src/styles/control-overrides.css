@@ -1,0 +1,498 @@
+/* ---------- icon tones ---------- */
+svg.i.tone-folder {
+    color: var(--tone-folder);
+}
+
+svg.i.tone-repo {
+    color: var(--tone-repo);
+}
+
+svg.i.tone-folder,
+svg.i.tone-repo {
+    fill: color-mix(in oklch, currentColor 18%, transparent);
+}
+
+svg.i.tone-file {
+    color: var(--tone-file);
+}
+
+svg.i.tone-branch {
+    color: var(--tone-branch);
+}
+
+svg.i.tone-tag {
+    color: var(--tone-tag);
+}
+
+svg.i.tone-commit {
+    color: var(--tone-commit);
+}
+
+svg.i.tone-brand {
+    color: var(--acc);
+}
+
+svg.i.tone-ok {
+    color: var(--ok-text);
+}
+
+svg.i.tone-warn {
+    color: var(--warn-text);
+}
+
+svg.i.tone-err {
+    color: var(--err-text);
+}
+
+/* ---------- controls: 32 / 28 / 24px heights, 8px radius ---------- */
+.btn {
+    justify-content: center;
+    gap: 6px;
+    height: var(--ctl-h);
+    padding: 0 var(--sp-3);
+    border-radius: var(--r-ctl);
+    font-size: var(--fs-md);
+    line-height: 1;
+}
+
+.btn.small,
+.bulk .btn,
+.compare-filters .btn,
+.compare-bar .btn,
+.compare-details .btn,
+.editor-endpoints .btn,
+.editor-footer .btn,
+.fld>span .btn {
+    height: var(--ctl-h-sm);
+    padding: 0 10px;
+    font-size: var(--fs-sm);
+    border-radius: var(--r-ctl);
+}
+
+.btn.icon-only {
+    width: var(--ctl-h);
+    padding: 0;
+}
+
+.btn.small.icon-only {
+    width: var(--ctl-h-sm);
+}
+
+.btn.flip svg {
+    transform: rotate(180deg);
+}
+
+.go {
+    height: 36px;
+}
+
+.pgb,
+.star,
+.x,
+.icon,
+.shell-control {
+    display: inline-grid;
+    place-items: center;
+    width: var(--ctl-h-sm);
+    height: var(--ctl-h-sm);
+    padding: 0;
+    border-radius: var(--r-ctl);
+}
+
+.add {
+    display: inline-flex;
+    align-items: center;
+    height: var(--ctl-h-sm);
+    padding: 0 10px;
+    border-radius: var(--r-ctl);
+    font-size: var(--fs-sm);
+}
+
+.mini,
+.vsc {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 var(--sp-2);
+    border-radius: 6px;
+}
+
+.chip {
+    min-height: 24px;
+    padding: 0 10px;
+}
+
+.seg {
+    display: inline-flex;
+    align-items: stretch;
+    height: var(--ctl-h);
+    padding: 2px;
+    border-radius: var(--r-ctl);
+}
+
+.seg button {
+    flex: 1 1 auto;
+    padding: 0 var(--sp-3);
+    border-radius: 6px;
+    font-size: var(--fs-md);
+    white-space: nowrap;
+}
+
+.seg.small {
+    height: var(--ctl-h-sm);
+}
+
+.seg.small button {
+    padding: 0 10px;
+    font-size: var(--fs-sm);
+}
+
+.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--ctl-h-sm);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+}
+
+.fld input:not([type=checkbox]),
+.fld textarea,
+.fld select,
+.big,
+.chipbox,
+.refpill,
+.parallel-input,
+.banner,
+.preview {
+    border-radius: var(--r-ctl);
+}
+
+.card,
+.bulk,
+.repository-table,
+.operation-dialog,
+.palette,
+.pop,
+.toast {
+    border-radius: var(--r-card);
+}
+
+/* ---------- spacing rhythm: 4 / 8 / 12 / 16 / 24 ---------- */
+.main {
+    gap: var(--sp-4);
+    padding: var(--sp-4) var(--sp-5);
+}
+
+.side {
+    gap: var(--sp-4);
+    padding: var(--sp-3) var(--sp-2);
+}
+
+.gsearch {
+    height: var(--ctl-h);
+    padding: 0 7px;
+    border-radius: var(--r-ctl);
+}
+
+.sec h6 {
+    margin: 0 var(--sp-2) var(--sp-1);
+}
+
+.nav {
+    min-height: var(--ctl-h-sm);
+    padding: var(--sp-1) var(--sp-2);
+    border-radius: var(--r-ctl);
+}
+
+.repo-nav {
+    border-radius: var(--r-ctl);
+}
+
+.repo-nav:hover {
+    background: var(--soft);
+}
+
+.repo-nav .nav,
+.repo-nav .nav:hover {
+    padding-left: 0;
+    background: transparent;
+}
+
+.repo-nav.on,
+.repo-nav.on:hover {
+    background: var(--accs);
+    box-shadow: inset 3px 0 var(--acc);
+}
+
+.repo-nav.on .nav {
+    color: var(--acc);
+    font-weight: 600;
+}
+
+.repo-nav {
+    transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.tree-toggle {
+    width: 26px;
+    height: var(--ctl-h-sm);
+}
+
+.nav .cnt.dirty {
+    min-width: 18px;
+    padding: 0 6px;
+    border-radius: 99px;
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
+}
+
+.bulk {
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+}
+
+.pager {
+    padding: var(--sp-2) var(--sp-4);
+}
+
+.srow {
+    padding-right: var(--sp-2);
+}
+
+.srow>div:first-child {
+    padding-left: var(--sp-4);
+}
+
+.rrow {
+    gap: var(--sp-4);
+    padding: 0 var(--sp-4);
+}
+
+.compare-bar,
+.compare-summary,
+.compare-filters {
+    gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-4);
+}
+
+.compare-bar,
+.editor-toolbar {
+    gap: var(--sp-2);
+}
+
+.editor-endpoints>div {
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+}
+
+.editor-footer {
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+}
+
+.editor-count {
+    min-width: 64px;
+    font-variant-numeric: tabular-nums;
+}
+
+.compare-pathbar span {
+    padding: 6px var(--sp-2);
+}
+
+.compare-number {
+    padding: 0 var(--sp-2);
+}
+
+.file-preview-panes header {
+    padding: var(--sp-2) var(--sp-4);
+}
+
+.file-preview-panes pre {
+    padding: var(--sp-4);
+}
+
+.set-compare-table th,
+.set-compare-table td {
+    padding: 10px var(--sp-4);
+}
+
+.compare-details .rscroll {
+    padding: var(--sp-4);
+}
+
+.rtop {
+    gap: var(--sp-2);
+    padding: var(--sp-4) var(--sp-4) var(--sp-3);
+}
+
+.tree {
+    margin: 0 var(--sp-4) var(--sp-4);
+}
+
+.ropts {
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4);
+}
+
+.rfoot {
+    padding: var(--sp-4);
+}
+
+.srccard {
+    padding: var(--sp-4);
+}
+
+.form {
+    gap: var(--sp-4);
+    padding: var(--sp-5);
+}
+
+.operation-dialog {
+    padding: var(--sp-5);
+}
+
+.palette-search {
+    padding: var(--sp-3) var(--sp-4);
+}
+
+.activity-toolbar {
+    padding: var(--sp-2) var(--sp-4);
+}
+
+.activity-entry summary {
+    padding: var(--sp-2) var(--sp-4);
+}
+
+.activity-meta {
+    padding: 0 var(--sp-4);
+}
+
+.activity-entry pre {
+    margin: var(--sp-2) var(--sp-4) var(--sp-4);
+}
+
+.shell-status {
+    padding: 0 var(--sp-4);
+}
+
+@media (max-width: 1200px) {
+    .main {
+        padding: var(--sp-3) var(--sp-4);
+    }
+}
+
+/* ---------- contrast: text-input borders reach 3:1, running text is at least 12px ---------- */
+.fld input:not([type=checkbox]),
+.fld textarea,
+.fld select,
+.big,
+.chipbox,
+.parallel-input,
+.setting-row select,
+.gsearch.small,
+.compare-endpoint select,
+.compare-endpoint input,
+.compare-filters input,
+.compare-exclude input,
+.activity-toolbar input,
+.activity-toolbar select {
+    border-color: var(--line-ctl);
+}
+
+.fld input:focus,
+.fld textarea:focus,
+.fld select:focus-visible,
+.big:focus,
+.chipbox:focus-within,
+.gsearch.small:focus-within,
+.setting-row select:focus-visible,
+.compare-endpoint select:focus-visible,
+.compare-endpoint input:focus-visible,
+.compare-filters input:focus-visible,
+.compare-exclude input:focus-visible,
+.activity-toolbar input:focus-visible,
+.activity-toolbar select:focus-visible {
+    border-color: var(--acc);
+}
+
+.editor-toolbar label,
+.editor-count,
+.editor-endpoints>div,
+.endpoint-side,
+.endpoint-access,
+.compare-filters>button,
+.compare-summary,
+.compare-pathbar,
+.compare-row,
+.compare-line-count,
+.compare-number,
+.compare-commits h3,
+.compare-commit,
+.compare-exclude,
+.file-preview-panes header,
+.fav small,
+.link,
+.tok,
+.tree .rb,
+.tree .ex,
+.tip,
+.destination-path,
+.pfoot,
+.mini,
+.lok,
+.cmt .sub,
+.shell-status,
+.repo-subtree,
+.tree-url,
+.tree-error,
+.activity-entry pre {
+    font-size: var(--fs-sm);
+}
+
+/* ---------- tree disclosure ---------- */
+:root {
+    interpolate-size: allow-keywords;
+}
+
+.repo-subtree details::details-content {
+    block-size: 0;
+    overflow: hidden;
+    transition: block-size var(--dur-med) var(--ease-out), content-visibility var(--dur-med) allow-discrete;
+}
+
+.repo-subtree details[open]::details-content {
+    block-size: auto;
+}
+
+.repo-subtree summary {
+    border-radius: 6px;
+}
+
+.repo-subtree summary:hover,
+.tree-toggle:hover {
+    color: var(--text);
+}
+
+.repo-subtree summary>svg {
+    transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.repo-subtree .tree-entry {
+    animation: fade-in var(--dur-med) var(--ease-out);
+}
+
+.activity-toolbar input,
+.activity-toolbar select {
+    height: var(--ctl-h-sm);
+    padding: 0 var(--sp-2);
+    border: 1px solid var(--line-ctl);
+    border-radius: var(--r-ctl);
+    background: var(--panel);
+    font-size: var(--fs-sm);
+}
+

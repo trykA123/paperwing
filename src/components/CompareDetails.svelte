@@ -1,10 +1,13 @@
 <script lang="ts">
   import type { CompareState } from '../lib/compare.svelte';
   import type { View } from '../lib/workspace';
+  import { commands, execute } from '../lib/commands';
   import { app } from '../lib/state.svelte';
   import { detailFile, directory, sizeLabel, statusLabel } from '../lib/compare-view';
   import Icon from './Icon.svelte';
   let { comparison, comparisonId }: { comparison: CompareState; comparisonId: string } = $props();
+  const actions = $derived(commands());
+  function command(side: 'left' | 'right') { return actions.find(action => action.id === `copy-${side}`)!; }
   const selected = $derived(detailFile(app.view, comparisonId, comparison.files, comparison.selectedId, comparison.snapshot));
   async function apply() { await comparison.refresh($state.snapshot(comparison.options)); await comparison.loadAllFiles(); if (comparison.mode === 'commits') await comparison.loadAllCommits(); }
   function open() {
@@ -37,6 +40,6 @@
       <button class="btn" disabled={comparison.busy || !comparison.snapshot} onclick={apply}><Icon name="refresh" /> Apply rules</button>
       <label class="compare-exclude">Exclude<input class="mono" bind:value={comparison.excludes} /></label>
     </section>
-    <section><h3>Copy</h3><div class="compare-copy-buttons"><button class="btn" disabled title="Available after the recovery service"><Icon name="copy" /> To left</button><button class="btn" disabled title="Available after the recovery service"><Icon name="copy" /> To right</button></div></section>
+    <section><h3>Copy</h3><div class="compare-copy-buttons"><button class="btn" disabled={!command('left').enabled} title={command('left').reason ?? 'Copy selected file or folder to left'} onclick={() => execute(command('left'))}><Icon name="copy" /> To left</button><button class="btn" disabled={!command('right').enabled} title={command('right').reason ?? 'Copy selected file or folder to right'} onclick={() => execute(command('right'))}><Icon name="copy" /> To right</button></div></section>
   </div>
 </section>

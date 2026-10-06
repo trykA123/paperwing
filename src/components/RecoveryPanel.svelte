@@ -7,9 +7,16 @@
   import { dialogOut } from '../lib/motion';
   let dialog: HTMLDialogElement;
   let records = $state<RecoveryRecord[]>([]), busy = $state(false), error = $state('');
-  async function refresh() { records = (await api.recoveryList()).sort((left, right) => right.createdAt - left.createdAt); }
+  async function refresh() {
+    const capability = app.capability('recovery');
+    if (!capability.supported) { error = capability.reason ?? 'Recovery is unavailable.'; return; }
+    records = (await api.recoveryList()).sort((left, right) => right.createdAt - left.createdAt); }
   async function run(record: RecoveryRecord, action: 'undo' | 'cleanup' | 'resolve') {
-    if (busy) return;
+    if (busy || !app.capability('recovery').supported) return;
+    if (action === 'undo') {
+      const support = await app.probeRoot(record.root);
+      if (!support.capabilities.recovery.supported) { error = support.capabilities.recovery.reason ?? 'Recovery is unavailable for this root.'; return; }
+    }
     const message = action === 'cleanup' ? 'Permanently delete this recovery backup? This cannot be undone.'
       : action === 'resolve' ? 'Acknowledge this conflicting operation and allow new writes? Backups are retained, but automatic undo will remain disabled.'
       : 'Restore this operation? Later disk changes will not be overwritten.';
@@ -28,7 +35,7 @@
 </script>
 
 <dialog class="operation-dialog" bind:this={dialog} out:dialogOut|global aria-label="Filesystem recovery" oncancel={event => { event.preventDefault(); if (!busy) app.recoveryOpen = false; }}>
-  <header><h2>Filesystem recovery</h2><span class="grow"></span><button class="icon" title="Refresh recovery records" disabled={busy} onclick={() => refresh().catch(reason => error = String(reason))}><Icon name="refresh" /></button><button class="icon" title="Close recovery" disabled={busy} onclick={() => app.recoveryOpen = false}><Icon name="close" /></button></header>
+  <header><h2>Filesystem recovery</h2><span class="grow"></span><button class="icon" title={app.capability('recovery').reason ?? 'Refresh recovery records'} disabled={busy || !app.capability('recovery').supported} onclick={() => refresh().catch(reason => error = String(reason))}><Icon name="refresh" /></button><button class="icon" title="Close recovery" disabled={busy} onclick={() => app.recoveryOpen = false}><Icon name="close" /></button></header>
   {#if error}<p class="warn" role="alert">{error}</p>{/if}
   <div class="operation-list">{#each records as record}<section>
     <div><strong class="mono grow">{record.path || record.id}</strong><span>{record.stage}</span><time>{new Date(record.createdAt).toLocaleString()}</time></div>

@@ -64,6 +64,22 @@
   const byCov = (a: [string, number][]) => (total > 1 ? [...a].sort((p, q2) => q2[1] - p[1]) : a);
   const rank = (g: string) => ({ release: 0, feature: 1, bugfix: 2 } as Record<string, number>)[g] ?? 3;
   const firstLine = (s: string) => s.split('\n')[0];
+  function refLabel(type: RefKind, name: string) {
+    if (type === 'commit') return name;
+    for (const entry of entries) {
+      const names = type === 'branch' ? entry?.branches : entry?.tags;
+      const labels = type === 'branch' ? entry?.branchLabels : entry?.tagLabels;
+      const index = names?.indexOf(name) ?? -1;
+      if (index >= 0) return labels?.[index] ?? name;
+    }
+    return name;
+  }
+
+  function groupLabel(name: string) {
+    const branch = br.find(([value]) => value.startsWith(`${name}/`))?.[0];
+    return branch ? refLabel('branch', branch).split('/')[0] : name;
+  }
+
 
   // Branch/tag names pointing at each commit, to label graph rows.
   const tips = $derived.by(() => {
@@ -73,7 +89,7 @@
     const add = (sha: string | undefined, type: RefKind, name: string) => {
       if (!sha) return;
       if (!m.has(sha)) m.set(sha, []);
-      m.get(sha)!.push({ type, name });
+      m.get(sha)!.push({ type, name: refLabel(type, name) });
     };
     e.branches.forEach((n, i) => add(e.branchShas?.[i], 'branch', n));
     e.tags.forEach((n, i) => add(e.tagShas?.[i], 'tag', n));
@@ -229,7 +245,7 @@
         <div class="psec">{r.title}{#if r.n !== undefined}<span>{r.n}</span>{/if}</div>
       {:else if r.k === 'grp'}
         <button class="pgrp" onclick={() => { open[r.name] = !open[r.name]; input.focus(); }}>
-          <span class="chev">{r.open ? '▾' : '▸'}</span>{r.name}/<span class="n">{r.n}</span>
+          <span class="chev">{r.open ? '▾' : '▸'}</span>{groupLabel(r.name)}/<span class="n">{r.n}</span>
         </button>
       {:else if r.k === 'note'}
         <div class="pnote" class:err={r.err}>{r.text}</div>
@@ -264,11 +280,12 @@
         </button>
       {:else}
         {@const isCur = !!current && current.type === r.type && current.name === r.name}
-        {@const slash = r.name.indexOf('/')}
+        {@const label = refLabel(r.type, r.name)}
+        {@const slash = label.indexOf('/')}
         <button class="pi" class:act={r.idx === active} data-idx={r.idx} onmousemove={() => (active = r.idx)}
           onclick={() => onpick({ type: r.type, name: r.name })}>
           <span class="t-{r.type}"><Icon name={r.type} /></span>
-          <span class="nm">{#if r.short && slash > 0}<span class="pre">{r.name.slice(0, slash + 1)}</span>{r.name.slice(slash + 1)}{:else}{r.type === 'commit' ? r.name.slice(0, 8) : r.name}{/if}</span>
+          <span class="nm">{#if r.short && slash > 0}<span class="pre">{label.slice(0, slash + 1)}</span>{label.slice(slash + 1)}{:else}{r.type === 'commit' ? r.name.slice(0, 8) : label}{/if}</span>
           {#if r.meta}<span class="meta">{r.meta}</span>{/if}
           {#if isCur}<span class="curm">current</span>{:else if total > 1}<span class="cov" class:part={r.cov < total}>{r.cov}/{total}</span>{/if}
         </button>

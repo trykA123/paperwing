@@ -9,7 +9,7 @@
   let input: HTMLInputElement;
   let query = $state('');
   let selected = $state(0);
-  const available = $derived(commands().filter(command => command.enabled && matches(command.label, query)));
+  const available = $derived(commands().filter(command => matches(command.label, query) && (command.enabled || !!command.reason)));
   const current = $derived(Math.min(selected, Math.max(0, available.length - 1)));
 
   onMount(() => {
@@ -37,7 +37,7 @@
     <button class="icon" title="Close command palette" aria-label="Close command palette" onclick={() => (app.paletteOpen = false)}><Icon name="close" /></button></div>
   <div class="palette-results">
     {#each available as command, index (command.id)}
-      <button class="palette-command" class:on={index === current} onclick={() => execute(command)}><Icon name={command.icon} tone={command.tone} /><span>{command.label}</span></button>
+      <button class="palette-command" class:on={index === current} disabled={!command.enabled} title={command.reason ?? command.label} onclick={() => execute(command)}><Icon name={command.icon} tone={command.tone} /><span>{command.label}{#if !command.enabled && command.reason}<small class="faint"> · {command.reason}</small>{/if}</span></button>
     {:else}<div class="empty">No available commands match.</div>{/each}
   </div>
 </dialog>

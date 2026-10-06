@@ -1,4 +1,4 @@
-use crate::settings::{get_token, valid_id, Source};
+use crate::settings::{valid_id, Source};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
@@ -102,6 +102,8 @@ fn valid_name(s: &str) -> Result<(), String> {
 
 fn api_base(host: &str) -> Result<String, String> {
     valid_host(host)?;
+    #[cfg(feature = "test-profile")]
+    if let Some(endpoint) = crate::test_profile::github_endpoint()? { return Ok(endpoint); }
     Ok(if host == "github.com" {
         "https://api.github.com".into()
     } else {
@@ -123,6 +125,13 @@ fn enc(s: &str) -> String {
 
 async fn get_json<T: DeserializeOwned>(source: &Source, path: &str) -> Result<T, (u16, String)> {
     let base = api_base(&source.host).map_err(|e| (0, e))?;
+    get_json_with_token(source, path, &base, crate::credentials::read(source.id.clone()),
+        || crate::credentials::revision(&source.id)).await
+}
+
+async fn get_json_with_token<T: DeserializeOwned>(source: &Source, path: &str, base: &str,
+    token: impl std::future::Future<Output = Result<Option<String>, String>>, revision: impl Fn() -> u64) -> Result<T, (u16, String)> {
+    let expected = revision();
     let client = reqwest::Client::builder()
         .user_agent("paperwing")
         .timeout(Duration::from_secs(30))
@@ -131,8 +140,11 @@ async fn get_json<T: DeserializeOwned>(source: &Source, path: &str) -> Result<T,
     let mut req = client
         .get(format!("{base}{path}"))
         .header("Accept", "application/vnd.github+json");
-    if let Some(token) = get_token(&source.id) {
+    if let Some(token) = token.await.map_err(|reason| (0, reason))? {
         req = req.bearer_auth(token);
+    }
+    if revision() != expected {
+        return Err((0, "Source credentials changed; retry the request".into()));
     }
     let res = req
         .send()
@@ -148,9 +160,12 @@ async fn get_json<T: DeserializeOwned>(source: &Source, path: &str) -> Result<T,
         };
         return Err((status, msg));
     }
-    res.json::<T>()
-        .await
-        .map_err(|e| (0, format!("Unexpected response from {}: {e}", source.host)))
+    let result = res.json::<T>().await
+        .map_err(|e| (0, format!("Unexpected response from {}: {e}", source.host)))?;
+    if revision() != expected {
+        return Err((0, "Source credentials changed; retry the request".into()));
+    }
+    Ok(result)
 }
 
 fn to_repo(source: &Source, r: GhRepo) -> Repo {
@@ -242,9 +257,10 @@ pub async fn list_repos(app: AppHandle, source: Source, refresh: bool) -> Result
         let repos = source.urls.iter().filter_map(|u| parse_manual(&source, u)).collect();
         return Ok(RepoList { repos, fetched_at, errors: vec![] });
     }
+    let revision = crate::credentials::revision(&source.id);
     let cache = cache_file(&app, &source.id)?;
     if !refresh {
-        if let Some(list) = std::fs::read_to_string(&cache).ok().and_then(|t| serde_json::from_str::<RepoList>(&t).ok()) {
+        if let Some(list) = crate::credentials::if_current(&source.id, revision, || std::fs::read_to_string(&cache).ok().and_then(|t| serde_json::from_str::<RepoList>(&t).ok())).flatten() {
             return Ok(list);
         }
     }
@@ -256,8 +272,9 @@ pub async fn list_repos(app: AppHandle, source: Source, refresh: bool) -> Result
         }
     }
     if list.errors.is_empty() {
-        let _ = std::fs::write(&cache, serde_json::to_string(&list).unwrap_or_default());
+        crate::credentials::if_current(&source.id, revision, || std::fs::write(&cache, serde_json::to_string(&list).unwrap_or_default()));
     }
+    if crate::credentials::revision(&source.id) != revision { return Err("Source credentials changed; reload repositories".into()); }
     Ok(list)
 }
 
@@ -295,4 +312,57 @@ pub async fn get_commits(source: Source, org: String, name: String, branch: Stri
             Commit { sha: c.sha, message: c.commit.message, author, date, parents: c.parents.into_iter().map(|p| p.sha).collect() }
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn deferred_credentials_reject_changed_sources_before_http() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:5920").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let requests = Arc::new(AtomicU64::new(0));
+        let count = requests.clone();
+        let server = tokio::spawn(async move {
+            while let Ok(Ok((mut stream, _))) = tokio::time::timeout(Duration::from_millis(350), listener.accept()).await {
+                count.fetch_add(1, Ordering::SeqCst);
+                let mut request = [0; 4096];
+                let received = stream.read(&mut request).await.unwrap();
+                assert!(received > 0);
+                stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}").await.unwrap();
+            }
+        });
+        let source: Source = serde_json::from_value(serde_json::json!({
+            "id":"deferred-source","name":"Fixture","kind":"ghe","host":"old.invalid"
+        })).unwrap();
+        for change in ["token replacement", "host replacement"] {
+            let revision = Arc::new(AtomicU64::new(0));
+            let current = revision.clone();
+            let (entered, waiting) = tokio::sync::oneshot::channel();
+            let (release, acquired) = tokio::sync::oneshot::channel();
+            let source = source.clone();
+            let base = base.clone();
+            let operation = tokio::spawn(async move {
+                get_json_with_token::<serde_json::Value>(&source, "/user", &base, async {
+                    entered.send(()).unwrap();
+                    acquired.await.unwrap();
+                    Ok(Some("synthetic-replacement-token".into()))
+                }, || current.load(Ordering::SeqCst)).await
+            });
+            waiting.await.unwrap();
+            revision.fetch_add(1, Ordering::SeqCst);
+            release.send(()).unwrap();
+            let error = operation.await.unwrap().unwrap_err();
+            assert!(error.1.contains("changed"), "{change}");
+        }
+        for reason in ["locked", "unavailable"] {
+            assert!(get_json_with_token::<serde_json::Value>(&source, "/user", &base,
+                async { Err(reason.into()) }, || 0).await.is_err());
+        }
+        server.await.unwrap();
+        assert_eq!(requests.load(Ordering::SeqCst), 0);
+    }
 }

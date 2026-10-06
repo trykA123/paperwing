@@ -1,0 +1,214 @@
+/* ref picker */
+.pop {
+    position: fixed;
+    width: 440px;
+    background: var(--panel);
+    border-radius: 14px;
+    box-shadow: 0 0 0 1px var(--line), var(--shadow-3);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+}
+
+.ptitle {
+    padding: 12px 14px 0;
+    font-size: var(--fs-sm);
+    color: var(--dim);
+}
+
+.ptitle b {
+    color: var(--text);
+}
+
+.ptabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 12px 8px;
+    align-items: center;
+}
+
+.ptabs button {
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: var(--fs-sm);
+    color: var(--dim);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ptabs button span {
+    font-size: var(--fs-xs);
+    color: var(--faint-text);
+}
+
+.ptabs button:hover {
+    background: var(--soft);
+}
+
+.ptabs button.on {
+    background: var(--accs);
+    color: var(--acc);
+}
+
+.ptabs button.on span {
+    color: var(--acc);
+}
+
+.pinput {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    color: var(--faint-text);
+}
+
+.pinput input {
+    border: 0;
+    outline: none;
+    flex: 1;
+    height: 40px;
+    background: none;
+    color: var(--text);
+}
+
+.plist {
+    overflow: auto;
+    padding: 4px 6px 8px;
+    flex: 1;
+    min-height: 0;
+}
+
+.psec {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--faint-text);
+    font-weight: 600;
+    padding: 10px 10px 4px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.pgrp {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    font-weight: 600;
+    font-size: var(--fs-md);
+    text-align: left;
+    border-radius: 8px;
+}
+
+.pgrp:hover {
+    background: var(--soft);
+}
+
+.pgrp .n {
+    margin-left: auto;
+    font-weight: 500;
+    color: var(--faint-text);
+    font-size: var(--fs-sm);
+}
+
+.pgrp .chev {
+    color: var(--faint-text);
+    width: 10px;
+}
+
+.pi {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 6px 10px;
+    text-align: left;
+    border-radius: 8px;
+}
+
+.pi .nm {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.pi .pre {
+    color: var(--faint-text);
+}
+
+.pi .meta {
+    font-size: var(--fs-sm);
+    color: var(--faint-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+}
+
+.pi .cov {
+    margin-left: auto;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    background: color-mix(in oklch, var(--ok) 12%, var(--panel));
+    color: var(--ok-text);
+    border-radius: 99px;
+    padding: 1px 7px;
+}
+
+.pi .cov.part {
+    background: color-mix(in oklch, var(--warn) 12%, var(--panel));
+    color: var(--warn-text);
+}
+
+.pi .curm {
+    margin-left: auto;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--acc);
+    background: var(--accs);
+    border-radius: 99px;
+    padding: 1px 7px;
+}
+
+.pi.act {
+    background: var(--accs);
+}
+
+.pi.act .nm {
+    color: var(--acc);
+}
+
+.pnote {
+    padding: 9px 10px;
+    font-size: var(--fs-sm);
+    color: var(--faint-text);
+}
+
+.pnote.err {
+    color: var(--err-text);
+}
+
+.pfoot {
+    border-top: 1px solid var(--line);
+    padding: 7px 12px;
+    font-size: var(--fs-xs);
+    color: var(--faint-text);
+    display: flex;
+    gap: 14px;
+}
+
+kbd {
+    font: 600 var(--fs-xs) var(--font);
+    background: var(--soft);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+

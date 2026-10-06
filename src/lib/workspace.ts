@@ -1,4 +1,4 @@
-import type { CompareEndpoint, Workspace } from './api';
+import type { CompareEndpoint, PlatformInfo, Workspace } from './api';
 
 export type View =
   | { kind: 'set' }
@@ -27,19 +27,19 @@ export function tabId(view: View, setId: string): string {
 export const DEFAULT_COLS = { repo: 210, checkout: 190, local: 220, status: 170 };
 export const DEFAULT_TEMPLATE = '{org}\\{folder}';
 
-export function defaultWorkspace(): Workspace {
+export function defaultWorkspace(platform: PlatformInfo['platform'] = 'windows'): Workspace {
   const id = Math.random().toString(36).slice(2, 10);
   return {
     sets: [{ id, name: 'My first set', items: [] }], stars: [], activeSet: id,
-    root: 'C:\\Dev\\repos', layout: 'flat', pathTemplate: DEFAULT_TEMPLATE, cols: { ...DEFAULT_COLS },
+    root: platform === 'windows' ? 'C:\\Dev\\repos' : '', layout: 'flat', pathTemplate: DEFAULT_TEMPLATE, cols: { ...DEFAULT_COLS },
     shallow: false, parallel: 4, onExisting: 'fetch', pageSize: 25, rightWidth: 380,
     theme: 'system', uiFont: 'system', codeFont: 'cascadia',
     shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true },
   };
 }
 
-export function migrateWorkspace(saved: Partial<Workspace> | null): Workspace {
-  const defaults = defaultWorkspace();
+export function migrateWorkspace(saved: Partial<Workspace> | null, platform: PlatformInfo['platform'] = 'windows'): Workspace {
+  const defaults = defaultWorkspace(platform);
   const ws = { ...defaults, ...saved };
   if (!ws.sets.length) ws.sets = defaults.sets;
   if (!ws.sets.some(set => set.id === ws.activeSet)) ws.activeSet = ws.sets[0].id;

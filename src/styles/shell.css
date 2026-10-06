@@ -1,0 +1,197 @@
+/* shell: every region fills the window, nothing scrolls except lists */
+#shell {
+    display: grid;
+    grid-template-columns: var(--lw, 250px) minmax(0, 1fr) min(var(--rw, 380px), max(280px, calc(100vw - var(--lw, 250px) - 420px)));
+    grid-template-rows: 42px minmax(0, 1fr) 26px;
+    grid-template-areas: "brand tabs tabs" "side main right" "status status status";
+    height: 100vh;
+}
+
+#shell.noright {
+    grid-template-columns: var(--lw, 250px) minmax(0, 1fr) 0;
+}
+
+#shell.panels-moving {
+    transition: grid-template-columns 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.shell-side,
+.shell-right {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.shell-side {
+    grid-area: side;
+}
+
+.shell-right {
+    grid-area: right;
+}
+
+.shell-panel-content {
+    width: var(--panel-width);
+    height: 100%;
+}
+
+.shell-right .shell-panel-content {
+    width: min(var(--panel-width), max(280px, calc(100vw - var(--lw, 250px) - 420px)));
+}
+
+.shell-panel-content>.side,
+.shell-panel-content>.right {
+    height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #shell.panels-moving {
+        transition: none;
+    }
+}
+
+#shell.noside .shell-brand {
+    display: none;
+}
+
+.main {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    min-height: 0;
+    padding: 16px 20px 14px;
+    overflow: hidden;
+}
+
+.main.scroll {
+    overflow: auto;
+}
+
+/* sidebar */
+.side {
+    grid-area: side;
+    position: relative;
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+    padding: 14px 10px 10px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-weight: 650;
+    font-size: var(--fs-lg);
+    padding: 0 6px;
+}
+
+.gsearch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--soft);
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 0 10px;
+    height: 34px;
+    color: var(--dim);
+}
+
+.gsearch:focus-within {
+    background: var(--panel);
+    border-color: var(--acc);
+    box-shadow: var(--ring);
+}
+
+.gsearch input {
+    border: 0;
+    background: none;
+    outline: none;
+    flex: 1;
+    min-width: 0;
+    color: var(--text);
+}
+
+.gsearch.small {
+    background: var(--panel);
+    border-color: var(--line);
+    width: 240px;
+}
+
+.sec h6 {
+    margin: 0 6px 4px;
+    font-size: var(--fs-xs);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--faint-text);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 6px 8px;
+    border-radius: 8px;
+    color: var(--text);
+}
+
+.nav:hover {
+    background: var(--soft);
+}
+
+.nav.on {
+    background: var(--accs);
+    color: var(--acc);
+    font-weight: 600;
+    box-shadow: inset 3px 0 var(--acc);
+}
+
+.nav.on .cnt {
+    color: var(--acc);
+}
+
+.nav .lbl {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nav .cnt {
+    margin-left: auto;
+    font-size: var(--fs-sm);
+    color: var(--faint-text);
+}
+
+.nav.ghost {
+    color: var(--dim);
+}
+
+.fav .star {
+    color: var(--warn);
+}
+
+.fav small {
+    color: var(--faint-text);
+    font-size: var(--fs-xs);
+}
+
+.fav .inset {
+    margin-left: auto;
+    font-size: var(--fs-xs);
+    color: var(--acc);
+    font-weight: 700;
+}
+
