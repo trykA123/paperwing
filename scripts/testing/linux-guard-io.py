@@ -13,10 +13,10 @@ assert os.readlink('/proc/self/ns/mnt') != sys.argv[3]
 mount = root / 'namespace-mount'
 subprocess.run(['mount', '-t', 'tmpfs', '-o', 'size=64k,nr_inodes=128,mode=700', 'tmpfs', str(mount)], check=True, timeout=10)
 environment = os.environ.copy()
-environment['PAPERWING_GUARD_IO_ROOT'] = str(root)
+environment['SKEIN_GUARD_IO_ROOT'] = str(root)
 for phase in ['full', 'readonly']:
     if phase == 'readonly':
         subprocess.run(['mount', '-t', 'tmpfs', '-o', 'remount,ro', 'tmpfs', str(mount)], check=True, timeout=10)
-    environment['PAPERWING_GUARD_IO_PHASE'] = phase
+    environment['SKEIN_GUARD_IO_PHASE'] = phase
     subprocess.run([str(binary), '--exact', 'linux_guard::tests::isolated_storage_failures_and_mount_crossings', '--test-threads=1'], env=environment, check=True, timeout=15)
 root.joinpath('io-report.json').write_text(json.dumps({'crossDevice': 'EXDEV, source retained', 'fullDisk': 'ENOSPC from bounded tmpfs', 'readOnly': 'EROFS, original data retained', 'support': 'tmpfs refused for writes; reads retained', 'mountIsolation': 'private user/mount namespace'}) + '\n')

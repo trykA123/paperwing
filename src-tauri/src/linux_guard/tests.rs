@@ -52,14 +52,14 @@ fn guarded_replace_create_metadata_and_stage_cleanup() {
     root.probe_write().unwrap();
     let path=fixture.path.join("repo/file");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
-    rustix::fs::setxattr(&path,"user.paperwing-fixture",b"preserved",rustix::fs::XattrFlags::empty()).unwrap();
+    rustix::fs::setxattr(&path,"user.skein-fixture",b"preserved",rustix::fs::XattrFlags::empty()).unwrap();
     let parent = root.parent("file", false).unwrap(); let before=parent.snapshot().unwrap();
     let stage=parent.stage(b"after", &before).unwrap();
     let published=parent.publish(stage,&before).unwrap();
     assert_eq!(std::fs::read(&path).unwrap(),b"after");
     assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,0o640);
     assert!(matches!(parent.snapshot().unwrap(), Snapshot::Regular{identity,..} if identity==published.identity));
-    let mut value=[0;32];let count=rustix::fs::getxattr(&path,"user.paperwing-fixture",&mut value).unwrap();
+    let mut value=[0;32];let count=rustix::fs::getxattr(&path,"user.skein-fixture",&mut value).unwrap();
     assert_eq!(&value[..count],b"preserved");
     assert!(std::fs::read_dir(fixture.path.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".paperwing-stage-")));
     let new=root.parent("nested/new",true).unwrap();let missing=new.snapshot().unwrap();
@@ -166,11 +166,11 @@ fn bounded_private_files_and_handle_ownership_fail_closed() {
 
 #[test]
 fn isolated_storage_failures_and_mount_crossings() {
-    if let Some(root)=std::env::var_os("PAPERWING_GUARD_IO_ROOT") {
+    if let Some(root)=crate::env_names::var_os("SKEIN_GUARD_IO_ROOT") {
         let root=PathBuf::from(root);assert!(root.is_absolute() && root.canonicalize().unwrap()==root);
         assert_eq!(std::fs::read_to_string(root.join(".paperwing-guard-fixture")).unwrap(),"paperwing-guard-fixture-v1\n");
         let mount=root.join("namespace-mount");
-        let phase=std::env::var("PAPERWING_GUARD_IO_PHASE").unwrap();
+        let phase=crate::env_names::var("SKEIN_GUARD_IO_PHASE").unwrap();
         if phase=="full" {
             std::fs::write(mount.join("readable"),b"readable").unwrap();
             let readonly=Root::open(&mount,&[]).unwrap();assert_eq!(readonly.read("readable",32).unwrap().unwrap().bytes,b"readable");

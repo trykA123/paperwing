@@ -391,7 +391,7 @@ mod tests {
 
     fn repo() -> std::path::PathBuf {
         let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("paperwing-commit-{}-{nonce}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("skein-commit-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         git_in(&dir, &["init", "-q", "-b", "main"]);
         git_in(&dir, &["config", "user.name", "Test User"]);
@@ -506,7 +506,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
     async fn publish_push_and_local_only_branch_deletion() {
         let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
         let dir = repo();
-        let remote = std::env::temp_dir().join(format!("paperwing-remote-{}-{}", std::process::id(), dir.file_name().unwrap().to_string_lossy()));
+        let remote = std::env::temp_dir().join(format!("skein-remote-{}-{}", std::process::id(), dir.file_name().unwrap().to_string_lossy()));
         std::fs::create_dir_all(&remote).unwrap();
         git_in(&remote, &["init", "-q", "--bare", "-b", "main"]);
         let path = dir.to_str().unwrap().to_string();

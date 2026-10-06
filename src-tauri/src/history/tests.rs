@@ -12,7 +12,7 @@ impl Fixture {
             .unwrap()
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "paperwing-history-{name}-{}-{nonce}",
+            "skein-history-{name}-{}-{nonce}",
             std::process::id()
         ));
         std::fs::create_dir_all(&root).unwrap();

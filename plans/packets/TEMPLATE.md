@@ -34,7 +34,7 @@ Observable, testable outcomes. Windows behaviour named explicitly.
 ## Gates
 - `bun run --bun check`, `bun test src/lib`, `bun run --bun build`
 - `bun scripts/testing/css-order.ts` (UI changes; `--write` regenerates `src/styles/order.json`)
-- `cd src-tauri && cargo test --offline` (set `PAPERWING_TEST_TMP` to an ext4 directory, never `/tmp`)
+- `cd src-tauri && cargo test --offline` (set `SKEIN_TEST_TMP` to an ext4 directory, never `/tmp`)
 - `rustfmt --check` and clippy on touched Rust files
 - UI: screenshots at 1440 and 1100 px, both themes
 

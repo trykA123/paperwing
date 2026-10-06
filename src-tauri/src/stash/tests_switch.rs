@@ -9,7 +9,7 @@ fn remote_with() -> PathBuf {
         .unwrap()
         .as_nanos();
     let bare = std::env::temp_dir().join(format!(
-        "paperwing-stash-remote-{}-{nonce}",
+        "skein-stash-remote-{}-{nonce}",
         std::process::id()
     ));
     std::fs::create_dir_all(&bare).unwrap();

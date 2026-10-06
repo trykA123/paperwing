@@ -194,7 +194,7 @@ pub(super) async fn run_job(
     }
     admission.rebind(app)?;
     let name =
-        crate::linux_guard::storage::unique_name(".paperwing-clone-").map_err(|e| e.to_string())?;
+        crate::linux_guard::storage::unique_name(".skein-clone-").map_err(|e| e.to_string())?;
     let stage = admission
         .directory
         .create_new(&name)

@@ -254,7 +254,7 @@ async fn clone_verification_cleans_staging_with_changed_origin_or_local_commit()
         let admission = admit(&saved, &job, "clone").unwrap();
         let stage = admission
             .directory
-            .create_new(".paperwing-clone-test")
+            .create_new(".skein-clone-test")
             .unwrap();
         let output = crate::git::buffered(
             &["clone", "-b", "main", "--", &job.url, &stage.fd_path()],
@@ -406,7 +406,7 @@ async fn fresh_clone_with_instead_of_rewrite_verifies_and_publishes() {
     let admission = admit(&settings(&fixture, &job), &job, "clone").unwrap();
     let stage = admission
         .directory
-        .create_new(".paperwing-clone-rewrite")
+        .create_new(".skein-clone-rewrite")
         .unwrap();
     let rewrite = format!("url.{}.insteadOf={}", origin.display(), job.url);
     let output = crate::git::buffered(
@@ -463,7 +463,7 @@ async fn verification_cleanup_refuses_a_substituted_staging_directory() {
     let admission = admit(&settings(&fixture, &job), &job, "clone").unwrap();
     let stage = admission
         .directory
-        .create_new(".paperwing-clone-test")
+        .create_new(".skein-clone-test")
         .unwrap();
     std::fs::write(stage.path.join("file"), b"clone data").unwrap();
     let retained = fixture.0.join("retained-stage");

@@ -202,8 +202,8 @@
       diskText = formats.map(format => format.text);
       const finishConstruct = benchmarkTimer('editor.construct');
       const finishDiff = benchmarkTimer('editor.diff');
-      const original = monaco.editor.createModel(diskText[0], language(path), monaco.Uri.parse(`paperwing://${sessionId}/${generation}/${fileId}/left/${encodeURIComponent(path)}`));
-      const modified = monaco.editor.createModel(diskText[1], language(path), monaco.Uri.parse(`paperwing://${sessionId}/${generation}/${fileId}/right/${encodeURIComponent(path)}`));
+      const original = monaco.editor.createModel(diskText[0], language(path), monaco.Uri.parse(`skein://${sessionId}/${generation}/${fileId}/left/${encodeURIComponent(path)}`));
+      const modified = monaco.editor.createModel(diskText[1], language(path), monaco.Uri.parse(`skein://${sessionId}/${generation}/${fileId}/right/${encodeURIComponent(path)}`));
       handles.push(original, modified);
       reversed = false;
       const instance = monaco.editor.createDiffEditor(host, { automaticLayout: true, renderSideBySide: !inline, useInlineViewWhenSpaceIsLimited: false,

@@ -402,8 +402,8 @@ async fn cancel_marks_remaining_repositories_without_running_them() {
 fn lingering(script: &str) -> Vec<String> {
     [
         "-c",
-        &format!("alias.paperwing-linger=!{script}"),
-        "paperwing-linger",
+        &format!("alias.skein-linger=!{script}"),
+        "skein-linger",
     ]
     .map(String::from)
     .to_vec()

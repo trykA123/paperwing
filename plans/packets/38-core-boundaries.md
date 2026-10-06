@@ -11,7 +11,7 @@ Turn the Rust backend into a small core with stable contracts, so new integratio
 Source: owner's architecture notes "Încăpățânatul × Arhitecta" (2026-10-06). Mantra: core small, contracts stable, capabilities optional, providers replaceable, workers disposable, state recoverable, cache bounded, foreground first.
 
 ## Already done
-- One crate `src-tauri` (`paperwing_lib`). About 104 `#[tauri::command]` functions registered in one flat list in `src-tauri/src/lib.rs`.
+- One crate `src-tauri` (`skein_lib`). About 104 `#[tauri::command]` functions registered in one flat list in `src-tauri/src/lib.rs`.
 - Modules call each other directly. Events go out through ad hoc `app.emit(...)` calls in `discover_job.rs`, `search_service.rs`, `clone.rs`, `launch.rs`, `credentials.rs` and `git/runner.rs`.
 - GitHub lives in `src-tauri/src/github.rs` and `github/` (`http.rs`, `listing.rs`, `cache.rs`, `pulls/`). Sources (github.com, GitHub Enterprise hosts, manual) are configured in settings.
 - Packet 34 adds a Rust-owned SQLite store (`src-tauri/src/store/`).

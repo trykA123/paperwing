@@ -22,8 +22,8 @@ packages without changing existing versions or checksums. The Bun lockfile is un
 The reference host already provides libdbus 1.16.2 and KWallet 6.30.0; no OS package was
 installed for this packet.
 
-PaperWing vendors the pinned synchronous backend at
-[`src-tauri/vendor/dbus-secret-service`](../src-tauri/vendor/dbus-secret-service/PAPERWING-PATCH.md)
+Skein vendors the pinned synchronous backend at
+[`src-tauri/vendor/dbus-secret-service`](../src-tauri/vendor/dbus-secret-service/SKEIN-PATCH.md)
 through a Cargo path patch. The published 4.1.0 source used non-cryptographic `fastrand`
 for DH private exponents and CBC initialization vectors. The patch uses exact
 `getrandom` 0.3.4 with its `std` feature for both crypto variants. Its

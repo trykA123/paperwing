@@ -43,7 +43,7 @@ fn encoded_metadata_bound_accommodates_supported_decimal_attribute_bytes() {
 }
 
 pub(super) fn persist_checkpoint(phase: &str, id: &str) {
-    let path = std::path::PathBuf::from(std::env::var_os("PAPERWING_JOURNAL_FIXTURE").unwrap());
+    let path = std::path::PathBuf::from(crate::env_names::var_os("SKEIN_JOURNAL_FIXTURE").unwrap());
     assert_eq!(
         std::fs::read(path.join(".paperwing-journal-fixture")).unwrap(),
         b"paperwing-journal-fixture-v1\n"
@@ -344,7 +344,7 @@ fn native_undo_restores_bytes_mode_acl_and_user_attributes_with_new_writer_disab
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
     rustix::fs::setxattr(
         &path,
-        "user.paperwing",
+        "user.skein",
         b"retained",
         rustix::fs::XattrFlags::empty(),
     )
@@ -696,7 +696,7 @@ fn cleanup_refuses_unknown_entries_substituted_artifacts_and_changed_bytes() {
 }
 
 fn validated_child_fixture() -> Fixture {
-    let path = std::path::PathBuf::from(std::env::var_os("PAPERWING_JOURNAL_FIXTURE").unwrap());
+    let path = std::path::PathBuf::from(crate::env_names::var_os("SKEIN_JOURNAL_FIXTURE").unwrap());
     let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../.skillify/evidence/paperwing/13/repair-1/native")
         .canonicalize()
@@ -722,7 +722,7 @@ fn validated_child_fixture() -> Fixture {
 #[ignore]
 fn native_child() {
     let fixture = validated_child_fixture();
-    let mode = std::env::var("PAPERWING_JOURNAL_CHILD_MODE").unwrap();
+    let mode = crate::env_names::var("SKEIN_JOURNAL_CHILD_MODE").unwrap();
     if mode == "park" {
         std::fs::write(
             fixture.path.join("child-ready.json"),
@@ -763,10 +763,10 @@ fn native_child() {
         return;
     }
     if mode == "restoreControl" {
-        let leaf = std::env::var("PAPERWING_CONTROL_STORE").unwrap();
+        let leaf = crate::env_names::var("SKEIN_CONTROL_STORE").unwrap();
         assert!(["data", "bind-data", "nested-bind-data"].contains(&leaf.as_str()));
         let original = Journal::open(&fixture.path.join("repo").join(&leaf)).unwrap();
-        let id = std::env::var("PAPERWING_JOURNAL_RECORD").unwrap();
+        let id = crate::env_names::var("SKEIN_JOURNAL_RECORD").unwrap();
         let loaded = original.load(&id).unwrap();
         assert!(matches!(loaded.revision.state, State::Applied { .. }));
         let backup = original.export(&id, true).unwrap();
@@ -843,12 +843,12 @@ fn native_child() {
             journal.replace(&root, "file", &expected, b"after").unwrap();
         }
         "undo" => journal
-            .undo(&std::env::var("PAPERWING_JOURNAL_RECORD").unwrap())
+            .undo(&crate::env_names::var("SKEIN_JOURNAL_RECORD").unwrap())
             .unwrap(),
         "cleanup" => {
             assert!(
                 journal
-                    .cleanup(&std::env::var("PAPERWING_JOURNAL_RECORD").unwrap(), true)
+                    .cleanup(&crate::env_names::var("SKEIN_JOURNAL_RECORD").unwrap(), true)
                     .unwrap()
                     .complete
             );
@@ -886,17 +886,19 @@ impl OwnedChild {
                 "--nocapture",
                 "--test-threads=1",
             ])
-            .env("PAPERWING_JOURNAL_FIXTURE", &fixture.path)
-            .env("PAPERWING_JOURNAL_CHILD_MODE", mode)
+            .env("SKEIN_JOURNAL_FIXTURE", &fixture.path)
+            .env("SKEIN_JOURNAL_CHILD_MODE", mode)
+            .env_remove("SKEIN_JOURNAL_KILL_PHASE")
             .env_remove("PAPERWING_JOURNAL_KILL_PHASE")
+            .env_remove("SKEIN_JOURNAL_RECORD")
             .env_remove("PAPERWING_JOURNAL_RECORD")
             .stdout(std::fs::File::create(fixture.path.join("child-stdout.log"))?)
             .stderr(std::fs::File::create(fixture.path.join("child-stderr.log"))?);
         if let Some(phase) = phase {
-            command.env("PAPERWING_JOURNAL_KILL_PHASE", phase);
+            command.env("SKEIN_JOURNAL_KILL_PHASE", phase);
         }
         if let Some(id) = id {
-            command.env("PAPERWING_JOURNAL_RECORD", id);
+            command.env("SKEIN_JOURNAL_RECORD", id);
         }
         let mut owner = Self {
             child: command.spawn()?,
@@ -913,7 +915,7 @@ impl OwnedChild {
             .map_err(std::io::Error::other)?,
         )?;
         let forced =
-            mode == "park" && std::env::var("PAPERWING_JOURNAL_PIDFD_FAIL").as_deref() == Ok("1");
+            mode == "park" && crate::env_names::var("SKEIN_JOURNAL_PIDFD_FAIL").as_deref() == Ok("1");
         let fd = if forced {
             -1
         } else {
@@ -1243,7 +1245,7 @@ fn native_io_child(fixture: &Fixture) {
     let mount = fixture.path.join("namespace-mount");
     let directory =
         crate::linux_guard::storage::PrivateDir::open(&mount, "linux-recovery-v1").unwrap();
-    let phase = std::env::var("PAPERWING_JOURNAL_IO_PHASE").unwrap();
+    let phase = crate::env_names::var("SKEIN_JOURNAL_IO_PHASE").unwrap();
     if phase == "readonly" {
         assert_eq!(
             directory.file("lock", false).unwrap_err().code,
@@ -1578,10 +1580,10 @@ assert (root/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-fix
 assert os.readlink('/proc/self/ns/mnt')!=original
 mount=root/'namespace-mount'
 subprocess.run(['mount','-t','tmpfs','-o','size=64k,mode=700','tmpfs',str(mount)],check=True,timeout=10)
-env=os.environ.copy();env['PAPERWING_JOURNAL_FIXTURE']=str(root);env['PAPERWING_JOURNAL_CHILD_MODE']='io';env['PAPERWING_JOURNAL_IO_PHASE']='full'
+env=os.environ.copy();env['SKEIN_JOURNAL_FIXTURE']=str(root);env['SKEIN_JOURNAL_CHILD_MODE']='io';env['SKEIN_JOURNAL_IO_PHASE']='full'
 subprocess.run([exe,'--exact','linux_journal::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=20)
 subprocess.run(['mount','-o','remount,ro','-t','tmpfs','tmpfs',str(mount)],check=True,timeout=10)
-env['PAPERWING_JOURNAL_IO_PHASE']='readonly'
+env['SKEIN_JOURNAL_IO_PHASE']='readonly'
 subprocess.run([exe,'--exact','linux_journal::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=20)
 assert (root/'repo/file').read_bytes()==b'before'
 assert (root/'outside').read_bytes()==b'outside-sentinel'
@@ -1833,7 +1835,7 @@ assert root.is_absolute() and root.resolve()==root
 assert (root/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-fixture-v1\n'
 assert os.readlink('/proc/self/ns/mnt')!=original
 subprocess.run(['mount','--bind',str(root/'repo'),str(root/'namespace-alias')],check=True,timeout=10)
-env=os.environ.copy();env['PAPERWING_JOURNAL_FIXTURE']=str(root);env['PAPERWING_JOURNAL_CHILD_MODE']='insideBind'
+env=os.environ.copy();env['SKEIN_JOURNAL_FIXTURE']=str(root);env['SKEIN_JOURNAL_CHILD_MODE']='insideBind'
 subprocess.run([exe,'--exact','linux_journal::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=20)
 assert (root/'repo/file').read_bytes()==b'before'
 assert (root/'outside').read_bytes()==b'outside-sentinel'
@@ -1868,7 +1870,7 @@ assert root.is_absolute() and root.resolve()==root
 assert (root/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-fixture-v1\n'
 assert os.readlink('/proc/self/ns/mnt')!=original
 subprocess.run(['mount','--bind',str(root/'repo/nested-bind-data'),str(root/'namespace-alias')],check=True,timeout=10)
-env=os.environ.copy();env['PAPERWING_JOURNAL_FIXTURE']=str(root);env['PAPERWING_JOURNAL_CHILD_MODE']='nestedBind'
+env=os.environ.copy();env['SKEIN_JOURNAL_FIXTURE']=str(root);env['SKEIN_JOURNAL_CHILD_MODE']='nestedBind'
 subprocess.run([exe,'--exact','linux_journal::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=20)
 assert (root/'repo/file').read_bytes()==b'before'
 assert (root/'outside').read_bytes()==b'outside-sentinel'
@@ -1975,10 +1977,10 @@ assert (fixture/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-
 assert '/repair-1/native/' in str(fixture)
 resource.setrlimit(resource.RLIMIT_CORE,(0,0))
 assert ctypes.CDLL(None,use_errno=True).prctl(36,1,0,0,0)==0
-env=os.environ.copy();env['PAPERWING_JOURNAL_FIXTURE']=str(fixture);env['PAPERWING_JOURNAL_CHILD_MODE']=mode
-env.pop('PAPERWING_JOURNAL_KILL_PHASE',None)
-if mode=='pidfdProbe':env['PAPERWING_JOURNAL_PIDFD_FAIL']='1'
-else:env.pop('PAPERWING_JOURNAL_PIDFD_FAIL',None)
+env=os.environ.copy();env['SKEIN_JOURNAL_FIXTURE']=str(fixture);env['SKEIN_JOURNAL_CHILD_MODE']=mode
+env.pop('SKEIN_JOURNAL_KILL_PHASE',None);env.pop('PAPERWING_JOURNAL_KILL_PHASE',None)
+if mode=='pidfdProbe':env['SKEIN_JOURNAL_PIDFD_FAIL']='1'
+else:env.pop('SKEIN_JOURNAL_PIDFD_FAIL',None);env.pop('PAPERWING_JOURNAL_PIDFD_FAIL',None)
 with (fixture/'probe-stdout.log').open('wb') as stdout,(fixture/'probe-stderr.log').open('wb') as stderr:
  helper=subprocess.Popen([exe,'--exact','linux_journal::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,stdout=stdout,stderr=stderr)
  helper_fd=None

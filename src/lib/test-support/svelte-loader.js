@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 const projectSource = fileURLToPath(new URL('../../', import.meta.url));
 
 Bun.plugin({
-    name: 'paperwing-server-tests',
+    name: 'skein-server-tests',
     setup(build) {
         build.onLoad({ filter: /\.svelte(?:\.ts)?$/ }, async ({ path }) => {
             if (!path.startsWith(projectSource)) return;

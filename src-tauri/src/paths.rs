@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn reads_validate_ancestors_metadata_and_missing_leaves() {
-        let directory = std::env::temp_dir().join(format!("paperwing-paths-{}", std::process::id()));
+        let directory = std::env::temp_dir().join(format!("skein-paths-{}", std::process::id()));
         fs::create_dir_all(directory.join("repo/.git")).unwrap();
         fs::create_dir_all(directory.join("repo/private-metadata")).unwrap();
         fs::write(directory.join("repo/file.txt"), b"unchanged\r\n").unwrap();
@@ -353,7 +353,7 @@ mod tests {
     #[test]
     fn links_are_inert_or_refused_and_read_limits_are_enforced() {
         let directory =
-            std::env::temp_dir().join(format!("paperwing-path-links-{}", std::process::id()));
+            std::env::temp_dir().join(format!("skein-path-links-{}", std::process::id()));
         fs::create_dir_all(directory.join("repo/.git")).unwrap();
         fs::write(directory.join("outside"), b"outside sentinel").unwrap();
         fs::write(directory.join("repo/inside"), b"inside").unwrap();
@@ -394,8 +394,8 @@ mod tests {
         #[cfg(windows)]
         {
             let status = std::process::Command::new("bun")
-                .args(["-e", "import {mkdirSync,writeFileSync,symlinkSync} from 'node:fs'; const p=process.env.PAPERWING_JUNCTION_ROOT; mkdirSync(p+'/outside-dir'); writeFileSync(p+'/outside-dir/sentinel','junction sentinel'); symlinkSync(p+'/outside-dir',p+'/repo/junction','junction');"])
-                .env("PAPERWING_JUNCTION_ROOT", &directory).status().unwrap();
+                .args(["-e", "import {mkdirSync,writeFileSync,symlinkSync} from 'node:fs'; const p=process.env.SKEIN_JUNCTION_ROOT; mkdirSync(p+'/outside-dir'); writeFileSync(p+'/outside-dir/sentinel','junction sentinel'); symlinkSync(p+'/outside-dir',p+'/repo/junction','junction');"])
+                .env("SKEIN_JUNCTION_ROOT", &directory).status().unwrap();
             assert!(status.success());
             assert!(root.read("junction/sentinel").is_err());
             assert!(root.read("junction/nonexistent/leaf").is_err());
@@ -406,7 +406,7 @@ mod tests {
             fs::remove_dir(directory.join("repo/junction")).unwrap();
             println!("Self-contained unprivileged junction rejected; outside sentinel unchanged");
         }
-        if let Some(fixture) = std::env::var_os("PAPERWING_P3_LINK_FIXTURE") {
+        if let Some(fixture) = crate::env_names::var_os("SKEIN_P3_LINK_FIXTURE") {
             let fixture = PathBuf::from(fixture);
             let root = ReadRoot::new(&fixture.join("repo"), vec![]).unwrap();
             assert!(root.read("junction/sentinel").is_err());

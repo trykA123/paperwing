@@ -379,7 +379,7 @@ fn guarded_recovery_initializer_refuses_whole_and_nested_bind_aliases() {
     for mode in ["whole", "nested"] {
         let fixture = Fixture::new();
         let exe = std::env::current_exe().unwrap();
-        let script="import os,pathlib,subprocess,sys\np=pathlib.Path(sys.argv[1]);mode=sys.argv[3]\nsource=p/'repo'\nif mode=='nested':\n source=p;source=p/'nested-mount';source.mkdir();subprocess.run(['mount','--bind',str(p/'repo'),str(source)],check=True)\nsubprocess.run(['mount','--bind',str(source),str(p/'alias')],check=True)\nenv=dict(os.environ,PAPERWING_PARENT_BIND_FIXTURE=str(p),PAPERWING_PARENT_BIND_MODE=mode)\nsubprocess.run([sys.argv[2],'--exact','linux_guard::mutation::parent_tests::native_bind_constructor_helper','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=15)\n";
+        let script="import os,pathlib,subprocess,sys\np=pathlib.Path(sys.argv[1]);mode=sys.argv[3]\nsource=p/'repo'\nif mode=='nested':\n source=p;source=p/'nested-mount';source.mkdir();subprocess.run(['mount','--bind',str(p/'repo'),str(source)],check=True)\nsubprocess.run(['mount','--bind',str(source),str(p/'alias')],check=True)\nenv=dict(os.environ,SKEIN_PARENT_BIND_FIXTURE=str(p),SKEIN_PARENT_BIND_MODE=mode)\nsubprocess.run([sys.argv[2],'--exact','linux_guard::mutation::parent_tests::native_bind_constructor_helper','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=15)\n";
         let log = std::fs::File::create(fixture.path.join("bind.log")).unwrap();
         let mut child = Child(
             std::process::Command::new("unshare")
@@ -416,7 +416,7 @@ fn guarded_recovery_initializer_refuses_whole_and_nested_bind_aliases() {
 #[test]
 #[ignore]
 fn native_bind_constructor_helper() {
-    let path = PathBuf::from(std::env::var_os("PAPERWING_PARENT_BIND_FIXTURE").unwrap());
+    let path = PathBuf::from(crate::env_names::var_os("SKEIN_PARENT_BIND_FIXTURE").unwrap());
     assert!(path.is_absolute());
     assert_eq!(
         std::fs::read(path.join(".paperwing-parent-fixture")).unwrap(),

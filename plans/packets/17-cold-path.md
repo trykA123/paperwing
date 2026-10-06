@@ -57,7 +57,7 @@ Uncommitted in the Codex worktree (16 files changed, +1591/-671, plus new files)
 
 ## Gates
 - `bun run --bun check`, `bun test src/lib`, `bun run --bun build`
-- `cd src-tauri && cargo test --offline` (set `PAPERWING_TEST_TMP` to an ext4 directory), `rustfmt --check`, clippy
+- `cd src-tauri && cargo test --offline` (set `SKEIN_TEST_TMP` to an ext4 directory), `rustfmt --check`, clippy
 - Windows VM: serial `cargo test --locked`
 
 ## Stop and report if

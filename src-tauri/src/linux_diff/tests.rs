@@ -199,7 +199,7 @@ assert (root/'.paperwing-diff-fixture').read_bytes()==b'paperwing-diff-fixture-v
 assert os.readlink('/proc/self/ns/mnt')!=original
 for source in ['left','left/nested']:
  subprocess.run(['mount','--bind',str(root/source),str(root/'alias')],check=True,timeout=10)
- env=os.environ.copy();env['PAPERWING_DIFF_FIXTURE']=str(root);env['PAPERWING_DIFF_MODE']='bind'
+ env=os.environ.copy();env['SKEIN_DIFF_FIXTURE']=str(root);env['SKEIN_DIFF_MODE']='bind'
  subprocess.run([exe,'--exact','linux_diff::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=20)
  subprocess.run(['umount',str(root/'alias')],check=True,timeout=10)
 "#;
@@ -225,7 +225,7 @@ for source in ['left','left/nested']:
 #[test]
 #[ignore]
 fn native_child() {
-    let path = PathBuf::from(std::env::var("PAPERWING_DIFF_FIXTURE").unwrap());
+    let path = PathBuf::from(crate::env_names::var("SKEIN_DIFF_FIXTURE").unwrap());
     assert!(path.is_absolute());
     assert_eq!(path.canonicalize().unwrap(), path);
     assert_eq!(
@@ -234,7 +234,7 @@ fn native_child() {
     );
     let fixture = Fixture { path, _budget: crate::test_support::Shared::new() };
     let before = fixture.snapshot();
-    let mode = std::env::var("PAPERWING_DIFF_MODE").unwrap();
+    let mode = crate::env_names::var("SKEIN_DIFF_MODE").unwrap();
     if mode == "bind" {
         assert!(Storage::new(fixture.path.join("alias/new/data"))
             .unwrap()
@@ -243,7 +243,7 @@ fn native_child() {
         assert!(!fixture.path.join("alias/new").exists());
         fixture.unchanged(&before);
     } else if mode == "reserve" || mode == "bootstrap" || mode == "holder" {
-        let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
+        let id = crate::env_names::var("SKEIN_DIFF_CHILD_ID").unwrap();
         if mode == "reserve" {
             let base = fixture.path.clone();
             let id = id.clone();
@@ -290,7 +290,7 @@ fn native_child() {
         }
         fixture.unchanged(&before);
     } else if mode == "manifest" {
-        let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
+        let id = crate::env_names::var("SKEIN_DIFF_CHILD_ID").unwrap();
         let mut storage = fixture.storage();
         let base = fixture.path.clone();
         storage.hook = Some(Arc::new(move |phase| {
@@ -316,7 +316,7 @@ fn native_child() {
         });
         fixture.unchanged(&before);
     } else if mode == "counts-bootstrap" || mode == "counts-waiter" {
-        let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
+        let id = crate::env_names::var("SKEIN_DIFF_CHILD_ID").unwrap();
         let mut storage = fixture.storage();
         let base = fixture.path.clone();
         let child_id = id.clone();
@@ -367,7 +367,7 @@ fn native_child() {
         });
         fixture.unchanged(&before);
     } else if mode == "reservation-pause" || mode == "cleanup-pause" {
-        let id = std::env::var("PAPERWING_DIFF_CHILD_ID").unwrap();
+        let id = crate::env_names::var("SKEIN_DIFF_CHILD_ID").unwrap();
         let base = fixture.path.clone();
         let target = if mode == "reservation-pause" {
             "before-directory"
@@ -660,9 +660,9 @@ impl OwnedChild {
                 "--nocapture",
                 "--test-threads=1",
             ])
-            .env("PAPERWING_DIFF_FIXTURE", &fixture.path)
-            .env("PAPERWING_DIFF_MODE", mode)
-            .env("PAPERWING_DIFF_CHILD_ID", id)
+            .env("SKEIN_DIFF_FIXTURE", &fixture.path)
+            .env("SKEIN_DIFF_MODE", mode)
+            .env("SKEIN_DIFF_CHILD_ID", id)
             .stdout(stdout)
             .stderr(stderr)
             .spawn()
@@ -1326,7 +1326,7 @@ root=pathlib.Path(sys.argv[1]);exe=sys.argv[2]
 assert root.is_absolute() and root.resolve()==root
 assert (root/'.paperwing-diff-fixture').read_bytes()==b'paperwing-diff-fixture-v1\n'
 assert os.geteuid()==0
-env=os.environ.copy();env['PAPERWING_DIFF_FIXTURE']=str(root);env['PAPERWING_DIFF_MODE']='foreign-owner'
+env=os.environ.copy();env['SKEIN_DIFF_FIXTURE']=str(root);env['SKEIN_DIFF_MODE']='foreign-owner'
 subprocess.run([exe,'--exact','linux_diff::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=20)
 "#;
     let output = std::process::Command::new("unshare")
@@ -1635,7 +1635,7 @@ fn non_ext4_storage_refuses_before_initializing_a_missing_suffix() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
     let parent = PathBuf::from("/dev/shm").join(format!(
-        "paperwing-diff-{}-{}",
+        "skein-diff-{}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));

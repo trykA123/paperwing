@@ -136,7 +136,7 @@ async fn detect_perl() -> bool {
         "-e",
         "x",
         "--",
-        ".paperwing-missing",
+        ".skein-missing",
     ];
     let request = Request {
         args: &args,

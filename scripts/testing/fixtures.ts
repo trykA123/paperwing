@@ -154,7 +154,7 @@ export function createFixtures(root: string, scale = 512): Manifest {
 }
 
 function selfTest() {
-  const parent = mkdtempSync(join(tmpdir(), 'paperwing-fixtures-self-test-'));
+  const parent = mkdtempSync(join(tmpdir(), 'skein-fixtures-self-test-'));
   const one = createFixtures(join(parent, 'one'), 16), two = createFixtures(join(parent, 'two'), 16);
   assert.deepEqual(one, two);
   const originalXdg = process.env.XDG_CONFIG_HOME;

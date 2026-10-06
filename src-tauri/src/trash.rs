@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn only_registered_unshared_git_repositories_are_moved() {
-        let root = std::env::temp_dir().join(format!("paperwing-trash-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("skein-trash-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         for name in ["alpha", "beta"] { repo(&root, name); }
         std::fs::create_dir_all(root.join("plain")).unwrap();
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     #[ignore = "puts one temporary folder in the Recycle Bin"]
     fn recycle_bin_removes_a_folder() {
-        let dir = std::env::temp_dir().join(format!("paperwing-recycle-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("skein-recycle-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("nested")).unwrap();
         std::fs::write(dir.join("nested").join("file.txt"), "x").unwrap();
         recycle(&dir).unwrap();

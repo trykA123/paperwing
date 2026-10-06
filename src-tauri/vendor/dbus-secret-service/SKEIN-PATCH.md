@@ -1,4 +1,4 @@
-# PaperWing entropy repair
+# Skein entropy repair
 
 This directory vendors the published `dbus-secret-service` 4.1.0 crate from
 [crates.io](https://crates.io/crates/dbus-secret-service/4.1.0). The original archive's

@@ -9,7 +9,7 @@ Role: ui-builder-high, one writer
 Startup, scrolling, filtering and opening files stay smooth at 10,000 rows and multi-megabyte files, proven by measurements on Windows and Linux.
 
 ## Already done
-- Benchmark hooks: `src/lib/benchmark.ts` records `ui.request`, `ui.files-ready`, `ui.first-render`, `ui.complete`, `editor.import`, `editor.construct` and `editor.diff` when `VITE_PAPERWING_BENCHMARK=1`, through the Rust `benchmark_record` command (`src-tauri/src/benchmark.rs`).
+- Benchmark hooks: `src/lib/benchmark.ts` records `ui.request`, `ui.files-ready`, `ui.first-render`, `ui.complete`, `editor.import`, `editor.construct` and `editor.diff` when `VITE_SKEIN_BENCHMARK=1`, through the Rust `benchmark_record` command (`src-tauri/src/benchmark.rs`).
 - `src/components/VirtualList.svelte` exists and is used by the compare lists.
 - Monaco is imported lazily in `src/components/FileCompare.svelte` (`await import('../lib/monaco')`), but `src/lib/monaco.ts` bundles every worker (editor, css, html, json, typescript) and the editor is `$state.raw` there only.
 - Fonts: `@fontsource-variable/geist` and `geist-mono` are installed (full set, not subset).

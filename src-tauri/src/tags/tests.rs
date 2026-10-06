@@ -17,7 +17,7 @@ fn git_out(dir: &Path, args: &[&str]) -> String {
 }
 
 fn scratch(label: &str) -> PathBuf {
-    let base = std::env::var_os("PAPERWING_TEST_TMP")
+    let base = crate::env_names::var_os("SKEIN_TEST_TMP")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
     let nonce = std::time::SystemTime::now()
@@ -25,7 +25,7 @@ fn scratch(label: &str) -> PathBuf {
         .unwrap()
         .as_nanos();
     let dir = base.join(format!(
-        "paperwing-tags-{label}-{}-{nonce}",
+        "skein-tags-{label}-{}-{nonce}",
         std::process::id()
     ));
     std::fs::create_dir_all(&dir).unwrap();

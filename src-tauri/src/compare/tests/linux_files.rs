@@ -19,7 +19,7 @@ impl Native {
     async fn new() -> Self {
         let serial = crate::test_support::serial().await;
         let path = crate::test_support::tmp_root().join(format!(
-            "paperwing-write-{}-{}",
+            "skein-write-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));

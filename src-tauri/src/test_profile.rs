@@ -38,7 +38,7 @@ fn root(path: &Path) -> Result<PathBuf, String> {
 
 pub fn preflight(identifier: &str) -> Result<(), String> {
     if identifier != IDENTIFIER { return Err("Test-profile build requires dev.paperwing.testing configuration".into()); }
-    let path = std::env::var_os("PAPERWING_TEST_PROFILE").ok_or("PAPERWING_TEST_PROFILE is required")?;
+    let path = crate::env_names::var_os("SKEIN_TEST_PROFILE").ok_or("SKEIN_TEST_PROFILE is required")?;
     let path = root(Path::new(&path))?;
     #[cfg(target_os = "linux")]
     for (variable, suffix) in [("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data"), ("XDG_CACHE_HOME", "cache")] {
@@ -83,7 +83,7 @@ pub fn source(id: &str) -> Result<(), String> {
 
 #[cfg(target_os = "linux")]
 pub fn root_probe_delay(path: &str) -> Result<(), String> {
-    let Ok(value) = std::env::var("PAPERWING_TEST_ROOT_PROBE_DELAY_MS") else { return Ok(()); };
+    let Ok(value) = crate::env_names::var("SKEIN_TEST_ROOT_PROBE_DELAY_MS") else { return Ok(()); };
     let delay: u64 = value.parse().map_err(|_| "Invalid isolated root-probe delay")?;
     if !(100..=2000).contains(&delay) { return Err("Isolated root-probe delay exceeds its bound".into()); }
     ensure()?;
@@ -101,7 +101,7 @@ pub fn root_probe_delay(path: &str) -> Result<(), String> {
 
 pub fn github_endpoint() -> Result<Option<String>, String> {
     ensure()?;
-    let Ok(value) = std::env::var("PAPERWING_TEST_GITHUB_API") else { return Ok(None); };
+    let Ok(value) = crate::env_names::var("SKEIN_TEST_GITHUB_API") else { return Ok(None); };
     let url = reqwest::Url::parse(&value).map_err(|_| "Invalid isolated GitHub API endpoint")?;
     if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") || url.port() != Some(5951)
         || !url.username().is_empty() || url.password().is_some() || url.path() != "/"
@@ -142,7 +142,7 @@ pub fn plain_file(path: &Path) -> Result<(), String> {
 }
 
 fn sample() -> Result<u32, String> {
-    let sample: u32 = std::env::var("PAPERWING_BENCHMARK_SAMPLE").map_err(|_| "Benchmark sample required")?
+    let sample: u32 = crate::env_names::var("SKEIN_BENCHMARK_SAMPLE").map_err(|_| "Benchmark sample required")?
         .parse().map_err(|_| "Invalid benchmark sample")?;
     if sample == 0 { return Err("Benchmark sample must be positive".into()); }
     Ok(sample)
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn profiles_refuse_unmarked_and_linked_roots_before_access() {
-        let path = std::env::temp_dir().join(format!("paperwing-profile-refusal-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("skein-profile-refusal-{}", std::process::id()));
         std::fs::create_dir_all(&path).unwrap();
         assert!(root(&path).is_err());
         std::fs::write(path.join(".paperwing-disposable"), MARKER).unwrap();

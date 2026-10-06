@@ -25,7 +25,7 @@ export function applyEditorTheme(): string {
     context.fillStyle = style.getPropertyValue(token).trim(); context.fillRect(0, 0, 1, 1);
     return '#' + Array.from(context.getImageData(0, 0, 1, 1).data).slice(0, 3).map(channel => channel.toString(16).padStart(2, '0')).join('');
   };
-  const name = dark ? 'paperwing-dark' : 'paperwing-light';
+  const name = dark ? 'skein-dark' : 'skein-light';
   monaco.editor.defineTheme(name, { base: dark ? 'vs-dark' : 'vs', inherit: true, rules: [], colors: {
     'editor.background': color('--editor'), 'editor.foreground': color('--text'),
     'editorGutter.background': color('--editor'), 'editorLineNumber.foreground': color('--dim'),

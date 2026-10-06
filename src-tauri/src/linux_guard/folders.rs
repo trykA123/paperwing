@@ -290,7 +290,7 @@ pub(crate) struct Fixture(pub PathBuf);
 #[cfg(test)]
 impl Fixture {
     pub(crate) fn new(label: &str) -> Self {
-        let root = std::env::var_os("PAPERWING_TEST_TMP")
+        let root = crate::env_names::var_os("SKEIN_TEST_TMP")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp"));
         assert!(root.is_absolute());

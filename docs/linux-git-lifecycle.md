@@ -46,7 +46,7 @@ native Windows validation remains unavailable.
 
 The guarantee covers helpers that remain in the job's process group. A helper can detach
 with setsid or setpgid. Process groups do not contain that helper; arbitrary descendant
-containment would require a stronger boundary such as a delegated cgroup. PaperWing does
+containment would require a stronger boundary such as a delegated cgroup. Skein does
 not create or reconfigure user cgroups in this packet.
 
 A detached helper holding a pipe causes an explicit drain failure. The app closes its
@@ -74,7 +74,7 @@ cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib git:: -
 
 Tests clean their generated processes and default temporary roots. To retain PID reports,
 create a fresh private evidence directory containing `.paperwing-process-evidence` with
-`paperwing-process-evidence-v1` and a newline, then set `PAPERWING_PROCESS_EVIDENCE` only for
+`paperwing-process-evidence-v1` and a newline, then set `SKEIN_PROCESS_EVIDENCE` only for
 that test process. This opt-in exists in Rust tests, not the production app.
 
 Ignored evidence under `11/process-before` records the failing native controls; final and

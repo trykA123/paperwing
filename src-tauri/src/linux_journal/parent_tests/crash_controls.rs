@@ -29,11 +29,11 @@ impl OwnedChild {
                 "--nocapture",
                 "--test-threads=1",
             ])
-            .env("PAPERWING_PARENT_CRASH_FIXTURE", path)
-            .env("PAPERWING_PARENT_CRASH_PHASE", phase)
-            .env("PAPERWING_PARENT_CRASH_OCCURRENCE", occurrence.to_string())
+            .env("SKEIN_PARENT_CRASH_FIXTURE", path)
+            .env("SKEIN_PARENT_CRASH_PHASE", phase)
+            .env("SKEIN_PARENT_CRASH_OCCURRENCE", occurrence.to_string())
             .env(
-                "PAPERWING_PARENT_CRASH_CLEANUP",
+                "SKEIN_PARENT_CRASH_CLEANUP",
                 if cleanup { "yes" } else { "no" },
             )
             .stdout(Stdio::piped())
@@ -130,7 +130,7 @@ fn reach(
 #[test]
 #[ignore]
 fn parent_process_helper() {
-    let path = PathBuf::from(std::env::var("PAPERWING_PARENT_CRASH_FIXTURE").unwrap());
+    let path = PathBuf::from(crate::env_names::var("SKEIN_PARENT_CRASH_FIXTURE").unwrap());
     assert!(
         path.is_absolute()
             && path.starts_with(
@@ -145,12 +145,12 @@ fn parent_process_helper() {
         b"paperwing-parent-fixture-v1\n"
     );
     assert!(path.join("restore-proof.json").is_file());
-    let wanted = std::env::var("PAPERWING_PARENT_CRASH_PHASE").unwrap();
-    let occurrence = std::env::var("PAPERWING_PARENT_CRASH_OCCURRENCE")
+    let wanted = crate::env_names::var("SKEIN_PARENT_CRASH_PHASE").unwrap();
+    let occurrence = crate::env_names::var("SKEIN_PARENT_CRASH_OCCURRENCE")
         .unwrap()
         .parse::<usize>()
         .unwrap();
-    let cleanup = match std::env::var("PAPERWING_PARENT_CRASH_CLEANUP")
+    let cleanup = match crate::env_names::var("SKEIN_PARENT_CRASH_CLEANUP")
         .unwrap()
         .as_str()
     {

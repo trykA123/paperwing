@@ -286,7 +286,7 @@ impl Journal {
         #[cfg(test)]
         {
             self.parent_checkpoint(&format!("file{phase}"), id)?;
-            if let Ok(target) = std::env::var("PAPERWING_JOURNAL_KILL_PHASE") {
+            if let Ok(target) = crate::env_names::var("SKEIN_JOURNAL_KILL_PHASE") {
                 if target == phase {
                     super::tests::persist_checkpoint(phase, id);
                     loop {
