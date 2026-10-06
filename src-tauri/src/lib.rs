@@ -22,6 +22,7 @@ mod platform;
 #[cfg(not(windows))]
 mod unsupported_files;
 mod settings;
+mod stash;
 mod credentials;
 mod discover;
 mod discover_job;
@@ -133,6 +134,13 @@ pub fn run() {
             commit::create_branch,
             commit::push_branch,
             commit::delete_branch,
+            stash::stash_list,
+            stash::stash_push,
+            stash::stash_apply,
+            stash::stash_pop,
+            stash::stash_drop,
+            stash::stash_show,
+            stash::switch_with_stash,
             trash::trash_set_folders,
             compare::comparison_open,
             compare::comparison_refresh,
