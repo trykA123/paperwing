@@ -44,6 +44,8 @@ pub struct RepositoryTree {
     pub(super) tags: Vec<TreeRef>,
     pub(super) stashes: Vec<TreeStash>,
     pub(super) submodules: Vec<TreeSubmodule>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) warning: Option<String>,
 }
 
 async fn tree_output(
@@ -153,6 +155,20 @@ async fn read_tree(path: &str) -> Result<RepositoryTree, String> {
             refs,
         });
     }
+    let mut warnings = Vec::new();
+    if let Err(error) = read_stashes(path, &mut tree).await {
+        warnings.push(format!("Stashes unavailable: {error}"));
+    }
+    if let Err(error) = read_submodules(path, &mut tree).await {
+        warnings.push(format!("Submodules unavailable: {error}"));
+    }
+    if !warnings.is_empty() {
+        tree.warning = Some(warnings.join("; "));
+    }
+    Ok(tree)
+}
+
+async fn read_stashes(path: &str, tree: &mut RepositoryTree) -> Result<(), String> {
     let output = tree_output(
         path,
         &["stash", "list", "--format=%gd%x09%H%x09%gs"],
@@ -170,83 +186,83 @@ async fn read_tree(path: &str) -> Result<RepositoryTree, String> {
             });
         }
     }
+    Ok(())
+}
+
+async fn read_submodules(path: &str, tree: &mut RepositoryTree) -> Result<(), String> {
+    let modules = std::path::Path::new(path).join(".gitmodules");
+    if !modules.exists() {
+        return Ok(());
+    }
+    let module_path = modules.to_str().ok_or("Unsupported .gitmodules path")?;
+    valid_path(module_path, true)?;
+    if !modules.is_file()
+        || std::fs::metadata(&modules)
+            .map_err(|_| ".gitmodules unavailable")?
+            .len()
+            > 256 * 1024
+    {
+        return Err("Unsupported or oversized .gitmodules".into());
+    }
     let output = tree_output(
         path,
-        &["ls-files", "--stage", "-z"],
-        &[0],
+        &[
+            "config",
+            "--no-includes",
+            "--file",
+            module_path,
+            "--null",
+            "--get-regexp",
+            "^submodule\\..*\\.(path|url)$",
+        ],
+        &[0, 1],
         OutputPolicy::Metadata,
     )
     .await?;
-    let mut submodule_paths = Vec::new();
+    let mut config = std::collections::BTreeMap::<String, (Option<String>, Option<String>)>::new();
     for entry in output.stdout.split(|byte| *byte == 0) {
+        let text = String::from_utf8_lossy(entry);
+        let Some((key, value)) = text.split_once('\n') else {
+            continue;
+        };
+        let Some((name, field)) = key.rsplit_once('.') else {
+            continue;
+        };
+        let pair = config.entry(name.into()).or_default();
+        if field == "path" {
+            pair.0 = Some(value.into());
+        }
+        if field == "url" {
+            pair.1 = Some(output.safe(value));
+        }
+    }
+    let declared: Vec<String> = config
+        .values()
+        .filter_map(|(path, _)| path.clone())
+        .collect();
+    if declared.is_empty() {
+        return Ok(());
+    }
+    let mut args = vec!["ls-files", "--stage", "-z", "--"];
+    args.extend(declared.iter().map(String::as_str));
+    let listing = tree_output(path, &args, &[0], OutputPolicy::Metadata).await?;
+    for entry in listing.stdout.split(|byte| *byte == 0) {
         let text = String::from_utf8_lossy(entry);
         let Some((metadata, relative)) = text.split_once('\t') else {
             continue;
         };
         let fields: Vec<_> = metadata.split(' ').collect();
         if fields.len() == 3 && fields[0] == "160000" && fields[2] == "0" {
-            submodule_paths.push(relative.to_string());
+            let url = config
+                .values()
+                .find(|(declared, _)| declared.as_deref() == Some(relative))
+                .and_then(|(_, url)| url.clone());
             tree.submodules.push(TreeSubmodule {
-                path: output.safe(relative),
+                path: listing.safe(relative),
                 sha: fields[1].into(),
-                url: None,
+                url,
             });
         }
     }
-    let modules = std::path::Path::new(path).join(".gitmodules");
-    if modules.exists() {
-        let module_path = modules.to_str().ok_or("Unsupported .gitmodules path")?;
-        valid_path(module_path, true)?;
-        if !modules.is_file()
-            || std::fs::metadata(&modules)
-                .map_err(|_| ".gitmodules unavailable")?
-                .len()
-                > 256 * 1024
-        {
-            return Err("Unsupported or oversized .gitmodules".into());
-        }
-        let output = tree_output(
-            path,
-            &[
-                "config",
-                "--no-includes",
-                "--file",
-                module_path,
-                "--null",
-                "--get-regexp",
-                "^submodule\\..*\\.(path|url)$",
-            ],
-            &[0, 1],
-            OutputPolicy::Metadata,
-        )
-        .await?;
-        let mut config =
-            std::collections::BTreeMap::<String, (Option<String>, Option<String>)>::new();
-        for entry in output.stdout.split(|byte| *byte == 0) {
-            let text = String::from_utf8_lossy(entry);
-            let Some((key, value)) = text.split_once('\n') else {
-                continue;
-            };
-            let Some((name, field)) = key.rsplit_once('.') else {
-                continue;
-            };
-            let pair = config.entry(name.into()).or_default();
-            if field == "path" {
-                pair.0 = Some(value.into());
-            }
-            if field == "url" {
-                pair.1 = Some(output.safe(value));
-            }
-        }
-        for (_, (relative, url)) in config {
-            if let Some(submodule) = submodule_paths
-                .iter()
-                .position(|path| relative.as_ref() == Some(path))
-                .and_then(|index| tree.submodules.get_mut(index))
-            {
-                submodule.url = url;
-            }
-        }
-    }
-    Ok(tree)
+    Ok(())
 }

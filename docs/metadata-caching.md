@@ -15,7 +15,7 @@ Each owner admits at most 32 producers and 256 consumers and reports excess admi
 Freshness uses explicit epochs and stale marks. No new timer lifetime is
 assumed, and cached metadata does not grant comparison or write authority. No background
 network requests, credential values or credential hashes are added to cache keys or disk rows.
-Listing responses with errors never refill disk. Newer generations reject older successes
+Listing responses with errors never refill disk. A listing that lost later pages of an owner (`partial`, with per-owner `warnings`) is stored marked partial, so the next start shows it as stale rows; it never replaces a fuller stored listing, and the next load revalidates it. Owners are listed at most four at a time. Newer generations reject older successes
 and failures at publication, including native disk publication after forced refresh.
 
 With a credential, discovery validates `GET /user`. When a configured owner matches that

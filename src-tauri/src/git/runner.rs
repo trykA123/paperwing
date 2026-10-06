@@ -68,8 +68,40 @@ pub fn configure_sources(ids: Vec<String>) {
 
 async fn read_secret(source_id: String) -> Result<Option<String>, String> {
     #[cfg(test)]
-    if let Some(result) = fixture_secret(&source_id) { return result; }
+    if let Some(result) = fixture_secret(&source_id) {
+        SECRET_READS.fetch_add(1, AtomicOrdering::SeqCst);
+        return result;
+    }
     crate::credentials::read(source_id).await
+}
+
+type SecretKey = Vec<(String, u64)>;
+
+static SECRET_CACHE: Mutex<Option<(SecretKey, Vec<String>)>> = Mutex::new(None);
+
+#[cfg(test)]
+pub(crate) static SECRET_READS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+async fn redaction_secrets(
+    ids: Vec<String>,
+    cancellation: &Option<Arc<AtomicBool>>,
+    owner: &Option<Arc<AtomicBool>>,
+) -> Result<(Vec<String>, bool), String> {
+    let key: SecretKey = ids.iter().map(|id| (id.clone(), crate::credentials::revision(id))).collect();
+    if let Some((cached, secrets)) = SECRET_CACHE.lock().unwrap().as_ref() {
+        if *cached == key { return Ok((secrets.clone(), false)); }
+    }
+    let mut secrets = Vec::new();
+    for source_id in ids {
+        if is_cancelled(cancellation, owner) { return Err("Git command cancelled".into()); }
+        match read_secret(source_id).await {
+            Ok(Some(token)) if !token.is_empty() => secrets.push(token),
+            Ok(_) => (),
+            Err(_) => return Ok((Vec::new(), true)),
+        }
+    }
+    *SECRET_CACHE.lock().unwrap() = Some((key, secrets.clone()));
+    Ok((secrets, false))
 }
 
 pub(super) fn configured_secrets() -> Result<Vec<String>, String> {
@@ -397,16 +429,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     #[cfg(feature = "benchmark")]
     let _process = crate::benchmark::Span::new("git.process", operation);
     let ids = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
-    let mut secrets = Vec::new();
-    let mut quiet = false;
-    for source_id in ids {
-        if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
-        match read_secret(source_id).await {
-            Ok(Some(token)) if !token.is_empty() => secrets.push(token),
-            Ok(_) => (),
-            Err(_) => { quiet = true; break; }
-        }
-    }
+    let (secrets, quiet) = redaction_secrets(ids, &cancellation, &owner).await?;
     let redaction = if quiet { Redaction::Quiet } else { Redaction::Ready(secrets) };
     let observer = if quiet { None } else { observer };
     if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
@@ -585,6 +608,11 @@ fn fixture_secret(id: &str) -> Option<Result<Option<String>, String>> {
 }
 
 #[cfg(test)]
+fn bump<I: IntoIterator>(ids: I) where I::Item: AsRef<str> {
+    for id in ids { crate::credentials::advance_revision(id.as_ref(), || ()); }
+}
+
+#[cfg(test)]
 pub(crate) struct CredentialFixture { sources: Vec<String> }
 
 #[cfg(test)]
@@ -592,19 +620,22 @@ impl CredentialFixture {
     pub(crate) fn new(secrets: FixtureSecrets) -> Self {
         let sources = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
         assert!(FIXTURE_SECRETS.lock().unwrap().replace(secrets.clone()).is_none());
+        bump(secrets.keys());
         configure_sources(secrets.keys().cloned().collect());
         Self { sources }
     }
 
     pub(crate) fn replace(id: &str, token: &str) {
         FIXTURE_SECRETS.lock().unwrap().as_mut().unwrap().insert(id.into(), Ok(Some(token.into())));
+        bump([id]);
     }
 }
 
 #[cfg(test)]
 impl Drop for CredentialFixture {
     fn drop(&mut self) {
-        *FIXTURE_SECRETS.lock().unwrap() = None;
+        let ids: Vec<String> = FIXTURE_SECRETS.lock().unwrap().take().map(|secrets| secrets.into_keys().collect()).unwrap_or_default();
+        bump(&ids);
         configure_sources(self.sources.clone());
     }
 }
