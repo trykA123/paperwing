@@ -132,19 +132,56 @@ impl ListingRequest {
                 listings::remove_other_login(connection, &source_id, login.as_deref())
             });
         }
+        let partial = list.partial;
+        let configuration = self.scope.configuration.clone();
         let listing = Listing {
             source_id,
-            scope: self.scope.configuration.clone(),
+            scope: if partial {
+                partial_scope(&configuration)
+            } else {
+                configuration.clone()
+            },
             login,
             fetched_at: list.fetched_at,
             version: listings::VERSION,
             repos: list.repos,
         };
-        store.enqueue(move |connection| listings::put(connection, &listing))
+        store.enqueue(move |connection| {
+            if partial && has_fuller_listing(connection, &listing, &configuration) {
+                return Ok(());
+            }
+            listings::put(connection, &listing)
+        })
     }
 }
 
-fn read_cached(listing: Listing, scope: &Scope, now: u64) -> Option<RepoList> {
+const PARTIAL_MARK: &str = "\u{0}partial";
+
+fn partial_scope(configuration: &str) -> String {
+    format!("{configuration}{PARTIAL_MARK}")
+}
+
+fn has_fuller_listing(
+    connection: &mut rusqlite::Connection,
+    listing: &Listing,
+    configuration: &str,
+) -> bool {
+    listings::get(connection, &listing.source_id)
+        .ok()
+        .flatten()
+        .is_some_and(|stored| {
+            stored.version == listings::VERSION
+                && stored.scope == configuration
+                && stored.login == listing.login
+                && stored.repos.len() > listing.repos.len()
+        })
+}
+
+fn read_cached(mut listing: Listing, scope: &Scope, now: u64) -> Option<RepoList> {
+    let partial = listing.scope == partial_scope(&scope.configuration);
+    if partial {
+        listing.scope = scope.configuration.clone();
+    }
     if listing.version != listings::VERSION
         || listing.source_id != scope.source_id
         || listing.scope != scope.configuration
@@ -168,6 +205,12 @@ fn read_cached(listing: Listing, scope: &Scope, now: u64) -> Option<RepoList> {
         fetched_at: listing.fetched_at,
         errors: Vec::new(),
         stale: true,
+        warnings: if partial {
+            vec!["Cached list is incomplete".into()]
+        } else {
+            Vec::new()
+        },
+        partial,
     })
 }
 

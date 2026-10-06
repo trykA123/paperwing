@@ -81,6 +81,20 @@ fn stored_rows_cannot_leak_repositories_from_another_source_or_owner() {
     }
 }
 
+#[test]
+fn cached_partial_rows_report_their_incomplete_state() {
+    let scope = scope();
+    let listing = Listing {
+        scope: partial_scope(&scope.configuration),
+        ..stored(&scope, vec![repo("cache-fixture", "admin", "repo")], 10)
+    };
+
+    let cached = read_cached(listing, &scope, 10).unwrap();
+
+    assert!(cached.partial);
+    assert_eq!(cached.warnings, ["Cached list is incomplete"]);
+}
+
 #[tokio::test]
 async fn rows_survive_a_new_process_and_are_served_stale() {
     let source = source("cache-stale-fixture");
@@ -301,4 +315,48 @@ async fn a_pending_store_is_a_cache_miss() {
         .finish(pending, None, &RepoList::default())
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn partial_listings_are_stored_marked_and_never_replace_a_fuller_one() {
+    let source = source("cache-partial-fixture");
+    let fixture = Fixture::new("metadata-cache-partial");
+    let store = store(&fixture);
+    let request = ListingRequest::new(&source, false).unwrap();
+    let partial = RepoList {
+        repos: vec![repo(&source.id, "admin", "one")],
+        fetched_at: now(),
+        warnings: vec!["admin: showing 1 of more; GitHub returned bad gateway".into()],
+        partial: true,
+        ..Default::default()
+    };
+    request
+        .finish(store.clone(), Some("admin".into()), &partial)
+        .await
+        .unwrap();
+    let stored = request.read_stale(store.clone()).await.unwrap().unwrap();
+    assert!(stored.partial && stored.stale);
+    assert_eq!(stored.repos.len(), 1);
+    let full = RepoList {
+        repos: vec![
+            repo(&source.id, "admin", "one"),
+            repo(&source.id, "admin", "two"),
+        ],
+        fetched_at: now(),
+        ..Default::default()
+    };
+    request
+        .finish(store.clone(), Some("admin".into()), &full)
+        .await
+        .unwrap();
+    let stored = request.read_stale(store.clone()).await.unwrap().unwrap();
+    assert!(!stored.partial);
+    assert_eq!(stored.repos.len(), 2);
+    request
+        .finish(store.clone(), Some("admin".into()), &partial)
+        .await
+        .unwrap();
+    let stored = request.read_stale(store).await.unwrap().unwrap();
+    assert!(!stored.partial);
+    assert_eq!(stored.repos.len(), 2);
 }

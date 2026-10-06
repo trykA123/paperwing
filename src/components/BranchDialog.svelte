@@ -45,8 +45,9 @@
         if (app.running || app.gitBusy) throw new Error('Wait for the running Git operation to finish first.');
         const item = app.addCopy(source, folder);
         copyItem = item;
-        await app.checkExists([app.dest(item)]);
-        if (app.exists[app.dest(item)]) {
+        const [status] = await app.checkExists([app.dest(item)]);
+        if (!status) throw new Error(`Could not check whether ${folder} exists on disk. Try again.`);
+        if (status.exists) {
           await app.removeItem(item.id);
           copyItem = null;
           throw new Error(`A folder named ${folder} already exists on disk.`);

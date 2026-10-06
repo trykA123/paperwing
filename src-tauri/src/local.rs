@@ -1,8 +1,6 @@
 use crate::git::{buffered, valid_root};
 use serde::Serialize;
 use std::path::Path;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
 
 /// What a destination folder currently has checked out (no network access).
 #[derive(Serialize, Default)]
@@ -79,22 +77,43 @@ async fn status_of(path: String) -> LocalStatus {
 
 #[tauri::command]
 pub async fn local_status(paths: Vec<String>) -> Vec<LocalStatus> {
-    let sem = Arc::new(Semaphore::new(8));
-    let handles: Vec<_> = paths
-        .into_iter()
-        .map(|p| {
-            let sem = sem.clone();
-            tauri::async_runtime::spawn(async move {
-                let _permit = sem.acquire_owned().await;
-                status_of(p).await
-            })
-        })
-        .collect();
-    let mut out = Vec::with_capacity(handles.len());
-    for h in handles {
-        if let Ok(s) = h.await {
-            out.push(s);
-        }
-    }
-    out
+    let names = paths.clone();
+    crate::ordered::map_bounded(paths, 8, status_of, move |index| {
+        unavailable_status(names[index].clone())
+    })
+    .await
 }
+
+fn unavailable_status(path: String) -> LocalStatus {
+    let dir = Path::new(&path);
+    let exists = dir.exists();
+    let repo = dir.join(".git").exists();
+    LocalStatus {
+        path,
+        exists,
+        repo,
+        error: Some("Status check did not finish".into()),
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_status_keeps_filesystem_presence() {
+        let fixture = crate::platform::Fixture::new("local-fallback-status");
+        let checkout = fixture.0.join("checkout");
+        std::fs::create_dir_all(checkout.join(".git")).unwrap();
+
+        let status = unavailable_status(checkout.to_string_lossy().into_owned());
+
+        assert!(status.exists);
+        assert!(status.repo);
+        assert_eq!(status.error.as_deref(), Some("Status check did not finish"));
+    }
+}
+
+#[cfg(test)]
+mod slow_tests;

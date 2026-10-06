@@ -2,6 +2,12 @@ use super::http::GithubApi;
 use super::{valid_name, GhLogin, GhRepo, Repo, RepoList, Source};
 
 const MAX_PAGES: u32 = 100;
+const OWNER_CONCURRENCY: usize = 4;
+
+struct OwnerListing {
+    repos: Vec<Repo>,
+    warning: Option<String>,
+}
 
 pub(super) async fn authenticated_login(api: &impl GithubApi) -> Result<Option<String>, String> {
     if !api.authenticated() {
@@ -37,13 +43,40 @@ pub(super) async fn fetch_listing(
         fetched_at: super::cache::now(),
         ..Default::default()
     };
-    for owner in &source.orgs {
-        match list_owner(source, owner, api, login).await {
-            Ok(repos) => list.repos.extend(repos),
+    let owners: Vec<&str> = source.orgs.iter().map(String::as_str).collect();
+    let mut results = Vec::with_capacity(owners.len());
+    for chunk in owners.chunks(OWNER_CONCURRENCY) {
+        results.extend(
+            futures_util::future::join_all(
+                chunk
+                    .iter()
+                    .map(|owner| owner_result(source, owner, api, login)),
+            )
+            .await,
+        );
+    }
+    for (owner, result) in results {
+        match result {
+            Ok(found) => {
+                list.repos.extend(found.repos);
+                if let Some(warning) = found.warning {
+                    list.warnings.push(format!("{owner}: {warning}"));
+                    list.partial = true;
+                }
+            }
             Err(reason) => list.errors.push(format!("{owner}: {reason}")),
         }
     }
     list
+}
+
+async fn owner_result<'a>(
+    source: &Source,
+    owner: &'a str,
+    api: &impl GithubApi,
+    login: Option<&str>,
+) -> (&'a str, Result<OwnerListing, String>) {
+    (owner, list_owner(source, owner, api, login).await)
 }
 
 async fn list_owner(
@@ -51,7 +84,7 @@ async fn list_owner(
     owner: &str,
     api: &impl GithubApi,
     login: Option<&str>,
-) -> Result<Vec<Repo>, String> {
+) -> Result<OwnerListing, String> {
     valid_name(owner)?;
     let personal =
         api.authenticated() && login.is_some_and(|login| login.eq_ignore_ascii_case(owner));
@@ -72,6 +105,9 @@ async fn list_owner(
                 route = format!("/users/{owner}/repos?type=owner");
                 continue;
             }
+            Err((status, reason)) if !repos.is_empty() && is_transient_error(status, &reason) => {
+                return Ok(partial(repos, &reason));
+            }
             Err((_, reason)) => return Err(reason),
         };
         let more = batch.next || batch.data.len() == 100;
@@ -84,13 +120,35 @@ async fn list_owner(
             repos.push(to_repo(source, repo));
         }
         if !more {
-            return Ok(repos);
+            return Ok(OwnerListing {
+                repos,
+                warning: None,
+            });
         }
         if page >= MAX_PAGES {
-            return Err("Repository discovery is incomplete: pagination limit reached".into());
+            let reason = "Repository discovery is incomplete: pagination limit reached";
+            return if repos.is_empty() {
+                Err(reason.into())
+            } else {
+                Ok(partial(repos, reason))
+            };
         }
         page += 1;
     }
+}
+
+fn partial(repos: Vec<Repo>, reason: &str) -> OwnerListing {
+    let warning = format!("showing {} of more; GitHub returned {reason}", repos.len());
+    OwnerListing {
+        repos,
+        warning: Some(warning),
+    }
+}
+
+fn is_transient_error(status: u16, reason: &str) -> bool {
+    (500..600).contains(&status)
+        || (status == 0
+            && (reason.starts_with("Cannot reach ") || reason == "Cannot read GitHub response"))
 }
 
 fn to_repo(source: &Source, repo: GhRepo) -> Repo {
@@ -210,7 +268,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn permissions_never_fall_back_or_publish_partial_personal_pages() {
+    async fn non_retryable_later_page_failures_discard_fetched_pages() {
         for status in [401, 403, 404] {
             let api = fixture(vec![
                 page(serde_json::json!([repo("admin", "private", true)]), true),
@@ -219,7 +277,16 @@ mod tests {
             let list = fetch_listing(&source("admin"), &api, Some("admin")).await;
             assert!(list.repos.is_empty());
             assert_eq!(list.errors, ["admin: denied"]);
+            assert!(list.warnings.is_empty());
+            assert!(!list.partial);
             assert_eq!(api.paths.borrow().len(), 2);
+        }
+        for status in [401, 403, 404] {
+            let api = fixture(vec![Err((status, "denied".into()))]);
+            let list = fetch_listing(&source("admin"), &api, Some("admin")).await;
+            assert!(list.repos.is_empty());
+            assert_eq!(list.errors, ["admin: denied"]);
+            assert!(!list.partial);
         }
         let api = fixture(vec![Err((401, "expired".into()))]);
         assert_eq!(authenticated_login(&api).await.unwrap_err(), "expired");
@@ -262,6 +329,94 @@ mod tests {
         assert!(list.repos.is_empty());
         assert!(list.errors[0].contains("incomplete"));
         assert_eq!(api.paths.borrow().len(), MAX_PAGES as usize);
+    }
+
+    fn many(owner: &str, from: usize, count: usize) -> serde_json::Value {
+        (from..from + count)
+            .map(|index| repo(owner, &format!("repo{index:04}"), false))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_failing_third_page_of_eight_keeps_two_hundred_repositories_and_warns() {
+        let api = fixture(vec![
+            page(many("big", 0, 100), true),
+            page(many("big", 100, 100), true),
+            Err((502, "bad gateway".into())),
+        ]);
+        let list = fetch_listing(&source("big"), &api, None).await;
+        assert_eq!(list.repos.len(), 200);
+        assert!(list.errors.is_empty());
+        assert!(list.partial);
+        assert_eq!(
+            list.warnings,
+            ["big: showing 200 of more; GitHub returned bad gateway"]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_network_failure_after_a_page_returns_partial_results() {
+        let api = fixture(vec![
+            page(serde_json::json!([repo("big", "first", false)]), true),
+            Err((0, "Cannot reach github.com".into())),
+        ]);
+
+        let list = fetch_listing(&source("big"), &api, None).await;
+
+        assert_eq!(list.repos.len(), 1);
+        assert!(list.errors.is_empty());
+        assert!(list.partial);
+        assert_eq!(
+            list.warnings,
+            ["big: showing 1 of more; GitHub returned Cannot reach github.com"]
+        );
+    }
+
+    struct Concurrent {
+        active: std::cell::Cell<usize>,
+        peak: std::cell::Cell<usize>,
+    }
+
+    impl GithubApi for Concurrent {
+        fn authenticated(&self) -> bool {
+            false
+        }
+        async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<Page<T>, (u16, String)> {
+            self.active.set(self.active.get() + 1);
+            self.peak.set(self.peak.get().max(self.active.get()));
+            tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+            self.active.set(self.active.get() - 1);
+            let owner = path.split('/').nth(2).unwrap().split('/').next().unwrap();
+            let owner = owner.split('?').next().unwrap();
+            Ok(Page {
+                data: serde_json::from_value(serde_json::json!([repo(owner, "only", false)]))
+                    .unwrap(),
+                next: false,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn owners_are_listed_concurrently_up_to_four_and_keep_their_order() {
+        let owners: Vec<String> = (0..9).map(|index| format!("owner{index}")).collect();
+        let mut multi = source("owner0");
+        multi.orgs = owners.clone();
+        let api = Concurrent {
+            active: Default::default(),
+            peak: Default::default(),
+        };
+        let started = std::time::Instant::now();
+        let list = fetch_listing(&multi, &api, None).await;
+        assert_eq!(api.peak.get(), OWNER_CONCURRENCY);
+        assert!(started.elapsed() < std::time::Duration::from_millis(30 * 9));
+        assert!(list.errors.is_empty());
+        assert_eq!(
+            list.repos
+                .iter()
+                .map(|repo| repo.org.clone())
+                .collect::<Vec<_>>(),
+            owners
+        );
     }
 
     fn store(fixture: &crate::platform::Fixture) -> crate::store::Store {
@@ -334,6 +489,31 @@ mod tests {
         assert!(!list.errors.is_empty());
         let stored = again.read_stale(store).await.unwrap().unwrap();
         assert_eq!(stored.repos[0].name, "kept");
+    }
+
+    #[tokio::test]
+    async fn authentication_failure_on_page_two_publishes_and_caches_nothing() {
+        for status in [401, 403] {
+            let source = revalidation_source(&format!("page-two-auth-{status}"));
+            let scratch = crate::platform::Fixture::new(&format!("page-two-auth-{status}"));
+            let store = store(&scratch);
+            let request = super::super::cache::ListingRequest::new(&source, false).unwrap();
+            let api = fixture(vec![
+                page(serde_json::json!({"login":"admin"}), false),
+                page(serde_json::json!([repo("admin", "first-page", true)]), true),
+                Err((status, "denied".into())),
+            ]);
+
+            let published = revalidate(&source, &request, store.clone(), &api)
+                .await
+                .unwrap();
+
+            assert!(published.repos.is_empty());
+            assert_eq!(published.errors, ["admin: denied"]);
+            assert!(!published.partial);
+            assert!(request.read_stale(store.clone()).await.unwrap().is_none());
+            store.close();
+        }
     }
 
     #[test]

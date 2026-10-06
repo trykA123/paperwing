@@ -459,3 +459,23 @@ fn valid_path_ignores_the_process_working_directory_on_the_same_drive() {
         .env(CHILD, &repo).current_dir(&linked).output().unwrap();
     assert!(child.status.success(), "{}{}", String::from_utf8_lossy(&child.stdout), String::from_utf8_lossy(&child.stderr));
 }
+
+#[tokio::test]
+async fn redaction_secrets_are_read_once_per_credential_revision() {
+    use std::sync::atomic::Ordering;
+    let _serial = TEST_RUNNER_LOCK.lock().await;
+    let _credentials = CredentialFixture::new(std::collections::BTreeMap::from([
+        ("cache-owner-a".into(), Ok(Some("synthetic-cache-a".into()))),
+        ("cache-owner-b".into(), Ok(Some("synthetic-cache-b".into()))),
+    ]));
+    let run = || async {
+        execute(Request { args: &["--version"], context: "cache", expected: &[0],
+            timeout: Duration::from_secs(45), policy: OutputPolicy::Text }, None).await.unwrap()
+    };
+    let before = super::runner::SECRET_READS.load(Ordering::SeqCst);
+    for _ in 0..5 { run().await; }
+    assert_eq!(super::runner::SECRET_READS.load(Ordering::SeqCst) - before, 2);
+    CredentialFixture::replace("cache-owner-a", "synthetic-cache-a2");
+    for _ in 0..5 { run().await; }
+    assert_eq!(super::runner::SECRET_READS.load(Ordering::SeqCst) - before, 4);
+}

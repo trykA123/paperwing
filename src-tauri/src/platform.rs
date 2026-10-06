@@ -309,19 +309,11 @@ pub(crate) fn same_destination(left: &Path, right: &Path) -> Result<bool, String
     ))
 }
 
-#[cfg(not(target_os = "linux"))]
-#[tauri::command]
-pub fn probe_root(root: String) -> RootSupport {
-    probe_root_sync(root)
-}
-
-#[cfg(target_os = "linux")]
 #[tauri::command]
 pub async fn probe_root(root: String) -> RootSupport {
     probe_root_bounded(root, probe_root_sync).await
 }
 
-#[cfg(target_os = "linux")]
 async fn probe_root_bounded(
     root: String,
     probe: impl FnOnce(String) -> RootSupport + Send + 'static,
@@ -335,7 +327,7 @@ async fn probe_root_bounded(
     else {
         return refused_root(
             root,
-            "Linux root probes are busy. Retry after the current probes finish.",
+            "Root probes are busy. Retry after the current probes finish.",
         );
     };
     let failed_root = root.clone();
@@ -348,12 +340,11 @@ async fn probe_root_bounded(
         Ok(support) => support,
         Err(_) => refused_root(
             failed_root,
-            "Linux root probe could not finish. Retry root selection.",
+            "Root probe could not finish. Retry root selection.",
         ),
     }
 }
 
-#[cfg(target_os = "linux")]
 fn refused_root(root: String, reason: &str) -> RootSupport {
     RootSupport {
         root,
@@ -395,7 +386,41 @@ fn probe_root_sync(root: String) -> RootSupport {
 }
 
 #[tauri::command]
-pub fn path_identities(paths: Vec<String>) -> Vec<PathIdentity> {
+pub async fn path_identities(paths: Vec<String>) -> Vec<PathIdentity> {
+    static SLOTS: std::sync::OnceLock<std::sync::Arc<tokio::sync::Semaphore>> =
+        std::sync::OnceLock::new();
+    let names = paths.clone();
+    let slots = SLOTS
+        .get_or_init(|| std::sync::Arc::new(tokio::sync::Semaphore::new(8)))
+        .clone();
+    crate::ordered::map_bounded(
+        paths,
+        8,
+        move |path| {
+            let slots = slots.clone();
+            async move {
+                let Ok(permit) = slots.try_acquire_owned() else {
+                    return unavailable_identity(path);
+                };
+                let fallback = path.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let _permit = permit;
+                    path_identities_sync(vec![path]).remove(0)
+                })
+                .await
+                .unwrap_or_else(|_| unavailable_identity(fallback))
+            }
+        },
+        move |index| unavailable_identity(names[index].clone()),
+    )
+    .await
+}
+
+fn unavailable_identity(path: String) -> PathIdentity {
+    PathIdentity { path, identity: None, exists: false, reason: Some("Path check did not finish".into()) }
+}
+
+pub(crate) fn path_identities_sync(paths: Vec<String>) -> Vec<PathIdentity> {
     paths
         .into_iter()
         .map(|path| {
@@ -474,6 +499,24 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[tokio::test]
+    async fn path_identities_keep_input_order_under_bounded_concurrency() {
+        let fixture = Fixture::new("order");
+        let paths: Vec<String> = (0..40)
+            .map(|index| {
+                let path = fixture.0.join(format!("entry{index:02}"));
+                if index % 3 == 0 {
+                    std::fs::write(&path, "x").unwrap();
+                }
+                path.to_str().unwrap().to_string()
+            })
+            .collect();
+        let identities = path_identities(paths.clone()).await;
+        assert_eq!(identities.iter().map(|entry| entry.path.clone()).collect::<Vec<_>>(), paths);
+        assert!(identities.iter().enumerate().all(|(index, entry)| entry.exists == (index % 3 == 0)));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
     async fn linux_ipc_serialization_reports_native_reads_and_exact_write_refusals() {
         assert_eq!(
             serde_json::to_value(platform_info().await).unwrap(),
@@ -516,7 +559,7 @@ mod tests {
             })
         );
         assert_eq!(
-            serde_json::to_value(path_identities(vec![root.clone()])).unwrap(),
+            serde_json::to_value(path_identities(vec![root.clone()]).await).unwrap(),
             serde_json::json!([
                 {"path": root, "identity": identity, "exists": true, "reason": null}
             ])
@@ -624,7 +667,7 @@ mod tests {
         let before = std::fs::read_dir(&fixture.0).unwrap().count();
         let missing = fixture.0.join("missing");
         assert!(!probe_root_sync(missing.to_str().unwrap().into()).valid);
-        let identity = path_identities(vec![missing.to_str().unwrap().into()]).remove(0);
+        let identity = path_identities_sync(vec![missing.to_str().unwrap().into()]).remove(0);
         assert!(!identity.exists);
         assert_eq!(identity.identity, None);
         assert_eq!(identity.reason, None);
@@ -641,7 +684,7 @@ mod tests {
             assert!(foreign.reason.unwrap().contains("explicitly reassign"));
             std::os::unix::fs::symlink(&fixture.0, fixture.0.join("linked")).unwrap();
             assert!(!probe_root_sync(fixture.0.join("linked").to_str().unwrap().into()).valid);
-            assert!(path_identities(vec![fixture
+            assert!(path_identities_sync(vec![fixture
                 .0
                 .join("linked/missing")
                 .to_str()
@@ -695,7 +738,7 @@ mod tests {
         std::fs::hard_link(fixture.0.join("Folder"), fixture.0.join("alias")).unwrap();
         assert!(same_destination(&fixture.0.join("Folder"), &fixture.0.join("alias")).unwrap());
         assert!(!same_destination(&fixture.0.join("Folder"), &fixture.0.join("folder")).unwrap());
-        let identities = path_identities(vec![
+        let identities = path_identities_sync(vec![
             fixture.0.join("Missing").to_str().unwrap().into(),
             fixture.0.join("missing").to_str().unwrap().into(),
         ]);

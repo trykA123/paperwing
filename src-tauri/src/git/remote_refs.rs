@@ -1,7 +1,5 @@
 use serde::Serialize;
 use std::cmp::Ordering;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
 use super::{buffered, valid_url};
 
 pub(super) fn natural_cmp(a: &str, b: &str) -> Ordering {
@@ -91,26 +89,22 @@ pub struct RefsResult {
     error: Option<String>,
 }
 
+fn failed_refs(url: String, error: String) -> RefsResult {
+    RefsResult { url, branches: vec![], tags: vec![], branch_labels: vec![], tag_labels: vec![], branch_shas: vec![], tag_shas: vec![], error: Some(error) }
+}
+
 pub(super) async fn get_refs_many(urls: Vec<String>) -> Vec<RefsResult> {
-    let sem = Arc::new(Semaphore::new(8));
-    let handles: Vec<_> = urls
-        .into_iter()
-        .map(|url| {
-            let sem = sem.clone();
-            tauri::async_runtime::spawn(async move {
-                let _permit = sem.acquire_owned().await;
-                match remote_refs(&url).await {
-                    Ok(refs) => refs,
-                    Err(e) => RefsResult { url, branches: vec![], tags: vec![], branch_labels: vec![], tag_labels: vec![], branch_shas: vec![], tag_shas: vec![], error: Some(e) },
-                }
-            })
-        })
-        .collect();
-    let mut out = Vec::with_capacity(handles.len());
-    for h in handles {
-        if let Ok(r) = h.await {
-            out.push(r);
-        }
-    }
-    out
+    let names = urls.clone();
+    crate::ordered::map_bounded(
+        urls,
+        8,
+        |url| async move {
+            match remote_refs(&url).await {
+                Ok(refs) => refs,
+                Err(e) => failed_refs(url, e),
+            }
+        },
+        move |index| failed_refs(names[index].clone(), "Remote refs check did not finish".into()),
+    )
+    .await
 }

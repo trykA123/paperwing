@@ -1,13 +1,16 @@
-import { api, type Commit, type Repo, type SetItem, type Source } from '../api';
+import { api, type Commit, type Repo, type RefsResult, type SetItem, type Source } from '../api';
 import { ForegroundRequests } from './foreground-requests';
 import { commitHistoryKey, sourceFingerprint } from './metadata-keys';
 
 export type RefsEntry = {
-  branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean; stale?: boolean;
+  branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean; stale?: boolean; failures?: number; retryAt?: number;
 };
 export type CommitsEntry = Commit[] | 'loading' | { error: string };
 export type RefState = 'ok' | 'missing' | 'unknown' | 'unverified';
 
+const RETRY_BASE_MS = 2_000;
+const RETRY_MAX_MS = 60_000;
+const retryDue = (entry: RefsEntry) => Date.now() >= (entry.retryAt ?? 0);
 const isHex = (s: string) => /^[0-9a-f]{7,40}$/i.test(s);
 
 export class RepositoryMetadata {
@@ -15,6 +18,7 @@ export class RepositoryMetadata {
   repoErrors = $state<Record<string, string[]>>({});
   loadingRepos = $state<Record<string, boolean>>({});
   staleRepos = $state<Record<string, boolean>>({});
+  repoWarnings = $state<Record<string, string[]>>({});
   refs = $state<Record<string, RefsEntry>>({});
   commits = $state<Record<string, CommitsEntry>>({});
   private staleCommits = $state<Record<string, boolean>>({});
@@ -26,6 +30,7 @@ export class RepositoryMetadata {
   private listingScopes = new Map<string, string>();
   private loadingListingKeys = new Map<string, string>();
   private refScopes = new Map<string, string>();
+  private refFailures = new Map<string, { failures: number; retryAt: number }>();
   private refOwners = new Map<string, Set<string>>();
   private ownersByUrl = $derived.by(() => {
     const owners = new Map<string, Set<string>>();
@@ -65,19 +70,26 @@ export class RepositoryMetadata {
     delete this.repos[sourceId];
     delete this.repoErrors[sourceId];
     delete this.staleRepos[sourceId];
+    delete this.repoWarnings[sourceId];
     this.listingScopes.delete(sourceId);
     this.loadingListingKeys.delete(sourceId);
     this.loadingRepos[sourceId] = false;
   }
 
-  markStale() {
-    for (const entry of Object.values(this.refs)) if (!entry.loading) entry.stale = true;
-    for (const [key, entry] of Object.entries(this.commits)) if (entry !== 'loading') this.staleCommits[key] = true;
+  markStale(urls?: readonly string[]) {
+    const only = urls && new Set(urls);
+    for (const [url, entry] of Object.entries(this.refs)) if (!entry.loading && (!only || only.has(url))) entry.stale = true;
+    for (const [key, entry] of Object.entries(this.commits)) {
+      if (entry === 'loading') continue;
+      const owner = this.commitOwners.get(key);
+      if (!only || (owner && only.has(owner.url))) this.staleCommits[key] = true;
+    }
   }
 
   needsRefs(url: string) {
     const entry = this.refs[url];
-    return !entry || entry.stale === true;
+    if (!entry) return true;
+    return entry.error ? retryDue(entry) : entry.stale === true;
   }
 
   needsCommits(item: SetItem) {
@@ -90,6 +102,7 @@ export class RepositoryMetadata {
       this.refEpochs[url] = (this.refEpochs[url] ?? 0) + 1;
       delete this.refs[url];
       this.refScopes.delete(url);
+      this.refFailures.delete(url);
       for (const [key, owner] of this.commitOwners) {
         if (owner.url === url) {
           delete this.commits[key];
@@ -130,6 +143,7 @@ export class RepositoryMetadata {
         if (!offline) this.repos[src.id] = list.repos;
         this.repoErrors[src.id] = list.errors;
         this.staleRepos[src.id] = offline;
+        this.repoWarnings[src.id] = list.warnings ?? [];
         this.listingScopes.set(src.id, currentScope);
       } },
       fail: error => { if (current()) {
@@ -181,28 +195,48 @@ export class RepositoryMetadata {
 
   async ensureRefs(urls: string[], force = false, signal?: AbortSignal) {
     if (signal?.aborted) return;
-    await Promise.all([...new Set(urls)].map(url => this.loadRefs(url, force, signal)));
+    const unique = [...new Set(urls)];
+    const priority = unique.length > 1 ? 'background' : 'foreground';
+    await Promise.all(unique.map(url => this.loadRefs(url, { force, priority, signal })));
   }
 
-  private loadRefs(url: string, force: boolean, signal?: AbortSignal) {
+  private entryFromRow(row: RefsResult, failures: number): RefsEntry {
+    const entry: RefsEntry = { branches: row.branches, tags: row.tags, branchShas: row.branchShas, tagShas: row.tagShas,
+      ...(row.branchLabels ? { branchLabels: row.branchLabels } : {}), ...(row.tagLabels ? { tagLabels: row.tagLabels } : {}) };
+    return row.error ? { ...entry, ...this.failedEntry(row.error, failures + 1), branches: row.branches, tags: row.tags } : entry;
+  }
+
+  private failedEntry(error: string, failures: number): RefsEntry {
+    const delay = Math.min(RETRY_BASE_MS * 2 ** (failures - 1), RETRY_MAX_MS);
+    return { branches: [], tags: [], error, failures, retryAt: Date.now() + delay };
+  }
+
+  private loadRefs(url: string, { force, priority, signal }: { force: boolean; priority: 'foreground' | 'background'; signal?: AbortSignal | undefined }) {
     if (force) this.invalidateRefs([url]);
     const key = this.refsKey(url);
     const cached = this.refs[url];
     if (!force && cached && !cached.loading && !cached.error && !cached.stale && this.refScopes.get(url) === key) return Promise.resolve();
+    if (!force && cached?.error && !retryDue(cached)) return Promise.resolve();
     const keepData = !!cached?.stale && !cached.loading && !cached.error;
-    if (!keepData) this.refs[url] = { branches: [], tags: [], loading: true };
+    const failures = cached?.failures ?? this.refFailures.get(url)?.failures ?? 0;
+    if (!keepData) this.refs[url] = { branches: [], tags: [], loading: true, ...(failures ? { failures, retryAt: cached?.retryAt ?? this.refFailures.get(url)?.retryAt ?? 0 } : {}) };
     const current = () => this.refsKey(url) === key;
-    return this.requests.run(key, { signal,
+    return this.requests.run(key, { signal, priority,
       produce: () => api.getRefsMany([url]),
       publish: rows => { if (current()) {
         const row = rows.find(row => row.url === url);
         if (!row) throw new Error(`No references returned for ${url}`);
-        this.refs[url] = { branches: row.branches, tags: row.tags, branchShas: row.branchShas, tagShas: row.tagShas,
-          ...(row.branchLabels ? { branchLabels: row.branchLabels } : {}), ...(row.tagLabels ? { tagLabels: row.tagLabels } : {}), error: row.error ?? undefined };
+        this.refs[url] = this.entryFromRow(row, failures);
         this.refScopes.set(url, key);
+        if (!row.error) this.refFailures.delete(url);
       } },
-      fail: error => { if (current() && !keepData) this.refs[url] = { branches: [], tags: [], error: String(error) }; },
-      settled: () => { if (this.refs[url]?.loading && !this.requests.has(this.refsKey(url))) delete this.refs[url]; },
+      fail: error => { if (current() && !keepData) this.refs[url] = this.failedEntry(String(error), failures + 1); },
+      settled: () => {
+        const entry = this.refs[url];
+        if (!entry?.loading || this.requests.has(this.refsKey(url))) return;
+        if (entry.failures) this.refFailures.set(url, { failures: entry.failures, retryAt: entry.retryAt ?? 0 });
+        delete this.refs[url];
+      },
     });
   }
 

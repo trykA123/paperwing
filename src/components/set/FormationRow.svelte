@@ -4,7 +4,7 @@
   export type RowHandlers = {
     toggle: (on: boolean) => void; inspect: () => void; pickRef: (anchor: HTMLElement) => void;
     next: (kind: NextActionKind) => void; menu: (anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) => void;
-    rename: (value: string | null) => void;
+    rename: (value: string | null) => void; retryStatus: () => void;
   };
 </script>
 
@@ -72,6 +72,8 @@
       <button class="btn small fm-action" disabled={!row.canAct} title={row.next.title} onclick={() => handlers.next(kind)}>
         <Icon name={ICONS[kind].icon} tone={ICONS[kind].tone} />{row.next.label}
       </button>
+    {:else if row.sync.kind === 'unavailable'}
+      <button class="btn small fm-action" title="Read the status of this folder again" onclick={handlers.retryStatus}><Icon name="refresh" />Retry</button>
     {/if}
   </div>
   <div class="fm-cell fm-more">
