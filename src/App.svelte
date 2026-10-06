@@ -98,7 +98,10 @@
 
   // Branches may have been switched in a terminal meanwhile; re-read local state when the window regains focus.
   function onFocus() {
-    if (!benchmarkEnabled && app.ready && !app.running) app.checkExists(app.set.items.map(i => app.dest(i)));
+    if (!benchmarkEnabled && app.ready && !app.running) {
+      app.invalidateMetadata();
+      void app.checkExists(app.set.items.map(i => app.dest(i)));
+    }
   }
 
   // Persist sources + workspace shortly after any change.

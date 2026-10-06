@@ -129,6 +129,23 @@ pub fn if_current<T>(source_id: &str, expected: u64, action: impl FnOnce() -> T)
     (entries.get(source_id).map_or(0, |entry| entry.value) == expected).then(action)
 }
 
+fn source_configuration(source: &crate::settings::Source) -> String {
+    serde_json::json!([source.kind, source.host, source.orgs, source.urls, source.credential_managed]).to_string()
+}
+
+fn check_configuration(source: &crate::settings::Source, configured: Option<&HashMap<String, String>>) -> Result<(), String> {
+    if configured.is_some_and(|sources| sources.get(&source.id) != Some(&source_configuration(source))) {
+        return Err("Source configuration changed; reload repository metadata".into());
+    }
+    Ok(())
+}
+
+pub fn metadata_revision(source: &crate::settings::Source) -> Result<u64, String> {
+    let configured = SOURCES.get_or_init(|| Mutex::new(None)).lock().map_err(|_| "Source configuration is unavailable")?;
+    check_configuration(source, configured.as_ref())?;
+    Ok(revision(&source.id))
+}
+
 pub fn invalidate(app: &AppHandle, source_id: &str) {
     let revision = advance_revision(source_id, || {
         if let Ok(cache) = app.path().app_cache_dir() {
@@ -148,7 +165,7 @@ fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
 
 pub fn configure_sources(app: &AppHandle, sources: &[crate::settings::Source], notify: bool) {
     let next: HashMap<_, _> = sources.iter().map(|source| (source.id.clone(),
-        serde_json::to_string(&(source.kind.as_str(), source.host.as_str(), &source.orgs, &source.urls)).unwrap())).collect();
+        source_configuration(source))).collect();
     let mut previous = SOURCES.get_or_init(|| Mutex::new(None)).lock().unwrap();
     if previous.is_some() || notify {
         let empty = HashMap::new();
@@ -549,3 +566,7 @@ mod native {
     pub fn write(_: &str, _: &str) -> Result<(), Failure> { ready() }
     pub fn delete(_: &str) -> Result<(), Failure> { ready() }
 }
+
+#[cfg(test)]
+#[path = "credentials_metadata_tests.rs"]
+mod metadata_tests;

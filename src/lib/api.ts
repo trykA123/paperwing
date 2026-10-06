@@ -80,6 +80,7 @@ export type Activity = {
 };
 export type TreeRef = { name: string; label?: string; sha: string; current: boolean; symbolic: string };
 export type RepositoryTree = {
+  identity?: string;
   branches: TreeRef[]; tags: TreeRef[];
   remotes: { name: string; urls: string[]; refs: TreeRef[] }[];
   stashes: { name: string; sha: string; subject: string }[];
@@ -142,7 +143,7 @@ export const api = {
   deleteToken: (sourceId: string) => invoke<void>('delete_token', { sourceId }),
   testSource: (source: Source) => invoke<string>('test_source', { source }),
   listUserOrgs: (source: Source) => invoke<string[]>('list_user_orgs', { source }),
-  listRepos: (source: Source, refresh: boolean) => invoke<RepoList>('list_repos', { source, refresh }),
+  listRepos: (source: Source, refresh: boolean, metadataEpoch = 0) => invoke<RepoList>('list_repos', { source, refresh, metadataEpoch }),
   getCommits: (source: Source, org: string, name: string, branch: string) =>
     invoke<Commit[]>('get_commits', { source, org, name, branch }),
   getRefsMany: (urls: string[]) => invoke<RefsResult[]>('get_refs_many', { urls }),

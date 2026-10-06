@@ -13,66 +13,65 @@ async function metadataFixture(run) {
     }, () => run(new app.constructor(), calls));
 }
 
-test('Repository metadata currently publishes overlapping source responses in completion order', async () => {
+test('Repository metadata discards older source responses after a forced refresh', async () => {
     await metadataFixture(async (state, calls) => {
         const source = { id: 'source', kind: 'github', name: 'Fixture' };
+        state.sources = [source];
         const older = state.loadRepos(source, false), newer = state.loadRepos(source, true);
         expect(calls.map(call => [call.command, call.args.refresh])).toEqual([['list_repos', false], ['list_repos', true]]);
         calls[1].resolve({ repos: [{ id: 'newer' }], errors: ['newer warning'] });
         await newer;
-        expect(state.repos.source).toEqual([{ id: 'newer' }]);
-        expect(state.loadingRepos.source).toBe(false);
         calls[0].resolve({ repos: [{ id: 'older' }], errors: ['older warning'] });
         await older;
-        expect(state.repos.source).toEqual([{ id: 'older' }]);
-        expect(state.repoErrors.source).toEqual(['older warning']);
+        expect(state.repos.source).toEqual([{ id: 'newer' }]);
+        expect(state.repoErrors.source).toEqual(['newer warning']);
+        expect(state.loadingRepos.source).toBe(false);
     });
 });
 
-test('Repository metadata currently retains newer rows when an older request fails afterward', async () => {
+test('Repository metadata discards an older failure after a forced refresh', async () => {
     await metadataFixture(async (state, calls) => {
         const source = { id: 'source', kind: 'github', name: 'Fixture' };
+        state.sources = [source];
         const older = state.loadRepos(source, false), newer = state.loadRepos(source, true);
         calls[1].resolve({ repos: [{ id: 'newer' }], errors: [] });
         await newer;
         calls[0].reject('older failure');
         await older;
         expect(state.repos.source).toEqual([{ id: 'newer' }]);
-        expect(state.repoErrors.source).toEqual(['older failure']);
+        expect(state.repoErrors.source).toEqual([]);
         expect(state.loadingRepos.source).toBe(false);
     });
 });
 
-test('Reference metadata currently lets an older response replace a completed forced refresh', async () => {
+test('Reference metadata rejects an older response after a forced refresh', async () => {
     await metadataFixture(async (state, calls) => {
         const url = 'https://fixture.invalid/repo';
         const older = state.ensureRefs([url, url]), newer = state.ensureRefs([url], true);
         expect(calls.map(call => call.args.urls)).toEqual([[url], [url]]);
         calls[1].resolve([{ url, branches: ['newer'], tags: [], branchShas: ['new-sha'], tagShas: [] }]);
         await newer;
-        expect(state.refs[url].branches).toEqual(['newer']);
         calls[0].resolve([{ url, branches: ['older'], tags: ['v1'], branchShas: ['old-sha'], tagShas: ['tag-sha'], error: 'older warning' }]);
         await older;
-        expect(state.refs[url]).toEqual({ branches: ['older'], tags: ['v1'], branchShas: ['old-sha'], tagShas: ['tag-sha'], error: 'older warning' });
+        expect(state.refs[url].branches).toEqual(['newer']);
     });
 });
 
-test('Commit history currently reuses its repository key across branch changes while loading and afterward', async () => {
+test('Commit histories use separate branch keys during and after loading', async () => {
     await metadataFixture(async (state, calls) => {
         state.sources = [{ id: 'source', kind: 'github', name: 'Fixture' }];
         state.repos = { source: [{ id: 'source:repo', source: 'source', org: 'org', name: 'repo', defaultBranch: 'main' }] };
         const item = { id: 'copy', repoId: 'source:repo', ref: { type: 'branch', name: 'main' } };
-        const loading = state.ensureCommits(item);
         const otherBranch = { ...item, ref: { type: 'branch', name: 'feature' } };
+        const main = state.ensureCommits(item), feature = state.ensureCommits(otherBranch);
+        expect(calls.map(call => [call.command, call.args.branch])).toEqual([['get_commits', 'main'], ['get_commits', 'feature']]);
+        calls[0].resolve([{ sha: 'main-sha' }]);
+        calls[1].resolve([{ sha: 'feature-sha' }]);
+        await Promise.all([main, feature]);
+        expect(state.commitsFor(item)).toEqual([{ sha: 'main-sha' }]);
+        expect(state.commitsFor(otherBranch)).toEqual([{ sha: 'feature-sha' }]);
         await state.ensureCommits(otherBranch);
-        expect(state.commits[item.repoId]).toBe('loading');
-        expect(calls.map(call => [call.command, call.args.branch])).toEqual([['get_commits', 'main']]);
-        const history = [{ sha: 'main-sha', message: 'Main history' }];
-        calls[0].resolve(history);
-        await loading;
-        await state.ensureCommits(otherBranch);
-        expect(calls).toHaveLength(1);
-        expect(state.commits[item.repoId]).toEqual(history);
+        expect(calls).toHaveLength(2);
     });
 });
 

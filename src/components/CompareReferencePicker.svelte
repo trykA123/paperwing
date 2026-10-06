@@ -35,7 +35,9 @@
   });
   $effect(() => {
     const current = [...new Set(paths)];
-    untrack(() => { for (const path of current) if (path) void app.loadTree(path); });
+    const consumer = new AbortController();
+    untrack(() => { for (const path of current) if (path) void app.loadTree(path, false, consumer.signal); });
+    return () => consumer.abort();
   });
   function changeKind(kind: CompareRef['kind']) {
     reference = kind === 'head' || kind === 'workingTree' ? { kind }

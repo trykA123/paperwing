@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Scope metadata by source, credential and ref epochs; share foreground requests and discover authenticated personal private repositories.
+
 - Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
 - Add durable Linux diff reservations with bounded admission, namespace prepayment and safe cleanup; application writes remain disabled.
 - Add durable Linux recovery with verified backups, restart reconciliation, conditional undo and owned cleanup; application writes remain disabled.

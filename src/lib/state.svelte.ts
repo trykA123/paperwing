@@ -65,6 +65,7 @@ class AppState {
     return (this.rootProbes[root] ?? unavailableRoot(root, 'Choose a valid native destination folder.')).capabilities[operation];
   }
   async probeRoot(root = this.ws.root) {
+    const previousIdentity = this.rootProbes[root]?.identity;
     const current = (this.rootProbeRevisions.get(root) ?? 0) + 1;
     this.rootProbeRevisions.set(root, current);
     this.rootProbes[root] = unavailableRoot(root, 'Checking native root support.');
@@ -74,6 +75,7 @@ class AppState {
       catch (reason) { support = unavailableRoot(root, String(reason)); }
       if (this.rootProbeRevisions.get(root) !== current) return this.rootProbeRequests.get(root)
         ?? this.rootProbes[root] ?? unavailableRoot(root, 'Root support changed. Try again.');
+      if (previousIdentity && support.identity !== previousIdentity) this.#invalidateTrees(this.repositoryTrees.paths());
       this.rootProbes[root] = support;
       return support;
     })();
@@ -85,6 +87,7 @@ class AppState {
     if (this.running || this.clonePreparing || this.gitBusy || !await this.guardBuffers()) return false;
     const support = await this.probeRoot(root);
     if (!support.valid) { this.toast(support.reason ?? 'Choose a valid native destination folder.', 'warn'); return false; }
+    this.#invalidateTrees(this.repositoryTrees.paths());
     this.ws.root = root;
     this.pathIdentities = {};
     return true;
@@ -102,7 +105,10 @@ class AppState {
   async refreshPathIdentities(paths: string[]) {
     const current = ++this.identityRevision;
     const results = await api.pathIdentities(paths);
-    if (current === this.identityRevision) this.pathIdentities = Object.fromEntries(results.map(result => [result.path, result]));
+    if (current === this.identityRevision) {
+      this.#invalidateTrees(results.filter(result => this.pathIdentities[result.path]?.identity !== result.identity).map(result => result.path));
+      this.pathIdentities = Object.fromEntries(results.map(result => [result.path, result]));
+    }
     return results;
   }
   collisionKey(path: string) { return collisionKey(path, this.nativePlatform, this.pathIdentities); }
@@ -140,8 +146,12 @@ class AppState {
   ready = $state(false);
   sources = $state<Source[]>([]);
   ws = $state<Workspace>(defaultWorkspace('unsupported'));
-  private repositoryMetadata = new RepositoryMetadata(() => this.sources);
-  credentials = new Credentials(sourceId => this.repositoryMetadata.invalidateSource(sourceId));
+  private repositoryMetadata = new RepositoryMetadata(() => this.sources, () => this.ws.sets.flatMap(set => set.items));
+  credentials = new Credentials(sourceId => {
+    const paths = this.ws.sets.flatMap(set => set.items.filter(item => item.repoId.startsWith(`${sourceId}:`)).map(item => this.dest(item, set.id)));
+    this.#invalidateTrees(paths);
+    this.repositoryMetadata.invalidateSource(sourceId);
+  });
   get repos() { return this.repositoryMetadata.repos; }
   set repos(value: RepositoryMetadata['repos']) { this.repositoryMetadata.repos = value; }
   get repoErrors() { return this.repositoryMetadata.repoErrors; }
@@ -161,7 +171,8 @@ class AppState {
   private gitActivity = new GitActivity();
   get activity() { return this.gitActivity.activity; }
   set activity(value: Activity[]) { this.gitActivity.activity = value; }
-  private repositoryTrees = new RepositoryTrees();
+  private repositoryTrees = new RepositoryTrees(path => JSON.stringify([this.ws.root,
+    this.rootProbes[this.ws.root]?.identity ?? '', this.pathIdentities[path]?.identity ?? '']));
   get trees() { return this.repositoryTrees.trees; }
   set trees(value: RepositoryTrees['trees']) { this.repositoryTrees.trees = value; }
   openTreePaths: string[] = [];
@@ -262,11 +273,15 @@ class AppState {
 
   clearActivity() { return this.gitActivity.clearActivity(); }
 
-  loadTree(path: string, force = false) { return this.repositoryTrees.loadTree(path, force); }
+  loadTree(path: string, force = false, signal?: AbortSignal) { return this.repositoryTrees.loadTree(path, force, signal); }
+
+  readTree(path: string, signal?: AbortSignal) { return this.repositoryTrees.readTree(path, signal); }
 
   #invalidateTrees(paths: string[]) { this.repositoryTrees.invalidate(paths); }
 
-  loadRepos(src: Source, refresh: boolean) { return this.repositoryMetadata.loadRepos(src, refresh); }
+  loadRepos(src: Source, refresh: boolean, signal?: AbortSignal) { return this.repositoryMetadata.loadRepos(src, refresh, signal); }
+
+  invalidateMetadata() { this.repositoryMetadata.invalidateAll(); }
 
   openView(view: View, setId = this.ws.activeSet, query?: string) {
     const id = tabId(view, setId);
@@ -384,9 +399,13 @@ class AppState {
 
   refState(item: SetItem): RefState { return this.repositoryMetadata.refState(item); }
 
-  ensureRefs(urls: string[], force = false) { return this.repositoryMetadata.ensureRefs(urls, force); }
+  ensureRefs(urls: string[], force = false, signal?: AbortSignal) { return this.repositoryMetadata.ensureRefs(urls, force, signal); }
 
-  ensureCommits(item: SetItem) { return this.repositoryMetadata.ensureCommits(item); }
+  ensureCommits(item: SetItem, force = false, signal?: AbortSignal) { return this.repositoryMetadata.ensureCommits(item, force, signal); }
+
+  commitKey(item: SetItem) { return this.repositoryMetadata.commitKey(item); }
+
+  commitsFor(item: SetItem) { return this.repositoryMetadata.commitsFor(item); }
 
   inSet(repoId: string) {
     return this.set.items.some(i => i.repoId === repoId);
@@ -601,6 +620,9 @@ class AppState {
   async checkExists(dests: string[]) {
     if (!dests.length) return;
     this.#invalidateTrees(dests);
+    const paths = new Set(dests);
+    const urls = this.ws.sets.flatMap(set => set.items.filter(item => paths.has(this.dest(item, set.id))).map(item => item.url));
+    this.repositoryMetadata.invalidateRefs(urls);
     for (const s of await api.localStatus(dests)) {
       this.exists[s.path] = s.exists;
       this.local[s.path] = s;
