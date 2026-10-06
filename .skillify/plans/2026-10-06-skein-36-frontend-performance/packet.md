@@ -22,3 +22,5 @@ Startup, scrolling, filtering and opening files stay smooth at 10,000 rows and m
 
 ## Done when
 Measured targets (ratified after R0): first rows under 150 ms on Linux and 300 ms on Windows for the fixture compare, 60 fps scrolling at 10,000 rows on both, and a 5 MB file opens in under 500 ms.
+
+- **R4b — Editor spike (2026-10-06).** Before Skein step 6, measure Monaco diff editor vs CodeMirror 6 `@codemirror/merge` (and a custom virtualised view for reference) on 100 KB, 1 MB, 5 MB and 20 MB file pairs with realistic changes: bundle size, time to interactive diff, memory, scroll fps, edit latency while typing, save round-trip of exact bytes (BOM, CRLF), per-change copy and custom gutter feasibility. Engines: system WebKitGTK (Tauri on Linux), Chromium/Helium as a WebView2 proxy, then WebView2 on the Windows VM. The winner becomes the packet 37 editor.
