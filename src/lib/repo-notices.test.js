@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
-import { splitListingErrors } from './repo-notices';
+import { warningsForOrg } from './repo-notices';
 
-test('errors that name this org become its inline warnings, the rest stay errors', () => {
-  const result = splitListingErrors(['Acme: rate limited', 'other: 404', 'network down'], 'acme');
-  expect(result).toEqual({ orgWarnings: ['Acme: rate limited'], errors: ['other: 404', 'network down'] });
+test('only warnings that name this org are returned', () => {
+  const warnings = ['Acme: showing 1000 of more; GitHub returned a partial page', 'other: showing 10 of more; GitHub returned a partial page'];
+  expect(warningsForOrg(warnings, 'acme')).toEqual([warnings[0]]);
 });
 
 test('an org prefix must match exactly', () => {
-  expect(splitListingErrors(['acme-labs: failed'], 'acme').orgWarnings).toEqual([]);
+  expect(warningsForOrg(['acme-labs: showing 1 of more; GitHub returned a partial page'], 'acme')).toEqual([]);
 });

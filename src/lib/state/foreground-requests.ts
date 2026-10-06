@@ -30,6 +30,7 @@ export class ForegroundRequests {
       request.settled();
       return Promise.resolve();
     }
+    if (existing?.start && (request.priority ?? 'foreground') === 'foreground') existing.priority = 'foreground';
     const flight = existing ?? { consumers: new Set<() => void>(), priority: request.priority ?? 'foreground' };
     this.flights.set(key, flight);
     const waiting = new Promise<void>(resolve => {

@@ -1,9 +1,5 @@
-export type RepoNotices = { orgWarnings: string[]; errors: string[] };
-
-/** Splits listing errors of the form "owner: reason" into warnings for this org and the rest. */
-export function splitListingErrors(errors: readonly string[], org: string): RepoNotices {
+/** Listing warnings have the form "owner: message"; returns the ones that name this org. */
+export function warningsForOrg(warnings: readonly string[], org: string) {
   const prefix = `${org.toLowerCase()}:`;
-  const orgWarnings: string[] = [], rest: string[] = [];
-  for (const error of errors) (error.toLowerCase().startsWith(prefix) ? orgWarnings : rest).push(error);
-  return { orgWarnings, errors: rest };
+  return warnings.filter(warning => warning.toLowerCase().startsWith(prefix));
 }

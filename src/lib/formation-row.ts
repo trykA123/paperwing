@@ -35,7 +35,7 @@ export function describeRow(item: SetItem, state: { focused: boolean; canAct: bo
     sub: item.path ? parentOf(item.path) : [item.folder ? item.name : '', item.org].filter(Boolean).join(' · '),
     refType: item.ref.type, refLabel: facts.refLabel, refBad: ref.bad, refTitle: ref.title,
     localNote: isCloned(local) && !facts.onRef && !item.path && localLabel ? `on ${localLabel}` : null,
-    local, sync: syncView(local), next: nextAction(facts), busy: app.rowBusy(item), fixed: !!item.path,
+    local, sync: syncView(local, app.statusFailures[app.dest(item)]), next: nextAction(facts), busy: app.rowBusy(item), fixed: !!item.path,
     selected: item.on, focused: state.focused, canAct: state.canAct,
   };
 }

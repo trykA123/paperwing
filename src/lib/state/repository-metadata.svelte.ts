@@ -18,8 +18,7 @@ export class RepositoryMetadata {
   repoErrors = $state<Record<string, string[]>>({});
   loadingRepos = $state<Record<string, boolean>>({});
   staleRepos = $state<Record<string, boolean>>({});
-  partialRepos = $state<Record<string, boolean>>({});
-  repoWarnings = $state<Record<string, string>>({});
+  repoWarnings = $state<Record<string, string[]>>({});
   refs = $state<Record<string, RefsEntry>>({});
   commits = $state<Record<string, CommitsEntry>>({});
   private staleCommits = $state<Record<string, boolean>>({});
@@ -31,6 +30,7 @@ export class RepositoryMetadata {
   private listingScopes = new Map<string, string>();
   private loadingListingKeys = new Map<string, string>();
   private refScopes = new Map<string, string>();
+  private refFailures = new Map<string, { failures: number; retryAt: number }>();
   private refOwners = new Map<string, Set<string>>();
   private ownersByUrl = $derived.by(() => {
     const owners = new Map<string, Set<string>>();
@@ -70,16 +70,20 @@ export class RepositoryMetadata {
     delete this.repos[sourceId];
     delete this.repoErrors[sourceId];
     delete this.staleRepos[sourceId];
-    delete this.partialRepos[sourceId];
     delete this.repoWarnings[sourceId];
     this.listingScopes.delete(sourceId);
     this.loadingListingKeys.delete(sourceId);
     this.loadingRepos[sourceId] = false;
   }
 
-  markStale() {
-    for (const entry of Object.values(this.refs)) if (!entry.loading) entry.stale = true;
-    for (const [key, entry] of Object.entries(this.commits)) if (entry !== 'loading') this.staleCommits[key] = true;
+  markStale(urls?: readonly string[]) {
+    const only = urls && new Set(urls);
+    for (const [url, entry] of Object.entries(this.refs)) if (!entry.loading && (!only || only.has(url))) entry.stale = true;
+    for (const [key, entry] of Object.entries(this.commits)) {
+      if (entry === 'loading') continue;
+      const owner = this.commitOwners.get(key);
+      if (!only || (owner && only.has(owner.url))) this.staleCommits[key] = true;
+    }
   }
 
   needsRefs(url: string) {
@@ -98,6 +102,7 @@ export class RepositoryMetadata {
       this.refEpochs[url] = (this.refEpochs[url] ?? 0) + 1;
       delete this.refs[url];
       this.refScopes.delete(url);
+      this.refFailures.delete(url);
       for (const [key, owner] of this.commitOwners) {
         if (owner.url === url) {
           delete this.commits[key];
@@ -138,8 +143,7 @@ export class RepositoryMetadata {
         if (!offline) this.repos[src.id] = list.repos;
         this.repoErrors[src.id] = list.errors;
         this.staleRepos[src.id] = offline;
-        this.partialRepos[src.id] = !!list.partial;
-        this.repoWarnings[src.id] = list.warning ?? '';
+        this.repoWarnings[src.id] = list.warnings ?? [];
         this.listingScopes.set(src.id, currentScope);
       } },
       fail: error => { if (current()) {
@@ -214,8 +218,8 @@ export class RepositoryMetadata {
     if (!force && cached && !cached.loading && !cached.error && !cached.stale && this.refScopes.get(url) === key) return Promise.resolve();
     if (!force && cached?.error && !retryDue(cached)) return Promise.resolve();
     const keepData = !!cached?.stale && !cached.loading && !cached.error;
-    const failures = cached?.failures ?? 0;
-    if (!keepData) this.refs[url] = { branches: [], tags: [], loading: true, ...(failures ? { failures } : {}) };
+    const failures = cached?.failures ?? this.refFailures.get(url)?.failures ?? 0;
+    if (!keepData) this.refs[url] = { branches: [], tags: [], loading: true, ...(failures ? { failures, retryAt: cached?.retryAt ?? this.refFailures.get(url)?.retryAt ?? 0 } : {}) };
     const current = () => this.refsKey(url) === key;
     return this.requests.run(key, { signal, priority,
       produce: () => api.getRefsMany([url]),
@@ -224,9 +228,15 @@ export class RepositoryMetadata {
         if (!row) throw new Error(`No references returned for ${url}`);
         this.refs[url] = this.entryFromRow(row, failures);
         this.refScopes.set(url, key);
+        if (!row.error) this.refFailures.delete(url);
       } },
       fail: error => { if (current() && !keepData) this.refs[url] = this.failedEntry(String(error), failures + 1); },
-      settled: () => { if (this.refs[url]?.loading && !this.requests.has(this.refsKey(url))) delete this.refs[url]; },
+      settled: () => {
+        const entry = this.refs[url];
+        if (!entry?.loading || this.requests.has(this.refsKey(url))) return;
+        if (entry.failures) this.refFailures.set(url, { failures: entry.failures, retryAt: entry.retryAt ?? 0 });
+        delete this.refs[url];
+      },
     });
   }
 

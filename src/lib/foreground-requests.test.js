@@ -135,3 +135,16 @@ test('a queued request whose consumers all left never starts and frees its slot'
   running.resolve('done');
   await settle();
 });
+
+test('a foreground request that joins a queued background flight moves it ahead of other background work', async () => {
+  const requests = new ForegroundRequests({ producers: 1, consumers: 16, queued: 8 });
+  const running = deferred(), started = [];
+  const queued = (key, priority) => requests.run(key, request(deferred(), { priority, produce() { started.push(key); return new Promise(() => {}); } }));
+  void requests.run('running', request(running));
+  void queued('first', 'background');
+  void queued('second', 'background');
+  void queued('second', 'foreground');
+  running.resolve('done');
+  await settle();
+  expect(started).toEqual(['second']);
+});

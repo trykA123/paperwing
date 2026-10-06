@@ -480,18 +480,58 @@ test('refs for more than 32 repositories all load as the queue drains', async ()
   });
 });
 
-test('listing warning and partial flags are stored and cleared with the next listing', async () => {
+test('listing warnings are stored per source and replaced by the next listing', async () => {
   await fixture(async (state, calls) => {
+    const warning = 'admin: showing 1000 of more; GitHub returned a partial page';
     const first = state.loadRepos(state.sources[0], true);
-    calls[0].resolve({ repos: [repo], errors: [], warning: 'Stopped at 400 repositories', partial: true });
+    calls[0].resolve({ repos: [repo], errors: [], warnings: [warning], partial: true });
     await first;
     expect(state.repos[source.id]).toEqual([repo]);
-    expect(state.partialRepos[source.id]).toBe(true);
-    expect(state.repoWarnings[source.id]).toBe('Stopped at 400 repositories');
+    expect(state.repoWarnings[source.id]).toEqual([warning]);
     const second = state.loadRepos(state.sources[0], true);
     calls[1].resolve({ repos: [repo], errors: [] });
     await second;
-    expect(state.partialRepos[source.id]).toBe(false);
-    expect(state.repoWarnings[source.id]).toBe('');
+    expect(state.repoWarnings[source.id]).toEqual([]);
+  });
+});
+
+test('markStale with urls keeps data visible for those urls only, refs and histories', async () => {
+  await fixture(async (state, calls) => {
+    const other = 'https://fixture.invalid/admin/other';
+    state.refs = { [item.url]: { branches: ['main'], tags: [] }, [other]: { branches: ['main'], tags: [] } };
+    const loading = state.ensureCommits(item);
+    calls[0].resolve([{ sha: 'one' }]);
+    await loading;
+    expect(state.needsCommits(item)).toBe(false);
+    state.markMetadataStale([item.url]);
+    expect(state.needsRefs(item.url)).toBe(true);
+    expect(state.needsRefs(other)).toBe(false);
+    expect(state.needsCommits(item)).toBe(true);
+    expect(state.refState(item)).toBe('ok');
+    expect(state.commitsFor(item)).toEqual([{ sha: 'one' }]);
+  });
+});
+
+test('the backoff keeps growing when a loading picker is closed and reopened', async () => {
+  await fixture(async (state, calls) => {
+    const failing = state.ensureRefs([item.url]);
+    calls[0].reject(new Error('down'));
+    await failing;
+    expect(state.refs[item.url].failures).toBe(1);
+    setSystemTime(new Date(state.refs[item.url].retryAt + 1));
+    try {
+      const closed = new AbortController();
+      const abandoned = state.ensureRefs([item.url], false, closed.signal);
+      expect(state.refs[item.url].failures).toBe(1);
+      closed.abort();
+      await abandoned;
+      calls[1].resolve([{ url: item.url, branches: ['main'], tags: [] }]);
+      await settle();
+      expect(state.refs[item.url]).toBeUndefined();
+      const again = state.ensureRefs([item.url]);
+      calls[2].reject(new Error('down'));
+      await again;
+      expect(state.refs[item.url].failures).toBe(2);
+    } finally { setSystemTime(); }
   });
 });

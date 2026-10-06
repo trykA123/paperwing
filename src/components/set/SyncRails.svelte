@@ -42,6 +42,8 @@
   <span class="fm-quiet">Not cloned</span>
 {:else if view.kind === 'broken'}
   <span class="fm-broken" title={view.reason}><Icon name="alert" tone="warn" />{view.reason}</span>
+{:else if view.kind === 'unavailable'}
+  <span class="fm-broken" title={view.reason}><Icon name="alert" tone="warn" />Status unavailable: {view.reason}</span>
 {:else}
   <span class="fm-quiet">Checking…</span>
 {/if}

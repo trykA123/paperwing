@@ -49,7 +49,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
     { id: 'theme', label: `Use ${app.ws.theme === 'dark' ? 'light' : 'dark'} theme`, icon: 'theme', enabled: true,
       run: () => { app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark'; } },
     { id: 'status', label: 'Refresh local status', icon: 'refresh', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!items.length,
-      run: () => app.checkExists(items.map(item => app.dest(item))) },
+      run: async () => { await app.checkExists(items.map(item => app.dest(item))); } },
     { id: 'compare', label: 'Compare repository refs', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length && !items[0]?.path,
       run: () => app.openCompare(items[0]) },
     { id: 'set-compare', label: 'Compare every repository across set', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!app.set.items.length && !app.set.items.some(item => item.path), run: () => app.openSetCompare() },
