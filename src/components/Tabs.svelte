@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
+  import WindowControls from './WindowControls.svelte';
 
   function navigate(event: KeyboardEvent, index: number) {
     let next = index;
@@ -13,9 +14,11 @@
     app.activateTab(app.tabs[next].id);
     (event.currentTarget as HTMLElement).closest('.tabstrip')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
+
+  const titlebar = $derived(app.platform.platform === 'windows' ? true : undefined);
 </script>
 
-<header class="tabs-chrome">
+<header class="tabs-chrome" class:native-controls={titlebar} data-tauri-drag-region={titlebar}>
   <div class="tabstrip" role="tablist" aria-label="Workspace tabs">
     {#each app.tabs as tab, index (tab.id)}
       <div class="shell-tab" class:on={tab.id === app.activeTabId}>
@@ -30,6 +33,7 @@
       </div>
     {/each}
   </div>
+  <div class="drag-spacer" data-tauri-drag-region={titlebar}></div>
   <div class="topbtns">
     <button class="kbtn" title="Command palette (Ctrl+K)" onclick={() => (app.paletteOpen = true)}><Icon name="search" /><span>Search or run a command...</span><kbd>Ctrl K</kbd></button>
     <button class="icon shell-control" class:on={app.ws.shell.sidebarVisible} title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.ws.shell.sidebarVisible}
@@ -39,4 +43,17 @@
     <button class="icon shell-control" title="Toggle light/dark theme" aria-label="Toggle light/dark theme"
       onclick={() => (app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark')}><Icon name="theme" /></button>
   </div>
+  <WindowControls />
 </header>
+
+<style>
+  .tabs-chrome.native-controls {
+    padding-right: 0;
+  }
+
+  .drag-spacer {
+    flex: none;
+    align-self: stretch;
+    width: var(--drag-min);
+  }
+</style>

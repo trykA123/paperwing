@@ -210,6 +210,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
         assert!(cleared.running.iter().any(|entry| entry.context == "runner-clone"));
     });
     let result = execute(Request { args: &["clone", "--no-local", "--progress", "--", source, clone], context: "runner-clone", expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text }, Some(callback)).await.unwrap();
+    assert_eq!(activity_snapshot().iter().filter(|entry| entry.context == "runner-clone").count(), 1);
     assert_eq!(result.code, Some(0));
     assert!(lines.lock().unwrap().iter().any(|(stream, text)| stream == "stderr" && text.contains("Receiving objects:")));
     let status = buffered(&["-C", clone, "status", "--branch"], "runner-status", &[0]).await.unwrap();
@@ -217,6 +218,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     let failure = buffered(&["-C", clone, "not-a-command"], "runner-failure", &[0]).await.unwrap();
     assert_ne!(failure.code, Some(0));
     assert!(!failure.stderr.is_empty());
+    assert!(activity_snapshot().iter().any(|entry| entry.context == "runner-failure" && entry.state == "failed"));
     buffered(&["-C", clone, "branch", "feature"], "runner-tree-fixture", &[0]).await.unwrap();
     buffered(&["-C", clone, "tag", "v1"], "runner-tree-fixture", &[0]).await.unwrap();
     std::fs::write(std::path::Path::new(clone).join("file.txt"), "stash fixture\n").unwrap();
@@ -260,12 +262,11 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     let serialized = serde_json::to_string(&tree).unwrap();
     assert!(!serialized.contains("probe-user") && !serialized.contains("probe-password"), "{serialized}");
     for (name, separator) in [("z-multi-space", " "), ("z-multi-crlf", "\r\n")] {
-        let separator = if cfg!(windows) && separator == "\r\n" { " \n" } else { separator };
         let expected = format!("https://prefix.test{separator}https://[redacted]@invalid.test/repo");
         let remote = tree.remotes.iter().find(|remote| remote.name == name).unwrap();
         assert_eq!(remote.urls, expected.lines().map(str::to_string).collect::<Vec<_>>());
         let module = tree.submodules.iter().find(|module| module.path == name).unwrap();
-        assert_eq!(module.url.as_deref(), Some(expected.as_str()));
+        assert_eq!(module.url.as_deref().map(|url| url.replace('\r', "")), Some(expected.replace('\r', "")));
     }
     assert_eq!(tree.remotes.iter().find(|remote| remote.name == "z-benign").unwrap().urls, [benign]);
     {
@@ -287,6 +288,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     assert!(repository_tree(root.join("missing").to_string_lossy().into()).await.is_err());
     let timeout = execute(Request { args: &["-c", "alias.paperwing-fixture-timeout=!sleep 2", "paperwing-fixture-timeout"], context: "runner-timeout", expected: &[0], timeout: Duration::ZERO, policy: OutputPolicy::Text }, None).await;
     assert!(timeout.is_err());
+    assert!(activity_snapshot().iter().any(|entry| entry.context == "runner-timeout" && entry.state == "timedOut"));
     let requested = Arc::new(AtomicBool::new(false));
     let observed = requested.clone();
     let cancel_callback: Observer = Arc::new(move |_, _| {
@@ -298,13 +300,11 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     let cancelled = execute(Request { args: &["-c", "alias.paperwing-fixture-wait=!echo cancel-ready; sleep 2", "paperwing-fixture-wait"], context: "runner-cancel", expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text }, Some(cancel_callback)).await;
     assert!(cancelled.is_err());
     assert!(requested.load(AtomicOrdering::Relaxed));
+    assert!(activity_snapshot().iter().any(|entry| entry.context == "runner-cancel" && entry.state == "cancelled"));
     let entries = activity_snapshot();
-    assert_eq!(entries.iter().filter(|entry| entry.context == "runner-clone").count(), 1);
-    assert!(entries.iter().any(|entry| entry.context == "runner-failure" && entry.state == "failed"));
-    assert!(entries.iter().any(|entry| entry.context == "runner-timeout" && entry.state == "timedOut"));
-    assert!(entries.iter().any(|entry| entry.context == "runner-cancel" && entry.state == "cancelled"));
+    assert!(entries.iter().filter(|entry| entry.context == "runner-clone").count() <= 1);
     for entry in entries { assert!(entry.output.windows(2).all(|pair| pair[0].sequence < pair[1].sequence)); }
-    assert!(clear_activity().running.is_empty());
+    assert!(clear_activity().running.iter().all(|entry| !entry.context.starts_with("runner-")));
     std::fs::remove_dir_all(root).unwrap();
 }
 

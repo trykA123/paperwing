@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "targets": ["appimage", "deb"],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/skein.desktop.hbs",
+        "files": {
+          "/usr/share/kio/servicemenus/skein-open.desktop": "linux/skein-open.desktop"
+        }
+      }
+    }
+  }
+}

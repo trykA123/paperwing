@@ -1,0 +1,16 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Skein",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 640,
+        "decorations": false,
+        "shadow": true
+      }
+    ]
+  }
+}

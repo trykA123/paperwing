@@ -158,7 +158,7 @@ fn next_page(current: &str, link: Option<&str>) -> Result<bool, (u16, String)> {
     let current = reqwest::Url::parse(current).map_err(|_| invalid())?;
     let target = reqwest::Url::parse(target).map_err(|_| invalid())?;
     if current.origin() != target.origin()
-        || current.path() != target.path()
+        || !same_endpoint(current.path(), target.path())
         || !target.username().is_empty()
         || target.password().is_some()
     {
@@ -173,6 +173,33 @@ fn next_page(current: &str, link: Option<&str>) -> Result<bool, (u16, String)> {
         return Err(invalid());
     }
     Ok(true)
+}
+
+fn same_endpoint(current: &str, target: &str) -> bool {
+    if current == target {
+        return true;
+    }
+    let current: Vec<_> = current.split('/').collect();
+    let target: Vec<_> = target.split('/').collect();
+    if current.len() != target.len() {
+        return false;
+    }
+    let Some(index) = current
+        .iter()
+        .position(|segment| matches!(*segment, "orgs" | "users"))
+    else {
+        return false;
+    };
+    let canonical = if current[index] == "orgs" {
+        "organizations"
+    } else {
+        "user"
+    };
+    current[..index] == target[..index]
+        && target[index] == canonical
+        && !target[index + 1].is_empty()
+        && target[index + 1].bytes().all(|byte| byte.is_ascii_digit())
+        && current[index + 2..] == target[index + 2..]
 }
 
 pub(super) async fn get_json<T: DeserializeOwned>(
@@ -233,8 +260,26 @@ mod tests {
             Some("<https://enterprise.invalid/api/v3/user/repos?page=2>; rel=\"next\"")
         )
         .unwrap());
+        for (current, target) in [
+            (
+                "https://api.github.com/orgs/acme/repos?type=all&per_page=100&page=1",
+                "https://api.github.com/organizations/123456/repos?type=all&per_page=100&page=2",
+            ),
+            (
+                "https://enterprise.invalid/api/v3/orgs/acme/repos?page=2",
+                "https://enterprise.invalid/api/v3/organizations/42/repos?page=3",
+            ),
+            (
+                "https://api.github.com/users/admin/repos?type=owner&page=1",
+                "https://api.github.com/user/987/repos?type=owner&page=2",
+            ),
+        ] {
+            assert!(next_page(current, Some(&format!("<{target}>; rel=\"next\""))).unwrap());
+        }
         for target in [
             "https://other.invalid/api/v3/user/repos?page=2",
+            "https://enterprise.invalid/api/v3/organizations/42/repos?page=2",
+            "https://enterprise.invalid/api/v3/organizations/x1/repos?page=2",
             "https://enterprise.invalid/api/v3/users/admin/repos?page=2",
             "https://enterprise.invalid/api/v3/user/repos?page=4",
         ] {

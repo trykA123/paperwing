@@ -86,6 +86,11 @@ fn link_text(target: &Path) -> Result<Vec<u8>, String> {
 }
 
 impl ReadRoot {
+    #[cfg(windows)]
+    pub(crate) fn metadata_locations(&self) -> &[PathBuf] {
+        &self.metadata
+    }
+
     #[cfg(target_os = "linux")]
     pub(crate) fn linux_value(&self) -> Result<crate::linux_guard::root::RootValue, String> {
         self.revalidate()?;
