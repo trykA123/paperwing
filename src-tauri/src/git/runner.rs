@@ -179,7 +179,14 @@ pub(super) type Observer = Arc<dyn Fn(&str, &str) + Send + Sync>;
 #[cfg(test)]
 pub(super) type ExitObserver = Arc<dyn Fn(&str, &str) -> Result<(), String> + Send + Sync>;
 
+pub type StdoutSink = Arc<dyn Fn(&[u8]) -> bool + Send + Sync>;
+type SinkHook = (StdoutSink, Arc<AtomicBool>);
+
 pub(super) async fn drain(reader: impl AsyncRead + Unpin, stream: &'static str, sender: tokio::sync::mpsc::Sender<(String, String)>, secrets: Vec<String>, policy: OutputPolicy) -> Result<(Vec<u8>, usize, bool), String> {
+    drain_with(reader, stream, sender, secrets, policy, None).await
+}
+
+async fn drain_with(reader: impl AsyncRead + Unpin, stream: &'static str, sender: tokio::sync::mpsc::Sender<(String, String)>, secrets: Vec<String>, policy: OutputPolicy, sink: Option<SinkHook>) -> Result<(Vec<u8>, usize, bool), String> {
     let mut reader = reader;
     let mut buffer = [0; 4096];
     let mut captured = Vec::new();
@@ -191,6 +198,10 @@ pub(super) async fn drain(reader: impl AsyncRead + Unpin, stream: &'static str, 
         let count = reader.read(&mut buffer).await.map_err(|_| "Could not read Git output".to_string())?;
         if count == 0 { break; }
         total += count;
+        if let Some((sink, stop)) = &sink {
+            if sink(&buffer[..count]) { stop.store(true, AtomicOrdering::Relaxed); break; }
+            continue;
+        }
         let room = CAPTURE_LIMIT.saturating_sub(captured.len());
         captured.extend_from_slice(&buffer[..count.min(room)]);
         if matches!(policy, OutputPolicy::Metadata) { continue; }
@@ -244,7 +255,21 @@ pub async fn execute_cancellable_input(request: Request<'_>, cancellation: Arc<A
     { execute_inner(request, None, Some(cancellation), input).await }
 }
 
+pub async fn execute_streaming(request: Request<'_>, cancellation: Arc<AtomicBool>, sink: StdoutSink) -> Result<Captured, String> {
+    #[cfg(test)]
+    { execute_core(request, None, Some(cancellation), None, Some(sink), None).await }
+    #[cfg(not(test))]
+    { execute_core(request, None, Some(cancellation), None, Some(sink)).await }
+}
+
 pub(super) async fn execute_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+    #[cfg(test)]
+    { execute_core(request, observer, cancellation, input, None, after_exit).await }
+    #[cfg(not(test))]
+    { execute_core(request, observer, cancellation, input, None).await }
+}
+
+async fn execute_core(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
     #[cfg(target_os = "linux")]
     {
         let args: Vec<_> = request.args.iter().map(|arg| arg.to_string()).collect();
@@ -258,11 +283,11 @@ pub(super) async fn execute_inner(request: Request<'_>, observer: Option<Observe
         tokio::spawn(async move {
             let args: Vec<_> = args.iter().map(String::as_str).collect();
             run_inner(Request { args: &args, context: &context, expected: &expected, timeout, policy }, observer,
-                cancellation, input.as_deref(), Some(owner), #[cfg(test)] after_exit).await
+                cancellation, input.as_deref(), Some(owner), sink, #[cfg(test)] after_exit).await
         }).await.map_err(|_| "Git runner task failed".to_string())?
     }
     #[cfg(not(target_os = "linux"))]
-    run_inner(request, observer, cancellation, input, None, #[cfg(test)] after_exit).await
+    run_inner(request, observer, cancellation, input, None, sink, #[cfg(test)] after_exit).await
 }
 
 #[cfg(target_os = "linux")]
@@ -307,7 +332,7 @@ struct Streams {
 
 impl Streams {
     fn new(mut stdin: Option<tokio::process::ChildStdin>, stdout: tokio::process::ChildStdout,
-        stderr: tokio::process::ChildStderr, input: Option<&[u8]>, secrets: &[String], policy: OutputPolicy) -> Self {
+        stderr: tokio::process::ChildStderr, input: Option<&[u8]>, secrets: &[String], policy: OutputPolicy, sink: Option<SinkHook>) -> Self {
         let mut tasks = JoinSet::new();
         let input = input.map(<[u8]>::to_vec);
         tasks.spawn(async move {
@@ -321,7 +346,7 @@ impl Streams {
         let stderr_sender = sender.clone();
         let stdout_secrets = secrets.to_vec();
         let stderr_secrets = secrets.to_vec();
-        tasks.spawn(async move { drain(stdout, "stdout", sender, stdout_secrets, policy).await.map(StreamResult::Stdout) });
+        tasks.spawn(async move { drain_with(stdout, "stdout", sender, stdout_secrets, policy, sink).await.map(StreamResult::Stdout) });
         tasks.spawn(async move { drain(stderr, "stderr", stderr_sender, stderr_secrets, policy).await.map(StreamResult::Stderr) });
         Self { receiver, tasks }
     }
@@ -340,7 +365,7 @@ impl Streams {
     }
 }
 
-async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, owner: Option<Arc<AtomicBool>>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, owner: Option<Arc<AtomicBool>>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
     #[cfg(feature = "benchmark")]
     let operation = crate::benchmark::operation(request.args);
     #[cfg(feature = "benchmark")]
@@ -413,7 +438,10 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().ok_or("Missing Git stdout")?;
         let stderr = child.stderr.take().ok_or("Missing Git stderr")?;
-        let mut streams = Streams::new(stdin, stdout, stderr, input, redaction.secrets(), if quiet { OutputPolicy::Metadata } else { request.policy });
+        let streaming = sink.is_some();
+        let sunk = Arc::new(AtomicBool::new(false));
+        let hook = sink.map(|sink| (sink, sunk.clone()));
+        let mut streams = Streams::new(stdin, stdout, stderr, input, redaction.secrets(), if quiet { OutputPolicy::Metadata } else { request.policy }, hook);
         let deadline = tokio::time::sleep(request.timeout);
         tokio::pin!(deadline);
         let mut tick = tokio::time::interval(Duration::from_millis(25));
@@ -423,7 +451,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
             tokio::select! {
                 status = child.wait() => break status.map_err(|_| "Could not wait for Git".to_string())?,
                 _ = &mut deadline => { stopped = Some("timedOut"); break terminate(&mut child).await?; },
-                _ = tick.tick() => if cancelled.load(AtomicOrdering::Relaxed) || is_cancelled(&cancellation, &owner) { stopped = Some("cancelled"); break terminate(&mut child).await?; },
+                _ = tick.tick() => if sunk.load(AtomicOrdering::Relaxed) { stopped = Some("sunk"); break terminate(&mut child).await?; } else if cancelled.load(AtomicOrdering::Relaxed) || is_cancelled(&cancellation, &owner) { stopped = Some("cancelled"); break terminate(&mut child).await?; },
                 Some((stream, text)) = streams.receiver.recv() => record_output(&mut activity, &mut logged, stream, text, observer.as_ref(), start),
             }
         };
@@ -448,7 +476,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         };
         let drained = tokio::time::timeout(Duration::from_secs(2), readers).await;
         if !matches!(drained, Ok(Ok(_))) { streams.tasks.shutdown().await; }
-        if let Some(state) = stopped { activity.state = state.into(); }
+        if let Some(state) = stopped.filter(|state| *state != "sunk") { activity.state = state.into(); }
         let ((stdout, stdout_bytes, stdout_truncated), (stderr, stderr_bytes, stderr_truncated)) = drained.map_err(|_| {
             if cfg!(target_os = "linux") { "Git output drain timed out. A helper may have detached from the job's process group." }
             else { "Git output drain timed out" }.to_string()
@@ -459,14 +487,16 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         if !quiet && matches!(request.policy, OutputPolicy::Metadata) {
             record_output(&mut activity, &mut logged, "metadata".into(), format!("Content omitted: {stdout_bytes} stdout bytes, {stderr_bytes} stderr bytes"), None, start);
         }
+        let sunk_stop = stopped == Some("sunk") || (stopped.is_none() && sunk.load(AtomicOrdering::Relaxed));
+        if sunk_stop { stopped = None; }
         if let Some(state) = stopped {
             activity.state = state.into();
             return Err(if state == "cancelled" { "Git command cancelled" } else { "Git command timed out" }.into());
         }
-        if stdout_bytes > CAPTURE_LIMIT || stderr_bytes > CAPTURE_LIMIT {
+        if (!streaming && stdout_bytes > CAPTURE_LIMIT) || stderr_bytes > CAPTURE_LIMIT {
             return Err("Git output exceeded the capture limit".into());
         }
-        activity.state = if status.code().is_some_and(|code| request.expected.contains(&code)) { "completed" } else { "failed" }.into();
+        activity.state = if sunk_stop || status.code().is_some_and(|code| request.expected.contains(&code)) { "completed" } else { "failed" }.into();
         Ok(Captured { stdout, stderr: if quiet { Vec::new() } else { redaction.safe(&String::from_utf8_lossy(&stderr)).into_bytes() },
             code: status.code(), redaction: redaction.clone(), raw_stderr: stderr })
     }.await.map_err(|error: String| if quiet { error } else { redaction.safe(&error) });
