@@ -86,6 +86,13 @@ export type RepositoryTree = {
   submodules: { path: string; sha: string; url: string | null }[];
 };
 
+export type HistoryCommit = { sha: string; short: string; subject: string; author: string; date: string };
+export type HistoryKind = 'tracking' | 'noUpstream' | 'upstreamGone' | 'detached' | 'unborn';
+export type RepositoryHistory = {
+  kind: HistoryKind; branch: string | null; upstream: string | null; uncommitted: number;
+  local: HistoryCommit[]; localTotal: number; origin: HistoryCommit[]; originTotal: number; base: HistoryCommit | null; below: HistoryCommit[];
+};
+
 export type ChangeFile = {
   path: string; origPath: string | null; index: string; worktree: string;
   kind: 'ordinary' | 'renamed' | 'unmerged' | 'untracked'; stagedAdded: number | null; stagedRemoved: number | null;
@@ -165,6 +172,7 @@ export const api = {
   clearActivity: () => invoke<{ running: Activity[]; retained: string[]; through: number }>('clear_activity'),
   cancelActivity: (id: string) => invoke<boolean>('cancel_activity', { id }),
   repositoryTree: (path: string) => invoke<RepositoryTree>('repository_tree', { path }),
+  repositoryHistory: (path: string, limit?: number) => invoke<RepositoryHistory>('repository_history', { path, limit }),
   repoChanges: (path: string) => invoke<RepoChanges>('repo_changes', { path }),
   changeContent: (path: string, file: string, origPath: string | null, area: DiffArea) => invoke<ChangeContent>('change_content', { path, file, origPath, area }),
   stagePaths: (path: string, files: string[]) => invoke<void>('stage_paths', { path, files }),

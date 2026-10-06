@@ -28,6 +28,8 @@
   import CommitDialog from './components/CommitDialog.svelte';
   import BranchDialog from './components/BranchDialog.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
+  import HistoryDrawer from './components/HistoryDrawer.svelte';
+  import { historyDrawer } from './lib/history-drawer.svelte';
   import { confirmQueue } from './lib/confirm';
   import SetCompare from './components/SetCompare.svelte';
   import { OpenFolderStore, tauriTransport } from './lib/open-folder.svelte';
@@ -50,7 +52,7 @@
   });
 
   function onKey(event: KeyboardEvent) {
-    if (app.copyRequest || app.recoveryOpen || document.querySelector('dialog[open]:not(.palette)')) return;
+    if (app.copyRequest || app.recoveryOpen || historyDrawer.target || document.querySelector('dialog[open]:not(.palette)')) return;
     if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       app.paletteOpen = !app.paletteOpen;
@@ -173,6 +175,7 @@
     {:else}<span><span class="dot d-done"></span>Ready</span>{/if}
     <button title="Toggle Git activity" aria-expanded={app.activityOpen} onclick={() => (app.activityOpen = !app.activityOpen)}><Icon name="activity" /> Activity · {app.activity.length}{#if failedRuns}<span class="badge-err">{failedRuns} failed</span>{/if}</button></footer>
   {#if app.activityOpen}<ActivityDrawer />{/if}
+  {#if historyDrawer.target}{#key historyDrawer.target.path}<HistoryDrawer target={historyDrawer.target} />{/key}{/if}
 </div>
 {#if app.paletteOpen}<CommandPalette />{/if}
 {#if app.copyRequest}<CopyOperations request={app.copyRequest} />{/if}

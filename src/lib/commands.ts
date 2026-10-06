@@ -1,6 +1,8 @@
 import type { IconName, IconTone } from '../components/Icon.svelte';
 import type { SetItem } from './api';
 import { app } from './state.svelte';
+import { historyDrawer } from './history-drawer.svelte';
+import { paletteReturn } from './focus-trap';
 
 export type Command = { id: string; label: string; icon: IconName; tone?: IconTone; enabled: boolean; reason?: string | null; run: () => void | Promise<void> };
 
@@ -62,6 +64,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
       run: () => app.openBranchDialog(local) },
     ...(items.length === 1 ? [
       { id: 'commit', label: 'Commit changes…', icon: 'check' as const, tone: 'record' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!local.length, run: () => app.openGitDialog('commit', items[0]) },
+      { id: 'history', label: 'Show commit history', icon: 'commit' as const, tone: 'inspect' as const, enabled: !!local.length, run: () => historyDrawer.open({ path: app.dest(items[0]), name: app.folderOf(items[0]) }, paletteReturn.element) },
       { id: 'code', label: 'Open repository in VS Code', icon: 'code' as const, enabled: !!local.length, run: () => app.openVscode(app.dest(items[0])) },
     ] : []),
   ];
