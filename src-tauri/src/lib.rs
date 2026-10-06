@@ -15,6 +15,7 @@ mod linux_diff;
 mod files;
 mod git;
 mod github;
+mod history;
 mod local;
 mod paths;
 mod platform;
@@ -115,6 +116,7 @@ pub fn run() {
             git::clear_activity,
             git::cancel_activity,
             git::repository_tree,
+            history::repository_history,
             commit::repo_changes,
             commit::change_content,
             commit::stage_paths,

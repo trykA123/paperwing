@@ -2,6 +2,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { app, DEFAULT_TEMPLATE, PATH_TOKENS, RUNNING } from '../lib/state.svelte';
   import type { SetItem } from '../lib/api';
+  import { historyDrawer } from '../lib/history-drawer.svelte';
   import Icon from './Icon.svelte';
 
   const items = $derived(app.actionItems);
@@ -98,6 +99,7 @@
           <div class="item-actions">
             <button class="btn small" disabled={app.running} onclick={() => app.openGitDialog('commit', item)}><Icon name="check" tone="record" /> Commit…</button>
             <button class="btn small" disabled={app.running} onclick={() => app.openGitDialog('branch', item)}><Icon name="branch" tone="branch" /> New branch…</button>
+            <button class="btn small" onclick={() => historyDrawer.open({ path: app.dest(item), name: app.folderOf(item) })}><Icon name="commit" tone="inspect" /> History</button>
           </div>
         {/if}</div>
     {/if}
