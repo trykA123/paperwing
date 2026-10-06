@@ -1,19 +1,16 @@
-use crate::git::{execute_cancellable, valid_ref, valid_root, OutputPolicy, Request};
+use crate::git::{valid_ref, valid_root};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::time::Duration;
+use std::collections::HashSet;
+use std::path::Path;
 
-pub const DEFAULT_PER_REPO: usize = 500;
-pub const DEFAULT_OVERALL: usize = 5000;
-pub const MAX_PER_REPO: usize = 5000;
-pub const MAX_OVERALL: usize = 50_000;
+pub const DEFAULT_PER_REPO: usize = 200;
+pub const DEFAULT_OVERALL: usize = 2000;
+pub const MAX_PER_REPO: usize = 2000;
+pub const MAX_OVERALL: usize = 10_000;
 pub const MAX_REPOS: usize = 500;
 const MAX_PATTERN: usize = 4096;
 const MAX_PATHSPECS: usize = 32;
 const MAX_CONTEXT: u8 = 3;
-const MAX_LINE_CHARS: usize = 400;
-const GREP_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Deserialize, Clone, Copy, Default, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -56,7 +53,6 @@ pub struct ContextLine {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Match {
-    pub repo: String,
     pub path: String,
     pub line: u32,
     pub column: u32,
@@ -181,231 +177,17 @@ pub fn validate_target(target: &RepoTarget, plan: &Plan) -> Result<(), String> {
     valid_ref(name)
 }
 
-pub async fn perl_supported() -> bool {
-    let dir = std::env::temp_dir();
-    let Some(dir) = dir.to_str() else {
-        return false;
-    };
-    let args = [
-        "-C",
-        dir,
-        "grep",
-        "--no-index",
-        "-P",
-        "-q",
-        "-e",
-        "x",
-        "--",
-        ".paperwing-missing",
-    ];
-    let request = Request {
-        args: &args,
-        context: "Check Perl regex support",
-        timeout: Duration::from_secs(10),
-        expected: &[0, 1, 128],
-        policy: OutputPolicy::Metadata,
-    };
-    let cancel = Arc::new(AtomicBool::new(false));
-    execute_cancellable(request, cancel)
-        .await
-        .is_ok_and(|output| matches!(output.code, Some(0 | 1)))
-}
-
-pub struct RepoResult {
-    pub status: RepoStatus,
-    pub matches: Vec<Match>,
-}
-
-pub async fn search_repo(
-    target: &RepoTarget,
-    plan: &Plan,
-    allowance: usize,
-    cancel: Arc<AtomicBool>,
-) -> RepoResult {
-    let limit = allowance.min(plan.per_repo);
-    match run_grep(target, plan, limit, cancel.clone()).await {
-        Ok((matches, truncated)) => RepoResult {
-            status: RepoStatus {
-                state: State::Done,
-                matches: matches.len(),
-                truncated,
-                error: None,
-            },
-            matches,
-        },
-        Err(error) => {
-            let cancelled = cancel.load(std::sync::atomic::Ordering::Relaxed);
-            let state = if cancelled {
-                State::Cancelled
-            } else {
-                State::Failed
-            };
-            RepoResult {
-                status: RepoStatus::without_matches(state, Some(describe(&error))),
-                matches: Vec::new(),
-            }
+pub fn dedupe(repos: Vec<RepoTarget>) -> Vec<RepoTarget> {
+    let mut seen = HashSet::new();
+    let mut kept = Vec::new();
+    for target in repos {
+        let canonical = crate::platform::canonical_path(Path::new(&target.path)).map_or_else(
+            |_| target.path.clone(),
+            |path| path.to_string_lossy().into_owned(),
+        );
+        if seen.insert((canonical, target.git_ref.clone())) {
+            kept.push(target);
         }
     }
-}
-
-fn describe(error: &str) -> String {
-    if error.contains("capture limit") {
-        return "Too many matches to read; narrow the pattern or add a path filter".into();
-    }
-    error.to_string()
-}
-
-async fn run_grep(
-    target: &RepoTarget,
-    plan: &Plan,
-    limit: usize,
-    cancel: Arc<AtomicBool>,
-) -> Result<(Vec<Match>, bool), String> {
-    let argv = build_argv(target, plan, limit);
-    let args: Vec<&str> = argv.iter().map(String::as_str).collect();
-    let request = Request {
-        args: &args,
-        context: "Search repository",
-        timeout: GREP_TIMEOUT,
-        expected: &[0, 1],
-        policy: OutputPolicy::Metadata,
-    };
-    let output = execute_cancellable(request, cancel).await?;
-    if !matches!(output.code, Some(0 | 1)) {
-        return Err(output.last_error());
-    }
-    let prefix = target.git_ref.as_ref().map(|name| format!("{name}:"));
-    let records = parse_records(&output.stdout, prefix.as_deref());
-    Ok(assemble(&target.path, records, plan.context, limit))
-}
-
-fn build_argv(target: &RepoTarget, plan: &Plan, limit: usize) -> Vec<String> {
-    let mut argv: Vec<String> = ["-C", &target.path, "-c", "core.fsmonitor=false"]
-        .map(String::from)
-        .to_vec();
-    argv.extend(["grep", "-z", "-I", "-n", "--column", "--no-color"].map(String::from));
-    argv.extend(plan.flags.iter().map(|flag| flag.to_string()));
-    if plan.context > 0 {
-        argv.push(format!("-C{}", plan.context));
-    }
-    if plan.untracked {
-        argv.extend(["--untracked", "--exclude-standard"].map(String::from));
-    }
-    argv.extend(["-m".into(), (limit + 1).to_string()]);
-    argv.extend(["-e".into(), plan.pattern.clone()]);
-    argv.extend(target.git_ref.clone());
-    argv.push("--".into());
-    argv.extend(plan.pathspecs.iter().cloned());
-    argv
-}
-
-enum Record {
-    Match {
-        path: String,
-        line: u32,
-        column: usize,
-        text: Vec<u8>,
-    },
-    Context {
-        path: String,
-        line: u32,
-        text: Vec<u8>,
-    },
-}
-
-fn parse_records(stdout: &[u8], prefix: Option<&str>) -> Vec<Record> {
-    stdout
-        .split(|byte| *byte == b'\n')
-        .filter_map(|row| parse_row(row, prefix))
-        .collect()
-}
-
-fn parse_row(row: &[u8], prefix: Option<&str>) -> Option<Record> {
-    let mut parts = row.splitn(4, |byte| *byte == 0);
-    let path = String::from_utf8_lossy(parts.next()?).into_owned();
-    let path = match prefix {
-        Some(prefix) => path.strip_prefix(prefix).unwrap_or(&path).to_string(),
-        None => path,
-    };
-    let line: u32 = std::str::from_utf8(parts.next()?).ok()?.parse().ok()?;
-    let third = parts.next()?;
-    match parts.next() {
-        Some(text) => {
-            let column = std::str::from_utf8(third).ok()?.parse().ok()?;
-            Some(Record::Match {
-                path,
-                line,
-                column,
-                text: text.to_vec(),
-            })
-        }
-        None => Some(Record::Context {
-            path,
-            line,
-            text: third.to_vec(),
-        }),
-    }
-}
-
-fn clip(text: &[u8]) -> String {
-    let text = String::from_utf8_lossy(text);
-    let text = text.trim_end_matches('\r');
-    match text.char_indices().nth(MAX_LINE_CHARS) {
-        Some((end, _)) => format!("{}…", &text[..end]),
-        None => text.to_string(),
-    }
-}
-
-fn char_column(text: &[u8], column: usize) -> u32 {
-    let end = column.saturating_sub(1).min(text.len());
-    let chars = String::from_utf8_lossy(&text[..end]).chars().count();
-    u32::try_from(chars + 1).unwrap_or(u32::MAX)
-}
-
-fn assemble(repo: &str, records: Vec<Record>, context: u8, limit: usize) -> (Vec<Match>, bool) {
-    let mut matches = Vec::new();
-    let mut truncated = false;
-    for (index, record) in records.iter().enumerate() {
-        let Record::Match {
-            path,
-            line,
-            column,
-            text,
-        } = record
-        else {
-            continue;
-        };
-        if matches.len() >= limit {
-            truncated = true;
-            break;
-        }
-        matches.push(Match {
-            repo: repo.to_string(),
-            path: path.clone(),
-            line: *line,
-            column: char_column(text, *column),
-            text: clip(text),
-            context: gather(&records, index, context),
-        });
-    }
-    (matches, truncated)
-}
-
-fn gather(records: &[Record], index: usize, context: u8) -> Vec<ContextLine> {
-    let Record::Match { path, line, .. } = &records[index] else {
-        return Vec::new();
-    };
-    let near = |other: u32| other != *line && other.abs_diff(*line) <= u32::from(context);
-    let around = records.iter().filter_map(|record| match record {
-        Record::Context {
-            path: other,
-            line,
-            text,
-        } if other == path && near(*line) => Some(ContextLine {
-            line: *line,
-            text: clip(text),
-        }),
-        _ => None,
-    });
-    around.collect()
+    kept
 }

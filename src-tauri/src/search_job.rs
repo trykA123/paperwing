@@ -1,19 +1,25 @@
 use crate::search::{
-    perl_supported, plan, search_repo, validate_target, Match, Mode, Plan, RepoStatus, RepoTarget,
-    SearchRequest, State,
+    dedupe, plan, validate_target, Match, Plan, RepoStatus, RepoTarget, SearchRequest, State,
 };
+use crate::search_grep::{search_repo, Budget};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, State as TauriState};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
-const CONCURRENCY: usize = 4;
-const MAX_RUNNING: usize = 4;
+const CHUNK: usize = 200;
+pub const MATCHES_EVENT: &str = "search-matches";
 pub const REPO_EVENT: &str = "search-repo";
 pub const DONE_EVENT: &str = "search-done";
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchesPayload {
+    pub id: u64,
+    pub repo: String,
+    pub matches: Vec<Match>,
+}
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +27,6 @@ pub struct RepoPayload {
     pub id: u64,
     pub repo: String,
     pub status: RepoStatus,
-    pub matches: Vec<Match>,
 }
 
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
@@ -41,225 +46,202 @@ pub struct DonePayload {
     pub summary: Summary,
 }
 
+#[derive(Clone)]
 pub enum Outbound {
+    Matches(MatchesPayload),
     Repo(RepoPayload),
     Done(DonePayload),
+}
+
+pub type Emit = Arc<dyn Fn(Outbound) + Send + Sync>;
+
+pub struct Job {
+    pub id: u64,
+    pub concurrency: usize,
+    pub cancel: Arc<AtomicBool>,
+    pub send: Emit,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
-    perl: bool,
+    pub perl: bool,
 }
 
 struct Shared {
     id: u64,
     plan: Plan,
     cancel: Arc<AtomicBool>,
-    found: AtomicUsize,
-    send: Arc<dyn Fn(Outbound) + Send + Sync>,
+    budget: Arc<Budget>,
+    send: Emit,
+    skipped_for_cap: AtomicBool,
 }
 
 impl Shared {
-    fn allowance(&self) -> usize {
-        self.plan
-            .overall
-            .saturating_sub(self.found.load(Ordering::SeqCst))
+    fn emit_repo(&self, repo: &str, status: RepoStatus) {
+        let payload = RepoPayload {
+            id: self.id,
+            repo: repo.to_string(),
+            status,
+        };
+        (self.send)(Outbound::Repo(payload));
     }
 
-    fn emit(&self, repo: String, status: RepoStatus, matches: Vec<Match>) {
-        (self.send)(Outbound::Repo(RepoPayload {
+    fn emit_matches(&self, repo: &str, matches: Vec<Match>) {
+        for chunk in matches.chunks(CHUNK) {
+            let payload = MatchesPayload {
+                id: self.id,
+                repo: repo.to_string(),
+                matches: chunk.to_vec(),
+            };
+            (self.send)(Outbound::Matches(payload));
+        }
+    }
+}
+
+async fn checked(shared: &Arc<Shared>, target: &RepoTarget) -> Result<(), RepoStatus> {
+    let (inner, target) = (shared.clone(), target.clone());
+    let validation =
+        tauri::async_runtime::spawn_blocking(move || validate_target(&target, &inner.plan));
+    match validation.await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => return Err(RepoStatus::without_matches(State::Failed, Some(error))),
+        Err(_) => {
+            return Err(RepoStatus::without_matches(
+                State::Failed,
+                Some("Validation failed".into()),
+            ))
+        }
+    }
+    if shared.cancel.load(Ordering::Relaxed) {
+        return Err(RepoStatus::without_matches(State::Cancelled, None));
+    }
+    if shared.budget.is_capped() {
+        shared.skipped_for_cap.store(true, Ordering::SeqCst);
+        let reason = Some("Overall result limit reached".into());
+        return Err(RepoStatus::without_matches(State::Skipped, reason));
+    }
+    Ok(())
+}
+
+async fn search_one(shared: Arc<Shared>, gate: Arc<Semaphore>, target: RepoTarget) -> RepoStatus {
+    let Ok(_permit) = gate.acquire().await else {
+        return RepoStatus::without_matches(State::Failed, Some("Search is unavailable".into()));
+    };
+    let (status, matches) = match checked(&shared, &target).await {
+        Err(status) => (status, Vec::new()),
+        Ok(()) => {
+            let found = search_repo(
+                &target,
+                &shared.plan,
+                shared.budget.clone(),
+                shared.cancel.clone(),
+            )
+            .await;
+            (found.status, found.matches)
+        }
+    };
+    shared.emit_matches(&target.path, matches);
+    shared.emit_repo(&target.path, status.clone());
+    status
+}
+
+async fn guarded(shared: Arc<Shared>, gate: Arc<Semaphore>, target: RepoTarget) -> RepoStatus {
+    let path = target.path.clone();
+    let mut inner = Aborting(tokio::spawn(search_one(shared.clone(), gate, target)));
+    match (&mut inner.0).await {
+        Ok(status) => status,
+        Err(_) => {
+            let status = RepoStatus::without_matches(
+                State::Failed,
+                Some("Search crashed for this repository".into()),
+            );
+            shared.emit_repo(&path, status.clone());
+            status
+        }
+    }
+}
+
+struct Aborting(tokio::task::JoinHandle<RepoStatus>);
+
+impl Drop for Aborting {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+struct DoneGuard {
+    id: u64,
+    send: Emit,
+    sent: bool,
+}
+
+impl DoneGuard {
+    fn finish(&mut self, summary: Summary) {
+        self.sent = true;
+        (self.send)(Outbound::Done(DonePayload {
             id: self.id,
-            repo,
-            status,
-            matches,
+            summary,
         }));
     }
 }
 
-async fn search_target(shared: &Shared, target: &RepoTarget) -> (RepoStatus, Vec<Match>) {
-    if let Err(error) = validate_target(target, &shared.plan) {
-        return (
-            RepoStatus::without_matches(State::Failed, Some(error)),
-            Vec::new(),
-        );
+impl Drop for DoneGuard {
+    fn drop(&mut self) {
+        if !self.sent {
+            let summary = Summary {
+                failed: 1,
+                cancelled: true,
+                ..Summary::default()
+            };
+            (self.send)(Outbound::Done(DonePayload {
+                id: self.id,
+                summary,
+            }));
+        }
     }
-    if shared.cancel.load(Ordering::Relaxed) {
-        return (
-            RepoStatus::without_matches(State::Cancelled, None),
-            Vec::new(),
-        );
-    }
-    let allowance = shared.allowance();
-    if allowance == 0 {
-        let reason = Some("Overall result limit reached".into());
-        return (
-            RepoStatus::without_matches(State::Skipped, reason),
-            Vec::new(),
-        );
-    }
-    let found = search_repo(target, &shared.plan, allowance, shared.cancel.clone()).await;
-    let (mut status, mut matches) = (found.status, found.matches);
-    let before = shared.found.fetch_add(matches.len(), Ordering::SeqCst);
-    let room = shared.plan.overall.saturating_sub(before);
-    if matches.len() > room {
-        matches.truncate(room);
-        status.matches = room;
-        status.truncated = true;
-    }
-    (status, matches)
 }
 
-async fn run_target(shared: Arc<Shared>, gate: Arc<Semaphore>, target: RepoTarget) -> RepoStatus {
-    let Ok(_permit) = gate.acquire().await else {
-        return RepoStatus::without_matches(State::Failed, Some("Search is unavailable".into()));
-    };
-    let (status, matches) = search_target(&shared, &target).await;
-    shared.emit(target.path, status.clone(), matches);
-    status
-}
-
-pub async fn run_job(
-    id: u64,
-    request: SearchRequest,
-    concurrency: usize,
-    cancel: Arc<AtomicBool>,
-    send: Arc<dyn Fn(Outbound) + Send + Sync>,
-) -> Result<Summary, String> {
+pub async fn run_job(request: SearchRequest, job: Job) -> Result<Summary, String> {
     let plan = plan(&request)?;
+    let mut done = DoneGuard {
+        id: job.id,
+        send: job.send.clone(),
+        sent: false,
+    };
+    let repos = tauri::async_runtime::spawn_blocking(move || dedupe(request.repos)).await;
+    let repos = repos.map_err(|_| "Could not read repository paths".to_string())?;
+    let budget = Arc::new(Budget::new(plan.overall));
     let shared = Arc::new(Shared {
-        id,
+        id: job.id,
         plan,
-        cancel: cancel.clone(),
-        found: AtomicUsize::new(0),
-        send,
+        cancel: job.cancel.clone(),
+        budget: budget.clone(),
+        send: job.send.clone(),
+        skipped_for_cap: AtomicBool::new(false),
     });
-    let gate = Arc::new(Semaphore::new(concurrency.max(1)));
+    let gate = Arc::new(Semaphore::new(job.concurrency.max(1)));
     let mut tasks = JoinSet::new();
-    for target in request.repos.iter().cloned() {
-        tasks.spawn(run_target(shared.clone(), gate.clone(), target));
+    for target in repos.iter().cloned() {
+        tasks.spawn(guarded(shared.clone(), gate.clone(), target));
     }
     let mut summary = Summary {
-        repos: request.repos.len(),
+        repos: repos.len(),
         ..Summary::default()
     };
     while let Some(joined) = tasks.join_next().await {
         match joined {
-            Ok(status) if status.state == State::Failed => summary.failed += 1,
-            Ok(_) => {}
+            Ok(status) => {
+                summary.matches += status.matches;
+                summary.failed += usize::from(status.state == State::Failed);
+            }
             Err(_) => summary.failed += 1,
         }
     }
-    summary.matches = shared.found.load(Ordering::SeqCst).min(shared.plan.overall);
-    summary.capped = shared.found.load(Ordering::SeqCst) >= shared.plan.overall;
-    summary.cancelled = cancel.load(Ordering::Relaxed);
-    (shared.send)(Outbound::Done(DonePayload {
-        id,
-        summary: summary.clone(),
-    }));
+    summary.capped = budget.is_capped() || shared.skipped_for_cap.load(Ordering::SeqCst);
+    summary.cancelled = job.cancel.load(Ordering::Relaxed);
+    done.finish(summary.clone());
     Ok(summary)
-}
-
-#[derive(Default)]
-pub struct Service {
-    next: AtomicU64,
-    active: Arc<Mutex<HashMap<u64, Arc<AtomicBool>>>>,
-}
-
-impl Service {
-    fn register(&self) -> Result<(u64, Arc<AtomicBool>), String> {
-        let mut active = self
-            .active
-            .lock()
-            .map_err(|_| "Search registry is unavailable")?;
-        if active.len() >= MAX_RUNNING {
-            return Err("Too many searches are running; cancel one first".into());
-        }
-        let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
-        let flag = Arc::new(AtomicBool::new(false));
-        active.insert(id, flag.clone());
-        Ok((id, flag))
-    }
-
-    fn cancel(&self, id: u64) -> bool {
-        let flag = self
-            .active
-            .lock()
-            .ok()
-            .and_then(|active| active.get(&id).cloned());
-        flag.is_some_and(|flag| {
-            flag.store(true, Ordering::Relaxed);
-            true
-        })
-    }
-}
-
-struct Slot {
-    active: Arc<Mutex<HashMap<u64, Arc<AtomicBool>>>>,
-    id: u64,
-}
-
-impl Drop for Slot {
-    fn drop(&mut self) {
-        let mut active = self
-            .active
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        active.remove(&self.id);
-    }
-}
-
-#[tauri::command]
-pub async fn search_capabilities() -> Capabilities {
-    Capabilities {
-        perl: perl_supported().await,
-    }
-}
-
-#[tauri::command]
-pub async fn search_start(
-    app: AppHandle,
-    service: TauriState<'_, Service>,
-    request: SearchRequest,
-) -> Result<u64, String> {
-    plan(&request)?;
-    if request.mode == Mode::Perl && !perl_supported().await {
-        return Err("This Git build has no Perl-compatible regex support".into());
-    }
-    let (id, cancel) = service.register()?;
-    let slot = Slot {
-        active: service.active.clone(),
-        id,
-    };
-    let stop = cancel.clone();
-    let send: Arc<dyn Fn(Outbound) + Send + Sync> = Arc::new(move |outbound| {
-        let sent = match outbound {
-            Outbound::Repo(payload) => app.emit(REPO_EVENT, payload),
-            Outbound::Done(payload) => app.emit(DONE_EVENT, payload),
-        };
-        if sent.is_err() {
-            stop.store(true, Ordering::Relaxed);
-        }
-    });
-    tauri::async_runtime::spawn(async move {
-        let _slot = slot;
-        if let Err(error) = run_job(id, request, CONCURRENCY, cancel, send.clone()).await {
-            send(Outbound::Done(DonePayload {
-                id,
-                summary: Summary {
-                    failed: 1,
-                    ..Summary::default()
-                },
-            }));
-            eprintln!("search {id} failed: {error}");
-        }
-    });
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn search_cancel(service: TauriState<'_, Service>, id: u64) -> Result<bool, String> {
-    Ok(service.cancel(id))
 }
 
 #[cfg(test)]

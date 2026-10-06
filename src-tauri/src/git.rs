@@ -1,5 +1,5 @@
 mod runner;
-pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, filesystem_gate};
+pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_streaming, filesystem_gate, StdoutSink};
 pub type ActivityOutput = runner::ActivityOutput;
 use runner::configured_secrets;
 #[cfg(test)]
@@ -50,3 +50,5 @@ pub fn clear_activity() -> ClearedActivity { runner::clear_activity() }
 
 #[tauri::command]
 pub fn cancel_activity(id: String) -> bool { runner::cancel_activity(id) }
+#[cfg(all(test, target_os = "linux"))]
+pub(crate) fn runner_idle() -> bool { runner::resources_idle() }

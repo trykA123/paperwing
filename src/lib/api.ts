@@ -144,15 +144,16 @@ export type SearchRequest = {
   pathspecs?: string[]; untracked?: boolean; context?: number; maxPerRepo?: number; maxOverall?: number;
 };
 export type SearchContextLine = { line: number; text: string };
-export type SearchMatch = { repo: string; path: string; line: number; column: number; text: string; context: SearchContextLine[] };
+export type SearchMatch = { path: string; line: number; column: number; text: string; context: SearchContextLine[] };
 export type SearchRepoStatus = { state: 'done' | 'skipped' | 'cancelled' | 'failed'; matches: number; truncated: boolean; error: string | null };
-export type SearchRepoResult = { id: number; repo: string; status: SearchRepoStatus; matches: SearchMatch[] };
+export type SearchMatches = { id: number; repo: string; matches: SearchMatch[] };
+export type SearchRepoResult = { id: number; repo: string; status: SearchRepoStatus };
 export type SearchSummary = { repos: number; matches: number; failed: number; capped: boolean; cancelled: boolean };
 export type SearchDone = { id: number; summary: SearchSummary };
 export type SearchCapabilities = { perl: boolean };
 export const events = {
   launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done',
-  searchRepo: 'search-repo', searchDone: 'search-done',
+  searchMatches: 'search-matches', searchRepo: 'search-repo', searchDone: 'search-done',
 } as const;
 
 export const api = {
@@ -218,5 +219,6 @@ export const api = {
   discoverCancelAll: () => invoke<number>('discover_cancel_all'),
   searchStart: (request: SearchRequest) => invoke<number>('search_start', { request }),
   searchCancel: (id: number) => invoke<boolean>('search_cancel', { id }),
+  searchCancelAll: () => invoke<number>('search_cancel_all'),
   searchCapabilities: () => invoke<SearchCapabilities>('search_capabilities'),
 };

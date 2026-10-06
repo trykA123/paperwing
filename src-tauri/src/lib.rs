@@ -27,7 +27,10 @@ mod discover;
 mod discover_job;
 mod launch;
 mod search;
+mod search_grep;
 mod search_job;
+mod search_rows;
+mod search_service;
 mod trash;
 
 use std::path::Path;
@@ -71,7 +74,7 @@ pub fn run() {
         .plugin(launch::single_instance())
         .manage(launch::Pending::from_process())
         .manage(discover_job::Service::default())
-        .manage(search_job::Service::default())
+        .manage(search_service::Service::default())
         .manage(compare::Service::default());
     #[cfg(windows)]
     let builder = builder.manage(files::Service::default());
@@ -175,9 +178,10 @@ pub fn run() {
             discover_job::discover_start,
             discover_job::discover_cancel,
             discover_job::discover_cancel_all,
-            search_job::search_start,
-            search_job::search_cancel,
-            search_job::search_capabilities,
+            search_service::search_start,
+            search_service::search_cancel,
+            search_service::search_cancel_all,
+            search_service::search_capabilities,
         ])
         .run(context)
         .expect("error while running PaperWing");
