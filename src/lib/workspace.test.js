@@ -512,11 +512,13 @@ test('P3 compare state ignores stale snapshots/content and uses opaque IDs', asy
         reads[2].reject({ kind: 'cancelled', side: null, message: 'obsolete' }); await old;
         expect(state.snapshot.generation).toBe(3);
         expect(state.error).toBeNull();
+        state.files = [{ id: 'opaque-one', left: { kind: 'symlink' } }, { id: 'opaque-two', right: { kind: 'gitlink' } }];
         const first = state.loadContent('opaque-one', 'left'), second = state.loadContent('opaque-two', 'right');
         expect(reads[5].args).toEqual({ id: 'session', generation: 3, fileId: 'opaque-two', side: 'right' });
-        reads[5].resolve({ generation: 3, bytes: [2] }); await second;
-        reads[4].resolve({ generation: 3, bytes: [1] }); await first;
-        expect(state.content.bytes).toEqual([2]);
+        reads[5].resolve(Uint8Array.of(2).buffer); await second;
+        reads[4].resolve(Uint8Array.of(1).buffer); await first;
+        expect(state.content.bytes).toEqual(Uint8Array.of(2));
+        expect(state.content.kind).toBe('gitlink');
         const pending = state.loadFiles(); await state.cancel();
         reads[6].resolve([{ id: 'obsolete-file' }]); await pending;
         expect(state.files).toEqual([]);
@@ -593,4 +595,29 @@ test('Windows partial-recycle configuration behavior stays unchanged', async () 
         app.ws = previous.ws; app.tabs = previous.tabs; app.activeTabId = previous.active; app.platform = previous.platform; app.rootProbes = previous.probes;
         clearMocks(); if (previous.window === undefined) delete globalThis.window; else globalThis.window = previous.window;
     }
+});
+
+test('comparison content fetches an unloaded row and preserves its server kind', async () => {
+    await compareFixture(async ({ state, reads }) => {
+        state.snapshot = { id: 'session', generation: 1, fileCount: 2 };
+        const pending = state.loadContent('unloaded', 'left');
+        expect(reads[0].command).toBe('comparison_files');
+        reads[0].resolve([{ id: 'unloaded', left: { kind: 'symlink' } }]);
+        await new Promise(resolve => setImmediate(resolve));
+        expect(reads[1].command).toBe('comparison_content');
+        reads[1].resolve(Uint8Array.of(97).buffer);
+        await pending;
+        expect(state.content.kind).toBe('symlink');
+    });
+});
+
+test('comparison content refuses an absent side without inventing a file kind', async () => {
+    await compareFixture(async ({ state, reads }) => {
+        state.snapshot = { id: 'session', generation: 1, fileCount: 1 };
+        state.files = [{ id: 'absent', left: null }];
+        await state.loadContent('absent', 'left');
+        expect(reads).toHaveLength(0);
+        expect(state.content).toBeNull();
+        expect(state.error.message).toContain('Comparison entry unavailable');
+    });
 });

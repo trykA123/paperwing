@@ -1,3 +1,6 @@
+#[path = "batch.rs"]
+mod batch;
+pub(crate) use batch::BatchReader;
 use serde::Serialize;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -21,7 +24,7 @@ type Child = linux_job::Job;
 type Child = tokio::process::Child;
 
 const OUTPUT_LIMIT: usize = 64 * 1024;
-const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
+pub(crate) const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
 pub(super) static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static ACTIVITY: OnceLock<Mutex<VecDeque<Activity>>> = OnceLock::new();
 static APPLICATION: OnceLock<AppHandle> = OnceLock::new();
@@ -398,6 +401,15 @@ impl Streams {
 }
 
 async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, owner: Option<Arc<AtomicBool>>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+    if request.args.windows(2).any(|args| args == ["worktree", "remove"]) {
+        let root = request.args.windows(2).find(|args| args[0] == "-C").map(|args| std::path::PathBuf::from(args[1]));
+        if let Some(root) = &root { BatchReader::close_root(root).await?; }
+        if let Some(path) = request.args.last().filter(|arg| !arg.starts_with('-')) {
+            let path = std::path::Path::new(path);
+            let path = if path.is_absolute() { path.to_path_buf() } else { root.unwrap_or_default().join(path) };
+            BatchReader::close_root(&path).await?;
+        }
+    }
     #[cfg(feature = "benchmark")]
     let operation = crate::benchmark::operation(request.args);
     #[cfg(feature = "benchmark")]
@@ -571,7 +583,7 @@ pub async fn buffered(args: &[&str], context: &str, expected: &[i32]) -> Result<
 
 #[cfg(all(test, target_os = "linux"))]
 pub(super) fn resources_idle() -> bool {
-    SLOTS.get().is_none_or(|slots| slots.available_permits() == 32)
+    batch::resources_idle() && SLOTS.get().is_none_or(|slots| slots.available_permits() == 32)
         && RUNNING.get().is_none_or(|jobs| jobs.lock().unwrap().is_empty())
 }
 

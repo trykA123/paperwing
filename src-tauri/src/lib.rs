@@ -94,7 +94,8 @@ pub fn run() {
     builder
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
-                tauri::async_runtime::block_on(webview.state::<compare::Service>().release_sessions());
+                let app = webview.app_handle().clone();
+                tauri::async_runtime::spawn(async move { app.state::<compare::Service>().release_sessions().await; });
                 #[cfg(windows)]
                 tauri::async_runtime::block_on(webview.state::<files::Service>().release_tickets());
                 #[cfg(target_os = "linux")]

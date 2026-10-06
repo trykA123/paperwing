@@ -52,6 +52,17 @@ async fn fresh_clone_into_pinned_empty_destination_preserves_git_workflow() {
 
 use super::*;
 
+mod review_fixes;
+mod count_config;
+mod cold_lifecycle;
+#[cfg(feature = "benchmark")]
+mod cold_measure;
+mod cold_path;
+mod equivalence;
+mod legacy;
+#[cfg(target_os = "linux")]
+mod metadata_limits;
+
 struct Fixture(PathBuf);
 impl Fixture {
     async fn new() -> Self {
@@ -83,10 +94,14 @@ impl Fixture {
     fn diff_data(&self) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
             .join(".skillify/evidence/paperwing/14/quota-repair/compare-native")
-            .join(self.0.file_name().unwrap())
+            .join(crate::test_support::tmp_root().file_name().unwrap()).join(self.0.file_name().unwrap())
     }
     fn job(&self) -> Job {
         Job {
+            rust_counts: false,
+            #[cfg(target_os = "linux")] count_root: Some(self.diff_data()),
+            #[cfg(not(target_os = "linux"))] count_root: Some(std::env::temp_dir()),
+            readers: Arc::default(),
             context: "compare-fixture".into(),
             cancel: Arc::new(AtomicBool::new(false)),
             #[cfg(target_os = "linux")] diff: Some(Arc::new(crate::linux_diff::Storage::new(self.diff_data()).unwrap())),
@@ -322,7 +337,11 @@ async fn native_repository_trailing_space_and_backslash_paths_compare_without_wr
         endpoint: Endpoint { set_id: "set".into(), item_id: "item".into(), reference: CompareRef::WorkingTree },
         root: repo.clone(), workspace_root: fixture.0.clone(),
     };
-    let job = Job { context: "native-read".into(), cancel: Arc::new(AtomicBool::new(false)), diff: Some(Arc::new(crate::linux_diff::Storage::new(fixture.0.join("diff-data")).unwrap())), roots: vec![crate::linux_guard::Root::open(&repo, &[]).unwrap().value().unwrap()], temporary_root: None, inventory_started: None };
+    let job = Job {
+        rust_counts: false,
+        count_root: None,
+        readers: Arc::default(),
+        context: "native-read".into(), cancel: Arc::new(AtomicBool::new(false)), diff: Some(Arc::new(crate::linux_diff::Storage::new(fixture.0.join("diff-data")).unwrap())), roots: vec![crate::linux_guard::Root::open(&repo, &[]).unwrap().value().unwrap()], temporary_root: None, inventory_started: None };
     let safe = read_root(&context, &job).await.unwrap();
     assert_eq!(safe.read("literal\\filename: ").unwrap().unwrap().bytes, b"native content\n");
     assert!(safe.read(".git/config").is_err());
@@ -490,6 +509,7 @@ async fn scaled_working_inventory_is_lazy_bounded_and_cancellable() {
     let index = std::fs::read(fixture.0.join("repo/.git/index")).unwrap();
     let started = std::time::Instant::now();
     let job = Job {
+        rust_counts: false,
         context: "scale-ready".into(),
         ..fixture.job()
     };
@@ -536,15 +556,13 @@ async fn scaled_working_inventory_is_lazy_bounded_and_cancellable() {
     );
     let inventory_started = Arc::new(tokio::sync::Notify::new());
     let cancel_job = Job {
+        rust_counts: false,
         inventory_started: Some(inventory_started.clone()),
         ..fixture.job()
     };
     let running_job = cancel_job.clone();
-    let context = fixture.context(CompareRef::WorkingTree);
-    let safe = comparison.right.safe.clone();
-    let commit = comparison.right.commit.clone();
-    let task =
-        tokio::spawn(async move { inventory(&context, &safe, &commit, &running_job).await });
+    let resolved = comparison.right.clone();
+    let task = tokio::spawn(async move { inventory(&resolved, &running_job).await });
     tokio::time::timeout(Duration::from_secs(10), inventory_started.notified())
         .await
         .expect("Working-tree blocking read must start before cancellation");
@@ -1399,6 +1417,8 @@ async fn cross_repository_bytes_and_unrelated_shallow_history_are_honest() {
     let unsuitable = fixture.0.join("unsuitable-temp");
     std::fs::write(&unsuitable, b"not a directory").unwrap();
     let partial_job = Job {
+        rust_counts: false,
+        count_root: Some(unsuitable.clone()),
         #[cfg(target_os = "linux")] diff: Some(Arc::new(crate::linux_diff::Storage::new(unsuitable.clone()).unwrap())),
         temporary_root: Some(unsuitable),
         ..fixture.job()
@@ -1540,7 +1560,12 @@ async fn refs_and_working_tree_inventory_are_read_only() {
     let head = std::fs::read(fixture.0.join("repo/.git/HEAD")).unwrap();
     let context = fixture.context(CompareRef::WorkingTree);
     let root = read_root(&context, &job).await.unwrap();
-    let files = inventory(&context, &root, &sha, &job).await.unwrap();
+    let resolved = Resolved {
+        object_format: ObjectFormat::read(&context.root, &job).await.unwrap(),
+        reader: git::BatchReader::new(context.root.clone(), job.cancel.clone()),
+        diff_config: Vec::new(), context, safe: root, commit: sha, files: BTreeMap::new(),
+    };
+    let files = inventory(&resolved, &job).await.unwrap();
     assert!(files.contains_key("untracked.txt"));
     assert!(!files.contains_key("same.txt"));
     assert!(files.contains_key("folder"));

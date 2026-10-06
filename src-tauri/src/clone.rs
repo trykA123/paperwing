@@ -234,6 +234,9 @@ async fn run_job(app: &AppHandle, job: &Job, opts: &Opts) -> Result<(&'static st
             "skip" => return Ok(("skipped", "Folder exists, skipped".into())),
             "fetch" => return switch_existing(app, job).await,
             "reclone" => {
+                crate::git::BatchReader::close_root(&dest).await?;
+                let _exclusive = crate::git::filesystem_gate().write().await;
+                crate::git::BatchReader::close_root(&dest).await?;
                 let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_nanos()).unwrap_or(0);
                 let backup = PathBuf::from(format!("{d}.bak-{ts}-{}", std::process::id()));
                 if backup.exists() { return Err("Reclone backup already exists; existing clone retained".into()); }
@@ -320,6 +323,7 @@ pub fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<Stri
                 let (app, sem, opts, mode) = (app.clone(), sem.clone(), opts.clone(), mode.clone());
                 tauri::async_runtime::spawn(async move {
                     let _permit = sem.acquire_owned().await;
+                    if let Err(error) = crate::git::BatchReader::close_root(Path::new(&job.dest)).await { emit(&app, &job.id, "failed", 0.0, error); return; }
                     let _lease = match Lease::acquire() {
                         Ok(lease) => lease,
                         Err(error) => { emit(&app, &job.id, "failed", 0.0, error); return; }
@@ -375,6 +379,7 @@ pub async fn start_clone(
     if !["skip", "fetch", "reclone"].contains(&opts.on_existing.as_str()) {
         return Err("Unknown 'if folder exists' option".into());
     }
+    for job in &jobs { crate::git::BatchReader::close_root(Path::new(&job.dest)).await?; }
     let lease = Lease::acquire()?;
     let worker_app = app.clone();
     let admission_mode = mode.clone();

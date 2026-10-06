@@ -107,6 +107,53 @@ the production desktop's Secret Service, exercise real GitHub credentials or rep
 Windows/owner-observed acceptance. [Credential contracts](linux-credentials.md) describe
 uncertain mutation responses and the process-local revision seam.
 
+## Cold-path contract controls
+
+Packet17 controls live in `compare::tests::cold_path`. A clean CRLF checkout still
+compares its raw bytes against the LF commit blob. Porcelain status and raw Git diff
+both omit that file. A clean-filter sentinel proves those commands execute filters
+which comparison avoids.
+
+Independent SHA-1 and SHA-256 repositories preserve raw equality, normalized equality,
+line counts and content reads. One Git object database cannot run tree diffs or batch
+read both formats, even with object alternates. Endpoint-owned batch readers keep these object databases separate. Working-tree
+inventory hashes raw bytes in each endpoint's object format without invoking filters.
+
+```sh
+cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib cold_path -- --test-threads=1
+```
+
+The frozen packet 17 oracle lives in `compare/tests/legacy`. Equivalence tests compare
+serialized rows, summaries, options and history while excluding generated file IDs.
+Fixtures cover renames, deletions, type changes, binary files, BOM/CRLF, filters, links,
+submodule entries, empty trees, unborn HEAD, content limits and independent object formats.
+Lifecycle controls verify reader release on close, cancel, refresh and owner drop.
+
+```sh
+cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib compare::tests -- --test-threads=1
+bun test src/lib/content-bytes.test.js
+```
+
+The comparison content command sends raw binary through `tauri::ipc::Response`.
+The API adapter returns a `Uint8Array` and derives content metadata from the request
+and selected row. The backend still validates the session, generation, source and bytes.
+
+Rust counts cover disjoint edits when a cached check for the private storage root and
+source repositories finds no applicable system, global, configured or repository
+attributes or automatic EOL conversion. The decision runs before materialization. Other contexts retain Git
+counts. Batch readers use six independent sessions, release after 30 seconds idle,
+and restart once after a read error. They release together on close, cancel, refresh,
+root mutation and page reload. Linked worktrees use their Git and common directories.
+Long-path inventories retain name-status metadata at the existing capture limit.
+
+The ignored `compare::tests::cold_measure::measure_cold_comparison` test provides a
+backend-only before/after harness with the `benchmark` feature. It requires
+`SKEIN_COLD_ROOT`, `SKEIN_COLD_ENGINE` (`old` or `new`),
+`SKEIN_COLD_WORKLOAD` (`refs`, `cross` or `working`) and `SKEIN_COLD_RESULT`.
+Use fixtures with `.skein-disposable` containing `skein-disposable-fixture-v1` and output paths inside the owned worktree. Capture process-tree
+RSS only between its `MEASURE_BEGIN` and `MEASURE_END` markers. These measurements
+exclude WebView rendering and do not replace native release or Windows/Defender evidence.
+
 ## Linux Git helper cleanup
 
 Run the native Git tests serially. They fork only inside marked private fixtures and clean

@@ -9,13 +9,19 @@ use std::sync::{
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 
+mod count_eligibility;
 mod history;
+mod index_objects;
 mod inventory;
+mod line_counts;
+mod object_id;
 mod registration;
 mod text_diff;
+mod working_inventory;
 
 use history::{history, HistorySource};
 use inventory::{content, inventory, Entry, Kind, Resolved};
+use object_id::ObjectFormat;
 use registration::bind;
 use text_diff::{binary, count_result, diff_metadata, line_counts, normalized};
 
@@ -103,6 +109,9 @@ struct Context {
 
 #[derive(Clone)]
 struct Job {
+    rust_counts: bool,
+    count_root: Option<PathBuf>,
+    readers: Arc<Mutex<Vec<git::BatchReader>>>,
     context: String,
     cancel: Arc<AtomicBool>,
     #[cfg(target_os = "linux")]
@@ -643,8 +652,22 @@ struct Prepared {
     history_source: Option<HistorySource>,
 }
 
+#[cfg(test)]
+impl Prepared {
+    async fn close_readers(&self) {
+        self.left.reader.close().await;
+        self.right.reader.close().await;
+    }
+}
+
+async fn close_readers(readers: &Mutex<Vec<git::BatchReader>>) {
+    let readers = std::mem::take(&mut *readers.lock().await);
+    futures_util::future::join_all(readers.iter().map(git::BatchReader::close)).await;
+}
+
 #[derive(Default)]
 struct Fetch {
+    diff_config: Arc<tokio::sync::OnceCell<Vec<String>>>,
     epoch: u64,
     problem: Option<Problem>,
 }
@@ -658,11 +681,13 @@ pub struct Service {
     slots: Semaphore,
     #[cfg(target_os = "linux")]
     diff: std::sync::OnceLock<Arc<crate::linux_diff::Storage>>,
+    counts: std::sync::OnceLock<Arc<count_eligibility::Eligibility>>,
     #[cfg(all(test, target_os = "linux"))]
     fresh_write_root_hook: std::sync::Mutex<Option<WriteRootHook>>,
 }
 
 struct Session {
+    readers: Arc<Mutex<Vec<git::BatchReader>>>,
     left: Context,
     right: Context,
     generation: u64,
@@ -678,6 +703,7 @@ impl Default for Service {
             slots: Semaphore::new(4),
             #[cfg(target_os = "linux")]
             diff: std::sync::OnceLock::new(),
+            counts: std::sync::OnceLock::new(),
             #[cfg(all(test, target_os = "linux"))]
             fresh_write_root_hook: std::sync::Mutex::new(None),
         }
@@ -717,6 +743,7 @@ impl Service {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn configure_diff(&self, path: PathBuf) -> Result<(), String> {
+        let _ = self.counts.set(Arc::new(count_eligibility::Eligibility::new(path.clone())));
         let storage = crate::linux_diff::Storage::new(path).map_err(|error| error.to_string())?;
         self.diff.set(Arc::new(storage)).map_err(|_| "Comparison diff storage is already configured".into())
     }
@@ -739,6 +766,7 @@ impl Service {
         sessions.insert(
             id.clone(),
             Session {
+                readers: Arc::default(),
                 left,
                 right,
                 generation: 0,
@@ -765,8 +793,10 @@ impl Service {
     }
 
     async fn close(&self, id: &str) -> bool {
-        if let Some(session) = self.sessions.lock().await.remove(id) {
+        let session = self.sessions.lock().await.remove(id);
+        if let Some(session) = session {
             session.cancel.store(true, Ordering::Relaxed);
+            close_readers(&session.readers).await;
             true
         } else {
             false
@@ -774,20 +804,28 @@ impl Service {
     }
 
     pub async fn release_sessions(&self) {
-        for (_, session) in self.sessions.lock().await.drain() {
+        let sessions: Vec<_> = self.sessions.lock().await.drain()
+            .map(|(_, session)| session)
+            .collect();
+        for session in &sessions {
             session.cancel.store(true, Ordering::Relaxed);
         }
+        futures_util::future::join_all(sessions.iter().map(|session| close_readers(&session.readers))).await;
     }
 
     async fn cancel(&self, id: &str) -> bool {
-        if let Some(session) = self.sessions.lock().await.get_mut(id) {
+        let readers = {
+            let mut sessions = self.sessions.lock().await;
+            let Some(session) = sessions.get_mut(id) else {
+                return false;
+            };
             session.cancel.store(true, Ordering::Relaxed);
             session.generation += 1;
             session.prepared = None;
-            true
-        } else {
-            false
-        }
+            session.readers.clone()
+        };
+        close_readers(&readers).await;
+        true
     }
 
     async fn fetch_state(&self, root: &Path) -> Result<Arc<Mutex<Fetch>>, Problem> {
@@ -826,12 +864,30 @@ impl Service {
             let mut captured = job.clone();
             if let Some(storage) = &captured.diff {
                 captured.roots = storage.capture(vec![left_safe.clone(), right_safe.clone()], &captured.cancel).await
-                    .map_err(|error| Problem::new(if error.cancelled { "cancelled" } else { "unavailable" }, error.message))?;
+                    .map_err(|error| {
+                        Problem::new(if error.cancelled { "cancelled" } else { "unavailable" }, error.message)
+                    })?;
             }
             captured
         };
         #[cfg(target_os = "linux")]
         let job = &storage_job;
+        let mut count_job = job.clone();
+        let eligibility = self.counts.get_or_init(|| {
+            #[cfg(target_os = "linux")]
+            let eligibility = count_eligibility::Eligibility::default();
+            #[cfg(not(target_os = "linux"))]
+            let eligibility = count_eligibility::Eligibility::new(std::env::temp_dir());
+            Arc::new(eligibility)
+        });
+        let fallback;
+        let eligibility = if job.count_root.as_ref().is_some_and(|root| Some(root) != eligibility.storage.as_ref()) {
+            fallback = count_eligibility::Eligibility::new(job.count_root.clone().ok_or_else(|| Problem::new("unavailable", "Count storage unavailable"))?);
+            &fallback
+        } else { eligibility.as_ref() };
+        count_job.rust_counts = eligibility.allows(&left_context.root, job).await?
+            && eligibility.allows(&right_context.root, job).await?;
+        let job = &count_job;
         let contexts = [&left_context, &right_context];
         let roots = [&left_safe.path, &right_safe.path];
         let mut states = Vec::new();
@@ -840,6 +896,21 @@ impl Service {
             let state = self.fetch_state(root).await?;
             epochs.push(job.lock(&state).await?.epoch);
             states.push(state);
+        }
+        let mut diff_configs = Vec::new();
+        for (index, context) in contexts.iter().enumerate() {
+            let config = job.lock(&states[index]).await?.diff_config.clone();
+            let values = config.get_or_try_init(|| async {
+                let result = job.run(&context.root, &["config", "--get-regexp", "^diff\\.(algorithm|renamelimit)$"], &[0, 1]).await?;
+                let mut values = Vec::new();
+                for line in decode(&result.stdout)?.lines() {
+                    if let Some((key, value)) = line.split_once(' ') {
+                        values.extend(["-c".into(), format!("{key}={value}")]);
+                    }
+                }
+                Ok::<_, Problem>(values)
+            }).await?;
+            diff_configs.push(values.clone());
         }
         let mut commits = Vec::new();
         for (index, context) in contexts.iter().enumerate() {
@@ -918,24 +989,35 @@ impl Service {
                 .side(side));
             }
         }
+        let left_format = ObjectFormat::read(&left_context.root, job).await?;
+        let right_format = ObjectFormat::read(&right_context.root, job).await?;
+        let left_reader = git::BatchReader::new(left_context.root.clone(), job.cancel.clone());
+        let right_reader = git::BatchReader::new(right_context.root.clone(), job.cancel.clone());
+        {
+            let mut readers = job.readers.lock().await;
+            job.check()?;
+            readers.extend([left_reader.clone(), right_reader.clone()]);
+        }
         let mut left = Resolved {
+            object_format: left_format,
+            diff_config: diff_configs[0].clone(),
+            reader: left_reader,
             context: left_context,
             safe: left_safe,
             commit: commits[0].take().unwrap(),
             files: BTreeMap::new(),
         };
         let mut right = Resolved {
+            object_format: right_format,
+            diff_config: diff_configs[1].clone(),
+            reader: right_reader,
             context: right_context,
             safe: right_safe,
             commit: commits[1].take().unwrap(),
             files: BTreeMap::new(),
         };
-        left.files = inventory(&left.context, &left.safe, &left.commit, job)
-            .await
-            .map_err(|problem| problem.side("left"))?;
-        right.files = inventory(&right.context, &right.safe, &right.commit, job)
-            .await
-            .map_err(|problem| problem.side("right"))?;
+        left.files = inventory(&left, job).await.map_err(|problem| problem.side("left"))?;
+        right.files = inventory(&right, job).await.map_err(|problem| problem.side("right"))?;
         let metadata = diff_metadata(&left, &right, job).await?;
         let paths: BTreeSet<_> = left
             .files
@@ -1000,7 +1082,7 @@ impl Service {
                 continue;
             }
             if leaves && row.raw_status != Status::TypeConflict {
-                let identical_oid = matches!((left_entry, right_entry), (Some(left), Some(right)) if left.reason.is_none() && right.reason.is_none() && left.oid.is_some() && left.oid == right.oid && left.mode == right.mode)
+                let identical_oid = matches!((left_entry, right_entry), (Some(left), Some(right)) if left.reason.is_none() && right.reason.is_none() && left.oid.is_some() && left.blob_id == right.blob_id && left.oid == right.oid && left.mode == right.mode)
                     && left.safe.path == right.safe.path;
                 if !identical_oid {
                     let cost = [left_entry, right_entry]
@@ -1218,7 +1300,7 @@ impl Service {
         id: &str,
         options: Options,
     ) -> Result<RefreshResult, Problem> {
-        let (contexts, generation, job) = {
+        let (contexts, generation, job, previous) = {
             let mut sessions = self.sessions.lock().await;
             let session = sessions
                 .get_mut(id)
@@ -1229,10 +1311,14 @@ impl Service {
             session.cancel = Arc::new(AtomicBool::new(false));
             session.generation += 1;
             session.prepared = None;
+            let previous = std::mem::take(&mut session.readers);
             (
                 [session.left.clone(), session.right.clone()],
                 session.generation,
                 Job {
+                rust_counts: false,
+                    count_root: self.counts.get().and_then(|counts| counts.storage.clone()),
+                    readers: session.readers.clone(),
                     context: format!("compare:{id}"),
                     cancel: session.cancel.clone(),
                     #[cfg(target_os = "linux")] diff: self.diff.get().cloned(),
@@ -1242,10 +1328,19 @@ impl Service {
                     #[cfg(test)]
                     inventory_started: None,
                 },
+                previous,
             )
         };
+        close_readers(&previous).await;
+        if let Some(counts) = self.counts.get() { counts.reset().await; }
+        for context in &contexts {
+            self.fetch_state(&context.root).await?.lock().await.diff_config = Arc::default();
+        }
         let _permit = job.slot(&self.slots).await?;
         let result = self.prepare(id, generation, contexts, options, &job).await;
+        if result.is_err() {
+            close_readers(&job.readers).await;
+        }
         job.check()?;
         let mut sessions = self.sessions.lock().await;
         let session = sessions
@@ -1352,6 +1447,9 @@ impl Service {
         Ok((
             prepared,
             Job {
+                rust_counts: false,
+                count_root: self.counts.get().and_then(|counts| counts.storage.clone()),
+                readers: session.readers.clone(),
                 context: format!("compare:{id}"),
                 cancel: session.cancel.clone(),
                 #[cfg(target_os = "linux")] diff: self.diff.get().cloned(),
@@ -1394,6 +1492,9 @@ pub async fn registered_write_root(settings: &crate::settings::Settings, root: &
                 registration::confined_destination(&context.workspace_root, root)?;
                 if root.exists() && crate::platform::same_destination(&context.root, root)? {
                     let job = Job {
+                        rust_counts: false,
+                        count_root: None,
+                        readers: Arc::default(),
                         context: "Recovery authorization".into(), cancel: Arc::new(AtomicBool::new(false)),
                         #[cfg(target_os = "linux")] diff: None,
                         #[cfg(target_os = "linux")] roots: Vec::new(),
@@ -1410,14 +1511,14 @@ pub async fn registered_write_root(settings: &crate::settings::Settings, root: &
     Err("Recovery root is no longer registered; automatic restore refused".into())
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Content {
-    generation: u64,
-    side: String,
-    kind: Kind,
     pub(crate) bytes: Vec<u8>,
-    binary: bool,
+}
+
+impl tauri::ipc::IpcResponse for Content {
+    fn body(self) -> tauri::Result<tauri::ipc::InvokeResponseBody> {
+        tauri::ipc::IpcResponse::body(tauri::ipc::Response::new(self.bytes))
+    }
 }
 
 #[derive(Serialize)]
@@ -1531,13 +1632,7 @@ pub async fn comparison_content(
     let bytes = content(resolved, &row.path, entry, &job).await?;
     job.check()?;
     service.snapshot(&settings, &id, generation).await?;
-    Ok(Content {
-        generation,
-        side,
-        kind: entry.kind.clone(),
-        binary: binary(&bytes),
-        bytes,
-    })
+    Ok(Content { bytes })
 }
 
 #[tauri::command]
@@ -1622,8 +1717,12 @@ pub(crate) struct NativeDiffTest {
 }
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) async fn native_diff_counts(input: NativeDiffTest) -> Result<serde_json::Value, String> {
-    let job=Job{context:"native-diff-control".into(),cancel:input.cancel,diff:Some(input.storage),roots:input.roots,temporary_root:None,inventory_started:None};
-    let lines=line_counts(b"left\n",b"right\nextra\n",&job).await.map_err(|problem|problem.message)?;
+    let job=Job{
+        rust_counts: false,
+        count_root: None,
+        readers: Arc::default(),
+        context:"native-diff-control".into(),cancel:input.cancel,diff:Some(input.storage),roots:input.roots,temporary_root:None,inventory_started:None};
+    let lines=line_counts(b"left\nsame\n",b"same\nright\nextra\n",&job).await.map_err(|problem|problem.message)?;
     let activity=serde_json::to_value(git::activity_snapshot()).map_err(|_|"Native diff activity unavailable")?;
     let commands=activity.as_array().ok_or("Native diff activity invalid")?.iter().filter(|entry|entry["context"]=="native-diff-control").collect::<Vec<_>>();
     if commands.len()!=1 || commands[0]["state"]!="completed" || commands[0]["argv"].as_array().is_none_or(|args|!args.iter().any(|arg|arg=="--no-index")) {return Err("Native diff Git counter mismatch".into());}

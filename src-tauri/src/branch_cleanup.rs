@@ -99,6 +99,7 @@ pub async fn delete_merged_branches(
     valid_root(&path)?;
     idle_check()?;
     check_batch(&names, &expected)?;
+    crate::git::BatchReader::close_root(std::path::Path::new(&path)).await?;
     let lock = repo_lock(&path);
     let _guard = lock.lock().await;
     let target = Target::local(&path, base).await?;
@@ -126,6 +127,7 @@ pub async fn delete_remote_branches(
     valid_root(&path)?;
     idle_check()?;
     check_batch(&names, &expected)?;
+    crate::git::BatchReader::close_root(std::path::Path::new(&path)).await?;
     let lock = repo_lock(&path);
     let _guard = lock.lock().await;
     let target = Target::remote(&path, remote, base).await?;

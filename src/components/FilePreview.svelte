@@ -14,7 +14,7 @@
     let active = true;
     if (stale || !file) { contents = []; return; }
     loading = true; error = '';
-    Promise.all((['left', 'right'] as const).map(side => file[side] ? api.comparisonContent(view.sessionId, view.generation, view.fileId, side) : null))
+    Promise.all((['left', 'right'] as const).map(side => file[side] ? api.comparisonContent(view.sessionId, view.generation, view.fileId, side, file![side]!.kind) : null))
       .then(result => { if (active) contents = result; })
       .catch(reason => { if (active) error = typeof reason === 'object' && reason?.message ? reason.message : String(reason); })
       .finally(() => { if (active) loading = false; });
@@ -23,7 +23,7 @@
   function text(content: CompareContent | null) {
     if (!content) return 'Not present on this side.';
     if (content.binary || content.kind === 'gitlink') return 'Binary or repository entry; text preview is not available.';
-    try { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(content.bytes)); }
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(content.bytes); }
     catch { return 'This encoding is not supported by the text preview.'; }
   }
 </script>
