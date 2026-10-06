@@ -1,10 +1,10 @@
 import type { LocalStatus } from './api';
 
 export type FormationFilter = 'all' | 'changes' | 'behind' | 'ahead' | 'notCloned';
-export type NextActionKind = 'clone' | 'commit' | 'switch' | 'pull' | 'push';
+export type NextActionKind = 'clone' | 'commit' | 'switch' | 'diverged' | 'pull' | 'push';
 export type NextAction = { kind: NextActionKind; label: string; title: string };
 /** `fixedFolder` marks a row for a folder that was opened in place; it is never cloned, switched or pulled by Skein. */
-export type RowFacts = { local: LocalStatus | undefined; onRef: boolean; refLabel: string; fixedFolder: boolean };
+export type RowFacts = { local: LocalStatus | undefined; onRef: boolean; refLabel: string; fixedFolder: boolean; refMissing?: boolean };
 export type FilterCounts = Record<FormationFilter, number>;
 
 export const FILTERS: readonly { id: FormationFilter; label: string }[] = [
@@ -17,11 +17,14 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 export const isCloned = (local: LocalStatus | undefined) => !!local?.repo && !local.error;
 export const isMissing = (local: LocalStatus | undefined) => !!local && !local.exists;
 
-export function nextAction({ local, onRef, refLabel, fixedFolder }: RowFacts): NextAction | null {
+export const isDiverged = (local: LocalStatus | undefined) => isCloned(local) && !!local!.branch && local!.ahead > 0 && local!.behind > 0;
+
+export function nextAction({ local, onRef, refLabel, fixedFolder, refMissing }: RowFacts): NextAction | null {
   if (isMissing(local)) return fixedFolder ? null : { kind: 'clone', label: 'Clone', title: 'Clone this repository' };
   if (!local || !isCloned(local)) return null;
   if (local.dirty > 0) return { kind: 'commit', label: `Commit ${plural(local.dirty, 'file')}`, title: 'Review, stage and commit the changed files' };
-  if (!onRef && !fixedFolder) return { kind: 'switch', label: `Switch to ${refLabel}`, title: `Fetch and check out ${refLabel}` };
+  if (!onRef && !fixedFolder && !refMissing) return { kind: 'switch', label: `Switch to ${refLabel}`, title: `Fetch and check out ${refLabel}` };
+  if (isDiverged(local)) return { kind: 'diverged', label: 'Diverged', title: 'Local and remote both have new commits. Open History to decide how to reconcile.' };
   if (local.branch && local.behind > 0 && !fixedFolder) return { kind: 'pull', label: `Pull ${local.behind}`, title: `Fast-forward ${local.branchLabel ?? local.branch}, ${plural(local.behind, 'commit')} behind` };
   if (local.branch && local.ahead > 0) return { kind: 'push', label: `Push ${local.ahead}`, title: `Push ${plural(local.ahead, 'commit')} to ${local.upstreamLabel ?? local.upstream ?? 'the remote'}` };
   if (local.branch && !local.upstream) return { kind: 'push', label: 'Publish', title: `Push ${local.branchLabel ?? local.branch} to the remote and track it` };
@@ -71,8 +74,8 @@ export type BulkTargets<T> = { cloned: T[]; fetchable: T[]; behind: T[]; offRef:
 export function bulkTargets<T>(items: readonly T[], read: (item: T) => RowFacts): BulkTargets<T> {
   const cloned = items.filter(item => isCloned(read(item).local));
   const fetchable = cloned.filter(item => !read(item).fixedFolder);
-  const behind = cloned.filter(item => { const facts = read(item); return facts.local!.behind > 0 && !facts.fixedFolder; });
-  const offRef = cloned.filter(item => { const facts = read(item); return !facts.onRef && !facts.fixedFolder; });
+  const behind = cloned.filter(item => { const facts = read(item); return facts.local!.behind > 0 && !facts.fixedFolder && !isDiverged(facts.local); });
+  const offRef = cloned.filter(item => { const facts = read(item); return !facts.onRef && !facts.fixedFolder && !facts.refMissing; });
   const pushable = cloned.filter(item => { const l = read(item).local!; return !!l.branch && (l.ahead > 0 || !l.upstream); });
   return { cloned, fetchable, behind, offRef, pushable };
 }

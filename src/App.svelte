@@ -60,7 +60,7 @@
     const id = shortcut(event);
     if (!id) return;
     if (id.startsWith('rail-')) {
-      if (!app.ready) return;
+      if (!app.ready || app.paletteOpen) return;
       event.preventDefault(); event.stopPropagation();
       const target = railShortcut(id.slice(5));
       if (target === 'settings') app.openView({ kind: 'settings' });
@@ -133,7 +133,7 @@
 
   // Keep "already on disk" markers in sync with the destination.
   $effect(() => {
-    if (benchmarkEnabled || !app.ready || !(app.rootSupport.valid || app.isTemporary)) return;
+    if (benchmarkEnabled || !app.ready || !(app.rootSupport.valid || app.set.items.some(item => item.path))) return;
     const dests = app.set.items.map(i => app.dest(i));
     const t = setTimeout(() => {
       void app.checkExists(dests);

@@ -4,7 +4,7 @@ import { historyDrawer } from './history-drawer.svelte';
 import { app } from './state.svelte';
 
 export const rowFacts = (item: SetItem): RowFacts => ({
-  local: app.local[app.dest(item)], onRef: app.onRef(item), refLabel: app.refLabel(item), fixedFolder: !!item.path,
+  local: app.local[app.dest(item)], onRef: app.onRef(item), refLabel: app.refLabel(item), fixedFolder: !!item.path, refMissing: app.refState(item) === 'missing',
 });
 
 /** A repository the set wants but the disk does not have yet. Before the first status check it counts only when the root is unusable. */
@@ -23,6 +23,7 @@ export function runNextAction(item: SetItem, kind: NextActionKind): void {
     case 'switch': void app.startClone([item], 'switch'); break;
     case 'pull': void app.startClone([item], 'pull'); break;
     case 'push': void app.pushRepos([pushTarget(item)]); break;
+    case 'diverged': openHistory(item); break;
   }
 }
 

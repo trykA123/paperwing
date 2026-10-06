@@ -4,6 +4,7 @@
   import CloneFooter from './right/CloneFooter.svelte';
   import CloneSettings from './right/CloneSettings.svelte';
   import ItemDetails from './right/ItemDetails.svelte';
+  import SetSummary from './right/SetSummary.svelte';
 
   const detail = $derived(app.detailItem);
   const toClone = $derived(app.actionItems.filter(needsClone));
@@ -37,7 +38,7 @@
     {#if toClone.length}
       <CloneSettings items={toClone} />
     {:else if !detail}
-      <div class="rsec"><p class="mut">Select a repository to see its details and history. Clone settings appear here when something is waiting to be cloned.</p></div>
+      <SetSummary />
     {/if}
   </div>
   {#if toClone.length}<CloneFooter items={toClone} />{/if}

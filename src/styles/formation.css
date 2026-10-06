@@ -581,14 +581,18 @@ button.fm-ref:hover {
     background: var(--line);
 }
 
-/* floating bulk bar */
+/* floating bulk bar; the list gets room under it so the last rows stay reachable */
+.fm-wrap:has(.fm-bar.on) .vbox {
+    padding-bottom: 104px;
+}
+
 .fm-bar {
     position: absolute;
     inset-inline: 12px;
     bottom: 56px;
     z-index: 5;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
     gap: 2px;
@@ -653,7 +657,7 @@ button.fm-ref:hover {
     border-top-color: var(--bar-fg);
 }
 
-@container (max-width: 560px) {
+@container (max-width: 820px) {
     .fm-bar .t {
         display: none;
     }
@@ -747,4 +751,27 @@ button.fm-ref:hover {
 
 [data-theme="dark"] .rail-badge.err {
     color: oklch(18% 0.03 27);
+}
+
+.set-summary dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--sp-1) var(--sp-3);
+    margin: var(--sp-3) 0 0;
+    font-size: var(--fs-sm);
+}
+
+.set-summary dt {
+    color: var(--dim);
+}
+
+.set-summary dd {
+    margin: 0;
+    font: 600 12px var(--mono);
+    text-align: right;
+}
+
+.set-summary dd.zero {
+    color: var(--faint-text);
+    font-weight: 400;
 }

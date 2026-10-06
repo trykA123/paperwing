@@ -1,4 +1,4 @@
-import type { RepoSet, Workspace } from '../api';
+import type { Workspace } from '../api';
 import { OpenFolderStore, tauriTransport, type TempSet, type Transport } from '../open-folder.svelte';
 import type { NoticeAction, NoticeKind } from '../notifications.svelte';
 import { isTemporaryId, promoteTemporarySet } from '../temporary-set';
@@ -40,9 +40,9 @@ export class TemporarySets {
     const set = this.find(id);
     if (!set) return null;
     if (set.scanning) { this.host.toast('Wait for the scan to finish before saving this set.', 'warn'); return null; }
-    const saved: RepoSet = promoteTemporarySet($state.snapshot(set), this.host.newId());
+    const { set: saved, itemIds } = promoteTemporarySet($state.snapshot(set), this.host.newId(), this.host.newId);
     this.host.ws.sets.push(saved);
-    this.retarget(id, saved.id);
+    this.retarget(id, saved.id, itemIds);
     this.store.dismiss(id);
     this.host.toast(`Saved "${saved.name}" as a set`, 'success');
     return saved.id;
@@ -50,25 +50,28 @@ export class TemporarySets {
 
   async discard(id: string): Promise<void> {
     this.leave(id);
-    for (const tab of [...this.host.tabs]) if (tab.setId === id) await this.host.closeTab(tab.id);
+    for (const tab of [...this.host.tabs]) if (tab.setId === id && tab.view.kind !== 'settings') await this.host.closeTab(tab.id);
     this.store.dismiss(id);
   }
 
   /** Called after a tab closes: a temporary set nobody has open any more is thrown away. */
   releaseIfUnused(id: string): void {
-    if (!isTemporaryId(id) || !this.find(id) || this.host.tabs.some(tab => tab.setId === id)) return;
+    if (!isTemporaryId(id) || !this.find(id) || this.host.tabs.some(tab => tab.setId === id && tab.view.kind !== 'settings')) return;
     this.leave(id);
     this.store.dismiss(id);
   }
 
   private leave(id: string): void {
-    if (this.host.ws.activeSet === id) this.host.ws.activeSet = this.host.ws.sets[0].id;
+    const fallback = this.host.ws.sets[0].id;
+    if (this.host.ws.activeSet === id) this.host.ws.activeSet = fallback;
+    for (const tab of this.host.tabs) if (tab.setId === id && tab.view.kind === 'settings') tab.setId = fallback;
   }
 
-  private retarget(from: string, to: string): void {
+  private retarget(from: string, to: string, itemIds: Map<string, string>): void {
     for (const tab of this.host.tabs) {
       if (tab.setId !== from) continue;
       const active = tab.id === this.host.activeTabId;
+      if (tab.view.kind === 'item') tab.view = { ...tab.view, itemId: itemIds.get(tab.view.itemId) ?? tab.view.itemId };
       tab.setId = to;
       tab.id = tabId(tab.view, to);
       if (active) this.host.activeTabId = tab.id;

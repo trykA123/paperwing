@@ -10,8 +10,8 @@
   import type { SetItem } from '../../lib/api';
   import Icon from '../Icon.svelte';
 
-  let { count, targets, dirty, busy, checking, handlers }: {
-    count: number; targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
+  let { count, targets, dirty, busy, checking, refEligible, handlers }: {
+    count: number; refEligible: number; targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
   } = $props();
 
   const reason = (empty: string) => (busy ? 'A Git operation is already running' : empty);
@@ -31,7 +31,7 @@
   <button disabled={busy || !targets.offRef.length} title={reason('Every selected repository is already on its branch')} onclick={handlers.switch}>
     <Icon name="branch" /><span class="t">Switch</span>{#if targets.offRef.length}<small>{targets.offRef.length}</small>{/if}
   </button>
-  <button title="Choose the branch, tag or commit for the selected repositories" onclick={event => handlers.ref(event.currentTarget)}><Icon name="tag" /><span class="sr-only">Ref…</span></button>
+  <button disabled={busy || !refEligible} title={reason(refEligible ? 'Choose the branch, tag or commit for the selected repositories' : 'Folders opened in place have no remote ref to choose')} onclick={event => handlers.ref(event.currentTarget)}><Icon name="tag" /><span class="sr-only">Ref…</span></button>
   <button disabled={checking} title="Ask each remote which branches and tags exist" onclick={handlers.check}>
     {#if checking}<span class="spin"></span>{:else}<Icon name="search" />{/if}<span class="sr-only">Check refs</span>
   </button>

@@ -147,6 +147,9 @@ pub(super) fn bind(settings: &crate::settings::Settings, endpoint: Endpoint) -> 
             .ok_or_else(|| Problem::new("unsafePath", "Unsupported root encoding"))?,
     )
     .map_err(|error| Problem::new("unsafePath", &error))?;
+    if let Some(path) = item.get("path").and_then(serde_json::Value::as_str).filter(|value| !value.is_empty()) {
+        return Ok(Context { endpoint, root: PathBuf::from(path), workspace_root });
+    }
     let folder = item
         .get("folder")
         .and_then(serde_json::Value::as_str)
@@ -253,9 +256,41 @@ pub(super) fn set_roots(settings: &crate::settings::Settings, set_id: &str) -> R
             let endpoint = Endpoint { set_id: id.into(), item_id: item_id.into(), reference: CompareRef::WorkingTree };
             let Ok(context) = bind(settings, endpoint) else { continue; };
             if context.root == context.workspace_root { continue; }
-            if id == set_id { own.push((item_id.to_string(), context.root)); } else { others.insert(crate::platform::destination_key(&context.root)?); }
+            let fixed = item.get("path").and_then(serde_json::Value::as_str).is_some_and(|value| !value.is_empty());
+            if id == set_id {
+                if !fixed { own.push((item_id.to_string(), context.root)); }
+            } else { others.insert(crate::platform::destination_key(&context.root)?);
+            }
         }
     }
     if !found { return Err("This set has not been saved yet".into()); }
     Ok((own, others))
+}
+
+#[cfg(test)]
+mod fixed_folder_tests {
+    use super::*;
+
+    #[test]
+    fn a_saved_open_with_set_protects_the_folder_and_is_never_trashed() {
+        let root = std::env::temp_dir().join(format!("skein-fixed-{}", std::process::id()));
+        let shared = root.join("o").join("alpha");
+        std::fs::create_dir_all(&shared).unwrap();
+        let item = |id: &str| serde_json::json!({ "id": id, "name": "alpha", "org": "o", "url": "u", "repoId": "s:1", "ref": { "type": "branch", "name": "main" } });
+        let mut fixed = item("f1");
+        fixed["path"] = serde_json::json!(shared.to_string_lossy());
+        let settings = crate::settings::Settings {
+            sources: vec![],
+            workspace: serde_json::json!({
+                "root": root.to_string_lossy(), "layout": "custom", "pathTemplate": "{org}\\{folder}",
+                "sets": [{ "id": "one", "name": "One", "items": [item("i1")] }, { "id": "open", "name": "Open", "items": [fixed] }],
+            }),
+        };
+        let (own, others) = set_roots(&settings, "one").unwrap();
+        assert_eq!(own.len(), 1);
+        assert!(others.contains(&crate::platform::destination_key(&shared).unwrap()), "the open-with set uses this folder");
+        let (own, _) = set_roots(&settings, "open").unwrap();
+        assert!(own.is_empty(), "folders opened in place are never trashed");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

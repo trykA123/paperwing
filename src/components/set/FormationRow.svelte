@@ -3,7 +3,7 @@
 
   export type RowHandlers = {
     toggle: (on: boolean) => void; inspect: () => void; pickRef: (anchor: HTMLElement) => void;
-    next: (kind: NextActionKind) => void; menu: (anchor: HTMLElement | { x: number; y: number }) => void;
+    next: (kind: NextActionKind) => void; menu: (anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) => void;
     rename: (value: string | null) => void;
   };
 </script>
@@ -17,7 +17,7 @@
 
   const ICONS: Record<NextActionKind, { icon: IconName; tone: IconTone }> = {
     clone: { icon: 'folder', tone: 'sync' }, commit: { icon: 'check', tone: 'record' }, switch: { icon: 'branch', tone: 'branch' },
-    pull: { icon: 'download', tone: 'sync' }, push: { icon: 'upload', tone: 'sync' },
+    diverged: { icon: 'commit', tone: 'warn' }, pull: { icon: 'download', tone: 'sync' }, push: { icon: 'upload', tone: 'sync' },
   };
 
   const focus = (el: HTMLInputElement) => { el.focus(); el.select(); };
@@ -25,8 +25,9 @@
   function onKey(event: KeyboardEvent) {
     if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
     event.preventDefault();
-    const box = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : null;
-    if (box) handlers.menu({ x: box.left, y: box.bottom });
+    const opener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    const box = opener?.getBoundingClientRect();
+    if (opener && box) handlers.menu({ x: box.left, y: box.bottom, opener });
   }
 
   function onRowClick(event: MouseEvent) {

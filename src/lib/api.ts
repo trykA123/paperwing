@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { withoutTemporaryActive } from './temporary-set';
 
 export type RefKind = 'branch' | 'tag' | 'commit';
 export type Ref = { type: RefKind; name: string };
@@ -157,7 +158,7 @@ export const api = {
   recoveryCleanup: (ids: string[], confirmed: boolean) => invoke<number>('recovery_cleanup', { ids, confirmed }),
   recoveryResolve: (id: string, confirmed: boolean) => invoke<RecoveryRecord>('recovery_resolve', { id, confirmed }),
   loadSettings: () => invoke<{ sources: Source[]; workspace: Partial<Workspace> | null }>('load_settings'),
-  saveSettings: (settings: { sources: Source[]; workspace: Workspace }) => invoke<void>('save_settings', { settings }),
+  saveSettings: (settings: { sources: Source[]; workspace: Workspace }) => invoke<void>('save_settings', { settings: withoutTemporaryActive(settings) }),
   sourceRevision: (sourceId: string) => invoke<number>('source_revision', { sourceId }),
   credentialStatus: (sourceId: string) => invoke<CredentialStatus>('credential_status', { sourceId }),
   setToken: (sourceId: string, token: string) => invoke<void>('set_token', { sourceId, token }),

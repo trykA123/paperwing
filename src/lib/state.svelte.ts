@@ -192,6 +192,7 @@ class AppState {
   #runIds = $state<string[]>([]);
   #runMode: GitAction = 'clone';
   #runItems: SetItem[] = [];
+  #runSetId = '';
   #runNotice = 0;
   pushing = $state<Record<string, 'Pushing' | 'Waiting'>>({});
   #cloneWaiters: (() => void)[] = [];
@@ -214,6 +215,8 @@ class AppState {
   });
   actionItems = $derived(this.view.kind === 'item' ? (this.focusedItem ? [this.focusedItem] : []) : this.selected);
   inspectedId = $state<string | null>(null);
+  /** When each set last finished a clean fetch this session (ms since epoch). */
+  lastFetch = $state<Record<string, number>>({});
   /** The repository the right panel describes: the focused row, else the last row clicked, else the only selected one. */
   detailItem = $derived(this.focusedItem ?? this.set.items.find(item => item.id === this.inspectedId) ?? (this.selected.length === 1 ? this.selected[0] : undefined));
   clashes = $derived(pathClashes(this.selected.map(item => this.dest(item)), this.nativePlatform, this.pathIdentities));
@@ -658,14 +661,14 @@ class AppState {
     return !!l.sha && name.slice(0, 7) === l.sha.slice(0, 7);
   }
 
-  async startClone(items: SetItem[] = this.selected, mode: GitAction = 'clone') {
+  async startClone(items: SetItem[] = this.selected, mode: GitAction = 'clone', setId = this.set.id) {
     if (this.running || this.clonePreparing || !items.length) return;
     this.clonePreparing = true;
     try {
       const support = await this.probeRoot();
       if (!support.valid) { this.toast(support.reason ?? 'Choose a valid native destination folder.', 'warn'); return; }
       if (this.bufferGuards.size && !await this.guardBuffers()) return;
-      const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i), refType: i.ref.type, refName: i.ref.name }));
+      const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i, setId), refType: i.ref.type, refName: i.ref.name }));
       let observations: PathIdentity[];
       try { observations = await this.refreshPathIdentities(jobs.map(job => job.dest)); }
       catch (reason) { this.toast(String(reason), 'error'); return; }
@@ -687,6 +690,7 @@ class AppState {
       }
       this.#runIds = jobs.map(j => j.id);
       this.#runItems = [...items];
+      this.#runSetId = setId;
       this.#runMode = mode;
       for (const j of jobs) this.jobs[j.id] = { id: j.id, phase: 'queued', pct: 0, msg: 'Waiting for a slot' };
       this.running = true;
@@ -706,13 +710,16 @@ class AppState {
     this.running = false;
     for (const waiter of this.#cloneWaiters.splice(0)) waiter();
     const mode = this.#runMode;
+    const runSet = this.#runSetId;
     const failed = this.#runItems.filter(item => this.jobs[item.id]?.phase === 'failed');
     this.runNotices.finish(this.#runNotice, {
       verb: mode, total: this.#runItems.length, failed, firstError: this.jobs[failed[0]?.id]?.msg,
-      retry: again => void this.startClone([...again], mode), viewActivity: () => { this.activityOpen = true; },
+      retry: again => void this.startClone([...again], mode, runSet), viewActivity: () => { this.activityOpen = true; },
     });
     this.#invalidateTrees(this.repositoryTrees.paths());
-    this.checkExists(this.set.items.map(i => this.dest(i)));
+    if (mode === 'fetch' && !failed.length) this.lastFetch[runSet] = Date.now();
+    const owner = this.ws.sets.find(set => set.id === runSet) ?? this.temporary.find(runSet) ?? this.set;
+    this.checkExists(owner.items.map(i => this.dest(i, owner.id)));
   }
 }
 

@@ -21,6 +21,18 @@ test('A repository on another branch is asked to switch before it pulls or pushe
   expect(action).toMatchObject({ kind: 'switch', label: 'Switch to release/2.4' });
 });
 
+test('Diverged history is not pulled or pushed; History is the suggested action', () => {
+  expect(nextAction(facts(repo({ ahead: 1, behind: 2 })))).toMatchObject({ kind: 'diverged', label: 'Diverged' });
+  const rows = [{ id: 'd', facts: facts(repo({ ahead: 1, behind: 2 })) }, { id: 'b', facts: facts(repo({ behind: 2 })) }];
+  expect(bulkTargets(rows, row => row.facts).behind.map(row => row.id)).toEqual(['b']);
+});
+
+test('A ref that is missing on the remote is never offered as a switch target', () => {
+  expect(nextAction(facts(repo(), { onRef: false, refMissing: true }))).toBeNull();
+  const rows = [{ id: 'm', facts: facts(repo(), { onRef: false, refMissing: true }) }];
+  expect(bulkTargets(rows, row => row.facts).offRef).toEqual([]);
+});
+
 test('Behind pulls, ahead pushes, and an unpublished branch is published', () => {
   expect(nextAction(facts(repo({ behind: 4 })))).toMatchObject({ kind: 'pull', label: 'Pull 4' });
   expect(nextAction(facts(repo({ ahead: 2 })))).toMatchObject({ kind: 'push', label: 'Push 2' });

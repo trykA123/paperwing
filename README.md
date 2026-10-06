@@ -296,7 +296,7 @@ The implementation is organized around these areas:
 | Browsing, sets, refs, and paths | [RepoList.svelte](src/components/RepoList.svelte), [SetView.svelte](src/components/SetView.svelte), [RefPicker.svelte](src/components/RefPicker.svelte), [RightPanel.svelte](src/components/RightPanel.svelte) |
 | Sources, settings, and appearance | [Settings.svelte](src/components/Settings.svelte), [github.rs](src-tauri/src/github.rs), [settings.rs](src-tauri/src/settings.rs), [appearance.ts](src/lib/appearance.ts) |
 | Git execution, synchronization, status, and trees | [git.rs](src-tauri/src/git.rs), [clone.rs](src-tauri/src/clone.rs), [local.rs](src-tauri/src/local.rs), [Sidebar.svelte](src/components/Sidebar.svelte) |
-| Git commands, activity, and shortcuts | [commands.ts](src/lib/commands.ts), [ActivityDrawer.svelte](src/components/ActivityDrawer.svelte) |
+| Git commands, activity, and shortcuts | [commands.ts](src/lib/commands.ts), [ActivityPanel.svelte](src/components/panel/ActivityPanel.svelte) |
 | Folder and whole-set comparison | [compare.rs](src-tauri/src/compare.rs), [compare.svelte.ts](src/lib/compare.svelte.ts), [FolderCompare.svelte](src/components/FolderCompare.svelte), [SetCompare.svelte](src/components/SetCompare.svelte) |
 | Text editing and diff rules | [FileCompare.svelte](src/components/FileCompare.svelte), [CompareDetails.svelte](src/components/CompareDetails.svelte), [editor.ts](src/lib/editor.ts), [monaco.ts](src/lib/monaco.ts) |
 | Branch creation and staged commits | [BranchDialog.svelte](src/components/BranchDialog.svelte), [CommitDialog.svelte](src/components/CommitDialog.svelte), [commit.rs](src-tauri/src/commit.rs) |

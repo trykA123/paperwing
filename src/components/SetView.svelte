@@ -81,11 +81,11 @@
     checking = false;
   }
 
-  function openMenu(item: SetItem, anchor: HTMLElement | { x: number; y: number }) {
+  function openMenu(item: SetItem, anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) {
     if (anchor instanceof HTMLElement) {
       const box = anchor.getBoundingClientRect();
       menu = { item, x: Math.max(8, Math.min(box.right - 290, innerWidth - 300)), y: Math.max(8, Math.min(box.bottom + 4, innerHeight - 420)), opener: anchor };
-    } else menu = { item, x: Math.max(8, Math.min(anchor.x, innerWidth - 300)), y: Math.max(8, Math.min(anchor.y, innerHeight - 420)), opener: null };
+    } else menu = { item, x: Math.max(8, Math.min(anchor.x, innerWidth - 300)), y: Math.max(8, Math.min(anchor.y, innerHeight - 420)), opener: anchor.opener ?? null };
   }
 
   function rename(item: SetItem, value: string | null) {
@@ -99,7 +99,7 @@
     inspect: () => { app.inspectedId = item.id; },
     pickRef: (anchor: HTMLElement) => { picker = { items: [item], anchor: anchor.getBoundingClientRect() }; },
     next: (kind: Parameters<typeof runNextAction>[1]) => runNextAction(item, kind),
-    menu: (anchor: HTMLElement | { x: number; y: number }) => openMenu(item, anchor),
+    menu: (anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) => openMenu(item, anchor),
     rename: (value: string | null) => rename(item, value),
   });
 
@@ -155,7 +155,7 @@
     {/key}
     {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} />{/if}
   </div>
-  <BulkBar count={selected.length} {targets} dirty={dirty.length} busy={gitBusy} {checking} handlers={bulk} />
+  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} busy={gitBusy} {checking} handlers={bulk} />
 </div>
 
 {#if picker}
