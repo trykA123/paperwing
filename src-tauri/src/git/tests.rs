@@ -438,3 +438,24 @@ async fn displayed_git_metadata_redacts_managed_manual_tokens_and_keeps_action_n
     assert!(tree.branches[0].label.contains("omitted"));
     assert!(tree.stashes[0].subject.contains("omitted"));
 }
+
+#[cfg(windows)]
+#[test]
+fn valid_path_ignores_the_process_working_directory_on_the_same_drive() {
+    const CHILD: &str = "SKEIN_VALID_PATH_CHILD";
+    if let Ok(path) = std::env::var(CHILD) {
+        assert_eq!(valid_path(&path, true), Ok(()), "drive-relative cwd leaked into validation");
+        return;
+    }
+    let fixture = crate::platform::Fixture::new("valid-path-cwd");
+    let repo = fixture.0.join("repo");
+    let linked = fixture.0.join("linked-cwd");
+    std::fs::create_dir(&repo).unwrap();
+    std::fs::create_dir(fixture.0.join("target")).unwrap();
+    let made = std::process::Command::new("cmd").arg("/c").arg("mklink").arg("/J").arg(&linked).arg(fixture.0.join("target")).output().unwrap();
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stdout));
+    let child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "git::tests::valid_path_ignores_the_process_working_directory_on_the_same_drive", "--nocapture"])
+        .env(CHILD, &repo).current_dir(&linked).output().unwrap();
+    assert!(child.status.success(), "{}{}", String::from_utf8_lossy(&child.stdout), String::from_utf8_lossy(&child.stderr));
+}

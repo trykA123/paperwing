@@ -41,6 +41,8 @@ pub fn valid_path(path: &str, must_exist: bool) -> Result<(), String> {
             _ => {}
         }
         ancestor.push(component.as_os_str());
+        // A bare drive prefix such as `C:` names that drive's current directory, not its root.
+        if matches!(component, Component::Prefix(_)) { continue; }
         match std::fs::symlink_metadata(&ancestor) {
             Ok(metadata) => {
                 if metadata.file_type().is_symlink() { return Err("Linked repository paths are not supported".into()); }
