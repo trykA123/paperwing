@@ -14,18 +14,24 @@
   const many = $derived(request.targets.length > 1);
   let dialog: HTMLDialogElement;
   let side = $state<CleanupSide>('local');
+  let confirming = $state(false);
 
   const count = $derived(side === 'local' ? session.localCount : session.remoteCount);
 
   async function run() {
-    if (side === 'remote') {
-      const { accepted } = await confirmWith(remoteConfirmMessage(session.remotePlan()), { title: 'Delete remote branches', kind: 'warning', okLabel: 'Delete from remote', destructive: true });
-      if (!accepted) return;
-    }
-    const results = await session.run(side);
-    const { deleted, failed } = summarizeCleanup(results);
-    app.toast(`${deleted} ${deleted === 1 ? 'branch' : 'branches'} deleted${failed ? `, ${failed} failed` : ''}`, failed ? 'warn' : 'success');
-    if (results.length) void app.checkExists(request.targets.map(target => target.path));
+    if (confirming || session.busy) return;
+    confirming = true;
+    try {
+      if (side === 'remote') {
+        const { accepted } = await confirmWith(remoteConfirmMessage(session.remotePlan()), { title: 'Delete remote branches', kind: 'warning', okLabel: 'Delete from remote', destructive: true });
+        if (!accepted) return;
+      }
+      const results = await session.run(side);
+      if (!results.length) return;
+      const { deleted, failed } = summarizeCleanup(results);
+      app.toast(`${deleted} ${deleted === 1 ? 'branch' : 'branches'} deleted${failed ? `, ${failed} failed` : ''}`, failed ? 'warn' : 'success');
+      void app.checkExists(request.targets.map(target => target.path));
+    } finally { confirming = false; }
   }
 
   function close() {
@@ -50,7 +56,7 @@
 
   <div class="seg cleanup-tabs" role="tablist" aria-label="Branches to clean up">
     {#each [['local', 'Local branches', session.localCount], ['remote', 'Remote branches', session.remoteCount]] as const as [id, label, picked] (id)}
-      <button role="tab" aria-selected={side === id} class:on={side === id} disabled={session.busy} onclick={() => (side = id)}>{label}{#if picked}<small>{picked}</small>{/if}</button>
+      <button role="tab" aria-selected={side === id} class:on={side === id} disabled={session.busy || confirming} onclick={() => (side = id)}>{label}{#if picked}<small>{picked}</small>{/if}</button>
     {/each}
   </div>
 
@@ -66,7 +72,7 @@
     <span class="hint">{side === 'local' ? 'Branches are never force-deleted; each must still be merged.' : 'One push per remote; main and master are never offered.'}</span>
     <span class="grow"></span>
     <button type="button" class="btn" disabled={session.busy} onclick={close}>Close</button>
-    <button type="button" class="btn {side === 'remote' ? 'danger' : 'dark'}" disabled={!count || session.busy || session.loading} onclick={run}>
+    <button type="button" class="btn {side === 'remote' ? 'danger' : 'dark'}" disabled={!count || session.busy || session.loading || confirming} onclick={run}>
       {#if session.busy}<span class="spin"></span>{:else}<Icon name={side === 'remote' ? 'remote' : 'trash'} />{/if}
       {side === 'local' ? `Delete ${count} local ${count === 1 ? 'branch' : 'branches'}` : `Delete ${count} from remote…`}
     </button>

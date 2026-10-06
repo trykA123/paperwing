@@ -298,3 +298,21 @@ button.cs-match:hover {
     color: var(--err-text);
     text-overflow: ellipsis;
 }
+
+.cs-text mark {
+    padding: 0 1px;
+    border-radius: 2px;
+    background: color-mix(in oklch, var(--acc) 28%, var(--panel));
+    color: var(--text);
+    font-weight: 600;
+}
+
+.cs-refs ul {
+    align-items: center;
+}
+
+.cs-refs input:not([type=checkbox]) {
+    height: var(--ctl-h-sm);
+    padding-block: 0;
+    font-size: var(--fs-sm);
+}

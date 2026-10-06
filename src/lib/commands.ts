@@ -45,7 +45,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
     { id: 'settings', label: 'Settings', icon: 'gear', enabled: app.ready, run: () => app.openView({ kind: 'settings' }) },
     { id: 'sidebar', label: `${app.ws.shell.sidebarVisible ? 'Hide' : 'Show'} sidebar`, icon: 'panel', enabled: true,
       run: () => { app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible; } },
-    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.view.kind !== 'settings',
+    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.view.kind !== 'settings' && app.view.kind !== 'codeSearch',
       run: () => { app.ws.shell.rightVisible = !app.ws.shell.rightVisible; } },
     { id: 'theme', label: `Use ${app.ws.theme === 'dark' ? 'light' : 'dark'} theme`, icon: 'theme', enabled: true,
       run: () => { app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark'; } },

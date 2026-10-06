@@ -85,6 +85,7 @@ export class CleanupSession {
     this.busy = true;
     try {
       const entries = this.#entries(side);
+      for (const repo of this.repos) { if (side === 'local') repo.result = null; else repo.remoteResult = null; }
       const results = side === 'local' ? await deleteLocalAcross(this.client, entries) : await deleteRemoteAcross(this.client, entries);
       for (const result of results) {
         const repo = this.#find(result.target.path);

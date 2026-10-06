@@ -35,7 +35,7 @@
   import SidePanel from './components/SidePanel.svelte';
   import { RAIL_SECTIONS, railShortcut } from './lib/rail';
 
-  const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings');
+  const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings' && app.view.kind !== 'codeSearch');
   const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
   let reducedMotion = $state(false), panelsMoving = $state(false);
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activity.some(entry => entry.state === 'running'));

@@ -5,8 +5,8 @@ import { mkdtempSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { deleteMerged, deleteRemote, localStatus, mergedBranches } from './backend.mjs';
-import { git, makeRepo, moveTip } from './fixture.mjs';
+import { calls, deleteMerged, deleteRemote, localStatus, mergedBranches } from './backend.mjs';
+import { git, makeCapRepo, makeDivergentRepo, makeRepo, moveTip } from './fixture.mjs';
 import { SearchJobs } from './search-jobs.mjs';
 
 const [url, shots, theme = 'light', width = '1440'] = process.argv.slice(2);
@@ -16,8 +16,12 @@ const repos = { alpha: join(root, 'alpha'), beta: join(root, 'beta repo'), gamma
 const remote = join(root, 'alpha-remote.git');
 makeRepo(repos.alpha, { remote }); makeRepo(repos.beta, { todo: 2 }); makeRepo(repos.gamma, { todo: 4 });
 const caps = Object.fromEntries(['readCompare', 'edit', 'copy', 'recovery', 'trash'].map(name => [name, { supported: true, reason: null }]));
-const items = Object.entries(repos).map(([name, path]) => ({ id: name, repoId: 'fixture:' + name, url: path, org: 'fixture', name: path.split('/').pop(), ref: { type: 'branch', name: 'main' }, on: false, path }));
-const workspace = { sets: [{ id: 'fix', name: 'Fixture set', items }], activeSet: 'fix', root, theme, pageSize: 'all' };
+const delta = join(root, 'delta repo'), deltaRemote = join(root, 'delta-remote.git');
+makeDivergentRepo(delta, deltaRemote);
+const capPaths = Array.from({ length: 13 }, (_, index) => join(root, 'caps', `c${String(index + 1).padStart(2, '0')}`));
+capPaths.forEach(path => makeCapRepo(path));
+const itemsOf = paths => paths.map(path => ({ id: path.split('/').pop(), repoId: 'fixture:' + path, url: path, org: 'fixture', name: path.split('/').pop(), ref: { type: 'branch', name: 'main' }, on: false, path }));
+const workspace = { sets: [{ id: 'fix', name: 'Fixture set', items: itemsOf(Object.values(repos)) }, { id: 'div', name: 'Divergent set', items: itemsOf([delta]) }, { id: 'caps', name: 'Caps set', items: itemsOf(capPaths) }], activeSet: 'fix', root, theme, pageSize: 'all' };
 const source = { id: 'fixture', name: 'Fixture', kind: 'manual', host: '', orgs: [], urls: [] };
 
 const browser = await chromium.launch({ executablePath: '/opt/helium-browser-bin/helium', headless: true, args: ['--no-sandbox'] });
@@ -39,8 +43,8 @@ await page.exposeFunction('__backend', async (cmd, a) => {
     case 'activity_snapshot': case 'get_refs_many': return [];
     case 'list_repos': return { repos: [], fetchedAt: 0, errors: [] };
     case 'merged_branches': return mergedBranches(a.path);
-    case 'delete_merged_branches': return deleteMerged(a.path, a.names, a.expected);
-    case 'delete_remote_branches': return deleteRemote(a.path, a.remote, a.names, a.expected);
+    case 'delete_merged_branches': return deleteMerged(a.path, a.names, a.expected, a.base);
+    case 'delete_remote_branches': return deleteRemote(a.path, a.remote, a.names, a.expected, a.base);
     case 'search_capabilities': return { perl: true };
     case 'search_start': return jobs.start(a.request);
     case 'search_cancel': return jobs.cancel(a.id);
@@ -117,6 +121,7 @@ await shot('remote-confirm');
 await page.click('.confirm-dialog .btn.danger');
 await page.waitForSelector('.cleanup-repo [role=status]:has-text("1 deleted")');
 check('remote branch deleted', !execFileSync('git', ['ls-remote', '--heads', remote], { encoding: 'utf8' }).includes('old-remote'));
+check('remote base passed as origin/main', calls.at(-1)?.base === 'origin/main', String(calls.at(-1)?.base));
 await page.click('.cleanup-dialog footer .btn:not(.danger):not(.dark)');
 await page.waitForSelector('.cleanup-dialog', { state: 'detached' });
 
@@ -137,69 +142,137 @@ await page.keyboard.press('Escape');
 await page.waitForSelector('.cleanup-dialog', { state: 'detached' });
 
 // 4. Code search.
+const frames = async run => {
+  await page.evaluate(() => {
+    window.__gaps = []; let last = performance.now();
+    const tick = now => { window.__gaps.push(now - last); last = now; window.__raf = requestAnimationFrame(tick); };
+    window.__raf = requestAnimationFrame(tick);
+  });
+  await run();
+  const gaps = await page.evaluate(() => { cancelAnimationFrame(window.__raf); return window.__gaps.slice(2); });
+  return { count: gaps.length, worst: Math.max(...gaps), over: gaps.filter(gap => gap > 50).length };
+};
+const search = () => page.click('.cs-bar button[type=submit]');
+const waitDone = text => page.waitForSelector(`.cs-status:has-text("${text}")`, { timeout: 30000 });
+
 await page.keyboard.press('Control+Shift+F');
 await page.waitForSelector('.code-search');
+check('right panel hidden for code search', (await page.locator('.shell-right').getAttribute('aria-hidden')) === 'true');
 await page.fill('.cs-pattern input', 'TODO');
-await page.click('.cs-bar button[type=submit]');
-await page.waitForSelector('.cs-status:has-text("matches in 3 repositories")');
+await search();
+await waitDone('matches in 3 repositories');
 const kinds = await page.$$eval('.cs-list .vrow > div', nodes => nodes.map(node => node.className.replace('cs-row ', '')));
 check('grouped by repository then file', kinds.filter(kind => kind.startsWith('cs-repo')).length === 3 && kinds.some(kind => kind.startsWith('cs-file')));
+check('matched text is highlighted', (await page.$$eval('.cs-match mark', nodes => nodes.map(node => node.textContent))).every(text => text.toUpperCase() === 'TODO'));
 await shot('search-results');
 await page.fill('.cs-paths input', 'src/*.ts');
-await page.click('.cs-bar button[type=submit]');
-await page.waitForSelector('.cs-status:has-text("matches in 3 repositories")');
+await search();
+await waitDone('matches in 3 repositories');
 check('path filter excludes README', !(await page.locator('.cs-list').innerText()).includes('README.md'));
 await page.click('.cs-match >> nth=0');
 await page.waitForSelector('.notices :text("Copied")');
 check('click copies the file path', (await page.evaluate(() => navigator.clipboard.readText())).includes(root));
 await shot('search-copied');
+await page.fill('.cs-paths input', '');
 
-await page.fill('.cs-pattern input', 'bigtest');
-await page.evaluate(() => {
-  window.__gaps = []; let last = performance.now();
-  const tick = now => { window.__gaps.push(now - last); last = now; window.__raf = requestAnimationFrame(tick); };
-  window.__raf = requestAnimationFrame(tick);
-});
-await page.click('.cs-bar button[type=submit]');
-await page.waitForSelector('.cs-status:has-text("Searching")');
-for (let step = 0; step < 6; step++) { await page.evaluate(top => { const box = document.querySelector('.cs-list .vbox'); box.scrollTop = top; }, step * 40000); await page.waitForTimeout(250); }
-await shot('search-streaming');
-await page.waitForSelector('.cs-status:has-text("10000 matches"), .cs-status:has-text("9999 matches")', { timeout: 30000 });
-const gaps = await page.evaluate(() => { cancelAnimationFrame(window.__raf); return window.__gaps.slice(2); });
-const worst = Math.max(...gaps), over = gaps.filter(gap => gap > 50).length;
-check('10000 matches stream without long frames', over <= 2, `frames=${gaps.length} worst=${worst.toFixed(0)}ms over50=${over}`);
-const mounted = await page.$$eval('.cs-list .vrow', nodes => nodes.length);
-check('only visible rows are mounted', mounted < 120, `rows=${mounted}`);
-await shot('search-big-done');
+const one = await frames(async () => { await page.fill('.cs-pattern input', 'bigone'); await search(); await waitDone('matches in 3 repositories'); });
+check('one event with 2000 matches stays smooth', one.over <= 1, `frames=${one.count} worst=${one.worst.toFixed(0)}ms over50=${one.over}`);
+const live = await page.$$eval('[role=status]', nodes => nodes.map(node => node.textContent.trim()).filter(Boolean));
+check('live region announces only the final count', live.some(text => /^\d+ matches in 3 repositories$/.test(text)) && live.every(text => !text.includes('Searching,')), live.join(' | '));
 
-await page.click('.cs-bar button[type=submit]');
-await page.waitForSelector('.cs-bar button.danger');
-await page.waitForTimeout(300);
-await page.click('.cs-bar button.danger');
-await page.waitForSelector('.cs-status:has-text("Cancelled")');
-check('stop cancels the job', jobs.log.some(entry => entry.startsWith('cancel')), jobs.log.join(' '));
-
-await page.click('.cs-bar button[type=submit]');
-await page.waitForSelector('.cs-bar button.danger');
-await page.waitForTimeout(300);
-const before = jobs.running.size;
-await page.click('.shell-tab:has-text("Code search") .tab-close');
-await page.waitForTimeout(600);
-check('closing the tab leaves no running job', before === 1 && jobs.running.size === 0, `before=${before} after=${jobs.running.size} ${jobs.log.slice(-3).join(' ')}`);
-check('closing the tab removes the listeners', (await page.evaluate(() => window.__listeners('search-matches'))) === 0);
-
-// 5. Four-search limit.
-for (let count = 0; count < 4; count++) jobs.start({ pattern: bigPattern(), repos: [{ path: repos.alpha }] });
-await page.keyboard.press('Control+Shift+F');
-await page.waitForSelector('.code-search');
+// Four-search limit.
+for (let count = 0; count < 4; count++) jobs.start({ pattern: 'bighold', repos: [{ path: repos.alpha }] });
 await page.fill('.cs-pattern input', 'TODO');
-await page.click('.cs-bar button[type=submit]');
+await search();
 await page.waitForSelector('.banner.err:has-text("Too many searches")');
 await shot('search-limit');
 await page.click('button:has-text("Stop all searches and retry")');
-await page.waitForSelector('.cs-status:has-text("matches in")', { timeout: 20000 });
+await waitDone('matches in 3 repositories');
 check('limit error offers a way out', true);
+await page.click('.shell-tab.on .tab-close');
+await page.waitForTimeout(400);
+check('closing the tab leaves no running job', jobs.running.size === 0, jobs.log.slice(-3).join(' '));
+check('closing the tab removes the listeners', (await page.evaluate(() => window.__listeners('search-matches'))) === 0);
+
+// 5. Divergent bases: local master, remote main and master, no origin/HEAD.
+await page.click('.shell-side button:has-text("Divergent set")');
+await page.waitForSelector('.fm-row[aria-label="Repository delta repo"]');
+await page.hover('.fm-row[aria-label="Repository delta repo"]');
+await page.click('button[aria-label="More actions for delta repo"]');
+await page.click('[role=menuitem]:has-text("Clean up merged branches")');
+await page.waitForSelector('.cleanup-dialog[open] .cleanup-row');
+const localOffered = await page.$$eval('.cleanup-row:not(.blocked) .cleanup-name', nodes => nodes.map(node => node.textContent));
+check('local base is master', localOffered.join() === 'topic', localOffered.join());
+await page.click('.cleanup-tabs [role=tab]:has-text("Remote")');
+await page.waitForSelector('.cleanup-list[aria-label="Branches on origin"]');
+const divergedOffered = await page.$$eval('.cleanup-list .cleanup-row .cleanup-name', nodes => nodes.map(node => node.textContent));
+check('remote branches are merged into origin/main', divergedOffered.join() === 'rel-old', divergedOffered.join());
+await page.check('.cleanup-row:has-text("rel-old") input');
+await page.click('.cleanup-dialog footer .btn.danger');
+await page.waitForSelector('.confirm-dialog[open]');
+await page.dblclick('.confirm-dialog .btn.danger').catch(() => {});
+await page.waitForSelector('.cleanup-repo [role=status]:has-text("1 deleted")');
+check('remote base differs from local base', calls.at(-1)?.base === 'origin/main', String(calls.at(-1)?.base));
+check('rel-old deleted on the remote', !execFileSync('git', ['ls-remote', '--heads', deltaRemote], { encoding: 'utf8' }).includes('rel-old'));
+await page.waitForTimeout(500);
+check('only one confirmation was queued', (await page.$$('.confirm-dialog')).length === 0);
+await shot('divergent');
+await page.click('.cleanup-dialog footer .btn:not(.danger):not(.dark)');
+await page.waitForSelector('.cleanup-dialog', { state: 'detached' });
+
+// 6. Caps, failed and skipped repositories, and 10000 matches.
+await page.click('.shell-side button:has-text("Caps set")');
+await page.waitForSelector('.fm-row[aria-label="Repository c13"]');
+await page.waitForTimeout(1500);
+await page.keyboard.press('Control+Shift+F');
+await page.waitForSelector('.code-search');
+await page.fill('.cs-pattern input', 'TODO');
+await page.click('.cs-scope summary');
+await page.fill('input[aria-label="Ref for c02"]', 'nosuchref');
+await search();
+await waitDone('matches in 13 repositories');
+const states = await page.evaluate(async () => {
+  const box = document.querySelector('.cs-list .vbox'), seen = new Map();
+  for (let top = 0; top <= box.scrollHeight; top += 400) {
+    box.scrollTop = top;
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    for (const row of box.querySelectorAll('.cs-repo')) seen.set(row.querySelector('b').textContent, row.querySelector('.cs-state').textContent);
+  }
+  box.scrollTop = 0;
+  return [...seen.values()];
+});
+const count = label => states.filter(state => state === label).length;
+check('per-repository cap, overall cap, failed and skipped states', count('failed') === 1 && count('skipped') === 1 && count('truncated') === 11, states.join());
+check('cap notice is shown', await page.locator('.banner.warn:has-text("result limit")').isVisible());
+check('default overall cap is 2000', (await page.locator('.cs-status').innerText()).includes('2000 matches'), await page.locator('.cs-status').innerText());
+await shot('search-caps');
+await page.fill('input[aria-label="Ref for c02"]', '');
+const big = await frames(async () => {
+  await page.fill('.cs-pattern input', 'bigtest');
+  await search();
+  await page.waitForSelector('.cs-status:has-text("Searching")');
+  for (let step = 0; step < 5; step++) { await page.evaluate(top => { document.querySelector('.cs-list .vbox').scrollTop = top; }, step * 60000); await page.waitForTimeout(300); }
+  await waitDone('10000 matches');
+});
+check('10000 matches stream without long frames', big.over <= 2, `frames=${big.count} worst=${big.worst.toFixed(0)}ms over50=${big.over}`);
+check('only visible rows are mounted', (await page.$$eval('.cs-list .vrow', nodes => nodes.length)) < 120);
+await shot('search-big-done');
+
+await search();
+await page.waitForSelector('.cs-bar button.danger');
+await page.waitForTimeout(500);
+await shot('search-streaming');
+await page.click('.cs-bar button.danger');
+await page.waitForSelector('.cs-status:has-text("Search cancelled")');
+check('stop cancels the job', jobs.log.some(entry => entry.startsWith('cancel')), jobs.log.join(' '));
+
+await search();
+await page.waitForSelector('.cs-bar button.danger');
+await page.waitForTimeout(400);
+const before = jobs.running.size;
+await page.click('.shell-tab.on .tab-close');
+await page.waitForTimeout(800);
+check('closing a running search cancels it', before === 1 && jobs.running.size === 0, `before=${before} after=${jobs.running.size}`);
 
 check('no unmocked commands', unknown.size === 0, [...unknown].join());
 await browser.close();
-function bigPattern() { return 'bigtest'; }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { SearchMatch } from '../../lib/api';
   import type { SearchSession } from '../../lib/search.svelte';
-  import { describeRepoStatus, SEARCH_ROW_HEIGHT, type SearchRow } from '../../lib/search-results';
+  import { describeRepoStatus, highlightRange, SEARCH_ROW_HEIGHT, type SearchRow } from '../../lib/search-results';
   import Alert from '../Alert.svelte';
   import EmptyState from '../EmptyState.svelte';
   import Icon from '../Icon.svelte';
@@ -10,6 +10,14 @@
   let { session, onopen }: { session: SearchSession; onopen: (repo: string, match: SearchMatch) => void } = $props();
   const summary = $derived(session.summary);
   const rowKey = (row: SearchRow) => row.key;
+  const finished = $derived(session.status === 'done' || session.status === 'cancelled');
+  const final = $derived(`${session.status === 'cancelled' ? 'Search cancelled. ' : ''}${session.matchCount} matches in ${session.reposTotal} repositories${summary?.failed ? `, ${summary.failed} failed` : ''}`);
+  const announcement = $derived(session.active ? 'Searching' : finished ? final : session.status === 'failed' ? 'Search did not start' : '');
+
+  function parts(match: SearchMatch) {
+    const range = session.request ? highlightRange(match, session.request) : null;
+    return range ? [match.text.slice(0, range[0]), match.text.slice(range[0], range[1]), match.text.slice(range[1])] : [match.text, '', ''];
+  }
 </script>
 
 {#snippet row(item: SearchRow)}
@@ -22,16 +30,17 @@
   {:else if item.kind === 'context'}
     <div class="cs-row cs-context mono"><span class="cs-line-no">{item.line}</span><span class="cs-text">{item.text}</span></div>
   {:else}
+    {@const [before, hit, after] = parts(item.match)}
     <button class="cs-row cs-match mono" title="Copy the path of this file" onclick={() => onopen(item.repo, item.match)}>
-      <span class="cs-line-no">{item.match.line}:{item.match.column}</span><span class="cs-text">{item.match.text}</span></button>
+      <span class="cs-line-no">{item.match.line}:{item.match.column}</span><span class="cs-text">{before}{#if hit}<mark>{hit}</mark>{/if}{after}</span></button>
   {/if}
 {/snippet}
 
 <div class="cs-results">
-  <div class="cs-status" role="status" aria-live="polite">
-    {#if session.status === 'starting' || session.status === 'running'}<span class="spin" aria-hidden="true"></span> Searching, {session.reposDone} of {session.reposTotal} repositories done, {session.matchCount} matches
-    {:else if session.status === 'done' || session.status === 'cancelled'}{session.status === 'cancelled' ? 'Cancelled. ' : ''}{session.matchCount} matches in {session.reposTotal} repositories{#if summary?.failed}, {summary.failed} failed{/if}
-    {/if}
+  <span class="sr-only" role="status">{announcement}</span>
+  <div class="cs-status" aria-hidden="true">
+    {#if session.active}<span class="spin"></span> Searching, {session.reposDone} of {session.reposTotal} repositories done, {session.matchCount} matches
+    {:else if finished}{final}{/if}
   </div>
   {#if summary?.capped}<Alert kind="warn">The result limit was reached, so some matches are not shown. Narrow the pattern or the paths to see the rest.</Alert>{/if}
   {#if session.status === 'idle'}
@@ -39,7 +48,7 @@
   {:else if session.status !== 'failed'}
     <div class="cs-list">
       <VirtualList items={session.rows} rowHeight={SEARCH_ROW_HEIGHT} key={rowKey} {row}>
-        {#snippet empty()}{#if session.status === 'done' || session.status === 'cancelled'}<EmptyState icon="search" title="No matches" hint="Nothing in the searched repositories matches this pattern." />{/if}{/snippet}
+        {#snippet empty()}{#if finished}<EmptyState icon="search" title="No matches" hint="Nothing in the searched repositories matches this pattern." />{/if}{/snippet}
       </VirtualList>
     </div>
   {/if}

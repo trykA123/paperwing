@@ -83,7 +83,7 @@ export async function deleteRemoteAcross(client: CleanupClient, entries: LocalDe
   for (const { target, data, rows, names } of entries) {
     const picked = selectableNames(rows, names);
     if (!picked.length || !data.remote) continue;
-    try { results.push(settle(target, picked, await client.deleteRemoteBranches(target.path, data.remote, picked, expectedTips(rows, picked), data.base))); }
+    try { results.push(settle(target, picked, await client.deleteRemoteBranches(target.path, data.remote, picked, expectedTips(rows, picked), data.remoteBase ?? data.base))); }
     catch (reason) { results.push(failure(target, `Could not delete branches on ${data.remote}`, reason)); }
   }
   return results;

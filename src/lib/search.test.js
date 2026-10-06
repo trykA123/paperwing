@@ -1,7 +1,7 @@
 import './test-support/svelte-loader.js';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { deferred } from './test-support/ipc-fixture.js';
-import { buildRows, describeRepoStatus, matchLocation } from './search-results.ts';
+import { buildRows, describeRepoStatus, highlightRange, matchLocation } from './search-results.ts';
 import { buildSearchRequest, defaultSearchForm, isSearchLimitError, parsePathspecs } from './search-request.ts';
 
 const { SearchSession } = await import('./search.svelte.ts');
@@ -88,6 +88,19 @@ describe('lifecycle', () => {
     expect(unsubscribed).toBe(true);
   });
 
+  test('closing the tab while subscribing stops listening and never starts the job', async () => {
+    const pending = deferred();
+    const search = new SearchSession({ ...transport(), subscribe: async next => { handlers = next; await pending.promise; return () => { unsubscribed = true; }; } }, run => run());
+    const running = search.start(request, names);
+    await Promise.resolve();
+    await search.dispose();
+    pending.resolve();
+    await running;
+    expect(unsubscribed).toBe(true);
+    expect(started).toBe(0);
+    expect(search.status).toBe('cancelled');
+  });
+
   test('a finished search is not cancelled on close', async () => {
     const search = session();
     await search.start(request, names);
@@ -132,6 +145,13 @@ describe('rows and requests', () => {
     expect(buildRows(groups).map(row => row.kind === 'match' ? `m${row.match.line}` : row.kind === 'context' ? `c${row.line}` : row.kind === 'file' ? row.path : row.name))
       .toEqual(['a', 'a.ts', 'c4', 'm5', 'm6', 'c7', 'b.ts', 'm1', 'b']);
     expect(new Set(buildRows(groups).map(row => row.key)).size).toBe(9);
+  });
+
+  test('finds the matched span from the byte column, with regular expressions too', () => {
+    expect(highlightRange(match('a.ts', 1, { text: '// TODO item', column: 4 }), { pattern: 'TODO' })).toEqual([3, 7]);
+    expect(highlightRange(match('a.ts', 1, { text: 'é TODO', column: 4 }), { pattern: 'TODO' })).toEqual([2, 6]);
+    expect(highlightRange(match('a.ts', 1, { text: 'x = foo123;', column: 5 }), { pattern: 'foo[0-9]+', mode: 'perl' })).toEqual([4, 10]);
+    expect(highlightRange(match('a.ts', 1, { text: 'x', column: 1 }), { pattern: '(', mode: 'perl' })).toBeNull();
   });
 
   test('describes each repository state', () => {

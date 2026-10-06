@@ -35,6 +35,7 @@ export function makeRepo(dir, { remote = null, todo = 3 } = {}) {
     git(dir, 'branch', '-u', 'origin/gone', 'gone');
     execFileSync('git', ['--git-dir', remote, 'branch', '-q', '-D', 'gone']);
     git(dir, 'fetch', '-q', '--prune');
+    git(dir, 'remote', 'set-head', 'origin', 'main');
     git(dir, 'branch', '-D', 'old-remote');
   }
   git(dir, 'checkout', '-q', 'dev');
@@ -45,4 +46,30 @@ export function moveTip(dir, branch) {
   const parent = git(dir, 'rev-parse', branch).trim();
   const next = git(dir, 'commit-tree', tree, '-p', parent, '-m', 'Moved after the preview').trim();
   git(dir, 'update-ref', `refs/heads/${branch}`, next);
+}
+
+/** Local default branch is master; the remote has main (ahead) and master, and no origin/HEAD. */
+export function makeDivergentRepo(dir, remote) {
+  mkdirSync(dir, { recursive: true });
+  mkdirSync(remote, { recursive: true });
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote]);
+  git(dir, 'init', '-q', '-b', 'master');
+  commit(dir, 'src/app.ts', '// TODO base\n', 'Base');
+  git(dir, 'branch', 'topic');
+  git(dir, 'remote', 'add', 'origin', remote);
+  git(dir, 'push', '-q', 'origin', 'master');
+  git(dir, 'checkout', '-q', '-b', 'main');
+  commit(dir, 'src/next.ts', '// TODO next\n', 'Main moves ahead');
+  git(dir, 'branch', 'rel-old');
+  for (const name of ['main', 'rel-old']) git(dir, 'push', '-q', 'origin', name);
+  git(dir, 'checkout', '-q', 'master');
+  git(dir, 'branch', '-D', 'main', 'rel-old');
+  git(dir, 'checkout', '-q', '-b', 'work');
+  git(dir, 'fetch', '-q', 'origin');
+}
+
+export function makeCapRepo(dir, matches = 300) {
+  mkdirSync(dir, { recursive: true });
+  git(dir, 'init', '-q', '-b', 'main');
+  commit(dir, 'src/big.ts', Array.from({ length: matches }, (_, index) => `const v${index} = ${index}; // TODO ${index}`).join('\n') + '\n', 'Many TODOs');
 }

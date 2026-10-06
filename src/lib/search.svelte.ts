@@ -42,6 +42,7 @@ export class SearchSession {
   matchCount = $state(0);
   reposDone = $state(0);
   reposTotal = $state(0);
+  request: SearchRequest | null = null;
   #version = $state(0);
   rows = $derived.by(() => { void this.#version; return buildRows(this.#groups); });
   #groups: SearchGroup[] = [];
@@ -66,11 +67,15 @@ export class SearchSession {
     this.#reset(request, names);
     this.status = 'starting';
     try {
-      this.#stop ??= await this.transport.subscribe({
-        matches: event => this.#receive({ type: 'matches', event }),
-        repo: event => this.#receive({ type: 'repo', event }),
-        done: event => this.#receive({ type: 'done', event }),
-      });
+      if (!this.#stop) {
+        const stop = await this.transport.subscribe({
+          matches: event => this.#receive({ type: 'matches', event }),
+          repo: event => this.#receive({ type: 'repo', event }),
+          done: event => this.#receive({ type: 'done', event }),
+        });
+        if (this.#disposed) { stop(); this.status = 'cancelled'; return; }
+        this.#stop = stop;
+      }
       const id = await this.transport.start(request);
       await this.#begin(id);
     } catch (reason) {
@@ -119,6 +124,7 @@ export class SearchSession {
   }
 
   #reset(request: SearchRequest, names: Record<string, string>) {
+    this.request = request;
     this.#groups = request.repos.map(target => ({ repo: target.path, name: names[target.path] ?? target.path, matches: [], status: null }));
     this.#byRepo = new Map(this.#groups.map(group => [group.repo, group]));
     this.#id = null;
@@ -133,6 +139,7 @@ export class SearchSession {
   }
 
   #receive(entry: Early) {
+    if (this.#disposed) return;
     if (this.#id === null) {
       if (this.status === 'starting' && this.#early.length < EARLY_LIMIT) this.#early.push(entry);
       return;

@@ -45,6 +45,25 @@ export function buildRows(groups: readonly SearchGroup[]): SearchRow[] {
   return rows;
 }
 
+export type SearchQuery = { pattern: string; mode?: 'fixed' | 'basic' | 'perl'; ignoreCase?: boolean };
+const ENCODER = new TextEncoder();
+const DECODER = new TextDecoder();
+
+/** Git reports the column in bytes; returns the matched span in string indices, or null when it cannot be found. */
+export function highlightRange(match: SearchMatch, query: SearchQuery): [number, number] | null {
+  const start = DECODER.decode(ENCODER.encode(match.text).slice(0, Math.max(0, match.column - 1))).length;
+  if (start >= match.text.length) return null;
+  let length = query.pattern.length;
+  if (query.mode && query.mode !== 'fixed') {
+    try {
+      const expression = new RegExp(query.pattern, query.ignoreCase ? 'iy' : 'y');
+      expression.lastIndex = start;
+      length = expression.exec(match.text)?.[0].length ?? 0;
+    } catch { return null; }
+  }
+  return length > 0 ? [start, Math.min(match.text.length, start + length)] : null;
+}
+
 export function describeRepoStatus(status: SearchRepoStatus | null): { label: string; tone: 'ok' | 'warn' | 'err' | 'mut' } {
   if (!status) return { label: 'searching', tone: 'mut' };
   if (status.state === 'failed') return { label: 'failed', tone: 'err' };

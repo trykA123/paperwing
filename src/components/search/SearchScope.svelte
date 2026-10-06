@@ -21,7 +21,7 @@
   <details class="cs-refs">
     <summary>Git ref per repository</summary>
     <p class="mut">Leave empty to search the working tree. Enter a branch, tag or commit to search that revision.</p>
-    <ul>
+    <ul class="fld">
       {#each shown as item (item.id)}
         <li><span class="mono" title={app.dest(item, setId)}>{app.folderOf(item)}</span>
           <input aria-label="Ref for {app.folderOf(item)}" placeholder="working tree" spellcheck="false" autocomplete="off" {disabled} bind:value={refs[app.dest(item, setId)]} /></li>

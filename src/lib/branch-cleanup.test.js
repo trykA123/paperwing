@@ -74,6 +74,9 @@ describe('deleting', () => {
     const data = listing();
     await deleteRemoteAcross(client, [{ target: target('a'), data, rows: remoteRows(data), names: ['old', 'main'] }]);
     expect(calls).toEqual([['/r/a', 'origin', ['old'], ['r-old'], 'origin/main']]);
+    const diverged = listing({ base: 'master', baseName: 'master', remoteBase: 'origin/main' });
+    await deleteRemoteAcross(client, [{ target: target('a'), data: diverged, rows: remoteRows(diverged), names: ['old'] }]);
+    expect(calls.at(-1)[4]).toBe('origin/main');
     expect(expectedTips(remoteRows(data), ['old'])).toEqual(['r-old']);
   });
 });
@@ -97,6 +100,9 @@ describe('session', () => {
     expect(deleted).toEqual([['/r/a', ['done']]]);
     expect(session.repos[0].result.deleted).toEqual(['done']);
     expect(session.repos[0].remotePicked).toEqual(['old']);
+    session.setAll('/r/a', 'local', false);
+    await session.run('local');
+    expect(session.repos.map(repo => repo.result)).toEqual([null, null, null]);
   });
 });
 
