@@ -3,6 +3,9 @@ import { RepositoryMetadata, type RefState } from './state/repository-metadata.s
 import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
 import { RootProbes } from './state/root-probes.svelte';
+import { railClick } from './rail';
+import { doingWord, RunNotices } from './state/run-notices';
+import { TemporarySets } from './state/temporary-sets.svelte';
 import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
 import { pendingPlatform, unavailableRoot } from './platform';
 import { benchmarkEnabled, benchmarkPlan } from './benchmark';
@@ -11,7 +14,7 @@ import {
     api, type Activity,
     type GitAction, type LocalStatus, type Phase, type Progress, type Ref, type Repo,
     type Capability, type Capabilities, type CompareEndpoint, type PathIdentity, type PlatformInfo, type RootSupport,
-    type SetItem, type Source, type Workspace,
+    type RailSection, type RepoSet, type SetItem, type Source, type Workspace,
 } from './api';
 import { CompareState, SetCompareState, type SetCompareRow } from './compare.svelte';
 import { confirm } from './confirm';
@@ -154,7 +157,12 @@ class AppState {
   jobs = $state<Record<string, Progress>>({});
   running = $state(false);
   clonePreparing = $state(false);
-  activityOpen = $state(false);
+  get activityOpen() { return this.ws.shell.sidebarVisible && this.ws.shell.section === 'activity'; }
+  set activityOpen(open: boolean) {
+    if (open) { this.ws.shell.section = 'activity'; this.ws.shell.sidebarVisible = true; }
+    else if (this.activityOpen) this.ws.shell.sidebarVisible = false;
+  }
+  clickRail(section: RailSection) { Object.assign(this.ws.shell, railClick(this.ws.shell, section)); }
   private gitActivity = new GitActivity();
   get activity() { return this.gitActivity.activity; }
   set activity(value: Activity[]) { this.gitActivity.activity = value; }
@@ -177,17 +185,29 @@ class AppState {
   get query() { return this.activeTab?.query ?? ''; }
   set query(value: string) { if (this.activeTab) this.activeTab.query = value; }
   notices = new NotificationStore();
+  private runNotices = new RunNotices(this.notices);
+  temporary = new TemporarySets({
+    get ws() { return app.ws; }, get tabs() { return app.tabs; },
+    get activeTabId() { return app.activeTabId; }, set activeTabId(id: string) { app.activeTabId = id; },
+    openView: (view, setId) => this.openView(view, setId), closeTab: id => this.closeTab(id),
+    toast: (message, kind, action) => this.toast(message, kind, action), newId: uid,
+  });
   pendingRename = $state(false);
   renameItemId = $state<string | null>(null);
   #runIds = $state<string[]>([]);
   #runMode: GitAction = 'clone';
+  #runItems: SetItem[] = [];
+  #runSetId = '';
+  #runNotice = 0;
+  pushing = $state<Record<string, 'Pushing' | 'Waiting'>>({});
   #cloneWaiters: (() => void)[] = [];
 
   get allRepos() { return this.repositoryMetadata.allRepos; }
   set allRepos(value: RepositoryMetadata['allRepos']) { this.repositoryMetadata.allRepos = value; }
   get repoById() { return this.repositoryMetadata.repoById; }
   set repoById(value: RepositoryMetadata['repoById']) { this.repositoryMetadata.repoById = value; }
-  set = $derived(this.ws.sets.find(s => s.id === this.ws.activeSet) ?? this.ws.sets[0]);
+  set = $derived<RepoSet>(this.ws.sets.find(s => s.id === this.ws.activeSet) ?? this.temporary.find(this.ws.activeSet) ?? this.ws.sets[0]);
+  isTemporary = $derived(!!this.temporary.find(this.set.id));
   selected = $derived(this.set.items.filter(i => i.on));
   runProgress = $derived.by(() => {
     const jobs = this.#runIds.map(id => this.jobs[id]).filter(Boolean);
@@ -199,7 +219,22 @@ class AppState {
     };
   });
   actionItems = $derived(this.view.kind === 'item' ? (this.focusedItem ? [this.focusedItem] : []) : this.selected);
+  inspectedId = $state<string | null>(null);
+  /** When each set last finished a clean fetch this session (ms since epoch). */
+  lastFetch = $state<Record<string, number>>({});
+  /** The repository the right panel describes: the focused row, else the last row clicked, else the only selected one. */
+  detailItem = $derived(this.focusedItem ?? this.set.items.find(item => item.id === this.inspectedId) ?? (this.selected.length === 1 ? this.selected[0] : undefined));
   clashes = $derived(pathClashes(this.selected.map(item => this.dest(item)), this.nativePlatform, this.pathIdentities));
+
+  /** What is happening to this row right now, for its spinner; null when nothing is. */
+  rowBusy(item: SetItem): string | null {
+    const push = this.pushing[this.dest(item)];
+    if (push) return push === 'Waiting' ? 'Waiting' : 'Pushing';
+    const job = this.jobs[item.id];
+    if (!this.running || !job || !this.#runIds.includes(item.id)) return null;
+    if (job.phase === 'queued') return 'Waiting';
+    return RUNNING.includes(job.phase) ? doingWord(this.#runMode) : null;
+  }
 
   async init() {
     const [saved, platform] = await Promise.all([api.loadSettings(), api.platformInfo()]);
@@ -262,7 +297,7 @@ class AppState {
   activateTab(id: string) {
     const tab = this.tabs.find(tab => tab.id === id);
     if (!tab) return;
-    if (this.ws.sets.some(set => set.id === tab.setId)) this.ws.activeSet = tab.setId;
+    if (this.ws.sets.some(set => set.id === tab.setId) || this.temporary.find(tab.setId)) this.ws.activeSet = tab.setId;
     this.activeTabId = id;
   }
 
@@ -296,6 +331,7 @@ class AppState {
     }
     const activeRemoved = closing.has(this.activeTabId);
     this.tabs = this.tabs.filter(tab => !closing.has(tab.id));
+    if (target) this.temporary.releaseIfUnused(target.setId);
     if (!activeRemoved) return;
     const next = this.tabs[Math.min(index, this.tabs.length - 1)];
     if (next) this.activateTab(next.id);
@@ -303,7 +339,7 @@ class AppState {
   }
 
   tabTitle(tab: ShellTab) {
-    const set = this.ws.sets.find(set => set.id === tab.setId);
+    const set = this.ws.sets.find(set => set.id === tab.setId) ?? this.temporary.find(tab.setId);
     const view = tab.view;
     switch (view.kind) {
       case 'set': return set?.name ?? 'Set';
@@ -360,7 +396,7 @@ class AppState {
     return (this.clashes.get(this.collisionKey(this.dest(item))) ?? 0) > 1;
   }
 
-  refState(item: SetItem): RefState { return this.repositoryMetadata.refState(item); }
+  refState(item: SetItem): RefState { return item.path ? 'ok' : this.repositoryMetadata.refState(item); }
 
   refStale(item: SetItem) { return this.repositoryMetadata.refs[item.url]?.stale === true; }
 
@@ -388,6 +424,7 @@ class AppState {
   uniqueFolder(base: string) { return uniqueFolder(base, this.set.items, this.nativePlatform); }
 
   addRepo(repo: Repo, notify = true) {
+    if (this.isTemporary) { this.toast('Save this temporary set before adding repositories to it', 'warn'); return; }
     const id = uid();
     const folder = this.uniqueFolder(repo.name);
     this.set.items.push({
@@ -530,22 +567,25 @@ class AppState {
     if (!targets.length || this.gitBusy || this.running) return;
     if (targets.length > 1 && !await confirm(`Push the current branch of ${targets.length} repositories?`, { title: 'Push', okLabel: 'Push' })) return;
     this.gitBusy = true;
+    const noticeId = this.runNotices.begin('push', targets.length);
     const failures: string[] = [];
+    const failed: { path: string; name: string }[] = [];
+    this.pushing = Object.fromEntries(targets.map(target => [target.path, 'Waiting' as const]));
     try {
       for (const target of targets) {
-        try { await api.pushBranch(target.path); } catch (reason) { failures.push(`${target.name}: ${reason}`); }
+        this.pushing[target.path] = 'Pushing';
+        try { await api.pushBranch(target.path); } catch (reason) { failures.push(`${target.name}: ${reason}`); failed.push(target); }
+        delete this.pushing[target.path];
       }
-    } finally { this.gitBusy = false; }
+    } finally { this.gitBusy = false; this.pushing = {}; }
     await this.checkExists(targets.map(target => target.path));
     const pushedPaths = new Set(targets.map(target => target.path));
     const urls = [...new Set(this.set.items.filter(item => pushedPaths.has(this.dest(item))).map(item => item.url))];
     if (urls.length) void this.ensureRefs(urls, true);
-    const pushed = targets.length - failures.length;
-    if (failures.length) {
-      this.toast(`Push failed for ${failures.length} of ${targets.length}. ${failures[0]}`, 'error', { label: 'View activity', run: () => { this.activityOpen = true; } });
-    } else {
-      this.toast(pushed === 1 ? `Pushed ${targets[0].name}` : `Pushed ${pushed} repositories`, 'success');
-    }
+    this.runNotices.finish(noticeId, {
+      verb: 'push', total: targets.length, failed, firstError: failures[0],
+      retry: again => void this.pushRepos([...again]), viewActivity: () => { this.activityOpen = true; },
+    });
   }
 
   /** Deletes a local branch after confirmation. The remote branch is never touched. */
@@ -600,6 +640,7 @@ class AppState {
   }
 
   refLabel(item: SetItem) {
+    if (item.path) { const l = this.local[item.path]; return l?.branchLabel ?? l?.branch ?? l?.tagLabel ?? l?.tag ?? l?.sha?.slice(0, 8) ?? ''; }
     if (item.ref.type === 'commit') return refText(item.ref);
     const refs = this.refs[item.url];
     const names = item.ref.type === 'branch' ? refs?.branches : refs?.tags;
@@ -618,20 +659,21 @@ class AppState {
   onRef(item: SetItem) {
     const l = this.local[this.dest(item)];
     if (!l?.repo) return false;
+    if (item.path) return true;
     const { type, name } = item.ref;
     if (type === 'branch') return l.branch === name;
     if (type === 'tag') return l.tag === name;
     return !!l.sha && name.slice(0, 7) === l.sha.slice(0, 7);
   }
 
-  async startClone(items: SetItem[] = this.selected, mode: GitAction = 'clone') {
+  async startClone(items: SetItem[] = this.selected, mode: GitAction = 'clone', setId = this.set.id) {
     if (this.running || this.clonePreparing || !items.length) return;
     this.clonePreparing = true;
     try {
       const support = await this.probeRoot();
       if (!support.valid) { this.toast(support.reason ?? 'Choose a valid native destination folder.', 'warn'); return; }
       if (this.bufferGuards.size && !await this.guardBuffers()) return;
-      const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i), refType: i.ref.type, refName: i.ref.name }));
+      const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i, setId), refType: i.ref.type, refName: i.ref.name }));
       let observations: PathIdentity[];
       try { observations = await this.refreshPathIdentities(jobs.map(job => job.dest)); }
       catch (reason) { this.toast(String(reason), 'error'); return; }
@@ -652,14 +694,18 @@ class AppState {
         if (!ok) return;
       }
       this.#runIds = jobs.map(j => j.id);
+      this.#runItems = [...items];
+      this.#runSetId = setId;
       this.#runMode = mode;
       for (const j of jobs) this.jobs[j.id] = { id: j.id, phase: 'queued', pct: 0, msg: 'Waiting for a slot' };
       this.running = true;
+      this.#runNotice = this.runNotices.begin(mode, jobs.length);
       try {
         await api.saveSettings({ sources: this.sources, workspace: this.ws });
         await api.startClone(jobs, { parallel: this.ws.parallel, shallow: this.ws.shallow, onExisting: this.ws.onExisting }, mode);
       } catch (e) {
         this.running = false;
+        this.notices.dismiss(this.#runNotice);
         this.toast(String(e), 'error');
       }
     } finally { this.clonePreparing = false; }
@@ -668,13 +714,17 @@ class AppState {
   #finished() {
     this.running = false;
     for (const waiter of this.#cloneWaiters.splice(0)) waiter();
-    const done = this.#runIds.map(id => this.jobs[id]).filter(Boolean);
-    const failed = done.filter(j => j.phase === 'failed').length;
-    const verb = { clone: 'Clone', fetch: 'Fetch', pull: 'Pull', switch: 'Switch' }[this.#runMode];
-    this.toast(`${verb} finished: ${done.length - failed} ok${failed ? `, ${failed} failed` : ''}`, failed ? 'error' : 'success',
-      failed ? { label: 'View activity', run: () => { this.activityOpen = true; } } : undefined);
+    const mode = this.#runMode;
+    const runSet = this.#runSetId;
+    const failed = this.#runItems.filter(item => this.jobs[item.id]?.phase === 'failed');
+    this.runNotices.finish(this.#runNotice, {
+      verb: mode, total: this.#runItems.length, failed, firstError: this.jobs[failed[0]?.id]?.msg,
+      retry: again => void this.startClone([...again], mode, runSet), viewActivity: () => { this.activityOpen = true; },
+    });
     this.#invalidateTrees(this.repositoryTrees.paths());
-    this.checkExists(this.set.items.map(i => this.dest(i)));
+    if (mode === 'fetch' && !failed.length) this.lastFetch[runSet] = Date.now();
+    const owner = this.ws.sets.find(set => set.id === runSet) ?? this.temporary.find(runSet) ?? this.set;
+    this.checkExists(owner.items.map(i => this.dest(i, owner.id)));
   }
 }
 

@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 5933,
-  "normalizedSourceSHA256": "7724642b23108d6c162e27f691ecaa88a91c29649578321a8eac2259cad7ec17",
+  "originalLineCount": 6696,
+  "normalizedSourceSHA256": "d0f2021815b9b9f99bb4272fe6de74fcad3a7f66c718ad8654516b4329511a72",
   "chapters": [
     {
       "path": "comparison.css",
@@ -19,80 +19,86 @@
     {
       "path": "shell.css",
       "firstLine": 846,
-      "lastLine": 1042,
-      "normalizedSHA256": "7bc278cf9146b7c2c0f1ef9fbf501e6d942eb4fd06a8995b49e3c01aa350a9ca"
+      "lastLine": 1044,
+      "normalizedSHA256": "ffccd1714508e83974ade4ab43db0c4f3b3f8e300fb958ce2d08facebc215948"
     },
     {
       "path": "workspace.css",
-      "firstLine": 1043,
-      "lastLine": 2086,
+      "firstLine": 1045,
+      "lastLine": 2088,
       "normalizedSHA256": "856a32620f44612ff9a08a4e0de47a566d52554a3315af77ef205ac274f0a30b"
     },
     {
       "path": "ref-picker.css",
-      "firstLine": 2087,
-      "lastLine": 2300,
+      "firstLine": 2089,
+      "lastLine": 2302,
       "normalizedSHA256": "b7fafe414e01bfcc8e6a7ec5a43ec9a9c2b527723fc6d73b5972196bc5639d89"
     },
     {
       "path": "settings.css",
-      "firstLine": 2301,
-      "lastLine": 2658,
+      "firstLine": 2303,
+      "lastLine": 2660,
       "normalizedSHA256": "94084afafa8ba1a192c3be2c9613ba59fbea498c2eef9f073352450218df3fef"
     },
     {
       "path": "local-and-appearance.css",
-      "firstLine": 2659,
-      "lastLine": 2858,
+      "firstLine": 2661,
+      "lastLine": 2860,
       "normalizedSHA256": "f3440e2f69ba5b487639e2daed8ac39a622076f8f5abb44187db2e497363448f"
     },
     {
       "path": "theme.css",
-      "firstLine": 2859,
-      "lastLine": 3706,
-      "normalizedSHA256": "07f4d08d6cf4ea33e366960eb6a626f4ef93759344acc1cab05a5e6eb212bd76"
+      "firstLine": 2861,
+      "lastLine": 3692,
+      "normalizedSHA256": "dc4f0873047a91963b1b34487fea23d887c6d0d2b724795a2dbf55bafe43079d"
     },
     {
       "path": "motion.css",
-      "firstLine": 3707,
-      "lastLine": 3836,
+      "firstLine": 3693,
+      "lastLine": 3822,
       "normalizedSHA256": "85b034d8b9fac74b701c5ffbc705adf991b61a570c6730f7727f89ba866995f8"
     },
     {
       "path": "feedback.css",
-      "firstLine": 3837,
-      "lastLine": 4114,
+      "firstLine": 3823,
+      "lastLine": 4100,
       "normalizedSHA256": "8818a96768bbd8f90bf841f8c35ccc33b2f2f16c1d8edb18465ad38067a38095"
     },
     {
       "path": "control-overrides.css",
-      "firstLine": 4115,
-      "lastLine": 4612,
+      "firstLine": 4101,
+      "lastLine": 4598,
       "normalizedSHA256": "097c4b9847276c90aada361b3dbda448fec36bbf7a1df70ec674253d2a495c88"
     },
     {
       "path": "workflow-overrides.css",
-      "firstLine": 4613,
-      "lastLine": 5417,
+      "firstLine": 4599,
+      "lastLine": 5403,
       "normalizedSHA256": "4dcd9b2cd89cd461eaadbd1104af6dea9f16784647065daf5548db0135a66544"
     },
     {
       "path": "comparison-overrides.css",
-      "firstLine": 5418,
-      "lastLine": 5530,
+      "firstLine": 5404,
+      "lastLine": 5516,
       "normalizedSHA256": "0d4f3d7b6162396c3d00d420b6ef03e07dbb03ac63fbfdcfb835d90ec5712081"
     },
     {
       "path": "select.css",
-      "firstLine": 5531,
-      "lastLine": 5652,
+      "firstLine": 5517,
+      "lastLine": 5638,
       "normalizedSHA256": "0353b962eee511f050c6ac5cdd8a5922d8b0c0b53e058f2ff3ee93b9cb258385"
     },
     {
       "path": "history.css",
-      "firstLine": 5653,
-      "lastLine": 5933,
+      "firstLine": 5639,
+      "lastLine": 5919,
       "normalizedSHA256": "36e2ca09c0e9e1115937be8bfe0f7f78bf6de531a34c044fbb832ff089e73ba9"
+    },
+    {
+      "path": "formation.css",
+      "firstLine": 5920,
+      "lastLine": 6696,
+      "normalizedSHA256": "17aabca06d9d2b1d987e6fc35bafc5255509160da272b3668ce049a2fa67b041"
     }
   ]
 }

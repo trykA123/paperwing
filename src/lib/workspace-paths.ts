@@ -28,6 +28,7 @@ export function segments(workspace: Workspace, sources: Source[], item: SetItem,
 }
 
 export function destination(workspace: Workspace, sources: Source[], item: SetItem, setName: string, platform: PlatformInfo['platform'] = 'windows') {
+  if (item.path) return item.path;
   const sep = platform === 'linux' ? '/' : '\\';
   const root = platform === 'linux' ? workspace.root.replace(/\/+$/, '') : workspace.root.replace(/[\\/]+$/, '');
   return [root, ...segments(workspace, sources, item, setName, platform)].join(sep);

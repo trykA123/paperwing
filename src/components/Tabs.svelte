@@ -21,9 +21,9 @@
 <header class="tabs-chrome" class:native-controls={titlebar} data-tauri-drag-region={titlebar}>
   <div class="tabstrip" role="tablist" aria-label="Workspace tabs">
     {#each app.tabs as tab, index (tab.id)}
-      <div class="shell-tab" class:on={tab.id === app.activeTabId}>
+      <div class="shell-tab" class:on={tab.id === app.activeTabId} class:temp={!!app.temporary.find(tab.setId)}>
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"
-          tabindex={tab.id === app.activeTabId ? 0 : -1} title={app.tabTitle(tab)}
+          tabindex={tab.id === app.activeTabId ? 0 : -1} title={app.temporary.find(tab.setId) ? `${app.tabTitle(tab)} (temporary, not saved)` : app.tabTitle(tab)}
           onclick={() => app.activateTab(tab.id)} onkeydown={event => navigate(event, index)}>
           <Icon name={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'copy' : tab.view.kind === 'fileDiff' ? 'code' : tab.view.kind === 'settings' ? 'gear' : tab.view.kind === 'search' || tab.view.kind === 'org' ? 'search' : 'folder'}
             tone={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'brand' : tab.view.kind === 'fileDiff' ? 'file' : tab.view.kind === 'set' || tab.view.kind === 'item' ? 'folder' : undefined} />

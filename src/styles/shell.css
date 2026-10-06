@@ -1,14 +1,16 @@
 /* shell: every region fills the window, nothing scrolls except lists */
 #shell {
     display: grid;
-    grid-template-columns: var(--lw, 250px) minmax(0, 1fr) min(var(--rw, 380px), max(280px, calc(100vw - var(--lw, 250px) - 420px)));
+    --rail-w: 48px;
+    --left: calc(var(--rail-w) + var(--lw, 250px));
+    grid-template-columns: var(--rail-w) var(--lw, 250px) minmax(0, 1fr) min(var(--rw, 380px), max(280px, calc(100vw - var(--left) - 420px)));
     grid-template-rows: 42px minmax(0, 1fr) 26px;
-    grid-template-areas: "brand tabs tabs" "side main right" "status status status";
+    grid-template-areas: "rail brand tabs tabs" "rail side main right" "status status status status";
     height: 100vh;
 }
 
 #shell.noright {
-    grid-template-columns: var(--lw, 250px) minmax(0, 1fr) 0;
+    grid-template-columns: var(--rail-w) var(--lw, 250px) minmax(0, 1fr) 0;
 }
 
 #shell.panels-moving {
@@ -36,7 +38,7 @@
 }
 
 .shell-right .shell-panel-content {
-    width: min(var(--panel-width), max(280px, calc(100vw - var(--lw, 250px) - 420px)));
+    width: min(var(--panel-width), max(280px, calc(100vw - var(--left) - 420px)));
 }
 
 .shell-panel-content>.side,

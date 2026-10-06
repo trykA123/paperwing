@@ -539,22 +539,6 @@ kbd {
     color: var(--faint-text);
 }
 
-.activity-drawer {
-    position: absolute;
-    bottom: 26px;
-    left: 0;
-    right: 0;
-    height: min(360px, 55%);
-    z-index: 30;
-    display: flex;
-    flex-direction: column;
-    background: var(--panel);
-    border-top: 1px solid var(--line);
-    box-shadow: 0 -6px 24px hsl(0.00 0.00% 0.00% / 0.1333);
-    outline: none;
-    min-width: 0;
-}
-
 .activity-toolbar {
     display: flex;
     align-items: center;
