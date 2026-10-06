@@ -21,6 +21,7 @@ mod git;
 mod github;
 mod history;
 mod local;
+mod ordered;
 mod paths;
 mod platform;
 #[cfg(not(any(windows, target_os = "linux")))]
