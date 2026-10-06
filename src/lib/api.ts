@@ -87,7 +87,7 @@ export type RepositoryTree = {
 };
 
 export type HistoryCommit = { sha: string; short: string; subject: string; author: string; date: string };
-export type HistoryKind = 'tracking' | 'noUpstream' | 'detached' | 'unborn';
+export type HistoryKind = 'tracking' | 'noUpstream' | 'upstreamGone' | 'detached' | 'unborn';
 export type RepositoryHistory = {
   kind: HistoryKind; branch: string | null; upstream: string | null; uncommitted: number;
   local: HistoryCommit[]; localTotal: number; origin: HistoryCommit[]; originTotal: number; base: HistoryCommit | null; below: HistoryCommit[];

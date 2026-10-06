@@ -245,3 +245,60 @@ async fn rejects_paths_that_are_not_repository_roots() {
     assert!(read_history(&fixture.path("plain"), None).await.is_err());
     assert!(read_history("relative/path", None).await.is_err());
 }
+
+#[tokio::test]
+async fn a_tracked_file_named_head_does_not_confuse_revisions() {
+    let fixture = Fixture::new("headfile");
+    let (work, _) = shared(&fixture);
+    commit(&work, "HEAD");
+    commit(&work, "after");
+    let history = read_history(work.to_str().unwrap(), None).await.unwrap();
+    assert_eq!(subjects(&history.local), ["add after", "add HEAD"]);
+    assert_eq!(history.local_total, 2);
+}
+
+#[tokio::test]
+async fn local_only_excludes_commits_already_on_any_remote() {
+    let fixture = Fixture::new("remotes");
+    let (work, _) = shared(&fixture);
+    git_in(&work, &["checkout", "-q", "-b", "wip"]);
+    commit(&work, "published");
+    git_in(&work, &["push", "-q", "origin", "wip"]);
+    commit(&work, "private");
+    let history = read_history(work.to_str().unwrap(), None).await.unwrap();
+    assert_eq!(history.kind, HistoryKind::NoUpstream);
+    assert_eq!(subjects(&history.local), ["add private"]);
+    assert_eq!(history.local_total, 1);
+}
+
+#[tokio::test]
+async fn a_deleted_remote_branch_is_reported_as_gone_not_missing() {
+    let fixture = Fixture::new("gone");
+    let (work, _) = shared(&fixture);
+    git_in(&work, &["checkout", "-q", "-b", "topic"]);
+    commit(&work, "topic-one");
+    git_in(&work, &["push", "-q", "-u", "origin", "topic"]);
+    git_in(&work, &["push", "-q", "origin", "--delete", "topic"]);
+    git_in(&work, &["fetch", "-q", "--prune", "origin"]);
+    let history = read_history(work.to_str().unwrap(), None).await.unwrap();
+    assert_eq!(history.kind, HistoryKind::UpstreamGone);
+    assert_eq!(history.upstream.as_deref(), Some("origin/topic"));
+    assert_eq!(subjects(&history.local), ["add topic-one"]);
+}
+
+#[tokio::test]
+async fn a_local_branch_upstream_drops_the_refs_heads_prefix() {
+    let fixture = Fixture::new("localup");
+    let work = fixture.dir("work");
+    init(&work);
+    commit(&work, "one");
+    git_in(
+        &work,
+        &["checkout", "-q", "-b", "feature", "--track", "main"],
+    );
+    commit(&work, "two");
+    let history = read_history(work.to_str().unwrap(), None).await.unwrap();
+    assert_eq!(history.kind, HistoryKind::Tracking);
+    assert_eq!(history.upstream.as_deref(), Some("main"));
+    assert_eq!(subjects(&history.local), ["add two"]);
+}

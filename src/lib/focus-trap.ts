@@ -7,10 +7,13 @@ export function trapTab(event: KeyboardEvent, container: HTMLElement) {
   const last = items.at(-1);
   if (!first || !last) return;
   const edge = event.shiftKey ? first : last;
-  if (document.activeElement !== edge && container.contains(document.activeElement)) return;
+  const active = document.activeElement;
+  if (active !== container && active !== edge && container.contains(active)) return;
   event.preventDefault();
   (event.shiftKey ? last : first).focus();
 }
+
+export const paletteReturn: { element: HTMLElement | null } = { element: null };
 
 const OTHER_LAYERS = 'dialog[open], .notices';
 

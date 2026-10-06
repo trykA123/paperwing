@@ -50,7 +50,7 @@
   });
 
   function onKey(event: KeyboardEvent) {
-    if (app.copyRequest || app.recoveryOpen || document.querySelector('dialog[open]:not(.palette)')) return;
+    if (app.copyRequest || app.recoveryOpen || historyDrawer.target || document.querySelector('dialog[open]:not(.palette)')) return;
     if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       app.paletteOpen = !app.paletteOpen;

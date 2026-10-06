@@ -22,6 +22,7 @@ pub struct HistoryCommit {
 pub enum HistoryKind {
     Tracking,
     NoUpstream,
+    UpstreamGone,
     Detached,
     Unborn,
 }
@@ -115,12 +116,14 @@ async fn log(path: &str, revisions: &[&str], take: usize) -> Result<Vec<HistoryC
         &take,
     ];
     args.extend_from_slice(revisions);
+    args.push("--");
     Ok(parse_commits(&git(path, &args, &[0]).await?))
 }
 
 async fn count(path: &str, revisions: &[&str]) -> Result<usize, String> {
     let mut args = vec!["rev-list", "--count"];
     args.extend_from_slice(revisions);
+    args.push("--");
     Ok(text(&git(path, &args, &[0]).await?).parse().unwrap_or(0))
 }
 
@@ -144,7 +147,39 @@ async fn uncommitted(path: &str) -> Result<usize, String> {
         .count())
 }
 
-async fn upstream_of(path: &str) -> Result<Option<String>, String> {
+enum Upstream {
+    Live { full: String, label: String },
+    Gone(String),
+    Absent,
+}
+
+async fn configured_upstream(path: &str, branch: &str) -> Result<Option<String>, String> {
+    let merge = git(
+        path,
+        &["config", "--get", &format!("branch.{branch}.merge")],
+        &[0, 1],
+    )
+    .await?;
+    if merge.code != Some(0) {
+        return Ok(None);
+    }
+    let remote = git(
+        path,
+        &["config", "--get", &format!("branch.{branch}.remote")],
+        &[0, 1],
+    )
+    .await?;
+    let (merge, remote) = (text(&merge), text(&remote));
+    let short = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
+    let label = if remote.is_empty() || remote == "." {
+        short.to_string()
+    } else {
+        format!("{remote}/{short}")
+    };
+    Ok(Some(label))
+}
+
+async fn upstream_of(path: &str, branch: &str) -> Result<Upstream, String> {
     let output = git(
         path,
         &["rev-parse", "--symbolic-full-name", "@{upstream}"],
@@ -152,11 +187,21 @@ async fn upstream_of(path: &str) -> Result<Option<String>, String> {
     )
     .await?;
     if output.code != Some(0) {
-        return Ok(None);
+        return Ok(match configured_upstream(path, branch).await? {
+            Some(label) => Upstream::Gone(output.safe(&label)),
+            None => Upstream::Absent,
+        });
     }
-    let name = text(&output);
-    valid_ref(&name)?;
-    Ok(Some(name))
+    let full = text(&output);
+    valid_ref(&full)?;
+    let short = full
+        .strip_prefix("refs/remotes/")
+        .or_else(|| full.strip_prefix("refs/heads/"))
+        .unwrap_or(&full);
+    Ok(Upstream::Live {
+        label: output.safe(short),
+        full,
+    })
 }
 
 async fn fill_tracking(
@@ -187,9 +232,64 @@ async fn fill_local_only(
     limit: usize,
     history: &mut RepositoryHistory,
 ) -> Result<(), String> {
-    history.local_total = count(path, &["HEAD"]).await?;
-    history.local = log(path, &["HEAD"], limit).await?;
+    let unpublished = ["HEAD", "--not", "--remotes"];
+    history.local_total = count(path, &unpublished).await?;
+    history.local = log(path, &unpublished, limit).await?;
     Ok(())
+}
+
+async fn has_commit(path: &str) -> Result<bool, String> {
+    Ok(git(
+        path,
+        &["rev-parse", "--verify", "-q", "HEAD^{commit}"],
+        &[0, 1],
+    )
+    .await?
+    .code
+        == Some(0))
+}
+
+async fn blank_history(path: &str, branch: Option<String>) -> Result<RepositoryHistory, String> {
+    Ok(RepositoryHistory {
+        kind: HistoryKind::Unborn,
+        branch,
+        upstream: None,
+        uncommitted: uncommitted(path).await?,
+        local: Vec::new(),
+        local_total: 0,
+        origin: Vec::new(),
+        origin_total: 0,
+        base: None,
+        below: Vec::new(),
+    })
+}
+
+async fn fill_history(
+    path: &str,
+    limit: usize,
+    upstream: Upstream,
+    history: &mut RepositoryHistory,
+) -> Result<(), String> {
+    match upstream {
+        Upstream::Live { full, label } => {
+            history.kind = HistoryKind::Tracking;
+            history.upstream = Some(label);
+            fill_tracking(path, &full, limit, history).await
+        }
+        Upstream::Gone(label) => {
+            history.kind = HistoryKind::UpstreamGone;
+            history.upstream = Some(label);
+            fill_local_only(path, limit, history).await
+        }
+        Upstream::Absent => {
+            history.kind = if history.branch.is_some() {
+                HistoryKind::NoUpstream
+            } else {
+                HistoryKind::Detached
+            };
+            fill_local_only(path, limit, history).await
+        }
+    }
 }
 
 pub(crate) async fn read_history(
@@ -200,50 +300,15 @@ pub(crate) async fn read_history(
     let limit = limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let head = git(path, &["symbolic-ref", "--short", "-q", "HEAD"], &[0, 1]).await?;
     let branch = (head.code == Some(0)).then(|| head.safe(&text(&head)));
-    let has_commit = git(
-        path,
-        &["rev-parse", "--verify", "-q", "HEAD^{commit}"],
-        &[0, 1],
-    )
-    .await?
-    .code
-        == Some(0);
-    let mut history = RepositoryHistory {
-        kind: HistoryKind::Unborn,
-        branch: branch.clone(),
-        upstream: None,
-        uncommitted: uncommitted(path).await?,
-        local: Vec::new(),
-        local_total: 0,
-        origin: Vec::new(),
-        origin_total: 0,
-        base: None,
-        below: Vec::new(),
-    };
-    if !has_commit {
+    let mut history = blank_history(path, branch.clone()).await?;
+    if !has_commit(path).await? {
         return Ok(history);
     }
-    let upstream = if branch.is_some() {
-        upstream_of(path).await?
-    } else {
-        None
+    let upstream = match &branch {
+        Some(name) => upstream_of(path, name).await?,
+        None => Upstream::Absent,
     };
-    if let Some(full) = upstream {
-        history.kind = HistoryKind::Tracking;
-        history.upstream = Some(
-            full.strip_prefix("refs/remotes/")
-                .unwrap_or(&full)
-                .to_string(),
-        );
-        fill_tracking(path, &full, limit, &mut history).await?;
-    } else {
-        history.kind = if branch.is_some() {
-            HistoryKind::NoUpstream
-        } else {
-            HistoryKind::Detached
-        };
-        fill_local_only(path, limit, &mut history).await?;
-    }
+    fill_history(path, limit, upstream, &mut history).await?;
     Ok(history)
 }
 

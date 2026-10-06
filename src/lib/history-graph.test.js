@@ -61,6 +61,7 @@ test('history summary names ahead, behind and the upstream', () => {
   expect(describeHistory(history({ kind: 'noUpstream', upstream: null }))).toContain('No upstream');
   expect(describeHistory(history({ kind: 'detached', branch: null, upstream: null }))).toContain('Detached');
   expect(describeHistory(history({ kind: 'unborn' }))).toBe('No commits yet');
+  expect(describeHistory(history({ kind: 'upstreamGone', upstream: 'origin/topic' }))).toBe('Upstream origin/topic no longer exists');
 });
 
 test('the uncommitted ring grows to fit 99+', () => {

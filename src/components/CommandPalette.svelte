@@ -4,6 +4,7 @@
   import { commands, execute } from '../lib/commands';
   import Icon from './Icon.svelte';
   import { dialogOut } from '../lib/motion';
+  import { paletteReturn } from '../lib/focus-trap';
 
   let dialog: HTMLDialogElement;
   let input: HTMLInputElement;
@@ -14,6 +15,7 @@
 
   onMount(() => {
     const previous = document.activeElement as HTMLElement | null;
+    paletteReturn.element = previous;
     dialog.showModal();
     input.focus();
     return () => previous?.focus();

@@ -72,6 +72,7 @@ export function describeHistory(history: RepositoryHistory): string {
     case 'unborn': return 'No commits yet';
     case 'detached': return 'Detached HEAD';
     case 'noUpstream': return 'No upstream branch';
+    case 'upstreamGone': return `Upstream ${history.upstream ?? 'branch'} no longer exists`;
     case 'tracking': {
       const upstream = history.upstream ?? 'origin';
       const parts = [history.localTotal && `${history.localTotal} ahead`, history.originTotal && `${history.originTotal} behind`].filter(Boolean);
