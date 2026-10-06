@@ -148,14 +148,14 @@ pub fn metadata_revision(source: &crate::settings::Source) -> Result<u64, String
 
 pub fn invalidate(app: &AppHandle, source_id: &str) {
     let revision = advance_revision(source_id, || {
-        if let Ok(cache) = app.path().app_cache_dir() {
-            let _ = std::fs::remove_file(cache.join(format!("repos-{source_id}.json")));
+        if let Some(store) = app.try_state::<crate::store::Store>() {
+            store.remove_source(source_id);
         }
     });
     let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
 }
 
-fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
+pub(crate) fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
     let mut entries = revisions().lock().unwrap();
     let entry = entries.entry(source_id.into()).or_default();
     entry.value += 1;
