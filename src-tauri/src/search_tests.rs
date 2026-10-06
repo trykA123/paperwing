@@ -228,7 +228,10 @@ async fn a_ref_target_searches_committed_content_and_rejects_bad_refs() {
     assert_eq!((found.len(), found[0].path.as_str()), (1, "f.txt"));
     let (_, working) = run(request(&[&path], "committed"), 4).await;
     assert_eq!(only(&working).status.matches, 0);
-    for bad in ["--output=x", "HEAD", "a..b"] {
+    options.repos[0].git_ref = Some("HEAD".into());
+    let (_, committed) = run(options.clone(), 4).await;
+    assert_eq!(only(&committed).status.state, State::Done);
+    for bad in ["--output=x", "a..b"] {
         options.repos[0].git_ref = Some(bad.into());
         let (summary, payloads) = run(options.clone(), 4).await;
         assert_eq!(

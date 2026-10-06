@@ -171,9 +171,6 @@ pub fn validate_target(target: &RepoTarget, plan: &Plan) -> Result<(), String> {
     if plan.untracked {
         return Err("Untracked files exist only in the working tree".into());
     }
-    if name == "HEAD" {
-        return Err("Choose a branch or tag; HEAD is not accepted".into());
-    }
     valid_ref(name)
 }
 
