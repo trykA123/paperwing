@@ -5,6 +5,9 @@ Editor writes, directional copy, undo and recovery commands remain disabled unti
 packets13–14 integrate the durable journal and fresh authority checks. Windows
 files.rs and file_guard.rs retain their baseline bytes.
 
+Packet15 also uses these guards for [Linux clone/reclone and desktop Trash](linux-folder-workflows.md).
+These folder actions are available on eligible local ext4 roots; editor/copy/recovery commands remain disabled.
+
 ## Supported envelope
 
 The initial write primitives support ordinary, user-owned local ext4 files and

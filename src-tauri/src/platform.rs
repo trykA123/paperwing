@@ -94,7 +94,11 @@ fn capabilities() -> Capabilities {
             edit: unavailable(&unavailable_reason("edit")),
             copy: unavailable(&unavailable_reason("copy")),
             recovery: unavailable(&unavailable_reason("recovery")),
-            trash: unavailable(&unavailable_reason("trash")),
+            trash: if cfg!(target_os = "linux") {
+                available()
+            } else {
+                unavailable(&unavailable_reason("trash"))
+            },
         }
     }
 }
@@ -118,8 +122,12 @@ fn root_capabilities(_path: &Path) -> Capabilities {
     #[cfg(windows)]
     let capabilities = capabilities_with_write_support(capabilities, supported_volume(_path));
     #[cfg(target_os = "linux")]
-    let capabilities = capabilities_with_write_support(capabilities, crate::linux_guard::Root::open(_path, &[])
-        .and_then(|root| root.probe_write()).map_err(|error| error.to_string()));
+    let capabilities = capabilities_with_write_support(
+        capabilities,
+        crate::linux_guard::Root::open(_path, &[])
+            .and_then(|root| root.probe_write())
+            .map_err(|error| error.to_string()),
+    );
     capabilities
 }
 
@@ -307,34 +315,65 @@ pub(crate) fn same_destination(left: &Path, right: &Path) -> Result<bool, String
 
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
-pub fn probe_root(root: String) -> RootSupport { probe_root_sync(root) }
+pub fn probe_root(root: String) -> RootSupport {
+    probe_root_sync(root)
+}
 
 #[cfg(target_os = "linux")]
 #[tauri::command]
-pub async fn probe_root(root: String) -> RootSupport { probe_root_bounded(root, probe_root_sync).await }
+pub async fn probe_root(root: String) -> RootSupport {
+    probe_root_bounded(root, probe_root_sync).await
+}
 
 #[cfg(target_os = "linux")]
-async fn probe_root_bounded(root: String, probe: impl FnOnce(String) -> RootSupport + Send + 'static) -> RootSupport {
-    static SLOTS: std::sync::OnceLock<std::sync::Arc<tokio::sync::Semaphore>> = std::sync::OnceLock::new();
-    let Ok(permit) = SLOTS.get_or_init(|| std::sync::Arc::new(tokio::sync::Semaphore::new(4))).clone().try_acquire_owned() else {
-        return refused_root(root, "Linux root probes are busy. Retry after the current probes finish.");
+async fn probe_root_bounded(
+    root: String,
+    probe: impl FnOnce(String) -> RootSupport + Send + 'static,
+) -> RootSupport {
+    static SLOTS: std::sync::OnceLock<std::sync::Arc<tokio::sync::Semaphore>> =
+        std::sync::OnceLock::new();
+    let Ok(permit) = SLOTS
+        .get_or_init(|| std::sync::Arc::new(tokio::sync::Semaphore::new(4)))
+        .clone()
+        .try_acquire_owned()
+    else {
+        return refused_root(
+            root,
+            "Linux root probes are busy. Retry after the current probes finish.",
+        );
     };
     let failed_root = root.clone();
-    match tauri::async_runtime::spawn_blocking(move || { let _permit = permit; probe(root) }).await {
+    match tauri::async_runtime::spawn_blocking(move || {
+        let _permit = permit;
+        probe(root)
+    })
+    .await
+    {
         Ok(support) => support,
-        Err(_) => refused_root(failed_root, "Linux root probe could not finish. Retry root selection."),
+        Err(_) => refused_root(
+            failed_root,
+            "Linux root probe could not finish. Retry root selection.",
+        ),
     }
 }
 
 #[cfg(target_os = "linux")]
 fn refused_root(root: String, reason: &str) -> RootSupport {
-    RootSupport { root, valid: false, reason: Some(reason.into()), identity: None,
-        case_policy: "unknown", capabilities: refused_capabilities(reason) }
+    RootSupport {
+        root,
+        valid: false,
+        reason: Some(reason.into()),
+        identity: None,
+        case_policy: "unknown",
+        capabilities: refused_capabilities(reason),
+    }
 }
 
 fn probe_root_sync(root: String) -> RootSupport {
     #[cfg(all(target_os = "linux", feature = "test-profile"))]
-    if let Err(reason) = crate::test_profile::root_probe_delay(&root) { return refused_root(root, &reason); }
+    if let Err(reason) = crate::test_profile::root_probe_delay(&root) {
+        return refused_root(root, &reason);
+    }
 
     match native_root(&root).and_then(|()| physical_identity(Path::new(&root))) {
         Ok(identity) => {
@@ -448,7 +487,7 @@ mod tests {
                     "edit": {"supported": false, "reason": "Linux editing requires the later recoverable write backend."},
                     "copy": {"supported": false, "reason": "Linux copying requires the later recoverable copy backend."},
                     "recovery": {"supported": false, "reason": "Linux recovery requires the later recovery backend."},
-                    "trash": {"supported": false, "reason": "Linux folder trash requires the later native trash backend."}
+                    "trash": {"supported": true, "reason": null}
                 }
             })
         );
@@ -485,41 +524,69 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn abandoned_root_probes_hold_the_four_task_limit_until_blocking_cleanup() {
-        let fixture=Fixture::new("probe-limit");let root=fixture.0.to_str().unwrap().to_string();
-        let mut releases=Vec::new();
+        let fixture = Fixture::new("probe-limit");
+        let root = fixture.0.to_str().unwrap().to_string();
+        let mut releases = Vec::new();
         for _ in 0..4 {
-            let (entered,ready)=tokio::sync::oneshot::channel();let (release,blocked)=std::sync::mpsc::channel();
-            let task=tokio::spawn(probe_root_bounded(root.clone(), move |root| {
-                let _=entered.send(());blocked.recv().unwrap();probe_root_sync(root)
+            let (entered, ready) = tokio::sync::oneshot::channel();
+            let (release, blocked) = std::sync::mpsc::channel();
+            let task = tokio::spawn(probe_root_bounded(root.clone(), move |root| {
+                let _ = entered.send(());
+                blocked.recv().unwrap();
+                probe_root_sync(root)
             }));
-            ready.await.unwrap();task.abort();let _=task.await;releases.push(release);
+            ready.await.unwrap();
+            task.abort();
+            let _ = task.await;
+            releases.push(release);
         }
-        let refused=probe_root_bounded(root.clone(), |_| panic!("Fifth blocking probe was admitted")).await;
-        assert!(!refused.valid);assert!(refused.reason.unwrap().contains("busy"));
-        for release in releases { release.send(()).unwrap(); }
-        let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(2);
+        let refused = probe_root_bounded(root.clone(), |_| {
+            panic!("Fifth blocking probe was admitted")
+        })
+        .await;
+        assert!(!refused.valid);
+        assert!(refused.reason.unwrap().contains("busy"));
+        for release in releases {
+            release.send(()).unwrap();
+        }
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
         loop {
-            if probe_root(root.clone()).await.valid { break; }
-            assert!(tokio::time::Instant::now()<deadline);tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            if probe_root(root.clone()).await.valid {
+                break;
+            }
+            assert!(tokio::time::Instant::now() < deadline);
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     }
 
     #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "current_thread")]
     async fn stalled_linux_root_probe_leaves_runtime_responsive() {
-        let fixture=Fixture::new("probe-responsive");let root=fixture.0.to_str().unwrap().to_string();
-        let (entered, ready)=tokio::sync::oneshot::channel();
-        let (started, start)=std::sync::mpsc::channel();let (tick, ticks)=std::sync::mpsc::channel();
-        let (release, blocked)=std::sync::mpsc::channel();
-        let controller=std::thread::spawn(move || {
-            start.recv().unwrap();let responsive=ticks.recv_timeout(std::time::Duration::from_millis(500)).is_ok();
-            release.send(()).unwrap();responsive
+        let fixture = Fixture::new("probe-responsive");
+        let root = fixture.0.to_str().unwrap().to_string();
+        let (entered, ready) = tokio::sync::oneshot::channel();
+        let (started, start) = std::sync::mpsc::channel();
+        let (tick, ticks) = std::sync::mpsc::channel();
+        let (release, blocked) = std::sync::mpsc::channel();
+        let controller = std::thread::spawn(move || {
+            start.recv().unwrap();
+            let responsive = ticks
+                .recv_timeout(std::time::Duration::from_millis(500))
+                .is_ok();
+            release.send(()).unwrap();
+            responsive
         });
-        let probe=tokio::spawn(probe_root_bounded(root, move |root| {
-            started.send(()).unwrap();let _=entered.send(());blocked.recv().unwrap();probe_root_sync(root)
+        let probe = tokio::spawn(probe_root_bounded(root, move |root| {
+            started.send(()).unwrap();
+            let _ = entered.send(());
+            blocked.recv().unwrap();
+            probe_root_sync(root)
         }));
-        ready.await.unwrap();tokio::time::sleep(std::time::Duration::from_millis(5)).await;let _=tick.send(());
-        assert!(probe.await.unwrap().valid);assert!(controller.join().unwrap());
+        ready.await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let _ = tick.send(());
+        assert!(probe.await.unwrap().valid);
+        assert!(controller.join().unwrap());
     }
 
     #[test]

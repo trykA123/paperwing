@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add guarded Linux clone/reclone and desktop Trash with recoverable moves; failed recycling keeps the set until explicit configuration-only removal. Windows behavior is unchanged.
+
 - Add a repository history drawer: open it from the command palette or the details panel to see working tree, local commits, origin commits and the shared base as two rails, with hover and keyboard details. It reads local refs only and never fetches.
 - Redesign notifications and inline alerts: five notification types with status-coloured icon and edge, a Rails loop for loading, and Retry and Show log actions on errors. Errors and loading notices stay until dismissed.
 - Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon. The bundle identifier, settings folder and credential service names are unchanged.

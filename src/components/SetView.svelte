@@ -116,6 +116,18 @@
     const folders = items.filter(item => app.exists[app.dest(item, set.id)]);
     const risky = folders.filter(item => { const l = app.local[app.dest(item, set.id)]; return !!l && (l.dirty > 0 || l.ahead > 0); }).length;
     const trash = app.capability('trash');
+    if (app.nativePlatform === 'linux') {
+      const result = await confirmWith(`Remove the set "${set.name}"? Folders stay on disk unless you choose recycling below. If any requested recycle fails, the set stays configured.`, {
+        title: 'Remove set', kind: 'warning', okLabel: 'Remove configuration only', destructive: true,
+        check: folders.length ? {
+          label: `Also move the ${folders.length} cloned folder${folders.length === 1 ? '' : 's'} to desktop Trash`,
+          okLabel: 'Recycle folders and remove set', disabled: !trash.supported,
+          hint: !trash.supported ? trash.reason ?? 'Folder removal is unavailable.' : risky ? `${risky} folder(s) have uncommitted changes or unpushed commits that move with the folder.` : 'Shared, unsafe or changed folders stay in place.',
+        } : undefined,
+      });
+      if (result.accepted) await app.deleteSet(set.id, result.checked);
+      return;
+    }
     const result = await confirmWith(`Delete the set "${set.name}"? The repositories stay on disk unless you also remove them below.`, {
       title: 'Delete set', kind: 'warning', okLabel: 'Delete', destructive: true,
       check: folders.length ? {

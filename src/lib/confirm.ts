@@ -8,7 +8,7 @@ export type ConfirmOptions = {
   /** Styles the confirm button as a destructive action and focuses Cancel first. */
   destructive?: boolean;
   /** Optional extra choice shown under the message, unchecked by default. */
-  check?: { label: string; hint?: string; disabled?: boolean };
+  check?: { label: string; hint?: string; disabled?: boolean; okLabel?: string };
 };
 export type ConfirmResult = { accepted: boolean; checked: boolean };
 export type ConfirmRequest = ConfirmOptions & { message: string; resolve: (result: ConfirmResult) => void };
