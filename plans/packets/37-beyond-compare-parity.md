@@ -1,6 +1,6 @@
 # 37 — Replace Beyond Compare
 
-Status: partly done (spike measured); editor decision pending owner review of the spike report. Delivered together with 06s.
+Status: ready (owner chose the faster editor, 2026-10-06). Delivered together with 06s.
 Platform: Windows first, Linux parity
 Size: L
 Role: both (editor and engine work first, then integrations)
@@ -17,7 +17,7 @@ Skein does what the owner uses Beyond Compare for, inside Git workflows and on p
 - Missing: three-way merge, sessions, command line and git tool integration, folder sync, binary and image compare, text rules beyond the current set.
 
 ## Decisions
-- Editor choice: pending owner review of the spike report. Do not pick an editor in this packet before that review. Build the editor behind one adapter interface (`src/lib/editor.ts`) so the choice changes one module.
+- Editor choice (owner, 2026-10-06: "take the faster one"): CodeMirror 6 merge view replaces Monaco. Files above 5 MB, or where CodeMirror scrolls below 30 fps, open in the custom renderer read-only with a notice. Build both behind one adapter interface (`src/lib/editor.ts`) so the choice changes one module. Remove `monaco-editor` once nothing imports it.
 - Spike facts for the review (medians, Helium and WebKitGTK):
   - 1 MB file (31k lines): Monaco interactive 274 ms and 494 ms with 508 MB and 923 MB extra memory; CodeMirror merge 101 ms and 155 ms with 101 MB and 66 MB; custom renderer 50 ms and 47 ms.
   - 5 MB: Monaco 382 and 591 ms, 847 and 1271 MB; CodeMirror 214 and 259 ms, scroll 19 and 22 fps; CodeMirror line-level variant scroll 47 and 51 fps.
@@ -45,7 +45,7 @@ Skein does what the owner uses Beyond Compare for, inside Git workflows and on p
 - The write paths themselves (06 and the Linux file service own them); call them.
 
 ## Steps
-1. Owner decides the editor from the spike report. Until then, define the adapter interface and port the current Monaco view onto it. Check: existing compare tests pass; the adapter has a contract test that any editor must pass (save fidelity, BOM and CRLF round trip, change navigation).
+1. Define the adapter interface, port the compare view onto CodeMirror 6 merge view, and add the custom renderer for large files. Check: existing compare tests pass; the adapter has a contract test that any editor must pass (save fidelity, BOM and CRLF round trip, change navigation).
 2. Text rules: ignore whitespace (leading, trailing, all), case, line endings, regex lines; encoding detection and explicit choice; binary or text override. Check: Rust and unit tests on fixtures.
 3. Folder compare: filters (all, differences, same, orphans), name filters and exclude globs, compare by size and time, content, or Git blob id; copy with confirm; sync preview (mirror, update). Check: fixture trees; Windows VM run with long paths.
 4. Three-way merge: base, left, right, output; accept left, right or both per chunk; mark resolved; save through the platform path. Check: fixture conflicts from real Git merges.

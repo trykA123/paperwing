@@ -1,7 +1,5 @@
 # Skein plans
-
 One packet per job in `packets/`, written to [`packets/TEMPLATE.md`](packets/TEMPLATE.md). A packet is a complete brief: an agent in a worktree reads it and the files it names, and needs nothing else. Finished packets are deleted; git history keeps them.
-
 Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise hosts plus github.com). Never hardcode github.com. Publish finished UI prototypes as Artifacts.
 
 ## Ready now
@@ -16,6 +14,8 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 | [29](packets/29-discard-partial-staging.md) | Discard changes and partial staging (backend first) | M |
 | [30](packets/30-auto-refresh.md) | File watcher refresh (timed fetch waits for 19) | M |
 | [24](packets/24-native-artifacts.md) | Native acceptance and honest docs (packaging done) | M |
+| [37](packets/37-beyond-compare-parity.md) | Replace Beyond Compare: CodeMirror 6 + large-file renderer | L |
+| [06s](packets/06s-fullscreen-compare.md) | Full-screen (OS) compare, with 37 | L |
 
 ## In progress
 | Packet | Where |
@@ -29,8 +29,6 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 | [38](packets/38-core-boundaries.md) core boundaries | 34 |
 | [31](packets/31-actions.md) CI runs, GitHub Actions first | 38, 34 |
 | [35](packets/35-jira.md) Jira as IssueProvider | 38, 34 |
-| [37](packets/37-beyond-compare-parity.md) replace Beyond Compare | owner's editor decision (spike report) |
-| [06s](packets/06s-fullscreen-compare.md) full-screen compare | 37's editor decision |
 | [17b](packets/17b-gitoxide.md) gitoxide reads | 17 |
 | [18](packets/18-progressive-contract.md) → [19](packets/19-progressive-backend.md) → [20](packets/20-progressive-frontend.md) progressive results | 17 |
 | [21](packets/21-immutable-cache.md) immutable cache | 17, 20 |
