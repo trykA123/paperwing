@@ -59,3 +59,5 @@ Stop on unproven dominance, semantic drift, an unjustified dependency or any reg
 ## Revision log
 - 2026-10-02: Proposed evidence-selected optimizations, not a mandate to replace Git.
 - 2026-10-05: Windows-first measurement with antivirus on; candidate order numstat batch, then persistent cat-file, then `gix` (separately approved). Rewritten in plain format.
+
+- [REV 2026-10-06] Owner approved the batched-Git direction as the main change: one `rev-parse`, one `diff-tree -r -z --raw -M` streamed as rows, one `diff-tree --numstat` for counts, `ls-tree -r -z` for identical files marked by blob-ID equality (never read), and a persistent `cat-file --batch` for contents and normalised diffs, with raw binary IPC for file bytes. **Phase 2:** in-process object reads and tree diffs with gitoxide (`gix`, pinned) behind the same interface, batched Git kept as the fallback; adopt only where measurements beat phase 1, especially on Windows with Defender. Also per-command `core.fsmonitor`, `core.untrackedCache`, `core.preloadIndex` and `core.fscache` for working-tree status, without changing global config, and optional `--filter=blob:none` clones.
