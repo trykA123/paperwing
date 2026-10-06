@@ -3,13 +3,15 @@ import type { SetItem } from './api';
 import { app } from './state.svelte';
 import { historyDrawer } from './history-drawer.svelte';
 import { paletteReturn } from './focus-trap';
+import { railShortcut } from './rail';
 
 export type Command = { id: string; label: string; icon: IconName; tone?: IconTone; enabled: boolean; reason?: string | null; run: () => void | Promise<void> };
 
 export function commands(items: SetItem[] = app.actionItems): Command[] {
   const local = items.filter(item => app.local[app.dest(item)]?.repo);
-  const behind = local.filter(item => (app.local[app.dest(item)]?.behind ?? 0) > 0);
-  const offRef = local.filter(item => !app.onRef(item));
+  const managed = local.filter(item => !item.path);
+  const behind = managed.filter(item => (app.local[app.dest(item)]?.behind ?? 0) > 0);
+  const offRef = managed.filter(item => !app.onRef(item));
   const pushable = local.filter(item => { const l = app.local[app.dest(item)]; return !!l?.branch && (l.ahead > 0 || !l.upstream); });
   const idle = !app.running && !app.clonePreparing && !app.gitBusy && app.ready;
   const rootIdle = idle && app.rootSupport.valid;
@@ -47,13 +49,13 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
       run: () => { app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark'; } },
     { id: 'status', label: 'Refresh local status', icon: 'refresh', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length,
       run: () => app.checkExists(items.map(item => app.dest(item))) },
-    { id: 'compare', label: 'Compare repository refs', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length,
+    { id: 'compare', label: 'Compare repository refs', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length && !items[0]?.path,
       run: () => app.openCompare(items[0]) },
-    { id: 'set-compare', label: 'Compare every repository across set', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!app.set.items.length, run: () => app.openSetCompare() },
-    { id: 'clone', label: `Clone ${items.length} repositories`, icon: 'folder', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length,
+    { id: 'set-compare', label: 'Compare every repository across set', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!app.set.items.length && !app.set.items.some(item => item.path), run: () => app.openSetCompare() },
+    { id: 'clone', label: `Clone ${items.length} repositories`, icon: 'folder', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length && !items.some(item => item.path),
       run: () => app.startClone(items) },
-    { id: 'fetch', label: `Fetch ${local.length} repositories`, icon: 'refresh', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!local.length,
-      run: () => app.startClone(local, 'fetch') },
+    { id: 'fetch', label: `Fetch ${managed.length} repositories`, icon: 'refresh', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!managed.length,
+      run: () => app.startClone(managed, 'fetch') },
     { id: 'pull', label: `Pull ${behind.length} repositories (fast-forward)`, icon: 'download', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!behind.length,
       run: () => app.startClone(behind, 'pull') },
     { id: 'switch', label: `Switch ${offRef.length} repositories to checkout ref`, icon: 'branch', tone: 'branch' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!offRef.length,
@@ -72,6 +74,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
 
 export function shortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): string | undefined {
   const control = event.ctrlKey || event.metaKey;
+  if (control && !event.altKey && !event.shiftKey && railShortcut(event.key)) return `rail-${event.key}`;
   if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Tab') return event.shiftKey ? 'tab-previous' : 'tab-next';
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'w') return 'tab-close';
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') return 'editor-save';

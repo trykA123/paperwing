@@ -8,8 +8,6 @@
   import { app } from './lib/state.svelte';
   import { commands, execute, shortcut } from './lib/commands';
   import { applyAppearance, onSystemThemeChange } from './lib/appearance';
-  import Sidebar from './components/Sidebar.svelte';
-  import BrandMark from './components/BrandMark.svelte';
   import SetView from './components/SetView.svelte';
   import RepoList from './components/RepoList.svelte';
   import RightPanel from './components/RightPanel.svelte';
@@ -18,7 +16,6 @@
   import Tooltip from './components/Tooltip.svelte';
   import Tabs from './components/Tabs.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
-  import ActivityDrawer from './components/ActivityDrawer.svelte';
   import Icon from './components/Icon.svelte';
   import FolderCompare from './components/FolderCompare.svelte';
   import CompareDetails from './components/CompareDetails.svelte';
@@ -32,9 +29,10 @@
   import { historyDrawer } from './lib/history-drawer.svelte';
   import { confirmQueue } from './lib/confirm';
   import SetCompare from './components/SetCompare.svelte';
-  import { OpenFolderStore, tauriTransport } from './lib/open-folder.svelte';
+  import ActivityRail from './components/ActivityRail.svelte';
+  import SidePanel from './components/SidePanel.svelte';
+  import { RAIL_SECTIONS, railShortcut } from './lib/rail';
 
-  const openFolder = new OpenFolderStore(tauriTransport, (message, kind) => app.toast(message, kind));
   const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings');
   const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
   let reducedMotion = $state(false), panelsMoving = $state(false);
@@ -61,6 +59,14 @@
     }
     const id = shortcut(event);
     if (!id) return;
+    if (id.startsWith('rail-')) {
+      if (!app.ready) return;
+      event.preventDefault(); event.stopPropagation();
+      const target = railShortcut(id.slice(5));
+      if (target === 'settings') app.openView({ kind: 'settings' });
+      else if (target) Object.assign(app.ws.shell, { section: target, sidebarVisible: true });
+      return;
+    }
     if (id.startsWith('tab-')) {
       if (app.paletteOpen || !app.ready) return;
       event.preventDefault(); event.stopPropagation();
@@ -84,7 +90,7 @@
     updateMotion(); motion.addEventListener('change', updateMotion);
     window.addEventListener('keydown', onKey, true);
     app.init().catch(e => app.toast(`Could not load settings: ${e}`, 'error'));
-    if (isTauri()) openFolder.start().catch(e => app.toast(`Could not listen for launch requests: ${e}`, 'error'));
+    if (isTauri()) app.temporary.start().catch(e => app.toast(`Could not listen for launch requests: ${e}`, 'error'));
     let disposed = false, closing = false;
     let unlisten: (() => void) | undefined;
     if (isTauri()) getCurrentWindow().onCloseRequested(async event => {
@@ -97,7 +103,7 @@
         await getCurrentWindow().destroy();
       } catch (reason) { app.toast(String(reason), 'error'); } finally { closing = false; }
     }).then(stop => { if (disposed) stop(); else unlisten = stop; }).catch(reason => app.toast(String(reason), 'error'));
-    return () => { disposed = true; unlisten?.(); openFolder.stop(); window.removeEventListener('keydown', onKey, true); motion.removeEventListener('change', updateMotion); };
+    return () => { disposed = true; unlisten?.(); app.temporary.stop(); window.removeEventListener('keydown', onKey, true); motion.removeEventListener('change', updateMotion); };
   });
 
   $effect(() => applyAppearance(app.ws.theme, app.ws.uiFont, app.ws.codeFont));
@@ -127,7 +133,7 @@
 
   // Keep "already on disk" markers in sync with the destination.
   $effect(() => {
-    if (benchmarkEnabled || !app.ready || !app.rootSupport.valid) return;
+    if (benchmarkEnabled || !app.ready || !(app.rootSupport.valid || app.isTemporary)) return;
     const dests = app.set.items.map(i => app.dest(i));
     const t = setTimeout(() => {
       void app.checkExists(dests);
@@ -141,10 +147,11 @@
 
 <div id="shell" class:noright={!rightVisible} class:noside={!app.ws.shell.sidebarVisible} class:panels-moving={panelsMoving}
   style:--lw="{app.ws.shell.sidebarVisible ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
-  <div class="shell-brand"><BrandMark busy={gitBusy} /><span>Skein</span></div>
+  <ActivityRail {gitBusy} />
+  <div class="shell-brand"><span>{RAIL_SECTIONS.find(entry => entry.id === app.ws.shell.section)?.label}</span></div>
   <Tabs />
   <div class="shell-side" inert={!app.ws.shell.sidebarVisible} aria-hidden={!app.ws.shell.sidebarVisible} style:--panel-width="{app.ws.shell.sidebarWidth}px">
-    {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><Sidebar /></div>{/if}
+    {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
   </div>
   <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings'}>
     {#if !app.ready}
@@ -177,7 +184,6 @@
       </span>
     {:else}<span><span class="dot d-done"></span>Ready</span>{/if}
     <button title="Toggle Git activity" aria-expanded={app.activityOpen} onclick={() => (app.activityOpen = !app.activityOpen)}><Icon name="activity" /> Activity · {app.activity.length}{#if failedRuns}<span class="badge-err">{failedRuns} failed</span>{/if}</button></footer>
-  {#if app.activityOpen}<ActivityDrawer />{/if}
   {#if historyDrawer.target}{#key historyDrawer.target.path}<HistoryDrawer target={historyDrawer.target} />{/key}{/if}
 </div>
 {#if app.paletteOpen}<CommandPalette />{/if}

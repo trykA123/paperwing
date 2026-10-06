@@ -110,10 +110,13 @@ export type SetItem = {
   id: string; repoId: string; url: string; org: string; name: string; ref: Ref; on: boolean;
   /** Clone into this folder instead of the repo name (lets one repo be cloned several times). */
   folder?: string;
+  /** A folder opened in place (Open with Skein): this exact path, never derived from the destination root. */
+  path?: string;
 };
 export type RepoSet = { id: string; name: string; items: SetItem[] };
 export type ColWidths = { repo: number; checkout: number; local: number; status: number };
-export type ShellLayout = { version: 1; sidebarWidth: number; sidebarVisible: boolean; rightVisible: boolean };
+export type RailSection = 'sets' | 'compare' | 'recovery' | 'activity';
+export type ShellLayout = { version: 1; sidebarWidth: number; sidebarVisible: boolean; rightVisible: boolean; section: RailSection };
 export type Workspace = {
   sets: RepoSet[]; stars: string[]; activeSet: string; root: string; layout: 'flat' | 'custom'; pathTemplate: string;
   cols: ColWidths;

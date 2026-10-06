@@ -1,15 +1,20 @@
 import { listen } from '@tauri-apps/api/event';
 import { api, events } from './api';
-import type { DiscoverBatch, DiscoverDone, DiscoverSummary, FoundRepo, LaunchAction, LaunchRequest } from './api';
-import type { NoticeKind } from './notifications.svelte';
+import type { DiscoverBatch, DiscoverDone, DiscoverSummary, LaunchAction, LaunchRequest, SetItem } from './api';
+import type { FoundRepo } from './api';
+import type { NoticeAction, NoticeKind } from './notifications.svelte';
+import { toSetItem } from './temporary-set';
 
 export type TempSet = {
-  id: string; scanId: number; name: string; path: string; repos: FoundRepo[];
+  id: string; scanId: number; name: string; path: string; repos: FoundRepo[]; items: SetItem[];
+  /** True when the opened folder is itself a repository; the set then holds only that repository. */
+  isRepository: boolean;
   scanning: boolean; capped: DiscoverSummary['capped']; cancelled: boolean; summary: DiscoverSummary | null;
 };
+export type LaunchHooks = { opened?: (set: TempSet) => void; repository?: (set: TempSet) => void; reveal?: (set: TempSet) => void };
 export type FolderCompareRequest = { left: string; right: string };
 export type ScanEvent = { type: 'batch'; batch: DiscoverBatch } | { type: 'done'; done: DiscoverDone };
-export type Notify = (message: string, kind: NoticeKind) => void;
+export type Notify = (message: string, kind: NoticeKind, action?: NoticeAction) => void;
 export type Transport = {
   drainRequests: () => Promise<LaunchRequest[]>;
   startScan: (path: string) => Promise<number>;
@@ -53,6 +58,7 @@ export class OpenFolderStore {
   compare = $state<FolderCompareRequest | null>(null);
   private readonly transport: Transport;
   private readonly notify: Notify;
+  private readonly hooks: LaunchHooks;
   private readonly early = new Map<number, ScanEvent[]>();
   private readonly known = new Map<number, Set<string>>();
   private readonly dismissed = new Set<number>();
@@ -60,9 +66,10 @@ export class OpenFolderStore {
   private active = false;
   private starting = 0;
 
-  constructor(transport: Transport, notify: Notify) {
+  constructor(transport: Transport, notify: Notify, hooks: LaunchHooks = {}) {
     this.transport = transport;
     this.notify = notify;
+    this.hooks = hooks;
   }
 
   async start(): Promise<void> {
@@ -96,9 +103,10 @@ export class OpenFolderStore {
     this.starting += 1;
     try {
       const scanId = await this.transport.startScan(path);
-      const set: TempSet = { id: `temp-${scanId}`, scanId, name: folderName(path), path, repos: [], scanning: true, capped: null, cancelled: false, summary: null };
+      const set: TempSet = { id: `temp-${scanId}`, scanId, name: folderName(path), path, repos: [], items: [], isRepository: false, scanning: true, capped: null, cancelled: false, summary: null };
       this.sets.push(set);
       this.known.set(scanId, new Set());
+      this.hooks.opened?.(this.sets.find(entry => entry.id === set.id) ?? set);
       for (const event of this.early.get(scanId) ?? []) this.apply(event);
       this.early.delete(scanId);
       return this.sets.find(entry => entry.id === set.id) ?? null;
@@ -153,10 +161,18 @@ export class OpenFolderStore {
     const seen = this.known.get(set.scanId) ?? new Set<string>();
     this.known.set(set.scanId, seen);
     for (const repo of repos) {
-      if (seen.has(repo.path)) continue;
+      if (set.isRepository || seen.has(repo.path)) continue;
       seen.add(repo.path);
-      set.repos.push(repo);
+      if (repo.path === set.path) this.becomeRepository(set, repo);
+      else { set.repos.push(repo); set.items.push(toSetItem(repo)); }
     }
+  }
+
+  private becomeRepository(set: TempSet, repo: FoundRepo): void {
+    set.isRepository = true;
+    set.repos = [repo];
+    set.items = [toSetItem(repo)];
+    this.hooks.repository?.(set);
   }
 
   private finish(set: TempSet, summary: DiscoverSummary): void {
@@ -164,6 +180,7 @@ export class OpenFolderStore {
     set.summary = summary;
     set.capped = summary.capped;
     set.cancelled = summary.cancelled;
-    if (!summary.cancelled) this.notify(describeScan(set), set.capped ? 'warn' : 'info');
+    if (summary.cancelled) return;
+    this.notify(describeScan(set), set.capped ? 'warn' : 'info', { label: 'Open', run: () => this.hooks.reveal?.(set) });
   }
 }

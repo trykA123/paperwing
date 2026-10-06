@@ -27,8 +27,8 @@ describe('P1 saved workspace', () => {
   test('defaults are complete and pane preferences survive reload', () => {
     const defaults = defaultWorkspace();
     expect(defaults.root).toBe('C:\\Dev\\repos');
-    expect(defaults.shell).toEqual({ version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true });
-    defaults.shell = { version: 1, sidebarWidth: 300, sidebarVisible: false, rightVisible: false };
+    expect(defaults.shell).toEqual({ version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: 'sets' });
+    defaults.shell = { version: 1, sidebarWidth: 300, sidebarVisible: false, rightVisible: false, section: 'activity' };
     expect(migrateWorkspace(JSON.parse(JSON.stringify(defaults)))).toEqual(defaults);
   });
 
