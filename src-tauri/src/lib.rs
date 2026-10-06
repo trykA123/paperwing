@@ -3,6 +3,7 @@ mod benchmark;
 #[cfg(feature = "test-profile")]
 mod test_profile;
 mod clone;
+mod branch_cleanup;
 mod commit;
 mod tags;
 mod compare;
@@ -155,6 +156,9 @@ pub fn run() {
             stash::stash_drop,
             stash::stash_show,
             stash::switch_with_stash,
+            branch_cleanup::merged_branches,
+            branch_cleanup::delete_merged_branches,
+            branch_cleanup::delete_remote_branches,
             trash::trash_set_folders,
             compare::comparison_open,
             compare::comparison_refresh,
