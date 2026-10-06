@@ -1,9 +1,12 @@
-#[cfg(any(windows, test))]
+#[cfg(target_os = "linux")]
+mod linux;
+
+#[cfg(any(windows, target_os = "linux", test))]
 use crate::settings::Settings;
 use serde::Serialize;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "linux", test))]
 use std::collections::HashSet;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "linux", test))]
 use std::path::Path;
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -16,14 +19,14 @@ pub struct TrashOutcome {
     reason: Option<String>,
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "linux", test))]
 fn outcome(item_id: &str, path: &Path, state: &str, reason: Option<String>) -> TrashOutcome {
     TrashOutcome { item_id: item_id.into(), path: path.to_string_lossy().into_owned(), state: state.into(), reason }
 }
 
 /// Moves each cloned folder of a saved set to the Recycle Bin. Only registered, plain Git repositories
 /// that no other set uses are touched; anything else is reported and left alone.
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "linux", test))]
 fn trash_folders(settings: &Settings, set_id: &str, recycle: impl Fn(&Path) -> Result<(), String>) -> Result<Vec<TrashOutcome>, String> {
     let (own, others) = crate::compare::set_roots(settings, set_id)?;
     let mut seen = HashSet::new();
@@ -80,7 +83,26 @@ pub async fn trash_set_folders(app: tauri::AppHandle, set_id: String) -> Result<
         .map_err(|_| "Could not move the folders".to_string())?
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub async fn trash_set_folders(
+    app: tauri::AppHandle,
+    set_id: String,
+) -> Result<Vec<TrashOutcome>, String> {
+    let exclusive = crate::git::filesystem_gate().write().await;
+    if crate::clone::busy() {
+        return Err("A clone, fetch or pull is running; try again when it finishes".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let _exclusive = exclusive;
+        let settings = crate::settings::load_settings(app)?;
+        linux::trash_folders(&settings, &set_id, &linux::data_home()?)
+    })
+    .await
+    .map_err(|_| "Could not move the folders".to_string())?
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 #[tauri::command]
 pub async fn trash_set_folders(set_id: String) -> Result<Vec<TrashOutcome>, String> {
     let _ = set_id;
@@ -150,7 +172,7 @@ mod tests {
         assert_eq!(moved.borrow().as_slice(), [fixture.0.join("Folder")]);
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     #[tokio::test]
     async fn direct_trash_call_refuses_without_loading_or_mutating_settings() {
         assert_eq!(trash_set_folders("arbitrary-set".into()).await.unwrap_err(), crate::platform::unavailable_reason("trash"));

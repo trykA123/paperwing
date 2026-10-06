@@ -543,3 +543,54 @@ test('P3 overlapping opens close abandoned backend sessions and unavailable stay
         expect(state.id).toBeNull();
     });
 });
+
+test('Linux failed or partial recycling keeps configuration until configuration-only removal', async () => {
+    const previous = { ws: app.ws, tabs: app.tabs, active: app.activeTabId, platform: app.platform, probes: app.rootProbes, busy: app.gitBusy, exists: app.exists, local: app.local, window: globalThis.window };
+    const calls = [];
+    globalThis.window = { crypto: globalThis.crypto };
+    try {
+        app.platform = { ...windowsPlatform, platform: 'linux', separator: '/' };
+        app.ws = { ...app.ws, root: '/fixture', activeSet: 'owner', sets: [
+            { id: 'owner', name: 'Owner', items: [{ id: 'item', name: 'repo', url: 'u', ref: { type: 'branch', name: 'main' } }] },
+            { id: 'other', name: 'Other', items: [] },
+        ] };
+        app.rootProbes = { '/fixture': supportedRoot('/fixture') };
+        app.tabs = []; app.gitBusy = false;
+        for (const state of ['failed', 'skipped']) {
+            mockIPC((command) => {
+                calls.push(command);
+                if (command === 'trash_set_folders') return [{ itemId: 'item', path: '/fixture/repo', state, reason: 'guard refused' }, { itemId: 'moved', path: '/fixture/moved', state: 'trashed', reason: null }];
+                if (command === 'local_status') return [];
+                return true;
+            });
+            await app.deleteSet('owner', true);
+            expect(app.ws.sets.some(set => set.id === 'owner')).toBe(true);
+            expect(app.ws.activeSet).toBe('owner');
+            expect(app.gitBusy).toBe(false);
+        }
+        calls.length = 0;
+        await app.deleteSet('owner', false);
+        expect(app.ws.sets.some(set => set.id === 'owner')).toBe(false);
+        expect(calls).not.toContain('trash_set_folders');
+    } finally {
+        app.ws = previous.ws; app.tabs = previous.tabs; app.activeTabId = previous.active; app.platform = previous.platform; app.rootProbes = previous.probes; app.gitBusy = previous.busy; app.exists = previous.exists; app.local = previous.local;
+        clearMocks(); if (previous.window === undefined) delete globalThis.window; else globalThis.window = previous.window;
+    }
+});
+
+test('Windows partial-recycle configuration behavior stays unchanged', async () => {
+    const previous = { ws: app.ws, tabs: app.tabs, active: app.activeTabId, platform: app.platform, probes: app.rootProbes, window: globalThis.window };
+    globalThis.window = { crypto: globalThis.crypto };
+    mockIPC(command => command === 'trash_set_folders' ? [{ itemId: 'item', path: 'C:\\fixture\\repo', state: 'failed', reason: 'fixture failure' }] : true);
+    try {
+        app.platform = windowsPlatform;
+        app.ws = { ...app.ws, root: 'C:\\fixture', activeSet: 'owner', sets: [{ id: 'owner', name: 'Owner', items: [] }, { id: 'other', name: 'Other', items: [] }] };
+        app.rootProbes = { 'C:\\fixture': supportedRoot('C:\\fixture') };
+        app.tabs = [];
+        await app.deleteSet('owner', true);
+        expect(app.ws.sets.some(set => set.id === 'owner')).toBe(false);
+    } finally {
+        app.ws = previous.ws; app.tabs = previous.tabs; app.activeTabId = previous.active; app.platform = previous.platform; app.rootProbes = previous.probes;
+        clearMocks(); if (previous.window === undefined) delete globalThis.window; else globalThis.window = previous.window;
+    }
+});

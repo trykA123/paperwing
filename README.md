@@ -476,7 +476,9 @@ bun run --bun tauri build --no-bundle -- --offline --locked
 
 Linux supports native root selection, physical identity, comparisons and recoverable file writes.
 Existing Windows roots remain saved until you explicitly choose a native folder. Editing,
-directional copies and undo require supported roots; folder trash remains unavailable. Linux
+directional copies and undo require supported roots. Linux clone/reclone and
+[desktop Trash](docs/linux-folder-workflows.md) use guarded local ext4 moves. A failed
+recycle keeps the set until explicit configuration-only removal. Linux
 credentials use a persistent desktop Secret Service store, with private native restart and
 error-path evidence. Configure the store separately; the app does not activate a wallet.
 Git operations stop helpers within their owned process group and finish output cleanup

@@ -36,6 +36,6 @@
   <footer>
     <span class="grow"></span>
     <button class="btn" bind:this={cancelButton} onclick={() => answer(false)}>{request.cancelLabel ?? 'Cancel'}</button>
-    <button class="btn {request.destructive ? 'danger' : 'dark'}" bind:this={okButton} onclick={() => answer(true, checked && !request.check?.disabled)}>{request.okLabel ?? 'OK'}</button>
+    <button class="btn {request.destructive ? 'danger' : 'dark'}" bind:this={okButton} onclick={() => answer(true, checked && !request.check?.disabled)}>{checked && !request.check?.disabled ? request.check?.okLabel ?? request.okLabel ?? 'OK' : request.okLabel ?? 'OK'}</button>
   </footer>
 </dialog>

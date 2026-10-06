@@ -1,8 +1,15 @@
-use crate::git::{buffered, execute, safe, valid_path, valid_ref, valid_root, valid_url, OutputPolicy, Request};
+#[cfg(not(target_os = "linux"))]
+use crate::git::{buffered, valid_root};
+use crate::git::{execute, safe, valid_path, valid_ref, valid_url, OutputPolicy, Request};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+#[cfg(not(target_os = "linux"))]
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(target_os = "linux")]
+mod linux;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Semaphore;
 
@@ -140,6 +147,7 @@ fn repo_key(url: &str) -> String {
     u.trim_end_matches('/').trim_end_matches(".git").to_string()
 }
 
+#[cfg(not(target_os = "linux"))]
 async fn check_origin(dir: &str, expected: &str) -> Result<(), String> {
     valid_root(dir)?;
     let out = buffered(&["-C", dir, "remote", "get-url", "origin"], &format!("Origin check: {dir}"), &[0]).await?;
@@ -153,6 +161,7 @@ async fn check_origin(dir: &str, expected: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(target_os = "linux"))]
 async fn open_existing(job: &Job) -> Result<(), String> {
     let dest = Path::new(&job.dest);
     if !dest.join(".git").exists() {
@@ -161,12 +170,14 @@ async fn open_existing(job: &Job) -> Result<(), String> {
     check_origin(&job.dest, &job.url).await
 }
 
+#[cfg(not(target_os = "linux"))]
 async fn fetch_existing(app: &AppHandle, job: &Job) -> Result<(), String> {
     emit(app, &job.id, "fetching", 0.0, "Fetching origin");
     run(app, job, "fetching", &["-C", &job.dest, "fetch", "--progress", "--tags", "--prune", "origin"]).await
 }
 
 /// Fetch, check out the job's ref and fast-forward it (used for "Switch" and "Fetch & checkout").
+#[cfg(not(target_os = "linux"))]
 async fn switch_existing(app: &AppHandle, job: &Job) -> Result<(&'static str, String), String> {
     open_existing(job).await?;
     let d = job.dest.as_str();
@@ -196,6 +207,7 @@ fn interrupted(error: &str) -> bool {
     error == "Git command cancelled" || error == "Git command timed out"
 }
 
+#[cfg(not(target_os = "linux"))]
 async fn pull_existing(app: &AppHandle, job: &Job) -> Result<(&'static str, String), String> {
     open_existing(job).await?;
     fetch_existing(app, job).await?;
@@ -206,6 +218,7 @@ async fn pull_existing(app: &AppHandle, job: &Job) -> Result<(&'static str, Stri
     Ok(("done", "Up to date with upstream".into()))
 }
 
+#[cfg(not(target_os = "linux"))]
 async fn run_job(app: &AppHandle, job: &Job, opts: &Opts) -> Result<(&'static str, String), String> {
     validate(job)?;
     let dest = PathBuf::from(&job.dest);
@@ -280,6 +293,7 @@ async fn run_job(app: &AppHandle, job: &Job, opts: &Opts) -> Result<(&'static st
     Ok(("done", done))
 }
 
+#[cfg(any(not(target_os = "linux"), test))]
 fn validate_jobs(settings: &crate::settings::Settings, jobs: &[Job]) -> Result<(), String> {
     let mut destinations = std::collections::HashSet::new();
     for job in jobs {
@@ -292,6 +306,7 @@ fn validate_jobs(settings: &crate::settings::Settings, jobs: &[Job]) -> Result<(
     Ok(())
 }
 
+#[cfg(not(target_os = "linux"))]
 #[tauri::command]
 pub fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<String>) -> Result<(), String> {
     let settings = crate::settings::load_settings(app.clone())?;
@@ -339,6 +354,74 @@ pub fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<Stri
             .collect();
         for h in handles {
             let _ = h.await;
+        }
+        let _ = app.emit("clone-finished", ());
+    });
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub async fn start_clone(
+    app: AppHandle,
+    jobs: Vec<Job>,
+    opts: Opts,
+    mode: Option<String>,
+) -> Result<(), String> {
+    let mode = mode.unwrap_or_else(|| "clone".into());
+    if !["clone", "fetch", "pull", "switch"].contains(&mode.as_str()) {
+        return Err("Unknown clone mode".into());
+    }
+    if !["skip", "fetch", "reclone"].contains(&opts.on_existing.as_str()) {
+        return Err("Unknown 'if folder exists' option".into());
+    }
+    let lease = Lease::acquire()?;
+    let worker_app = app.clone();
+    let admission_mode = mode.clone();
+    let (lease, admissions) = tauri::async_runtime::spawn_blocking(move || {
+        let settings = crate::settings::load_settings(worker_app)?;
+        let admissions = linux::admit_jobs(&settings, jobs, &admission_mode);
+        Ok::<_, String>((lease, admissions))
+    })
+    .await
+    .map_err(|_| "Could not validate Linux clone folders")??;
+    let sem = Arc::new(Semaphore::new(opts.parallel.clamp(1, 16)));
+    tauri::async_runtime::spawn(async move {
+        let _lease = lease;
+        let mut handles = Vec::new();
+        for (job, admission) in admissions {
+            let admission = match admission {
+                Ok(admission) => admission,
+                Err(error) => {
+                    emit(&app, &job.id, "failed", 0.0, error);
+                    continue;
+                }
+            };
+            let (app, opts, mode, sem) = (app.clone(), opts.clone(), mode.clone(), sem.clone());
+            handles.push(tauri::async_runtime::spawn(async move {
+                let _permit = sem.acquire_owned().await;
+                let job = admission.job.clone();
+                emit(&app, &job.id, "resolving", 0.0, "Starting");
+                let worker_app = app.clone();
+                let result = tauri::async_runtime::spawn_blocking(move || {
+                    tauri::async_runtime::block_on(linux::run_job(
+                        &worker_app,
+                        admission,
+                        &opts,
+                        &mode,
+                    ))
+                })
+                .await
+                .map_err(|_| "Linux clone worker could not finish".to_string())
+                .and_then(|result| result);
+                match result {
+                    Ok((phase, message)) => emit(&app, &job.id, phase, 100.0, message),
+                    Err(error) => emit(&app, &job.id, "failed", 0.0, error),
+                }
+            }));
+        }
+        for handle in handles {
+            let _ = handle.await;
         }
         let _ = app.emit("clone-finished", ());
     });

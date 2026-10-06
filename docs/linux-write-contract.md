@@ -3,6 +3,9 @@
 Packet 08 is a research and prototype gate. Linux recoverable writes remain unavailable.
 Packet 09 depends on this contract. Windows write code and recovery readers remain unchanged.
 
+Packet15 implements guarded [clone/reclone and desktop Trash](linux-folder-workflows.md)
+within these practical race limits. Linux recoverable file-write commands remain unavailable.
+
 The existing source protects saves, filesystem copies and undo with Windows-specific handles
 and transactions. Standard Linux resolution, rename and advisory-lock primitives do not
 establish the same protection against concurrent writers or moved directories. This is a

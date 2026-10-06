@@ -515,8 +515,11 @@ class AppState {
         const outcomes = await api.trashSetFolders(id);
         const moved = outcomes.filter(outcome => outcome.state === 'trashed').length;
         const kept = outcomes.filter(outcome => outcome.state === 'skipped' || outcome.state === 'failed');
-        if (moved) this.toast(`Moved ${moved} folder${moved === 1 ? '' : 's'} to the Recycle Bin`, 'success');
-        if (kept.length) this.toast(`${kept.length} folder${kept.length === 1 ? ' was' : 's were'} left in place. ${kept[0].reason ?? ''}`, 'warn');
+        if (moved) this.toast(`Moved ${moved} folder${moved === 1 ? '' : 's'} to the ${this.nativePlatform === 'linux' ? 'desktop Trash' : 'Recycle Bin'}`, 'success');
+        if (kept.length) {
+          this.toast(this.nativePlatform === 'linux' ? `${kept.length} folder operation${kept.length === 1 ? ' was' : 's were'} skipped or failed. ${kept[0].reason ?? ''} The set stays configured. Choose Remove configuration only to remove it.` : `${kept.length} folder${kept.length === 1 ? ' was' : 's were'} left in place. ${kept[0].reason ?? ''}`, 'warn');
+          if (this.nativePlatform === 'linux') { await this.checkExists(this.ws.sets.find(set => set.id === id)?.items.map(item => this.dest(item, id)) ?? []); return; }
+        }
       } catch (reason) {
         this.toast(String(reason), 'error');
         return;
@@ -689,7 +692,7 @@ class AppState {
       if (mode === 'clone' && this.ws.onExisting === 'reclone') {
         const n = jobs.filter(j => this.exists[j.dest]).length;
         const ok = !n || await confirm(
-          `${n} folder(s) already exist. They will be renamed to <name>.bak-<timestamp> and cloned fresh.`,
+          this.nativePlatform === 'linux' ? `${n} folder(s) already exist. They will be preserved at unique sibling paths and cloned fresh. Preserved folders are never cleaned up automatically.` : `${n} folder(s) already exist. They will be renamed to <name>.bak-<timestamp> and cloned fresh.`,
           { title: 'Re-clone', kind: 'warning', okLabel: 'Re-clone', destructive: true });
         if (!ok) return;
       }
