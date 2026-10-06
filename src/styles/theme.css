@@ -121,14 +121,9 @@
     background: var(--soft);
 }
 
-[data-theme="dark"] .banner.err,
 [data-theme="dark"] .x:hover {
     background: color-mix(in oklch, var(--err) 12%, var(--panel));
     color: var(--err-text);
-}
-
-[data-theme="dark"] .banner.info {
-    color: var(--acc);
 }
 
 [data-theme="dark"] .srow,

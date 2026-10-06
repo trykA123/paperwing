@@ -4,6 +4,7 @@
   import { app } from '../lib/state.svelte';
   import { dialogOut } from '../lib/motion';
   import Icon from './Icon.svelte';
+  import Alert from './Alert.svelte';
   import RefSelect, { type RefGroup } from './RefSelect.svelte';
 
   let { request }: { request: NonNullable<typeof app.gitDialog> } = $props();
@@ -137,7 +138,7 @@
     <label class="fld"><span>Branch name</span>
       <input bind:this={input} bind:value={name} placeholder="feature/my-change" spellcheck="false" autocomplete="off" disabled={busy} />
     </label>
-    {#if problem}<div class="banner warn">{problem}</div>{/if}
+    {#if problem}<Alert kind="warn">{problem}</Alert>{/if}
 
     <div class="fld"><label for="branch-start"><span>Start from <em class="mut">{many ? 'must exist in every repository; defaults to each current commit' : `defaults to the current commit${local?.branch ? ` (${local.branchLabel ?? local.branch})` : ''}`}</em></span></label>
       <RefSelect id="branch-start" bind:value={start} {groups} placeholder="HEAD" disabled={busy} />
@@ -150,14 +151,14 @@
           <input id="branch-folder" bind:value={folderInput} placeholder={defaultFolder || 'folder-name'} spellcheck="false" autocomplete="off" disabled={busy} />
           <small class="hint">{request.name} stays on its current branch. A new copy is cloned into <code>{folder || '…'}</code>, switched to {clean || 'the new branch'}, and added to this set as its own row.</small>
         </div>
-        {#if folderProblem}<div class="banner warn">{folderProblem}</div>{/if}
+        {#if folderProblem}<Alert kind="warn">{folderProblem}</Alert>{/if}
         {#if busy}<p class="hint"><span class="spin"></span> {app.running ? 'Cloning the copy…' : 'Working…'}</p>{/if}
       {/if}
     {/if}
 
     {#if !separate}<label class="check"><input type="checkbox" bind:checked={switchTo} disabled={busy} /> Switch to the new branch</label>{/if}
-    {#if !separate && switchTo && dirtyRepos}<div class="banner info">Uncommitted changes in {dirtyRepos} {dirtyRepos === 1 ? 'repository' : 'repositories'} will come with you to the new branch.</div>{/if}
-    {#if error}<div class="banner err" role="alert">{error}</div>{/if}
+    {#if !separate && switchTo && dirtyRepos}<Alert kind="info">Uncommitted changes in {dirtyRepos} {dirtyRepos === 1 ? 'repository' : 'repositories'} will come with you to the new branch.</Alert>{/if}
+    {#if error}<Alert kind="err" role="alert">{error}</Alert>{/if}
 
     <footer>
       <span class="hint">The branch is created locally; nothing is pushed.</span>

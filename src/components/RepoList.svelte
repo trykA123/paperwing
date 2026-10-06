@@ -6,6 +6,7 @@
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
   import Icon from './Icon.svelte';
+  import Alert from './Alert.svelte';
   import EmptyState from './EmptyState.svelte';
   import Skeleton from './Skeleton.svelte';
 
@@ -65,7 +66,7 @@
   </div>
 </header>
 
-{#if errors.length}<div class="banner err">{errors.join(' · ')}</div>{/if}
+{#if errors.length}<Alert kind="err">{errors.join(' · ')}</Alert>{/if}
 
 <div class="card fill">
   {#key `${cur}|${size}|${query}`}

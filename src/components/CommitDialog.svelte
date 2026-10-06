@@ -4,6 +4,7 @@
   import { app } from '../lib/state.svelte';
   import { dialogOut } from '../lib/motion';
   import Icon from './Icon.svelte';
+  import Alert from './Alert.svelte';
   import DiffViewer from './DiffViewer.svelte';
 
   let { request }: { request: NonNullable<typeof app.gitDialog> } = $props();
@@ -113,9 +114,9 @@
     <button class="icon" title="Close" aria-label="Close" disabled={busy} onclick={close}><Icon name="close" /></button>
   </header>
 
-  {#if error}<div class="banner err" role="alert">{error}</div>{/if}
-  {#if changes?.authorError}<div class="banner warn">Git cannot tell who you are: {changes.authorError} Set <code>user.name</code> and <code>user.email</code> and reopen this dialog.</div>{/if}
-  {#if changes?.detached}<div class="banner warn">HEAD is detached. The commit will not belong to any branch; create a branch first to keep it.</div>{/if}
+  {#if error}<Alert kind="err" role="alert">{error}</Alert>{/if}
+  {#if changes?.authorError}<Alert kind="warn">Git cannot tell who you are: {changes.authorError} Set <code>user.name</code> and <code>user.email</code> and reopen this dialog.</Alert>{/if}
+  {#if changes?.detached}<Alert kind="warn">HEAD is detached. The commit will not belong to any branch; create a branch first to keep it.</Alert>{/if}
 
   <div class="commit-body">
     <div class="commit-files">

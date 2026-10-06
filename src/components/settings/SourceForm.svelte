@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Source, SourceKind, CredentialStatus } from '../../lib/api';
   import Icon from '../Icon.svelte';
+  import Alert from '../Alert.svelte';
 
   let { draft = $bindable(), token = $bindable(), orgInput = $bindable(), urlsText = $bindable(), kinds, status, actions }: {
     draft: Source; token: string; orgInput: string; urlsText: string;
@@ -37,8 +38,8 @@
             {#if status.tokenUrl}<button class="btn" onclick={actions.createToken}>Create token ↗</button>{/if}
           </div>
           <small class="hint">Needs the <code>repo</code> and <code>read:org</code> scopes. It is only used to list repositories and commits and is never written to the settings file. <b>Test connection</b> checks that the host and token work.</small>
-          {#if status.credential?.reason && !(status.msg && !status.msg.ok)}<div class="banner err" role="status">{status.credential.reason}</div>{/if}
-          {#if status.msg?.where === 'token'}<div class="banner" class:err={!status.msg.ok} class:info={status.msg.ok}>{status.msg.text}</div>{/if}
+          {#if status.credential?.reason && !(status.msg && !status.msg.ok)}<Alert kind="err" role="status">{status.credential.reason}</Alert>{/if}
+          {#if status.msg?.where === 'token'}<Alert kind={status.msg.ok ? 'info' : 'err'}>{status.msg.text}</Alert>{/if}
         </div>
 
         <div class="fld">
@@ -62,7 +63,7 @@
             </div>
           {/if}
           <small class="hint">Repos from these organizations appear in the sidebar. Use the name from the URL, e.g. <code>example-org</code> in <code>github.com/example-org/demo-project</code>. <b>Load my organizations</b> lists the ones your account belongs to so you can click them.</small>
-          {#if status.msg?.where === 'orgs'}<div class="banner" class:err={!status.msg.ok} class:info={status.msg.ok}>{status.msg.text}</div>{/if}
+          {#if status.msg?.where === 'orgs'}<Alert kind={status.msg.ok ? 'info' : 'err'}>{status.msg.text}</Alert>{/if}
         </div>
       {:else}
         <label class="fld">
@@ -73,7 +74,7 @@
         </label>
       {/if}
 
-      {#if status.msg?.where === 'form'}<div class="banner" class:err={!status.msg.ok} class:info={status.msg.ok}>{status.msg.text}</div>{/if}
+      {#if status.msg?.where === 'form'}<Alert kind={status.msg.ok ? 'info' : 'err'}>{status.msg.text}</Alert>{/if}
 
       <div class="formfoot">
         <button class="btn" disabled={!!status.busy} onclick={actions.cancel}>Cancel</button>

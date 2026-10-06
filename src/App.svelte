@@ -14,7 +14,7 @@
   import RepoList from './components/RepoList.svelte';
   import RightPanel from './components/RightPanel.svelte';
   import Settings from './components/Settings.svelte';
-  import Toast from './components/Toast.svelte';
+  import Notifications from './components/Notifications.svelte';
   import Tooltip from './components/Tooltip.svelte';
   import Tabs from './components/Tabs.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
@@ -176,5 +176,5 @@
 {#if app.recoveryOpen}<RecoveryPanel />{/if}
 {#if app.gitDialog?.kind === 'commit'}<CommitDialog request={app.gitDialog} />{:else if app.gitDialog?.kind === 'branch'}<BranchDialog request={app.gitDialog} />{/if}
 {#if $confirmQueue.length}{#key $confirmQueue[0]}<ConfirmDialog request={$confirmQueue[0]} />{/key}{/if}
-<Toast />
+<Notifications />
 <Tooltip />

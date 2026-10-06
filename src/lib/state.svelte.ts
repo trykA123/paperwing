@@ -15,6 +15,7 @@ import {
 import { CompareState, SetCompareState, type SetCompareRow } from './compare.svelte';
 import { confirm } from './confirm';
 import { defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } from './workspace';
+import { NotificationStore, type NoticeAction, type NoticeKind, type NoticeOptions } from './notifications.svelte';
 export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
 export type { View } from './workspace';
 
@@ -25,9 +26,6 @@ export const PHASE: Record<Phase, string> = {
   queued: 'Queued', resolving: 'Starting', cloning: 'Cloning', fetching: 'Fetching',
   checkout: 'Checkout', done: 'Done', failed: 'Failed', skipped: 'Skipped',
 };
-export type ToastKind = 'info' | 'success' | 'warn' | 'error';
-export type ToastItem = { id: number; msg: string; kind: ToastKind; action?: { label: string; run: () => void } };
-const TOAST_MS: Record<ToastKind, number> = { info: 4000, success: 4000, warn: 7000, error: 10000 };
 export const refText = (r: Ref) => (r.type === 'commit' ? r.name.slice(0, 8) : r.name);
 export const matches = (text: string, query: string) =>
   query.toLowerCase().split(/\s+/).filter(Boolean).every(w => text.toLowerCase().includes(w));
@@ -178,11 +176,9 @@ class AppState {
   paletteOpen = $state(false);
   get query() { return this.activeTab?.query ?? ''; }
   set query(value: string) { if (this.activeTab) this.activeTab.query = value; }
-  toasts = $state<ToastItem[]>([]);
+  notices = new NotificationStore();
   pendingRename = $state(false);
   renameItemId = $state<string | null>(null);
-  #toastTimers = new Map<number, number>();
-  #toastSeq = 0;
   #runIds = $state<string[]>([]);
   #runMode: GitAction = 'clone';
   #cloneWaiters: (() => void)[] = [];
@@ -230,30 +226,8 @@ class AppState {
     }
   }
 
-  toast(msg: string, kind: ToastKind = 'info', action?: ToastItem['action']) {
-    const same = this.toasts.find(t => t.msg === msg && t.kind === kind);
-    if (same) return this.#armToast(same);
-    const item = { id: ++this.#toastSeq, msg, kind, action };
-    this.toasts = [...this.toasts, item].slice(-4);
-    this.#armToast(item);
-  }
-
-  #armToast(item: ToastItem) {
-    clearTimeout(this.#toastTimers.get(item.id));
-    this.#toastTimers.set(item.id, window.setTimeout(() => this.dismissToast(item.id), TOAST_MS[item.kind]));
-  }
-
-  dismissToast(id: number) {
-    clearTimeout(this.#toastTimers.get(id));
-    this.#toastTimers.delete(id);
-    this.toasts = this.toasts.filter(t => t.id !== id);
-  }
-
-  holdToast(id: number) { clearTimeout(this.#toastTimers.get(id)); }
-
-  releaseToast(id: number) {
-    const item = this.toasts.find(t => t.id === id);
-    if (item) this.#armToast(item);
+  toast(msg: string, kind: NoticeKind = 'info', action?: NoticeAction, options: NoticeOptions = {}) {
+    return this.notices.notify(msg, kind, { ...options, actions: [...(action ? [action] : []), ...(options.actions ?? [])] });
   }
 
   mergeActivity(entry: Activity) { return this.gitActivity.mergeActivity(entry); }
