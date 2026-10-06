@@ -137,7 +137,23 @@ export type DiscoverSummary = {
   capped: 'directories' | 'repositories' | null; cancelled: boolean;
 };
 export type DiscoverDone = { id: number; summary: DiscoverSummary };
-export const events = { launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done' } as const;
+export type SearchMode = 'fixed' | 'basic' | 'perl';
+export type SearchRepoTarget = { path: string; gitRef?: string | null };
+export type SearchRequest = {
+  repos: SearchRepoTarget[]; pattern: string; mode?: SearchMode; ignoreCase?: boolean; wholeWord?: boolean;
+  pathspecs?: string[]; untracked?: boolean; context?: number; maxPerRepo?: number; maxOverall?: number;
+};
+export type SearchContextLine = { line: number; text: string };
+export type SearchMatch = { repo: string; path: string; line: number; column: number; text: string; context: SearchContextLine[] };
+export type SearchRepoStatus = { state: 'done' | 'skipped' | 'cancelled' | 'failed'; matches: number; truncated: boolean; error: string | null };
+export type SearchRepoResult = { id: number; repo: string; status: SearchRepoStatus; matches: SearchMatch[] };
+export type SearchSummary = { repos: number; matches: number; failed: number; capped: boolean; cancelled: boolean };
+export type SearchDone = { id: number; summary: SearchSummary };
+export type SearchCapabilities = { perl: boolean };
+export const events = {
+  launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done',
+  searchRepo: 'search-repo', searchDone: 'search-done',
+} as const;
 
 export const api = {
   platformInfo: () => invoke<PlatformInfo>('platform_info'),
@@ -200,4 +216,7 @@ export const api = {
   discoverStart: (path: string, maxDepth?: number) => invoke<number>('discover_start', { path, maxDepth: maxDepth ?? null }),
   discoverCancel: (id: number) => invoke<boolean>('discover_cancel', { id }),
   discoverCancelAll: () => invoke<number>('discover_cancel_all'),
+  searchStart: (request: SearchRequest) => invoke<number>('search_start', { request }),
+  searchCancel: (id: number) => invoke<boolean>('search_cancel', { id }),
+  searchCapabilities: () => invoke<SearchCapabilities>('search_capabilities'),
 };
