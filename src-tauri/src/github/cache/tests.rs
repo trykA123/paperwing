@@ -244,3 +244,61 @@ async fn no_token_or_credential_state_reaches_the_database() {
             .any(|window| window == token.as_bytes()));
     }
 }
+
+#[tokio::test]
+async fn a_slow_writer_does_not_block_credential_revisions() {
+    let source = source("cache-slow-writer-fixture");
+    let fixture = Fixture::new("metadata-cache-slow-writer");
+    let store = store(&fixture);
+    let request = ListingRequest::new(&source, false).unwrap();
+    let (release, gate) = std::sync::mpsc::channel::<()>();
+    store.post(move |_| {
+        let _ = gate.recv();
+        Ok(())
+    });
+    let list = RepoList {
+        repos: vec![repo(&source.id, "admin", "repo")],
+        fetched_at: now(),
+        ..Default::default()
+    };
+    let finishing = tokio::spawn({
+        let request = request.clone();
+        let store = store.clone();
+        async move { request.finish(store, Some("admin".into()), &list).await }
+    });
+    tokio::task::yield_now().await;
+    assert!(!finishing.is_finished());
+    let id = source.id.clone();
+    let current = tauri::async_runtime::spawn_blocking(move || {
+        crate::credentials::if_current(&id, request.revision(), || ()).is_some()
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(5), current)
+            .await
+            .expect("if_current waited for the writer")
+            .unwrap()
+    );
+    let id = source.id.clone();
+    let advanced = tauri::async_runtime::spawn_blocking(move || {
+        crate::credentials::advance_revision(&id, || ())
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), advanced)
+        .await
+        .expect("advance_revision waited for the writer")
+        .unwrap();
+    release.send(()).unwrap();
+    finishing.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn a_pending_store_is_a_cache_miss() {
+    let source = source("cache-pending-fixture");
+    let request = ListingRequest::new(&source, false).unwrap();
+    let pending = Store::pending();
+    assert!(!pending.is_ready());
+    assert!(request.read_stale(pending.clone()).await.unwrap().is_none());
+    request
+        .finish(pending, None, &RepoList::default())
+        .await
+        .unwrap();
+}

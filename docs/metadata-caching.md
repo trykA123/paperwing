@@ -29,5 +29,13 @@ The controlled transport fixtures use synthetic responses without network or a c
 Live token permissions, Enterprise server compatibility and Windows native acceptance require
 the separate native acceptance run. Fine-grained tokens expose only their granted repositories.
 
-The cache is disposable. Commit histories are also written to the store (not yet read back). Rollback can delete `skein-store.sqlite3` (and its `-wal` and `-shm` files) from the application data directory after closing the app; old `repos-<source-id>.json` files in the application
-cache after closing the app; credentials, settings and repositories do not need changes.
+The cache is disposable. Repository listings are stored in `skein-store.sqlite3` in the application data directory. Commit histories are also written to the store but not yet read back. Rollback: close the app and delete `skein-store.sqlite3` with its `-wal`, `-shm` and `.running` files. Credentials, settings and repositories need no change. Legacy `repos-<source-id>.json` files in the application cache directory are deleted at startup.
+
+The store opens on a background thread. Until it is ready, and whenever it is disabled, every read is a cache miss and every write is dropped. A file is moved aside only when SQLite reports it is not a database or is corrupt, or a migration fails; open, I/O, permission, read-only and busy errors disable the store for the session and leave the file untouched. A full integrity check runs only after an unclean shutdown (the `.running` marker is still present).
+
+Known gaps against packet 34 (not implemented yet):
+
+- Commit history `recall` is unused, and `REF_EPOCH` is a constant, so cached commits are never served.
+- Pruning removes the oldest `fetched_at` rows first. It is not LRU.
+- Vacuum runs only when the file is over the size cap, not on idle.
+- The schema version is tracked with `PRAGMA user_version`.

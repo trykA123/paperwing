@@ -3,6 +3,7 @@ mod crash;
 mod pruning;
 mod recovery;
 mod schema;
+mod startup;
 
 use super::listings::{Listing, VERSION};
 use super::{Options, Store};

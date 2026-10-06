@@ -22,9 +22,13 @@ pub fn apply(connection: &mut Connection, migrations: &[Migration]) -> Result<()
     }
     for migration in migrations.iter().filter(|item| item.version > current) {
         let transaction = connection.transaction()?;
-        transaction.execute_batch(migration.sql)?;
-        transaction.pragma_update(None, "user_version", migration.version)?;
-        transaction.commit()?;
+        transaction
+            .execute_batch(migration.sql)
+            .map_err(Error::Migration)?;
+        transaction
+            .pragma_update(None, "user_version", migration.version)
+            .map_err(Error::Migration)?;
+        transaction.commit().map_err(Error::Migration)?;
     }
     Ok(())
 }

@@ -10,6 +10,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("local store file is not usable: {0}")]
     Unusable(Reason),
+    #[error("local store migration failed: {0}")]
+    Migration(rusqlite::Error),
 }
 
 #[derive(Debug)]
@@ -32,16 +34,43 @@ impl fmt::Display for Reason {
     }
 }
 
-impl Error {
-    pub(super) fn is_busy(&self) -> bool {
-        matches!(
-            self,
-            Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _))
-                if matches!(
-                    failure.code,
-                    rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
-                )
+fn failure_code(error: &rusqlite::Error) -> Option<rusqlite::ErrorCode> {
+    match error {
+        rusqlite::Error::SqliteFailure(failure, _) => Some(failure.code),
+        _ => None,
+    }
+}
+
+fn is_environmental(code: Option<rusqlite::ErrorCode>) -> bool {
+    use rusqlite::ErrorCode::{
+        CannotOpen, DatabaseBusy, DatabaseLocked, DiskFull, PermissionDenied, ReadOnly,
+        SystemIoFailure,
+    };
+    matches!(
+        code,
+        Some(
+            CannotOpen
+                | SystemIoFailure
+                | PermissionDenied
+                | ReadOnly
+                | DatabaseBusy
+                | DatabaseLocked
+                | DiskFull
         )
+    )
+}
+
+impl Error {
+    pub(super) fn resets_store(&self) -> bool {
+        use rusqlite::ErrorCode::{DatabaseCorrupt, NotADatabase};
+        match self {
+            Self::Unusable(_) => true,
+            Self::Sqlite(error) => {
+                matches!(failure_code(error), Some(NotADatabase | DatabaseCorrupt))
+            }
+            Self::Migration(error) => !is_environmental(failure_code(error)),
+            Self::Unavailable | Self::Io(_) => false,
+        }
     }
 }
 

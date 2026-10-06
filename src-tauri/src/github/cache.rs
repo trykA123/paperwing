@@ -1,13 +1,14 @@
 use super::{RepoList, Source};
 use crate::store::{
     listings::{self, Listing},
-    Store,
+    Error, Store,
 };
 use std::{
     collections::HashMap,
     sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
+use tokio::sync::oneshot;
 
 static EPOCHS: OnceLock<Mutex<HashMap<String, u64>>> = OnceLock::new();
 
@@ -87,11 +88,11 @@ impl ListingRequest {
     pub async fn read_stale(&self, store: Store) -> Result<Option<RepoList>, String> {
         let request = self.clone();
         tauri::async_runtime::spawn_blocking(move || {
+            let stored = store
+                .read_blocking(|connection| listings::get(connection, &request.source_id))
+                .ok()
+                .flatten();
             request.if_current(|| {
-                let stored = store
-                    .read_blocking(|connection| listings::get(connection, &request.source_id))
-                    .ok()
-                    .flatten();
                 Ok(stored.and_then(|listing| read_cached(listing, &request.scope, now())))
             })
         })
@@ -105,26 +106,31 @@ impl ListingRequest {
         login: Option<String>,
         list: &RepoList,
     ) -> Result<(), String> {
-        let request = self.clone();
-        let list = list.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            request.if_current(|| {
-                request
-                    .persist(&store, login, list)
-                    .unwrap_or_else(|reason| eprintln!("Repository cache not updated: {reason}"));
-                Ok(())
-            })
-        })
-        .await
-        .map_err(|_| "Repository cache write task failed".to_string())?
+        let queued = self.if_current(|| Ok(self.enqueue(&store, login, list.clone())))?;
+        let outcome = match queued {
+            Ok(receiver) => receiver
+                .await
+                .map_err(|_| Error::Unavailable)
+                .and_then(|done| done),
+            Err(error) => Err(error),
+        };
+        if let Err(reason) = outcome {
+            eprintln!("Repository cache not updated: {reason}");
+        }
+        Ok(())
     }
 
-    fn persist(&self, store: &Store, login: Option<String>, list: RepoList) -> Result<(), String> {
+    fn enqueue(
+        &self,
+        store: &Store,
+        login: Option<String>,
+        list: RepoList,
+    ) -> Result<oneshot::Receiver<Result<(), Error>>, Error> {
         let source_id = self.source_id.clone();
         if !list.errors.is_empty() {
-            return Ok(store.write_blocking(move |connection| {
+            return store.enqueue(move |connection| {
                 listings::remove_other_login(connection, &source_id, login.as_deref())
-            })?);
+            });
         }
         let listing = Listing {
             source_id,
@@ -134,7 +140,7 @@ impl ListingRequest {
             version: listings::VERSION,
             repos: list.repos,
         };
-        Ok(store.write_blocking(move |connection| listings::put(connection, &listing))?)
+        store.enqueue(move |connection| listings::put(connection, &listing))
     }
 }
 

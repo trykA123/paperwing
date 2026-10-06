@@ -155,7 +155,7 @@ pub fn invalidate(app: &AppHandle, source_id: &str) {
     let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
 }
 
-fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
+pub(crate) fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
     let mut entries = revisions().lock().unwrap();
     let entry = entries.entry(source_id.into()).or_default();
     entry.value += 1;

@@ -10,6 +10,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const WAL_LIMIT_BYTES: i64 = 4 * 1024 * 1024;
 const KEPT_ASIDE: usize = 3;
 const INCREMENTAL_VACUUM: i64 = 2;
+const RUNNING_SUFFIX: &str = ".running";
 
 pub(super) struct Opened {
     pub connection: Connection,
@@ -20,21 +21,34 @@ pub(super) fn open_writer(path: &Path, migrations: &[Migration]) -> Result<Opene
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    match prepare(path, migrations) {
-        Ok(connection) => Ok(Opened {
+    let check = ran_uncleanly(path);
+    let opened = match prepare(path, migrations, check) {
+        Ok(connection) => Opened {
             connection,
             recovered_from: None,
-        }),
-        Err(error) if error.is_busy() || matches!(error, Error::Io(_)) => Err(error),
-        Err(error) => {
+        },
+        Err(error) if error.resets_store() => {
             eprintln!("Local store reset: {error}");
             let aside = move_aside(path)?;
-            Ok(Opened {
-                connection: prepare(path, migrations)?,
+            Opened {
+                connection: prepare(path, migrations, false)?,
                 recovered_from: Some(aside),
-            })
+            }
         }
+        Err(error) => return Err(error),
+    };
+    if let Err(error) = std::fs::write(suffixed(path, RUNNING_SUFFIX), b"") {
+        eprintln!("Local store run marker not written: {error}");
     }
+    Ok(opened)
+}
+
+pub(super) fn mark_clean(path: &Path) {
+    let _ = std::fs::remove_file(suffixed(path, RUNNING_SUFFIX));
+}
+
+fn ran_uncleanly(path: &Path) -> bool {
+    suffixed(path, RUNNING_SUFFIX).exists()
 }
 
 pub(super) fn open_reader(path: &Path) -> Result<Connection, Error> {
@@ -47,7 +61,7 @@ pub(super) fn open_reader(path: &Path) -> Result<Connection, Error> {
     Ok(connection)
 }
 
-fn prepare(path: &Path, migrations: &[Migration]) -> Result<Connection, Error> {
+fn prepare(path: &Path, migrations: &[Migration], check: bool) -> Result<Connection, Error> {
     let mut connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -66,9 +80,12 @@ fn prepare(path: &Path, migrations: &[Migration]) -> Result<Connection, Error> {
     connection.pragma_update(None, "foreign_keys", true)?;
     connection.pragma_update(None, "trusted_schema", false)?;
     connection.pragma_update(None, "journal_size_limit", WAL_LIMIT_BYTES)?;
-    let check: String = connection.query_row("PRAGMA quick_check(1)", [], |row| row.get(0))?;
-    if check != "ok" {
-        return Err(Error::Unusable(Reason::Corrupt(check)));
+    if check {
+        let verdict: String =
+            connection.query_row("PRAGMA quick_check(1)", [], |row| row.get(0))?;
+        if verdict != "ok" {
+            return Err(Error::Unusable(Reason::Corrupt(verdict)));
+        }
     }
     migrations::apply(&mut connection, migrations)?;
     Ok(connection)
@@ -79,15 +96,28 @@ fn move_aside(path: &Path) -> Result<PathBuf, Error> {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |time| time.as_nanos());
     let aside = suffixed(path, &format!(".corrupt-{stamp}"));
-    std::fs::rename(path, &aside)?;
-    for extension in ["-wal", "-shm"] {
-        let sidecar = suffixed(path, extension);
-        if sidecar.exists() {
-            std::fs::rename(&sidecar, suffixed(&aside, extension))?;
-        }
-    }
+    rename_group(path, &aside)?;
     forget_old_asides(path);
     Ok(aside)
+}
+
+pub(super) fn rename_group(path: &Path, aside: &Path) -> Result<(), Error> {
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let members = ["-wal", "-shm", ""]
+        .map(|extension| (suffixed(path, extension), suffixed(aside, extension)));
+    for (from, to) in members {
+        if !from.exists() {
+            continue;
+        }
+        if let Err(error) = std::fs::rename(&from, &to) {
+            for (original, renamed) in moved.into_iter().rev() {
+                let _ = std::fs::rename(renamed, original);
+            }
+            return Err(error.into());
+        }
+        moved.push((from, to));
+    }
+    Ok(())
 }
 
 fn suffixed(path: &Path, suffix: &str) -> PathBuf {

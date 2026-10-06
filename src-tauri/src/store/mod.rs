@@ -1,5 +1,6 @@
 pub mod commits;
 mod error;
+mod legacy;
 pub mod listings;
 mod migrations;
 mod open;
@@ -22,8 +23,9 @@ use readers::Readers;
 use rusqlite::Connection;
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
+use tokio::sync::oneshot;
 use writer::Writer;
 
 const FILE_NAME: &str = "skein-store.sqlite3";
@@ -50,11 +52,12 @@ struct Inner {
     writer: Writer,
     readers: Readers,
     recovered_from: Option<PathBuf>,
+    path: PathBuf,
 }
 
 #[derive(Clone)]
 pub struct Store {
-    inner: Option<Arc<Inner>>,
+    slot: Arc<OnceLock<Option<Arc<Inner>>>>,
 }
 
 pub fn seconds(value: u64) -> i64 {
@@ -62,49 +65,99 @@ pub fn seconds(value: u64) -> i64 {
 }
 
 impl Store {
+    #[cfg(test)]
     pub fn open(path: &Path, options: &Options) -> Result<Self, Error> {
+        let store = Self::pending();
+        store.fill(Self::build(path, options));
+        Ok(store)
+    }
+
+    fn build(path: &Path, options: &Options) -> Result<Arc<Inner>, Error> {
         let opened = open::open_writer(path, options.migrations)?;
         let readers = Readers::open(path, options.readers)?;
         let writer = Writer::spawn(opened.connection, options.max_bytes)?;
-        Ok(Self {
-            inner: Some(Arc::new(Inner {
-                writer,
-                readers,
-                recovered_from: opened.recovered_from,
-            })),
-        })
+        Ok(Arc::new(Inner {
+            writer,
+            readers,
+            recovered_from: opened.recovered_from,
+            path: path.to_path_buf(),
+        }))
     }
 
-    pub fn open_in(directory: &Path) -> Self {
-        match Self::open(&directory.join(FILE_NAME), &Options::default()) {
-            Ok(store) => {
-                if let Some(kept) = store.recovered_from() {
+    pub fn pending() -> Self {
+        Self {
+            slot: Arc::new(OnceLock::new()),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn disabled() -> Self {
+        let store = Self::pending();
+        store.fill(Err(Error::Unavailable));
+        store
+    }
+
+    pub fn start(data: PathBuf, cache: Option<PathBuf>) -> Self {
+        let store = Self::pending();
+        let opening = store.clone();
+        let spawned = std::thread::Builder::new()
+            .name("store-open".into())
+            .spawn(move || {
+                opening.fill(Self::build(&data.join(FILE_NAME), &Options::default()));
+                if let Some(cache) = cache {
+                    legacy::remove_listing_files(&cache);
+                }
+            });
+        if let Err(error) = spawned {
+            eprintln!("Local store disabled: {error}");
+            store.fill(Err(Error::Unavailable));
+        }
+        store
+    }
+
+    fn fill(&self, result: Result<Arc<Inner>, Error>) {
+        let inner = match result {
+            Ok(inner) => {
+                if let Some(kept) = inner.recovered_from.as_deref() {
                     eprintln!(
                         "Local store reset; the old file is kept at {}",
                         kept.display()
                     );
                 }
-                store
+                Some(inner)
             }
             Err(error) => {
                 eprintln!("Local store disabled: {error}");
-                Self::disabled()
+                None
             }
+        };
+        let _ = self.slot.set(inner);
+    }
+
+    #[cfg(test)]
+    pub fn is_ready(&self) -> bool {
+        matches!(self.slot.get(), Some(Some(_)))
+    }
+
+    pub fn mark_clean(&self) {
+        if let Ok(inner) = self.inner() {
+            open::mark_clean(&inner.path);
         }
     }
 
-    pub fn disabled() -> Self {
-        Self { inner: None }
-    }
-
+    #[cfg(test)]
     pub fn recovered_from(&self) -> Option<&Path> {
-        self.inner.as_ref()?.recovered_from.as_deref()
+        self.inner().ok()?.recovered_from.as_deref()
     }
 
     fn inner(&self) -> Result<&Inner, Error> {
-        self.inner.as_deref().ok_or(Error::Unavailable)
+        self.slot
+            .get()
+            .and_then(Option::as_deref)
+            .ok_or(Error::Unavailable)
     }
 
+    #[cfg(test)]
     pub fn write_blocking<T: Send + 'static>(
         &self,
         work: impl FnOnce(&mut Connection) -> Result<T, Error> + Send + 'static,
@@ -114,6 +167,13 @@ impl Store {
             .submit(work)
             .blocking_recv()
             .map_err(|_| Error::Unavailable)?
+    }
+
+    pub fn enqueue<T: Send + 'static>(
+        &self,
+        work: impl FnOnce(&mut Connection) -> Result<T, Error> + Send + 'static,
+    ) -> Result<oneshot::Receiver<Result<T, Error>>, Error> {
+        Ok(self.inner()?.writer.submit(work))
     }
 
     pub fn post(&self, work: impl FnOnce(&mut Connection) -> Result<(), Error> + Send + 'static) {

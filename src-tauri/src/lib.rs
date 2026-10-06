@@ -110,7 +110,7 @@ pub fn run() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
                     .data_directory(webview).build()?;
             }
-            app.manage(store::Store::open_in(&app.path().app_data_dir()?));
+            app.manage(store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok()));
             git::attach(app.handle().clone());
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
@@ -223,6 +223,11 @@ pub fn run() {
             search_service::search_cancel_all,
             search_service::search_capabilities,
         ])
-        .run(context)
-        .expect("error while running PaperWing");
+        .build(context)
+        .expect("error while building PaperWing")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                app.state::<store::Store>().mark_clean();
+            }
+        });
 }
