@@ -249,6 +249,7 @@ class AppState {
     const ws = migrateWorkspace(saved.workspace, platform.platform);
     this.sources = saved.sources ?? [];
     this.ws = ws;
+    if (saved.restoredFromBackup) this.toast('Settings were restored from a backup', 'info');
     await this.probeRoot();
     this.openView({ kind: 'set' });
     await listen<Progress>('clone-progress', e => { this.jobs[e.payload.id] = e.payload; });
@@ -613,8 +614,9 @@ class AppState {
           this.toast(`Deleted ${label} (was ${result.sha}). The remote branch is untouched.`, 'success');
           break;
         } catch (reason) {
-          const text = String(reason);
-          if (force || !text.includes('not fully merged')) { this.toast(text, 'error'); return; }
+          const structured = typeof reason === 'object' && reason !== null && 'kind' in reason && 'message' in reason;
+          const text = structured ? String(reason.message) : String(reason);
+          if (force || !structured || reason.kind !== 'notMerged') { this.toast(text, 'error'); return; }
           const again = await confirm(`"${label}" has commits that are not merged into the branch you are on, and no other branch contains them.\n\nDelete it anyway? Git keeps the commits for a while, so a mistake can still be undone from the reflog.`,
             { title: 'Unmerged branch', kind: 'warning', okLabel: 'Delete anyway', destructive: true });
           if (!again) return;

@@ -65,6 +65,8 @@ The app uses ordinary Git repositories, so terminal commands and other editors s
 The pull request client supports GitHub.com and separately configured GitHub Enterprise Server hosts.
 It uses each host's stored token, targets fork parents, follows branch upstream names, and reports unpushed commits.
 Manual source tokens are used only when every configured URL belongs to the requested API host.
+Saved tokens are bound to their original host. Changing a host requires saving a token for that host.
+Test connection and Load my organizations use a typed token without saving it until Save source.
 Skein reduces terminal juggling; Git retains its right to complain about conflicts.
 
 ## The workspace model
@@ -515,6 +517,11 @@ Use these details when organizing a workspace:
 - Prefer descriptive folder names over `final_final_really_final`. Your comparison tabs deserve a chance.
 
 ## Where things are stored
+
+Settings saves keep the last valid copy in `settings.json.bak`. If the main file is corrupt,
+Skein loads the backup and shows “Settings were restored from a backup”. If neither copy is
+valid, Skein starts with defaults and retains the broken main file as `settings.json.broken-<timestamp>`.
+
 
 | What | Where |
 |---|---|

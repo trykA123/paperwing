@@ -166,7 +166,7 @@ pub(super) async fn resolve(path: &str, branch: &str) -> Result<Branch, Error> {
     let reference = format!("refs/heads/{branch}");
     let tip = git(path, &["rev-parse", "--verify", &reference], &[0]).await?;
     let sha = String::from_utf8_lossy(&tip.stdout).trim().to_string();
-    if !matches!(sha.len(), 40 | 64) || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    if !crate::object_id::valid(&sha) {
         return Err(Error::Message("Cannot read the local branch commit".into()));
     }
     Ok(Branch { repo, head, sha })

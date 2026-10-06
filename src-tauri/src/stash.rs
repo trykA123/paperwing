@@ -53,7 +53,7 @@ pub(crate) enum Restore {
 }
 
 pub(crate) fn valid_oid(oid: &str) -> Result<(), String> {
-    if matches!(oid.len(), 40 | 64) && oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    if crate::object_id::valid(oid) {
         Ok(())
     } else {
         Err("Invalid stash id".into())

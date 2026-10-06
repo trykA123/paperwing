@@ -23,7 +23,8 @@ use readers::Readers;
 use rusqlite::Connection;
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{Arc, Condvar, Mutex, OnceLock},
+    time::Duration,
 };
 use tokio::sync::oneshot;
 use writer::Writer;
@@ -71,6 +72,7 @@ impl Drop for Inner {
 #[derive(Clone)]
 pub struct Store {
     slot: Arc<OnceLock<Option<Arc<Inner>>>>,
+    opening: Arc<(Mutex<()>, Condvar)>,
 }
 
 pub fn seconds(value: u64) -> i64 {
@@ -100,6 +102,7 @@ impl Store {
     pub fn pending() -> Self {
         Self {
             slot: Arc::new(OnceLock::new()),
+            opening: Arc::new((Mutex::new(()), Condvar::new())),
         }
     }
 
@@ -144,7 +147,10 @@ impl Store {
                 None
             }
         };
+        let (lock, changed) = &*self.opening;
+        let _guard = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let _ = self.slot.set(inner);
+        changed.notify_all();
     }
 
     #[cfg(test)]
@@ -172,6 +178,12 @@ impl Store {
     }
 
     fn inner(&self) -> Result<&Inner, Error> {
+        if self.slot.get().is_none() {
+            let (lock, changed) = &*self.opening;
+            let guard = lock.lock().map_err(|_| Error::Unavailable)?;
+            let (_guard, _) = changed.wait_timeout_while(guard, Duration::from_secs(5), |_| self.slot.get().is_none())
+                .map_err(|_| Error::Unavailable)?;
+        }
         self.slot
             .get()
             .and_then(Option::as_deref)

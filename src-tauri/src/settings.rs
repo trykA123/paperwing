@@ -1,3 +1,5 @@
+mod persistence;
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -52,54 +54,87 @@ fn settings_file(app: &AppHandle) -> Result<PathBuf, String> {
     #[cfg(feature = "test-profile")]
     crate::test_profile::validate(app)?;
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let file = dir.join("settings.json");
     #[cfg(feature = "test-profile")]
     crate::test_profile::plain_file(&file)?;
-    #[cfg(not(feature = "test-profile"))]
-    if !file.exists() {
-        if let Some(legacy) = dir.parent().map(|parent| parent.join(LEGACY_IDENTIFIER).join("settings.json")) {
-            if legacy.is_file() { let _ = std::fs::copy(&legacy, &file); }
-        }
-    }
     Ok(file)
 }
 
-#[tauri::command]
+fn prepare_settings(app: &AppHandle) -> Result<PathBuf, String> {
+    let file = settings_file(app)?;
+    std::fs::create_dir_all(file.parent().ok_or("Settings directory is missing")?).map_err(|e| e.to_string())?;
+    Ok(file)
+}
+
 pub fn load_settings(app: AppHandle) -> Result<Settings, String> {
-    let file = settings_file(&app)?;
+    Ok(load_with_status(&app)?.settings)
+}
+
+fn load_with_status(app: &AppHandle) -> Result<Loaded, String> {
+    let file = settings_file(app)?;
+    #[cfg(feature = "test-profile")]
     if !file.exists() {
-        #[cfg(feature = "test-profile")]
         return Err("Test profile settings must be prepared before launch".into());
-        #[cfg(not(feature = "test-profile"))]
-        return Ok(Settings::default());
     }
-    let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
-    let settings: Settings = serde_json::from_str(&text).map_err(|e| format!("{} is invalid: {e}", file.display()))?;
+    let (settings, restored_from_backup) = persistence::load(&file)?;
     #[cfg(feature = "test-profile")]
     crate::test_profile::settings(&settings)?;
     for source in &settings.sources { valid_id(&source.id)?; }
-    crate::credentials::configure_sources(&app, &settings.sources, false);
-    crate::git::configure_sources(redaction_sources(&settings.sources));
-    Ok(settings)
+    Ok(Loaded { settings, restored_from_backup })
 }
 
-#[tauri::command]
-pub fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+    static SAVES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _save = SAVES.lock().map_err(|_| "Settings persistence is unavailable")?;
     let _filesystem = crate::git::filesystem_gate().try_read().map_err(|_| "A recoverable write is in progress; retry saving settings")?;
     #[cfg(feature = "test-profile")]
     crate::test_profile::settings(&settings)?;
     for source in &settings.sources { valid_id(&source.id)?; }
-    let file = settings_file(&app)?;
-    let tmp = file.with_extension("json.tmp");
-    #[cfg(feature = "test-profile")]
-    crate::test_profile::plain_file(&tmp)?;
-    let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &file).map_err(|e| e.to_string())?;
+    let file = prepare_settings(&app)?;
+    crate::credentials::bind_before_host_edits(&settings.sources)?;
+    persistence::save(&file, &settings)?;
     crate::credentials::configure_sources(&app, &settings.sources, true);
     crate::git::configure_sources(redaction_sources(&settings.sources));
     Ok(())
+}
+
+pub(crate) fn initialize(app: AppHandle) -> Result<(), String> {
+    let file = prepare_settings(&app)?;
+    #[cfg(not(feature = "test-profile"))]
+    if !file.exists() && !file.with_extension("json.bak").exists() {
+        if let Some(legacy) = file.parent().and_then(|dir| dir.parent()).map(|parent| parent.join(LEGACY_IDENTIFIER).join("settings.json")) {
+            if legacy.is_file() { let _ = std::fs::copy(&legacy, &file); }
+        }
+    }
+    let _ = file;
+    let settings = load_settings(app.clone())?;
+    crate::credentials::configure_sources(&app, &settings.sources, false);
+    crate::git::configure_sources(redaction_sources(&settings.sources));
+    Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Loaded {
+    #[serde(flatten)]
+    settings: Settings,
+    restored_from_backup: bool,
+}
+
+pub mod commands {
+    use super::*;
+
+    #[tauri::command]
+    pub async fn load_settings(app: AppHandle) -> Result<Loaded, String> {
+        tauri::async_runtime::spawn_blocking(move || load_with_status(&app)).await
+            .map_err(|_| "Could not load settings".to_string())?
+    }
+
+    #[tauri::command]
+    pub async fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+        tauri::async_runtime::spawn_blocking(move || super::save_settings(app, settings)).await
+            .map_err(|_| "Could not save settings".to_string())?
+    }
 }
 
 pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
@@ -107,8 +142,8 @@ pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub async fn set_token(app: AppHandle, source_id: String, token: String) -> Result<(), String> {
-    crate::credentials::set_token(app, source_id, token).await
+pub async fn set_token(app: AppHandle, source_id: String, token: String, host: Option<String>) -> Result<(), String> {
+    crate::credentials::set_token(app, source_id, token, host).await
 }
 
 #[tauri::command]

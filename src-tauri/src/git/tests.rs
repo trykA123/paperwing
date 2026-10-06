@@ -417,7 +417,7 @@ async fn displayed_git_metadata_redacts_managed_manual_tokens_and_keeps_action_n
     let duplicate = crate::commit::create_branch(path.into(), "synthetic-display-token-branch".into(), None, false).await.unwrap_err();
     assert!(!duplicate.contains("synthetic-display-token"));
     let missing = crate::commit::delete_branch(path.into(), "synthetic-display-token-missing".into(), false).await.unwrap_err();
-    assert!(!missing.contains("synthetic-display-token"));
+    assert!(!missing.to_string().contains("synthetic-display-token"));
     let missing = crate::commit::create_branch(path.into(), "candidate".into(), Some("synthetic-display-token-missing".into()), false).await.unwrap_err();
     assert!(!missing.contains("synthetic-display-token"));
     let changes = serde_json::to_value(crate::commit::repo_changes(path.into()).await.unwrap()).unwrap();
