@@ -31,3 +31,6 @@ release/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Claude Code agent worktrees
+.claude/worktrees/
