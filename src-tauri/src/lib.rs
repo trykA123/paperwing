@@ -25,6 +25,7 @@ mod unsupported_files;
 #[cfg(target_os = "linux")]
 mod linux_files;
 mod settings;
+mod stash;
 mod credentials;
 mod discover;
 mod discover_job;
@@ -147,6 +148,13 @@ pub fn run() {
             tags::push_tag,
             tags::delete_tag,
             tags::delete_remote_tag,
+            stash::stash_list,
+            stash::stash_push,
+            stash::stash_apply,
+            stash::stash_pop,
+            stash::stash_drop,
+            stash::stash_show,
+            stash::switch_with_stash,
             trash::trash_set_folders,
             compare::comparison_open,
             compare::comparison_refresh,

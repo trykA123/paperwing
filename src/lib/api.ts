@@ -111,6 +111,11 @@ export type PushedTag = { remote: string; name: string; forced: boolean };
 export type DeletedTag = { name: string; object: string };
 export type TrashOutcome = { itemId: string; path: string; state: 'trashed' | 'missing' | 'skipped' | 'failed'; reason: string | null };
 export type ChangeContent = { original: string; modified: string; originalLabel: string; modifiedLabel: string; binary: boolean };
+export type StashEntry = { index: number; reference: string; oid: string; message: string; branch: string | null; createdAt: number };
+export type StashPushOutcome = { stashed: string | null; nothingToStash: boolean };
+export type StashRestoreOutcome = { applied: boolean; stashKept: boolean; indexRestored: boolean; conflicted: string[]; error: string | null };
+export type StashDiff = { patch: string; truncated: boolean; hasUntracked: boolean; notice: string | null };
+export type SwitchStashOutcome = { stashed: string | null; switched: boolean; error: string | null };
 
 export type SetItem = {
   id: string; repoId: string; url: string; org: string; name: string; ref: Ref; on: boolean;
