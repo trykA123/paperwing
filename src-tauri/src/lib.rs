@@ -119,6 +119,8 @@ pub fn run() {
             github::list_repos,
             github::list_cached_repos,
             github::get_commits,
+            github::pulls::pull_for_branch,
+            github::pulls::open_pull_request,
             git::get_refs_many,
             git::activity_snapshot,
             git::clear_activity,

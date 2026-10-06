@@ -1,0 +1,14 @@
+[
+  {
+    "method": "GET",
+    "path": "/repos/admin/skein-fixture-api/pulls?head=admin%3Afeature%2Flogin&state=open&sort=updated&direction=desc&per_page=1&page=1",
+    "status": 403,
+    "headers": {
+      "x-ratelimit-remaining": "0",
+      "x-ratelimit-reset": "1791302400"
+    },
+    "body": {
+      "message": "API rate limit exceeded. synthetic-token"
+    }
+  }
+]
