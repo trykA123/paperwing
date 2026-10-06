@@ -30,7 +30,7 @@ Fixed today on Windows: `valid_path` checked the bare drive prefix `C:` (= the d
 - New packets (plans in `.skillify/plans/2026-10-06-skein-*`): 25 open-with, 26 stash, 27 snapshots, 28 PRs, 29 discard/partial staging, 30 auto-refresh, 31 Actions view, 32 Linux filesystems, 33 tags, 34 local store, 35 Jira read-only + branch from ticket, 36 frontend performance, 37 Beyond Compare parity, step 3b rail sections + context menus; backlog file lists the rest.
 
 ## Waiting on the owner
-- Pick the Jira layout from https://claude.ai/artifact/5aK3CYYU1YeYid9SxWbtQC (designer recommends C, the work hub).
+- Jira layout chosen: A (board) with a centred ticket dialog (recorded in packet 35).
 - Try the new `Skein.exe` from CI run `37481629860` once green (artifacts on the run page).
 - Whether to bring back other font choices (default answer: no).
 

@@ -21,3 +21,5 @@ See Jira boards, sprints and issues inside Skein without leaving it, link ticket
 
 ## Done when
 Against a Jira Cloud test site (or recorded responses if none is available): boards and sprint render, a ticket shows its linked branches, and branch-from-ticket creates the branch in two fixture repositories with one expected failure reported.
+
+- [REV 2026-10-06] Owner chose direction A from https://claude.ai/artifact/5aK3CYYU1YeYid9SxWbtQC: kanban board in the main area, boards/sprints/saved filters in the rail panel, and the ticket detail as a centred floating dialog (two columns: description, sub-tasks and links left; properties, branches/PRs and "Create branch…" right), not a right drawer. Branch-from-ticket opens as a modal from that dialog.
