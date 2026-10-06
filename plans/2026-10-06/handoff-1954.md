@@ -17,7 +17,7 @@ The alt session took over orchestration while the main session was paused. Usage
   - rename to Skein (`4fd9642`): persisted ids kept, listed in `docs/naming.md`
   - Windows store-handle fix (`d1ee281`)
 - Branch backup list: `.alt/branches-backup-20261006.txt`. Restore with `git branch <name> <sha>`.
-- CI run 37498431610 on `d1ee281`: test (Linux), linux and windows builds succeeded. **test-windows result not seen yet.** Check it first.
+- CI run 37498431610 on `d1ee281`: test (Linux), linux and windows builds succeeded. test-windows also passed: the first fully green run on main, including all Windows tests.
 - Windows VM is running (VNC 127.0.0.1:5927). The installer from run 37495154837 is installed and verified: per-user install, "Open with Skein" HKCU keys.
 - Architecture diagram for the owner: https://claude.ai/artifact/H9LzM3xh2dDJTqoJ2gdBhy (as built and when finished). Source: `.alt/scratch/skein-architecture.html`.
 - Mod `handoff-relay` (this warning) lives in `~/.claude-alt/dev-mods/1115865e-…/handoff-relay`.
@@ -32,7 +32,7 @@ The alt session took over orchestration while the main session was paused. Usage
 | Paused main session worktree | `.claude/worktrees/agent-a488fb7de6d04ca04` (`fix/parallel-tests`, dirty) | Its content is already in main (`3f18795`); safe to remove later. |
 
 ## Next steps, in order
-1. Check test-windows for run 37498431610 and fix any failure.
+1. (Done: run 37498431610 fully green.)
 2. Finish the perf-frontend review fixes. Review perf-backend. Merge both into main (the `api.ts` `warnings?: string[]` line must match), run gates, push, and get a new installer.
 3. Install the new build on the VM. Smoke-test a set with github.com repos. Tell the owner the artifact link (run page → `skein-windows-nsis`).
 4. Packet 17: review the sfzxd result, rebase onto main, then measure on the Windows VM.
