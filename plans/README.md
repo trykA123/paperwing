@@ -25,8 +25,6 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 |---|---|
 | [17](packets/17-cold-path.md) | Phase 1, Codex run in `.crew/paperwing-api-builder-sfzxd` |
 | [41](packets/41-windows-diagnostics.md) | Backend, Codex run in `.crew/paperwing-api-builder-1ci2m` |
-| [39](packets/39-backend-ui-wiring.md) | ui-builder in `.alt/ui-39`, branch `ui/39-cleanup-search` |
-| Perf fixes (no packet) | `merge/perf` plus review fixes in `.crew/paperwing-api-builder-24d6y` |
 
 ## Blocked
 | Packet | Waits for |
