@@ -19,12 +19,12 @@ pub(super) async fn authenticated_login(api: &impl GithubApi) -> Result<Option<S
 pub(super) async fn revalidate(
     source: &Source,
     request: &super::cache::ListingRequest,
-    file: std::path::PathBuf,
+    store: crate::store::Store,
     api: &impl GithubApi,
 ) -> Result<RepoList, String> {
     let login = authenticated_login(api).await?;
     let list = fetch_listing(source, api, login.as_deref()).await;
-    request.finish(file, login, &list).await?;
+    request.finish(store, login, &list).await?;
     Ok(list)
 }
 
@@ -264,6 +264,10 @@ mod tests {
         assert_eq!(api.paths.borrow().len(), MAX_PAGES as usize);
     }
 
+    fn store(fixture: &crate::platform::Fixture) -> crate::store::Store {
+        crate::store::Store::open(&fixture.0.join("store.sqlite3"), &Default::default()).unwrap()
+    }
+
     fn revalidation_source(id: &str) -> Source {
         Source {
             id: id.into(),
@@ -281,42 +285,40 @@ mod tests {
     #[tokio::test]
     async fn login_change_replaces_the_stale_disk_rows() {
         let source = revalidation_source("revalidate-login");
-        let file = crate::platform::Fixture::new("revalidate-login")
-            .0
-            .join("listing.json");
+        let scratch = crate::platform::Fixture::new("revalidate-login");
+        let store = store(&scratch);
         let first = super::super::cache::ListingRequest::new(&source, false).unwrap();
         let api = listing_of("admin", "first", "admin");
-        revalidate(&source, &first, file.clone(), &api)
+        revalidate(&source, &first, store.clone(), &api)
             .await
             .unwrap();
         let again = super::super::cache::ListingRequest::new(&source, false).unwrap();
-        let stale = again.read_stale(file.clone()).await.unwrap().unwrap();
+        let stale = again.read_stale(store.clone()).await.unwrap().unwrap();
         assert!(stale.stale);
         assert_eq!(stale.repos[0].name, "first");
         let api = listing_of("admin", "second", "Admin");
-        let fresh = revalidate(&source, &again, file.clone(), &api)
+        let fresh = revalidate(&source, &again, store.clone(), &api)
             .await
             .unwrap();
         assert!(!fresh.stale);
-        let stored = again.read_stale(file).await.unwrap().unwrap();
+        let stored = again.read_stale(store).await.unwrap().unwrap();
         assert_eq!(stored.repos[0].name, "second");
     }
 
     #[tokio::test]
     async fn offline_revalidation_keeps_the_stale_disk_rows() {
         let source = revalidation_source("revalidate-offline");
-        let file = crate::platform::Fixture::new("revalidate-offline")
-            .0
-            .join("listing.json");
+        let scratch = crate::platform::Fixture::new("revalidate-offline");
+        let store = store(&scratch);
         let first = super::super::cache::ListingRequest::new(&source, false).unwrap();
         let api = listing_of("admin", "kept", "admin");
-        revalidate(&source, &first, file.clone(), &api)
+        revalidate(&source, &first, store.clone(), &api)
             .await
             .unwrap();
         let again = super::super::cache::ListingRequest::new(&source, false).unwrap();
         let offline = fixture(vec![Err((0, "offline".into()))]);
         assert_eq!(
-            revalidate(&source, &again, file.clone(), &offline)
+            revalidate(&source, &again, store.clone(), &offline)
                 .await
                 .unwrap_err(),
             "offline"
@@ -325,11 +327,11 @@ mod tests {
             page(serde_json::json!({"login":"admin"}), false),
             Err((0, "offline".into())),
         ]);
-        let list = revalidate(&source, &again, file.clone(), &partial)
+        let list = revalidate(&source, &again, store.clone(), &partial)
             .await
             .unwrap();
         assert!(!list.errors.is_empty());
-        let stored = again.read_stale(file).await.unwrap().unwrap();
+        let stored = again.read_stale(store).await.unwrap().unwrap();
         assert_eq!(stored.repos[0].name, "kept");
     }
 

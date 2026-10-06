@@ -22,6 +22,7 @@ mod platform;
 #[cfg(not(windows))]
 mod unsupported_files;
 mod settings;
+mod store;
 mod credentials;
 mod discover;
 mod discover_job;
@@ -92,6 +93,7 @@ pub fn run() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
                     .data_directory(webview).build()?;
             }
+            app.manage(store::Store::open_in(&app.path().app_data_dir()?));
             git::attach(app.handle().clone());
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {

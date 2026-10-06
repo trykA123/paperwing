@@ -7,7 +7,7 @@ Each owner admits at most 32 producers and 256 consumers and reports excess admi
 
 | Metadata | Versioned scope | Freshness and invalidation |
 | --- | --- | --- |
-| Listings | Source ID, kind, host, owners, credential management and credential revision | Source or token edits and credential-store failures invalidate. A missing token does not. Disk rows are keyed on cache version and source configuration, store the login they were fetched for, and are shown as stale on startup. Every load then revalidates in the foreground (`GET /user` and listing) and replaces the rows. Offline or failed revalidation keeps the stale rows. |
+| Listings | Source ID, kind, host, owners, credential management and credential revision | Source or token edits and credential-store failures invalidate. A missing token does not. Rows live in the local SQLite store (`skein-store.sqlite3` in the app data directory) and are keyed on cache version and source configuration, store the login they were fetched for, and are shown as stale on startup. Every load then revalidates in the foreground (`GET /user` and listing) and replaces the rows. Offline or failed revalidation keeps the stale rows. |
 | Histories | Source configuration and revision, repository, requested branch and ref epoch | Ref selection changes the requested branch scope. Forced refresh and source/token edits invalidate. Focus and Git operation status refresh mark entries stale: the last data stays visible and open pickers reload it. |
 | Remote refs | URL, all owning source configurations/revisions and ref epoch | Force refresh and source/token edits invalidate. Focus marks entries stale; badges keep the last value and pickers re-request. A failed reload keeps the stale entry. |
 | Trees | Path, destination root, observed root/path identity, native Git/common-directory identity and generation | Root changes, focus, Git operation status refresh and explicit refresh invalidate. Credential revisions also invalidate trees for that source’s set items. New physical path observations invalidate immediately. Native responses bind root, `.git`, Git directory and common directory identities before and after reading. |
@@ -29,5 +29,5 @@ The controlled transport fixtures use synthetic responses without network or a c
 Live token permissions, Enterprise server compatibility and Windows native acceptance require
 the separate native acceptance run. Fine-grained tokens expose only their granted repositories.
 
-The cache is disposable. Rollback can remove `repos-<source-id>.json` from the application
+The cache is disposable. Commit histories are also written to the store (not yet read back). Rollback can delete `skein-store.sqlite3` (and its `-wal` and `-shm` files) from the application data directory after closing the app; old `repos-<source-id>.json` files in the application
 cache after closing the app; credentials, settings and repositories do not need changes.

@@ -1,13 +1,15 @@
 use crate::settings::{valid_id, Source};
+use crate::store::Store;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 mod cache;
+mod commit_cache;
 mod http;
 mod listing;
 use http::{get_json, GithubApi};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Repo {
     pub id: String,
@@ -31,14 +33,7 @@ pub struct RepoList {
     pub stale: bool,
 }
 
-#[derive(Serialize)]
-pub struct Commit {
-    sha: String,
-    message: String,
-    author: String,
-    date: String,
-    parents: Vec<String>,
-}
+pub use crate::store::CommitRow as Commit;
 
 #[derive(Deserialize)]
 struct GhOwner {
@@ -187,8 +182,13 @@ pub async fn list_repos(app: AppHandle, source: Source, refresh: bool) -> Result
     let http = http::Http::connect_at(&source, request.revision())
         .await
         .map_err(|(_, reason)| reason)?;
-    let file = cache_file(&app, &source.id)?;
-    listing::revalidate(&source, &request, file, &http).await
+    listing::revalidate(
+        &source,
+        &request,
+        app.state::<Store>().inner().clone(),
+        &http,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -198,16 +198,8 @@ pub async fn list_cached_repos(app: AppHandle, source: Source) -> Result<Option<
         return Ok(None);
     }
     cache::ListingRequest::new(&source, false)?
-        .read_stale(cache_file(&app, &source.id)?)
+        .read_stale(app.state::<Store>().inner().clone())
         .await
-}
-
-fn cache_file(app: &AppHandle, source_id: &str) -> Result<std::path::PathBuf, String> {
-    Ok(app
-        .path()
-        .app_cache_dir()
-        .map_err(|error| error.to_string())?
-        .join(format!("repos-{source_id}.json")))
 }
 
 #[tauri::command]
@@ -232,6 +224,7 @@ pub async fn list_user_orgs(source: Source) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub async fn get_commits(
+    app: AppHandle,
     source: Source,
     org: String,
     name: String,
@@ -252,7 +245,7 @@ pub async fn get_commits(
         .await
         .map_err(|(_, reason)| reason)?
         .data;
-    Ok(list
+    let commits: Vec<Commit> = list
         .into_iter()
         .map(|c| {
             let (author, date) = c
@@ -268,5 +261,17 @@ pub async fn get_commits(
                 parents: c.parents.into_iter().map(|p| p.sha).collect(),
             }
         })
-        .collect())
+        .collect();
+    commit_cache::remember(
+        &app.state::<Store>(),
+        &commit_cache::Request {
+            source: &source,
+            org: &org,
+            name: &name,
+            branch: &branch,
+            revision,
+        },
+        &commits,
+    );
+    Ok(commits)
 }
