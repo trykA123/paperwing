@@ -1,5 +1,5 @@
 /* ---------- notifications, tooltips, empty and loading states ---------- */
-.toasts {
+.notices {
     position: fixed;
     right: 16px;
     bottom: 38px;
@@ -11,62 +11,99 @@
     pointer-events: none;
 }
 
-.toast {
+.notice {
     --kind: var(--acc);
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 24px;
+    align-items: start;
     gap: 10px;
     padding: 10px 8px 10px 12px;
     background: var(--panel);
     border: 1px solid var(--line);
     border-left: 3px solid var(--kind);
-    border-radius: 10px;
+    border-radius: var(--r-card);
     box-shadow: var(--shadow-2);
+    color: var(--text);
     font-size: var(--fs-md);
     pointer-events: auto;
 }
 
-.toast.success {
+.notice.success {
     --kind: var(--ok);
 }
 
-.toast.warn {
+.notice.warn {
     --kind: var(--warn);
 }
 
-.toast.error {
+.notice.error {
     --kind: var(--err);
 }
 
-.toast-icon {
+.notice.loading {
+    --kind: var(--hl);
+}
+
+.notice-icon {
     display: grid;
     place-items: center;
-    height: 20px;
+    height: 24px;
+    border-radius: 6px;
+    background: color-mix(in oklch, var(--kind) 16%, transparent);
     color: var(--kind);
 }
 
-.toast-msg {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    padding-top: 1px;
+.notice.loading .notice-icon {
+    background: transparent;
 }
 
-.toast-action {
-    flex: none;
-    padding: 2px 8px;
+.notice-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding-top: 3px;
+}
+
+.notice-msg {
+    overflow-wrap: anywhere;
+}
+
+.notice.has-detail .notice-msg {
+    font-weight: 600;
+}
+
+.notice-detail {
+    color: var(--dim);
+    font-size: var(--fs-sm);
+    overflow-wrap: anywhere;
+}
+
+.notice-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.notice-action {
+    padding: 2px 10px;
+    border: 1px solid var(--line-ctl);
     border-radius: 6px;
-    color: var(--acc);
+    color: var(--text);
     font-weight: 600;
     font-size: var(--fs-sm);
 }
 
-.toast-action:hover {
-    background: var(--accs);
+.notice-action.ghost {
+    border-color: transparent;
+    color: var(--dim);
 }
 
-.toast-close {
-    flex: none;
+.notice-action:hover {
+    background: var(--soft);
+}
+
+.notice-close {
     display: grid;
     place-items: center;
     width: 24px;
@@ -75,7 +112,7 @@
     color: var(--faint-text);
 }
 
-.toast-close:hover {
+.notice-close:hover {
     background: var(--soft);
     color: var(--text);
 }

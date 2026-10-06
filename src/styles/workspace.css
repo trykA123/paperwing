@@ -125,33 +125,60 @@ h2 {
 }
 
 .banner {
+    --kind: var(--acc);
+    --tint: var(--info-bg);
+    --edge: var(--info-line);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
     padding: 9px 14px;
+    border: 1px solid var(--edge);
     border-radius: 10px;
+    background: var(--tint);
+    color: var(--text);
     font-size: var(--fs-md);
 }
 
 .banner.err {
-    background: var(--err-bg);
-    border: 1px solid var(--err-line);
-    color: var(--err-text);
+    --kind: var(--err);
+    --tint: var(--err-bg);
+    --edge: var(--err-line);
 }
 
 .banner.warn {
-    background: var(--warn-bg);
-    border: 1px solid var(--warn-line);
-    color: var(--warn-text);
+    --kind: var(--warn);
+    --tint: var(--warn-bg);
+    --edge: var(--warn-line);
 }
 
 .banner.ok {
-    background: var(--ok-bg);
-    border: 1px solid var(--ok-line);
-    color: var(--ok-text);
+    --kind: var(--ok);
+    --tint: var(--ok-bg);
+    --edge: var(--ok-line);
 }
 
-.banner.info {
-    background: var(--info-bg);
-    border: 1px solid var(--info-line);
-    color: var(--acc);
+.banner-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    height: 20px;
+    color: var(--kind);
+}
+
+.banner-body {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    padding-top: 1px;
+    overflow-wrap: anywhere;
+}
+
+.banner-title {
+    font-weight: 600;
+}
+
+.banner-action {
+    flex: none;
 }
 
 /* virtual list */

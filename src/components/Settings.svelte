@@ -5,6 +5,7 @@
   import { credentialLabel, credentialStoreName } from '../lib/state/credentials.svelte';
   import { api, type Source, type SourceKind } from '../lib/api';
   import Icon, { type IconName, type IconTone } from './Icon.svelte';
+  import Alert from './Alert.svelte';
   import AppearanceSection from './settings/AppearanceSection.svelte';
   import CloningSection from './settings/CloningSection.svelte';
   import SourceForm from './settings/SourceForm.svelte';
@@ -204,7 +205,7 @@
     </div>
 
   {#if !app.sources.length && !draft}
-    <div class="banner info">No sources yet. Add GitHub, your GitHub Enterprise server, or manual repository URLs.</div>
+    <Alert kind="info">No sources yet. Add GitHub, your GitHub Enterprise server, or manual repository URLs.</Alert>
   {/if}
 
   {#if app.sources.length}
