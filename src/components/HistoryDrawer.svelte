@@ -3,6 +3,7 @@
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { api, type RepositoryHistory } from '../lib/api';
+  import { app } from '../lib/state.svelte';
   import { motionMs } from '../lib/appearance';
   import { containFocus, trapTab } from '../lib/focus-trap';
   import { canLoadMore, describeHistory, hasSharedBase, layoutHistory } from '../lib/history-graph';
@@ -87,6 +88,7 @@
       <h2>{target.name}</h2>
       {#if history}<span class="history-branch mono"><Icon name="branch" tone="branch" />{history.branch ?? 'detached HEAD'}</span>{/if}
     </div>
+    <button class="btn small" title="Delete branches that are already merged" onclick={() => { app.cleanupDialog ??= { targets: [{ path: target.path, name: target.name }] }; }}><Icon name="trash" />Clean up branches</button>
     <button class="shell-control" title="Close history" aria-label="Close history" onclick={() => historyDrawer.close()}><Icon name="close" /></button>
   </header>
   <div class="history-body">

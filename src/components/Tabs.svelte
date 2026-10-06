@@ -25,7 +25,7 @@
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"
           tabindex={tab.id === app.activeTabId ? 0 : -1} title={app.temporary.find(tab.setId) ? `${app.tabTitle(tab)} (temporary, not saved)` : app.tabTitle(tab)}
           onclick={() => app.activateTab(tab.id)} onkeydown={event => navigate(event, index)}>
-          <Icon name={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'copy' : tab.view.kind === 'fileDiff' ? 'code' : tab.view.kind === 'settings' ? 'gear' : tab.view.kind === 'search' || tab.view.kind === 'org' ? 'search' : 'folder'}
+          <Icon name={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'copy' : tab.view.kind === 'fileDiff' ? 'code' : tab.view.kind === 'settings' ? 'gear' : tab.view.kind === 'search' || tab.view.kind === 'codeSearch' || tab.view.kind === 'org' ? 'search' : 'folder'}
             tone={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'brand' : tab.view.kind === 'fileDiff' ? 'file' : tab.view.kind === 'set' || tab.view.kind === 'item' ? 'folder' : undefined} />
           <span>{app.tabTitle(tab)}</span>
         </button>

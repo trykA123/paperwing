@@ -115,6 +115,7 @@
     },
     check: checkRefs,
     branch: () => app.openBranchDialog(targets.cloned),
+    cleanup: () => app.openCleanupDialog(targets.cloned),
     commit: () => { if (dirty[0]) app.openGitDialog('commit', dirty[0]); },
     clear: () => app.setAllOn(false),
   };

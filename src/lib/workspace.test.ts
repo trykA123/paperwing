@@ -1,7 +1,7 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
 import type { Workspace } from './api';
-import { defaultWorkspace, migrateWorkspace } from './workspace';
+import { defaultWorkspace, migrateWorkspace, tabId } from './workspace';
 
 describe('P1 saved workspace', () => {
   test('legacy data, unknown fields and duplicate folders survive two round trips', () => {
@@ -37,5 +37,18 @@ describe('P1 saved workspace', () => {
     expect(restored.sets).toHaveLength(1);
     expect(restored.activeSet).toBe(restored.sets[0].id);
     expect(restored.root).toBe('E:\\private');
+  });
+});
+
+describe('code search tab', () => {
+  test('has one tab per set and never collides with the repository browser', () => {
+    expect(tabId({ kind: 'codeSearch' }, 'a')).toBe('codeSearch:a');
+    expect(tabId({ kind: 'codeSearch' }, 'a')).not.toBe(tabId({ kind: 'search' }, 'a'));
+    expect(tabId({ kind: 'codeSearch' }, 'a')).not.toBe(tabId({ kind: 'codeSearch' }, 'b'));
+  });
+
+  test('a saved workspace from before the tab existed still loads', () => {
+    const saved = { activeSet: 's', sets: [{ id: 's', name: 'S', items: [] }], shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: 'sets' } };
+    expect(migrateWorkspace(saved as unknown as Partial<Workspace>).activeSet).toBe('s');
   });
 });

@@ -19,6 +19,8 @@ import {
 } from './api';
 import { CompareState, SetCompareState, type SetCompareRow } from './compare.svelte';
 import { confirm } from './confirm';
+import { SearchSession } from './search.svelte';
+import type { CleanupTarget } from './branch-cleanup';
 import { defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } from './workspace';
 import { NotificationStore, type NoticeAction, type NoticeKind, type NoticeOptions } from './notifications.svelte';
 export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
@@ -108,6 +110,7 @@ class AppState {
   recoveryOpen = $state(false);
   readonlyBenchmark = false;
   gitDialog = $state<{ kind: 'commit' | 'branch'; path: string; name: string; itemId?: string; targets?: { path: string; name: string }[] } | null>(null);
+  cleanupDialog = $state<{ targets: CleanupTarget[] } | null>(null);
   /** True while a push or branch deletion runs; clone jobs use `running` instead. */
   gitBusy = $state(false);
   copyActions = $state<Record<string, { left: boolean; right: boolean; copy: (side: 'left' | 'right') => void; leftReason?: string | null; rightReason?: string | null }>>({});
@@ -180,6 +183,7 @@ class AppState {
   activeTabId = $state('');
   comparisons = $state<Record<string, CompareState>>({});
   setComparisons = $state<Record<string, SetCompareState>>({});
+  codeSearches = $state<Record<string, SearchSession>>({});
   activeTab = $derived(this.tabs.find(tab => tab.id === this.activeTabId));
   view = $derived<View>(this.activeTab?.view ?? { kind: 'set' });
   focusedItem = $derived.by(() => {
@@ -330,6 +334,7 @@ class AppState {
       void this.setComparisons[view.comparisonId]?.cancel().catch(error => this.toast(String(error), 'error'));
       delete this.setComparisons[view.comparisonId];
     }
+    if (view.kind === 'codeSearch') this.#disposeSearch(id);
     if (view.kind === 'compare') {
       const state = this.comparisons[view.comparisonId];
       if (state) void state.close().catch(error => this.toast(String(error), 'error'));
@@ -354,6 +359,7 @@ class AppState {
         ?? set?.items.find(item => item.id === view.itemId)?.name ?? 'Repository';
       case 'org': return `${view.org} → ${set?.name ?? 'Set'}`;
       case 'search': return `Search → ${set?.name ?? 'Set'}`;
+      case 'codeSearch': return `Code search → ${set?.name ?? 'Set'}`;
       case 'compare': return view.readOnly ? 'Compare (read-only)' : 'Compare';
       case 'setCompare': return `Compare ${set?.name ?? 'Set'}`;
       case 'fileDiff': return view.path.split('/').at(-1) ?? 'File diff';
@@ -368,6 +374,27 @@ class AppState {
     this.openView({ kind: 'compare', comparisonId, readOnly,
       left: { setId: this.set.id, itemId: item.id, reference: { kind: 'head' } },
       right: { setId: this.set.id, itemId: item.id, reference: { kind: readOnly ? 'head' : 'workingTree' } } });
+  }
+
+  #disposeSearch(id: string) {
+    void this.codeSearches[id]?.dispose().catch(error => this.toast(`Could not stop the search: ${error}`, 'error'));
+    delete this.codeSearches[id];
+  }
+
+  openCodeSearch() {
+    const id = tabId({ kind: 'codeSearch' }, this.set.id);
+    if (!this.codeSearches[id]) {
+      const session = new SearchSession();
+      void session.loadCapabilities();
+      this.codeSearches[id] = session;
+    }
+    this.openView({ kind: 'codeSearch' }, this.set.id);
+  }
+
+  openCleanupDialog(items: SetItem[]) {
+    const targets = items.filter(item => this.local[this.dest(item)]?.repo).map(item => ({ path: this.dest(item), name: this.folderOf(item) }));
+    if (!targets.length) { this.toast('Clone the repositories first', 'warn'); return; }
+    if (!this.cleanupDialog) this.cleanupDialog = { targets };
   }
 
   openSetCompare() {
@@ -512,7 +539,7 @@ class AppState {
     if (this.bufferGuards.size && !await this.guardBuffers()) return;
     if (trashFolders && (this.running || this.clonePreparing || this.gitBusy)) { this.toast('Wait for the running Git operation to finish first', 'warn'); return; }
     for (const tab of [...this.tabs]) {
-      if (tab.setId === id && tab.view.kind === 'setCompare') await this.closeTab(tab.id);
+      if (tab.setId === id && (tab.view.kind === 'setCompare' || tab.view.kind === 'codeSearch')) await this.closeTab(tab.id);
       if (tab.view.kind === 'compare' && (tab.setId === id || [tab.view.left, tab.view.right].some(endpoint => endpoint.setId === id))) await this.closeTab(tab.id);
     }
     if (trashFolders) {

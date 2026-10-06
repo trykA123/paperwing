@@ -1,0 +1,300 @@
+.cleanup-dialog {
+    width: min(720px, calc(100vw - 48px));
+}
+
+.cleanup-dialog > header {
+    margin-bottom: var(--sp-3);
+}
+
+.cleanup-tabs {
+    margin-bottom: var(--sp-3);
+    background: var(--soft);
+}
+
+.cleanup-tabs button small {
+    margin-left: var(--sp-2);
+    padding: 1px 6px;
+    border-radius: var(--r-ctl);
+    background: var(--accs);
+    color: var(--acc-text, var(--text));
+    font-size: var(--fs-xs);
+}
+
+.cleanup-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    max-height: calc(100vh - 300px);
+    overflow: auto;
+}
+
+.cleanup-repo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+}
+
+.cleanup-repo h3 {
+    margin: 0;
+    font-size: var(--fs-base);
+}
+
+.cleanup-repo h3 small {
+    margin-left: var(--sp-2);
+    font-weight: 400;
+}
+
+.cleanup-list {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+}
+
+.cleanup-list-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--line);
+    font-size: var(--fs-sm);
+}
+
+.cleanup-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 32px;
+    padding: 0 var(--sp-3);
+    font-size: var(--fs-sm);
+}
+
+.cleanup-row:hover {
+    background: var(--hover);
+}
+
+.cleanup-row.blocked {
+    color: var(--dim);
+}
+
+.cleanup-name {
+    flex: none;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cleanup-subject {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cleanup-date {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.cleanup-tag {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: 1px var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--dim);
+    font-size: var(--fs-xs);
+}
+
+.cleanup-tag.warn {
+    border-color: var(--warn-line);
+    background: var(--warn-bg);
+    color: var(--warn-text);
+}
+
+.cleanup-empty {
+    margin: 0;
+    padding: var(--sp-3);
+    font-size: var(--fs-sm);
+}
+
+.cleanup-blocked summary {
+    padding: var(--sp-2) var(--sp-3);
+    border-top: 1px solid var(--line);
+    color: var(--dim);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+}
+
+.history-head > .btn {
+    margin-left: auto;
+}
+
+.code-search {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    height: 100%;
+    min-height: 0;
+}
+
+.cs-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+}
+
+.cs-line,
+.cs-options,
+.cs-scope {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+}
+
+.cs-pattern {
+    flex: 1;
+    min-width: 220px;
+}
+
+.cs-pattern input,
+.cs-paths input {
+    width: 100%;
+    min-width: 0;
+}
+
+.cs-paths {
+    flex: 1;
+    min-width: 220px;
+}
+
+.cs-refs {
+    flex-basis: 100%;
+    font-size: var(--fs-sm);
+}
+
+.cs-refs summary {
+    cursor: pointer;
+    color: var(--dim);
+}
+
+.cs-refs ul {
+    display: grid;
+    grid-template-columns: minmax(120px, 240px) minmax(160px, 320px);
+    gap: var(--sp-1) var(--sp-3);
+    max-height: 160px;
+    margin: var(--sp-2) 0 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.cs-refs li {
+    display: contents;
+}
+
+.cs-results {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--sp-2);
+    min-height: 0;
+}
+
+.cs-status {
+    min-height: 20px;
+    color: var(--dim);
+    font-size: var(--fs-sm);
+}
+
+.cs-list {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    overflow: hidden;
+}
+
+.cs-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: 100%;
+    padding: 0 var(--sp-3);
+    overflow: hidden;
+    font-size: var(--fs-sm);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.cs-repo {
+    background: var(--soft);
+    border-bottom: 1px solid var(--line);
+}
+
+.cs-file {
+    color: var(--dim);
+}
+
+.cs-file .mono {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cs-context {
+    color: var(--faint-text);
+}
+
+button.cs-match:hover {
+    background: var(--hover);
+}
+
+.cs-line-no {
+    flex: none;
+    min-width: 56px;
+    padding-left: var(--sp-4);
+    color: var(--faint-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.cs-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre;
+}
+
+.cs-state {
+    padding: 1px var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    font-size: var(--fs-xs);
+}
+
+.cs-state.ok {
+    border-color: var(--ok-line);
+    color: var(--ok-text);
+}
+
+.cs-state.warn {
+    border-color: var(--warn-line);
+    color: var(--warn-text);
+}
+
+.cs-state.err {
+    border-color: var(--err-line);
+    color: var(--err-text);
+}
+
+.cs-error {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--err-text);
+    text-overflow: ellipsis;
+}
