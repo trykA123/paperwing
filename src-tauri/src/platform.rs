@@ -309,32 +309,11 @@ pub(crate) fn same_destination(left: &Path, right: &Path) -> Result<bool, String
     ))
 }
 
-#[cfg(not(target_os = "linux"))]
-#[tauri::command]
-pub async fn probe_root(root: String) -> RootSupport {
-    let failed = root.clone();
-    crate::ordered::map_bounded(
-        vec![root],
-        8,
-        |root| async move {
-            let fallback = root.clone();
-            tauri::async_runtime::spawn_blocking(move || probe_root_sync(root))
-                .await
-                .unwrap_or_else(|_| refused_root(fallback, "Root probe could not finish. Retry root selection."))
-        },
-        move |_| refused_root(failed.clone(), "Root probe could not finish. Retry root selection."),
-    )
-    .await
-    .remove(0)
-}
-
-#[cfg(target_os = "linux")]
 #[tauri::command]
 pub async fn probe_root(root: String) -> RootSupport {
     probe_root_bounded(root, probe_root_sync).await
 }
 
-#[cfg(target_os = "linux")]
 async fn probe_root_bounded(
     root: String,
     probe: impl FnOnce(String) -> RootSupport + Send + 'static,
@@ -348,7 +327,7 @@ async fn probe_root_bounded(
     else {
         return refused_root(
             root,
-            "Linux root probes are busy. Retry after the current probes finish.",
+            "Root probes are busy. Retry after the current probes finish.",
         );
     };
     let failed_root = root.clone();
@@ -361,7 +340,7 @@ async fn probe_root_bounded(
         Ok(support) => support,
         Err(_) => refused_root(
             failed_root,
-            "Linux root probe could not finish. Retry root selection.",
+            "Root probe could not finish. Retry root selection.",
         ),
     }
 }
@@ -408,15 +387,29 @@ fn probe_root_sync(root: String) -> RootSupport {
 
 #[tauri::command]
 pub async fn path_identities(paths: Vec<String>) -> Vec<PathIdentity> {
+    static SLOTS: std::sync::OnceLock<std::sync::Arc<tokio::sync::Semaphore>> =
+        std::sync::OnceLock::new();
     let names = paths.clone();
+    let slots = SLOTS
+        .get_or_init(|| std::sync::Arc::new(tokio::sync::Semaphore::new(8)))
+        .clone();
     crate::ordered::map_bounded(
         paths,
         8,
-        |path| async move {
-            let fallback = path.clone();
-            tauri::async_runtime::spawn_blocking(move || path_identities_sync(vec![path]).remove(0))
+        move |path| {
+            let slots = slots.clone();
+            async move {
+                let Ok(permit) = slots.try_acquire_owned() else {
+                    return unavailable_identity(path);
+                };
+                let fallback = path.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let _permit = permit;
+                    path_identities_sync(vec![path]).remove(0)
+                })
                 .await
                 .unwrap_or_else(|_| unavailable_identity(fallback))
+            }
         },
         move |index| unavailable_identity(names[index].clone()),
     )
@@ -522,6 +515,7 @@ mod tests {
         assert!(identities.iter().enumerate().all(|(index, entry)| entry.exists == (index % 3 == 0)));
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn linux_ipc_serialization_reports_native_reads_and_exact_write_refusals() {
         assert_eq!(

@@ -5,6 +5,8 @@ use super::{execute, valid_path, valid_ref, valid_root, Captured, OutputPolicy, 
 use serde::Serialize;
 use std::time::Duration;
 
+const MAX_SUBMODULE_COMMAND_UNITS: usize = 24 * 1024;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TreeRef {
@@ -243,26 +245,79 @@ async fn read_submodules(path: &str, tree: &mut RepositoryTree) -> Result<(), St
     if declared.is_empty() {
         return Ok(());
     }
-    let mut args = vec!["ls-files", "--stage", "-z", "--"];
-    args.extend(declared.iter().map(String::as_str));
-    let listing = tree_output(path, &args, &[0], OutputPolicy::Metadata).await?;
-    for entry in listing.stdout.split(|byte| *byte == 0) {
-        let text = String::from_utf8_lossy(entry);
-        let Some((metadata, relative)) = text.split_once('\t') else {
-            continue;
-        };
-        let fields: Vec<_> = metadata.split(' ').collect();
-        if fields.len() == 3 && fields[0] == "160000" && fields[2] == "0" {
-            let url = config
-                .values()
-                .find(|(declared, _)| declared.as_deref() == Some(relative))
-                .and_then(|(_, url)| url.clone());
-            tree.submodules.push(TreeSubmodule {
-                path: listing.safe(relative),
-                sha: fields[1].into(),
-                url,
-            });
+    for chunk in submodule_path_chunks(path, &declared)? {
+        let mut args = vec!["--literal-pathspecs", "ls-files", "--stage", "-z", "--"];
+        args.extend(chunk.iter().map(String::as_str));
+        let listing = tree_output(path, &args, &[0], OutputPolicy::Metadata).await?;
+        for entry in listing.stdout.split(|byte| *byte == 0) {
+            let text = String::from_utf8_lossy(entry);
+            let Some((metadata, relative)) = text.split_once('\t') else {
+                continue;
+            };
+            let fields: Vec<_> = metadata.split(' ').collect();
+            if fields.len() == 3 && fields[0] == "160000" && fields[2] == "0" {
+                let url = config
+                    .values()
+                    .find(|(declared, _)| declared.as_deref() == Some(relative))
+                    .and_then(|(_, url)| url.clone());
+                tree.submodules.push(TreeSubmodule {
+                    path: listing.safe(relative),
+                    sha: fields[1].into(),
+                    url,
+                });
+            }
         }
     }
     Ok(())
+}
+
+pub(super) fn submodule_path_chunks<'a>(
+    repository: &str,
+    paths: &'a [String],
+) -> Result<Vec<&'a [String]>, String> {
+    let command_args = [
+        "git",
+        "-C",
+        repository,
+        "--literal-pathspecs",
+        "ls-files",
+        "--stage",
+        "-z",
+        "--",
+    ];
+    let fixed_units = command_args
+        .iter()
+        .map(|arg| windows_argument_units(arg))
+        .sum::<usize>()
+        + 512;
+    let budget = MAX_SUBMODULE_COMMAND_UNITS
+        .checked_sub(fixed_units)
+        .ok_or_else(|| "Repository path exceeds the safe submodule command length".to_string())?;
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    let mut used = fixed_units;
+    for (index, path) in paths.iter().enumerate() {
+        let length = windows_argument_units(path);
+        if length > budget {
+            return Err("Submodule path exceeds the safe command length".into());
+        }
+        if index > start && used + length > MAX_SUBMODULE_COMMAND_UNITS {
+            chunks.push(&paths[start..index]);
+            start = index;
+            used = fixed_units;
+        }
+        used += length;
+    }
+    if start < paths.len() {
+        chunks.push(&paths[start..]);
+    }
+    Ok(chunks)
+}
+
+fn windows_argument_units(argument: &str) -> usize {
+    argument
+        .encode_utf16()
+        .map(|unit| if unit == u16::from(b'"') { 2 } else { 1 })
+        .sum::<usize>()
+        + 3
 }

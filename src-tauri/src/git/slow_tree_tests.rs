@@ -16,6 +16,29 @@ fn git(dir: &std::path::Path, args: &[&str]) {
     );
 }
 
+fn gitlinks(root: &std::path::Path, paths: &[String]) {
+    let sha = "1111111111111111111111111111111111111111";
+    let mut child = Command::new("git")
+        .current_dir(root)
+        .args(["update-index", "-z", "--index-info"])
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let mut input = child.stdin.take().unwrap();
+        for path in paths {
+            write!(input, "160000 {sha} 0\t{path}\0").unwrap();
+        }
+    }
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn big_repo(root: &std::path::Path, files: usize, remote_branches: usize) {
     std::fs::create_dir_all(root).unwrap();
     git(root, &["init", "-q", "-b", "main"]);
@@ -139,6 +162,67 @@ async fn tree_lists_gitlinks_declared_in_gitmodules_with_urls() {
         Some("https://example.invalid/dep.git")
     );
     assert!(tree.warning.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn gitmodules_glob_paths_match_only_the_literal_index_path() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let root = std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap())
+        .join("tree-literal-path");
+    let _ = std::fs::remove_dir_all(&root);
+    big_repo(&root, 5, 1);
+    let paths = vec!["*".to_string(), "modules/other".to_string()];
+    gitlinks(&root, &paths);
+    std::fs::write(
+        root.join(".gitmodules"),
+        "[submodule \"glob\"]\n\tpath = *\n\turl = x\n",
+    )
+    .unwrap();
+
+    let tree = repository_tree(root.to_string_lossy().into_owned())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        tree.submodules
+            .iter()
+            .map(|submodule| submodule.path.as_str())
+            .collect::<Vec<_>>(),
+        ["*"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn long_gitmodules_path_lists_are_chunked_and_merged() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let root =
+        std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap()).join("tree-path-chunks");
+    let _ = std::fs::remove_dir_all(&root);
+    big_repo(&root, 0, 1);
+    let paths: Vec<String> = (0..300)
+        .map(|index| format!("modules/{index:04}/{}", "component".repeat(11)))
+        .collect();
+    assert!(
+        super::repository_tree::submodule_path_chunks(&root.to_string_lossy(), &paths)
+            .unwrap()
+            .len()
+            > 1
+    );
+    gitlinks(&root, &paths);
+    let modules = paths
+        .iter()
+        .enumerate()
+        .map(|(index, path)| format!("[submodule \"dep{index:04}\"]\n\tpath = {path}\n\turl = x\n"))
+        .collect::<String>();
+    std::fs::write(root.join(".gitmodules"), modules).unwrap();
+
+    let tree = repository_tree(root.to_string_lossy().into_owned())
+        .await
+        .unwrap();
+
+    assert_eq!(tree.submodules.len(), paths.len());
+    assert_eq!(tree.submodules.first().unwrap().path, paths[0]);
+    assert_eq!(tree.submodules.last().unwrap().path, paths[paths.len() - 1]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

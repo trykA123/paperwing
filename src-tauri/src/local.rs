@@ -78,12 +78,41 @@ async fn status_of(path: String) -> LocalStatus {
 #[tauri::command]
 pub async fn local_status(paths: Vec<String>) -> Vec<LocalStatus> {
     let names = paths.clone();
-    crate::ordered::map_bounded(paths, 8, status_of, move |index| LocalStatus {
-        path: names[index].clone(),
-        error: Some("Status check did not finish".into()),
-        ..Default::default()
+    crate::ordered::map_bounded(paths, 8, status_of, move |index| {
+        unavailable_status(names[index].clone())
     })
     .await
+}
+
+fn unavailable_status(path: String) -> LocalStatus {
+    let dir = Path::new(&path);
+    let exists = dir.exists();
+    let repo = dir.join(".git").exists();
+    LocalStatus {
+        path,
+        exists,
+        repo,
+        error: Some("Status check did not finish".into()),
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_status_keeps_filesystem_presence() {
+        let fixture = crate::platform::Fixture::new("local-fallback-status");
+        let checkout = fixture.0.join("checkout");
+        std::fs::create_dir_all(checkout.join(".git")).unwrap();
+
+        let status = unavailable_status(checkout.to_string_lossy().into_owned());
+
+        assert!(status.exists);
+        assert!(status.repo);
+        assert_eq!(status.error.as_deref(), Some("Status check did not finish"));
+    }
 }
 
 #[cfg(test)]

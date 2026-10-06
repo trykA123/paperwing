@@ -205,7 +205,11 @@ fn read_cached(mut listing: Listing, scope: &Scope, now: u64) -> Option<RepoList
         fetched_at: listing.fetched_at,
         errors: Vec::new(),
         stale: true,
-        warnings: Vec::new(),
+        warnings: if partial {
+            vec!["Cached list is incomplete".into()]
+        } else {
+            Vec::new()
+        },
         partial,
     })
 }

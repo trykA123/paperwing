@@ -81,6 +81,20 @@ fn stored_rows_cannot_leak_repositories_from_another_source_or_owner() {
     }
 }
 
+#[test]
+fn cached_partial_rows_report_their_incomplete_state() {
+    let scope = scope();
+    let listing = Listing {
+        scope: partial_scope(&scope.configuration),
+        ..stored(&scope, vec![repo("cache-fixture", "admin", "repo")], 10)
+    };
+
+    let cached = read_cached(listing, &scope, 10).unwrap();
+
+    assert!(cached.partial);
+    assert_eq!(cached.warnings, ["Cached list is incomplete"]);
+}
+
 #[tokio::test]
 async fn rows_survive_a_new_process_and_are_served_stale() {
     let source = source("cache-stale-fixture");

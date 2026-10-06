@@ -105,7 +105,9 @@ async fn list_owner(
                 route = format!("/users/{owner}/repos?type=owner");
                 continue;
             }
-            Err((_, reason)) if !repos.is_empty() => return Ok(partial(repos, &reason)),
+            Err((status, reason)) if !repos.is_empty() && is_transient_error(status, &reason) => {
+                return Ok(partial(repos, &reason));
+            }
             Err((_, reason)) => return Err(reason),
         };
         let more = batch.next || batch.data.len() == 100;
@@ -141,6 +143,12 @@ fn partial(repos: Vec<Repo>, reason: &str) -> OwnerListing {
         repos,
         warning: Some(warning),
     }
+}
+
+fn is_transient_error(status: u16, reason: &str) -> bool {
+    (500..600).contains(&status)
+        || (status == 0
+            && (reason.starts_with("Cannot reach ") || reason == "Cannot read GitHub response"))
 }
 
 fn to_repo(source: &Source, repo: GhRepo) -> Repo {
@@ -260,20 +268,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn permissions_never_fall_back_and_later_page_failures_keep_fetched_pages() {
+    async fn non_retryable_later_page_failures_discard_fetched_pages() {
         for status in [401, 403, 404] {
             let api = fixture(vec![
                 page(serde_json::json!([repo("admin", "private", true)]), true),
                 Err((status, "denied".into())),
             ]);
             let list = fetch_listing(&source("admin"), &api, Some("admin")).await;
-            assert_eq!(list.repos.len(), 1);
-            assert!(list.errors.is_empty());
-            assert_eq!(
-                list.warnings,
-                ["admin: showing 1 of more; GitHub returned denied"]
-            );
-            assert!(list.partial);
+            assert!(list.repos.is_empty());
+            assert_eq!(list.errors, ["admin: denied"]);
+            assert!(list.warnings.is_empty());
+            assert!(!list.partial);
             assert_eq!(api.paths.borrow().len(), 2);
         }
         for status in [401, 403, 404] {
@@ -346,6 +351,24 @@ mod tests {
         assert_eq!(
             list.warnings,
             ["big: showing 200 of more; GitHub returned bad gateway"]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_network_failure_after_a_page_returns_partial_results() {
+        let api = fixture(vec![
+            page(serde_json::json!([repo("big", "first", false)]), true),
+            Err((0, "Cannot reach github.com".into())),
+        ]);
+
+        let list = fetch_listing(&source("big"), &api, None).await;
+
+        assert_eq!(list.repos.len(), 1);
+        assert!(list.errors.is_empty());
+        assert!(list.partial);
+        assert_eq!(
+            list.warnings,
+            ["big: showing 1 of more; GitHub returned Cannot reach github.com"]
         );
     }
 
@@ -466,6 +489,31 @@ mod tests {
         assert!(!list.errors.is_empty());
         let stored = again.read_stale(store).await.unwrap().unwrap();
         assert_eq!(stored.repos[0].name, "kept");
+    }
+
+    #[tokio::test]
+    async fn authentication_failure_on_page_two_publishes_and_caches_nothing() {
+        for status in [401, 403] {
+            let source = revalidation_source(&format!("page-two-auth-{status}"));
+            let scratch = crate::platform::Fixture::new(&format!("page-two-auth-{status}"));
+            let store = store(&scratch);
+            let request = super::super::cache::ListingRequest::new(&source, false).unwrap();
+            let api = fixture(vec![
+                page(serde_json::json!({"login":"admin"}), false),
+                page(serde_json::json!([repo("admin", "first-page", true)]), true),
+                Err((status, "denied".into())),
+            ]);
+
+            let published = revalidate(&source, &request, store.clone(), &api)
+                .await
+                .unwrap();
+
+            assert!(published.repos.is_empty());
+            assert_eq!(published.errors, ["admin: denied"]);
+            assert!(!published.partial);
+            assert!(request.read_stale(store.clone()).await.unwrap().is_none());
+            store.close();
+        }
     }
 
     #[test]
