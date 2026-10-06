@@ -2,6 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn lists_merged_and_unmerged_without_current_or_base() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     branch_with_commit(&fixture, "wip", false);
@@ -27,6 +28,7 @@ async fn lists_merged_and_unmerged_without_current_or_base() {
 
 #[tokio::test]
 async fn base_falls_back_to_local_main_and_accepts_override() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     git_in(&fixture.work, &["remote", "remove", "origin"]);
     branch_with_commit(&fixture, "done", true);
@@ -50,6 +52,7 @@ async fn base_falls_back_to_local_main_and_accepts_override() {
 
 #[tokio::test]
 async fn gone_upstream_and_remote_listing() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     branch_with_commit(&fixture, "other", true);
@@ -78,6 +81,7 @@ async fn gone_upstream_and_remote_listing() {
 
 #[tokio::test]
 async fn protected_names_are_not_listed_and_missing_remote_base_empties_remote_list() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     git_in(&fixture.work, &["branch", "master", "main"]);

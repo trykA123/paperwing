@@ -4,6 +4,7 @@ use super::*;
 
 #[tokio::test]
 async fn pop_conflict_keeps_the_stash_and_lists_conflicted_paths() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("a.txt"), "stashed\n").unwrap();
@@ -25,6 +26,7 @@ async fn pop_conflict_keeps_the_stash_and_lists_conflicted_paths() {
 
 #[tokio::test]
 async fn overlapping_local_changes_refuse_apply_without_losing_the_stash() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("a.txt"), "stashed\n").unwrap();
@@ -39,6 +41,7 @@ async fn overlapping_local_changes_refuse_apply_without_losing_the_stash() {
 
 #[tokio::test]
 async fn staged_changes_come_back_staged() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("a.txt"), "staged\n").unwrap();
@@ -58,6 +61,7 @@ async fn staged_changes_come_back_staged() {
 
 #[tokio::test]
 async fn pop_without_index_when_staged_state_cannot_be_restored() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     let numbers: String = (1..=10).map(|n| format!("{n}\n")).collect();
@@ -82,6 +86,7 @@ async fn pop_without_index_when_staged_state_cannot_be_restored() {
 
 #[tokio::test]
 async fn apply_is_refused_while_a_merge_is_in_conflict() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("a.txt"), "stashed\n").unwrap();

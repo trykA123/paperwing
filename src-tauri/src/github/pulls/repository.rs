@@ -225,6 +225,7 @@ mod tests {
 
     #[tokio::test]
     async fn resolves_enterprise_remote_upstream_and_local_tip_without_remote_git_access() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
         let id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

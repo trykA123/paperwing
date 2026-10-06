@@ -118,6 +118,7 @@ fn publish(other: &Path, work: &Path, names: &[&str]) {
 
 #[tokio::test]
 async fn in_sync_branch_has_a_base_and_empty_rails() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("sync");
     let (work, _) = shared(&fixture);
     let history = read_history(work.to_str().unwrap(), None).await.unwrap();
@@ -134,6 +135,7 @@ async fn in_sync_branch_has_a_base_and_empty_rails() {
 
 #[tokio::test]
 async fn ahead_lists_only_local_commits_newest_first() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("ahead");
     let (work, _) = shared(&fixture);
     commit(&work, "three");
@@ -150,6 +152,7 @@ async fn ahead_lists_only_local_commits_newest_first() {
 
 #[tokio::test]
 async fn behind_lists_only_origin_commits_after_a_fetch() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("behind");
     let (work, other) = shared(&fixture);
     publish(&other, &work, &["remote-a", "remote-b"]);
@@ -162,6 +165,7 @@ async fn behind_lists_only_origin_commits_after_a_fetch() {
 
 #[tokio::test]
 async fn diverged_has_both_rails_and_the_split_point_as_base() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("diverged");
     let (work, other) = shared(&fixture);
     commit(&work, "mine");
@@ -174,6 +178,7 @@ async fn diverged_has_both_rails_and_the_split_point_as_base() {
 
 #[tokio::test]
 async fn uncommitted_counts_modified_and_untracked_files() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("dirty");
     let (work, _) = shared(&fixture);
     std::fs::write(work.join("one.txt"), "changed").unwrap();
@@ -184,6 +189,7 @@ async fn uncommitted_counts_modified_and_untracked_files() {
 
 #[tokio::test]
 async fn limit_caps_each_rail_but_totals_stay_exact() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("limit");
     let (work, other) = shared(&fixture);
     for name in ["l1", "l2", "l3"] {
@@ -199,6 +205,7 @@ async fn limit_caps_each_rail_but_totals_stay_exact() {
 
 #[tokio::test]
 async fn no_upstream_shows_a_local_only_rail() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("local");
     let work = fixture.dir("work");
     init(&work);
@@ -213,6 +220,7 @@ async fn no_upstream_shows_a_local_only_rail() {
 
 #[tokio::test]
 async fn detached_head_is_local_only_without_a_branch() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("detached");
     let work = fixture.dir("work");
     init(&work);
@@ -227,6 +235,7 @@ async fn detached_head_is_local_only_without_a_branch() {
 
 #[tokio::test]
 async fn unborn_branch_has_no_commits_but_counts_files() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("unborn");
     let work = fixture.dir("work");
     init(&work);
@@ -248,6 +257,7 @@ async fn rejects_paths_that_are_not_repository_roots() {
 
 #[tokio::test]
 async fn a_tracked_file_named_head_does_not_confuse_revisions() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("headfile");
     let (work, _) = shared(&fixture);
     commit(&work, "HEAD");
@@ -259,6 +269,7 @@ async fn a_tracked_file_named_head_does_not_confuse_revisions() {
 
 #[tokio::test]
 async fn local_only_excludes_commits_already_on_any_remote() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("remotes");
     let (work, _) = shared(&fixture);
     git_in(&work, &["checkout", "-q", "-b", "wip"]);
@@ -273,6 +284,7 @@ async fn local_only_excludes_commits_already_on_any_remote() {
 
 #[tokio::test]
 async fn a_deleted_remote_branch_is_reported_as_gone_not_missing() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("gone");
     let (work, _) = shared(&fixture);
     git_in(&work, &["checkout", "-q", "-b", "topic"]);
@@ -288,6 +300,7 @@ async fn a_deleted_remote_branch_is_reported_as_gone_not_missing() {
 
 #[tokio::test]
 async fn a_local_branch_upstream_drops_the_refs_heads_prefix() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new("localup");
     let work = fixture.dir("work");
     init(&work);

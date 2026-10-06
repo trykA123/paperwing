@@ -29,6 +29,7 @@ async fn stash_count(path: &str) -> usize {
 
 #[tokio::test]
 async fn dirty_switch_stashes_tracked_and_untracked_with_a_named_message() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     git_in(&dir, &["branch", "other"]);
@@ -55,6 +56,7 @@ async fn dirty_switch_stashes_tracked_and_untracked_with_a_named_message() {
 
 #[tokio::test]
 async fn clean_switch_creates_no_stash_and_bad_targets_are_refused() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     git_in(&dir, &["branch", "other"]);
@@ -82,6 +84,7 @@ async fn clean_switch_creates_no_stash_and_bad_targets_are_refused() {
 
 #[tokio::test]
 async fn remote_only_branch_is_tracked_after_stashing() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     let remote = remote_with();
@@ -108,6 +111,7 @@ async fn remote_only_branch_is_tracked_after_stashing() {
 
 #[tokio::test]
 async fn ambiguous_remote_branch_is_refused_before_stashing() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     let (first, second) = (remote_with(), remote_with());

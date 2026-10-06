@@ -497,7 +497,7 @@ mod tests {
                 "edit": {"supported": true, "reason": null},
                 "copy": {"supported": true, "reason": null},
                 "recovery": {"supported": true, "reason": null},
-                "trash": {"supported": false, "reason": "Linux folder trash requires the later native trash backend."}
+                "trash": {"supported": true, "reason": null}
             })
         } else {
             serde_json::json!({

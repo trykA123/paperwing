@@ -14,6 +14,7 @@ async fn delete(fixture: &Fixture, items: &[&str], expected: Vec<String>) -> Vec
 
 #[tokio::test]
 async fn one_leased_push_maps_each_branch() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     branch_with_commit(&fixture, "wip", false);
@@ -56,6 +57,7 @@ async fn one_leased_push_maps_each_branch() {
 
 #[tokio::test]
 async fn deletes_several_branches_in_one_call() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     for name in ["a", "b", "c"] {
         branch_with_commit(&fixture, name, true);
@@ -83,6 +85,7 @@ async fn deletes_several_branches_in_one_call() {
 
 #[tokio::test]
 async fn lease_mismatch_is_refused() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     git_in(&fixture.work, &["push", "-q", "origin", "main", "done"]);
@@ -97,11 +100,13 @@ async fn lease_mismatch_is_refused() {
 
 #[tokio::test]
 async fn remote_rejection_reason_is_returned() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     git_in(&fixture.work, &["push", "-q", "origin", "main", "done"]);
     let hook = fixture.bare.join("hooks/update");
     std::fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+    #[cfg(unix)]
     std::fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     let results = delete(&fixture, &["done"], vec![fixture.tip("done")]).await;
     assert_eq!(error_of(&results[0]), "hook declined");
@@ -110,6 +115,7 @@ async fn remote_rejection_reason_is_returned() {
 
 #[tokio::test]
 async fn merge_only_in_unpushed_local_main_is_not_deletable() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", false);
     git_in(&fixture.work, &["push", "-q", "origin", "done"]);
@@ -124,6 +130,7 @@ async fn merge_only_in_unpushed_local_main_is_not_deletable() {
 
 #[tokio::test]
 async fn refuses_without_a_remote_base() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     git_in(&fixture.work, &["push", "-q", "origin", "done"]);
@@ -157,6 +164,7 @@ async fn refuses_without_a_remote_base() {
 
 #[tokio::test]
 async fn validates_remote_and_names() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     let call = |remote: &str, name: &str| {
         delete_remote_branches(
@@ -183,6 +191,7 @@ async fn validates_remote_and_names() {
 
 #[tokio::test]
 async fn stale_lease_on_a_vanished_remote_branch_says_it_is_gone() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     git_in(&fixture.work, &["push", "-q", "origin", "main", "done"]);

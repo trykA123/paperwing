@@ -1585,6 +1585,7 @@ async fn history_display_uses_operation_tokens_after_replacement() {
 #[cfg(target_os="linux")]
 #[tokio::test]
 async fn line_counts_refuse_missing_storage_configuration_and_source_authority() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture=Fixture::new().await;let mut job=fixture.job();job.diff=None;
     assert!(line_counts(b"l\n",b"r\n",&job).await.unwrap_err().message.contains("not configured"));
     job=fixture.job();job.roots.clear();assert!(line_counts(b"l\n",b"r\n",&job).await.is_err());assert!(!fixture.0.join("diff-data").exists());

@@ -62,6 +62,7 @@ fn list_parsing_reads_branch_message_and_time() {
 
 #[tokio::test]
 async fn push_list_show_apply_pop_and_drop() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
@@ -103,6 +104,7 @@ async fn push_list_show_apply_pop_and_drop() {
 
 #[tokio::test]
 async fn untracked_files_are_stashed_shown_and_restored() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("new.txt"), "fresh\n").unwrap();
@@ -126,6 +128,7 @@ async fn untracked_files_are_stashed_shown_and_restored() {
 
 #[tokio::test]
 async fn clean_repository_reports_nothing_to_stash() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let outcome = stash_push(text(&dir), Some("note".into()), true)
         .await
@@ -143,6 +146,7 @@ async fn clean_repository_reports_nothing_to_stash() {
 
 #[tokio::test]
 async fn stale_or_malformed_ids_are_refused() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("a.txt"), "changed\n").unwrap();
@@ -168,6 +172,7 @@ async fn stale_or_malformed_ids_are_refused() {
 
 #[tokio::test]
 async fn concurrent_drops_of_one_stash_never_hit_its_neighbour() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("a.txt"), "x\n").unwrap();
@@ -198,6 +203,7 @@ async fn concurrent_drops_of_one_stash_never_hit_its_neighbour() {
 
 #[tokio::test]
 async fn oversized_stash_falls_back_to_a_summary() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let dir = repo();
     let path = text(&dir);
     std::fs::write(dir.join("big.txt"), "line of filler text\n".repeat(500_000)).unwrap();

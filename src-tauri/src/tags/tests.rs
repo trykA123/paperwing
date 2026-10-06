@@ -64,6 +64,7 @@ fn path(dir: &Path) -> String {
 
 #[tokio::test]
 async fn creates_lightweight_and_annotated_tags_and_lists_them() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, _bare) = repo_with_remote();
     let head = git_out(&dir, &["rev-parse", "HEAD"]);
     let light = create_tag(path(&dir), request("v1", None)).await.unwrap();
@@ -96,6 +97,7 @@ async fn creates_lightweight_and_annotated_tags_and_lists_them() {
 
 #[tokio::test]
 async fn annotated_message_keeps_hash_lines() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, _bare) = repo_with_remote();
     create_tag(path(&dir), request("v1", Some("#123 fixed\nreal line")))
         .await
@@ -106,6 +108,7 @@ async fn annotated_message_keeps_hash_lines() {
 
 #[tokio::test]
 async fn tags_a_given_ref_instead_of_head() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, _bare) = repo_with_remote();
     let first = git_out(&dir, &["rev-parse", "HEAD"]);
     git_out(&dir, &["commit", "-q", "--allow-empty", "-m", "second"]);
@@ -137,6 +140,7 @@ async fn tags_a_given_ref_instead_of_head() {
 
 #[tokio::test]
 async fn refuses_duplicate_names_unless_moving() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, _bare) = repo_with_remote();
     let first = git_out(&dir, &["rev-parse", "HEAD"]);
     create_tag(path(&dir), request("v1", None)).await.unwrap();
@@ -164,6 +168,7 @@ async fn refuses_duplicate_names_unless_moving() {
 
 #[tokio::test]
 async fn rejects_invalid_tag_and_remote_names() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, _bare) = repo_with_remote();
     for name in [
         "-x", "HEAD", "head", "a..b", "", "a b", "a~1", "x.lock", "--delete",
@@ -193,6 +198,7 @@ async fn rejects_invalid_tag_and_remote_names() {
 
 #[tokio::test]
 async fn pushes_one_tag_only_and_deletes_it_remotely() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, bare) = repo_with_remote();
     git_out(&dir, &["push", "-q", "origin", "main"]);
     create_tag(path(&dir), request("v1", Some("one")))
@@ -215,6 +221,7 @@ async fn pushes_one_tag_only_and_deletes_it_remotely() {
 
 #[tokio::test]
 async fn moved_tag_needs_a_matching_lease_to_push() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, bare) = repo_with_remote();
     git_out(&dir, &["push", "-q", "origin", "main"]);
     let first = create_tag(path(&dir), request("v1", None)).await.unwrap();
@@ -270,6 +277,7 @@ async fn moved_tag_needs_a_matching_lease_to_push() {
 
 #[tokio::test]
 async fn signing_is_left_to_git_config() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let (dir, _bare) = repo_with_remote();
     assert!(!signs_tags(&path(&dir)).await.unwrap());
     git_out(&dir, &["config", "tag.gpgSign", "true"]);

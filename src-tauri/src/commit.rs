@@ -428,6 +428,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
 
     #[tokio::test]
     async fn stage_unstage_commit_and_branch_flow() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
         let dir = repo();
         let path = dir.to_str().unwrap().to_string();
         std::fs::write(dir.join("a.txt"), "one\n").unwrap();
@@ -485,6 +486,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
 
     #[tokio::test]
     async fn unborn_repository_can_stage_unstage_and_commit() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
         let dir = repo();
         let path = dir.to_str().unwrap().to_string();
         std::fs::write(dir.join("first.txt"), "hello\n").unwrap();
@@ -502,6 +504,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
 
     #[tokio::test]
     async fn publish_push_and_local_only_branch_deletion() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
         let dir = repo();
         let remote = std::env::temp_dir().join(format!("paperwing-remote-{}-{}", std::process::id(), dir.file_name().unwrap().to_string_lossy()));
         std::fs::create_dir_all(&remote).unwrap();

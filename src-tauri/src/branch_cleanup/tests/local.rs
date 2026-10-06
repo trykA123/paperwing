@@ -8,6 +8,7 @@ async fn delete(fixture: &Fixture, items: &[&str], expected: Vec<String>) -> Vec
 
 #[tokio::test]
 async fn checks_oid_merge_and_protected_branches_with_reasons() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     branch_with_commit(&fixture, "wip", false);
@@ -55,6 +56,7 @@ async fn checks_oid_merge_and_protected_branches_with_reasons() {
 
 #[tokio::test]
 async fn deletes_when_head_is_on_a_third_branch_with_live_or_gone_upstream() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "live", true);
     branch_with_commit(&fixture, "gone", true);
@@ -77,6 +79,7 @@ async fn deletes_when_head_is_on_a_third_branch_with_live_or_gone_upstream() {
 
 #[tokio::test]
 async fn refuses_a_branch_checked_out_in_another_worktree() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     let tree = fixture.root.join("tree");
@@ -91,6 +94,7 @@ async fn refuses_a_branch_checked_out_in_another_worktree() {
 
 #[tokio::test]
 async fn refuses_a_branch_that_moved_after_listing() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     let listed = fixture.tip("done");
@@ -104,6 +108,7 @@ async fn refuses_a_branch_that_moved_after_listing() {
 
 #[tokio::test]
 async fn current_branch_is_never_deleted() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     git_in(&fixture.work, &["switch", "-q", "-c", "feature"]);
     let results = delete(&fixture, &["feature"], vec![fixture.tip("feature")]).await;
@@ -112,6 +117,7 @@ async fn current_branch_is_never_deleted() {
 
 #[tokio::test]
 async fn symbolic_alias_is_not_listed_and_never_deletes_its_target() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     git_in(&fixture.work, &["switch", "-q", "-c", "other"]);
     git_in(
@@ -130,6 +136,7 @@ async fn symbolic_alias_is_not_listed_and_never_deletes_its_target() {
 
 #[tokio::test]
 async fn removes_branch_config_section_on_delete() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
     let fixture = fixture();
     branch_with_commit(&fixture, "done", true);
     git_in(

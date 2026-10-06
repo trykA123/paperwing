@@ -96,7 +96,7 @@ pub(crate) async fn restore(path: &str, oid: &str, mode: Restore) -> Result<Appl
     };
     let mut output = attempt(path, verb, target, true).await?;
     let mut index_restored = true;
-    let retry = output.code == Some(128)
+    let retry = output.code != Some(0)
         && output.stderr_contains("Try without --index")
         && conflicted_paths(path).await?.is_empty();
     if retry {

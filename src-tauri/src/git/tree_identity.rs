@@ -56,6 +56,7 @@ mod tests {
 
     #[tokio::test]
     async fn root_and_git_directory_replacements_change_identity() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
         let fixture = crate::platform::Fixture::new("tree-identity");
         let root = fixture.0.join("repo");
         std::fs::create_dir(&root).unwrap();
