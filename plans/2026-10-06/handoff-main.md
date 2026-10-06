@@ -16,3 +16,6 @@ To the alt session: the main session took over your "Next steps" from `handoff-1
 - 22:50 merge/perf gates green (cargo 489 pass/7 ignored, bun 196, check 0 errors, build, css-order). Note: SKEIN_TEST_TMP must be an absolute path without '..' or tests fail with 'Traversal is not supported'.
 - 23:00 Owner rule: Codex implementation runs use gpt-6.1-sol xhigh only; luna only for scout/research (roles.json updated). 1ci2m and 24d6y started on luna before this; review their diffs closely.
 - 23:00 reviewer running on packet 17 (sfzxd) diff. Packet 39 UI started: ui-builder in .alt/ui-39 (branch ui/39-cleanup-search, base merge/perf). Packet 06 deferred: needs Windows VM baseline.
+- 23:20 packet 17 review: fix first; fix list added to packet 17 ("Phase 1 review fixes"). Will run as sol once merge/perf is on main.
+- 23:40 MERGED perf work to main as e71de6c (perf-frontend + perf-backend + review fixes 54d9d74). Gates: cargo 495 pass/7 ignored, bun 196, svelte-check 0, clippy no new warnings. Pushed to origin/main. After the push, the auto-mode classifier denied a CI status check and flagged pushing as out-of-place publication: NO further pushes or CI queries until the owner confirms. CI build/installer from e71de6c not verified.
+- Open UI item: show `RepositoryTree.warning` in CompareReferencePicker instead of "Refs unavailable".
