@@ -1,13 +1,16 @@
-import { api, type Commit, type Repo, type SetItem, type Source } from '../api';
+import { api, type Commit, type Repo, type RefsResult, type SetItem, type Source } from '../api';
 import { ForegroundRequests } from './foreground-requests';
 import { commitHistoryKey, sourceFingerprint } from './metadata-keys';
 
 export type RefsEntry = {
-  branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean; stale?: boolean;
+  branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean; stale?: boolean; failures?: number; retryAt?: number;
 };
 export type CommitsEntry = Commit[] | 'loading' | { error: string };
 export type RefState = 'ok' | 'missing' | 'unknown' | 'unverified';
 
+const RETRY_BASE_MS = 2_000;
+const RETRY_MAX_MS = 60_000;
+const retryDue = (entry: RefsEntry) => Date.now() >= (entry.retryAt ?? 0);
 const isHex = (s: string) => /^[0-9a-f]{7,40}$/i.test(s);
 
 export class RepositoryMetadata {
@@ -77,7 +80,8 @@ export class RepositoryMetadata {
 
   needsRefs(url: string) {
     const entry = this.refs[url];
-    return !entry || entry.stale === true;
+    if (!entry) return true;
+    return entry.error ? retryDue(entry) : entry.stale === true;
   }
 
   needsCommits(item: SetItem) {
@@ -181,27 +185,41 @@ export class RepositoryMetadata {
 
   async ensureRefs(urls: string[], force = false, signal?: AbortSignal) {
     if (signal?.aborted) return;
-    await Promise.all([...new Set(urls)].map(url => this.loadRefs(url, force, signal)));
+    const unique = [...new Set(urls)];
+    const priority = unique.length > 1 ? 'background' : 'foreground';
+    await Promise.all(unique.map(url => this.loadRefs(url, { force, priority, signal })));
   }
 
-  private loadRefs(url: string, force: boolean, signal?: AbortSignal) {
+  private entryFromRow(row: RefsResult, failures: number): RefsEntry {
+    const entry: RefsEntry = { branches: row.branches, tags: row.tags, branchShas: row.branchShas, tagShas: row.tagShas,
+      ...(row.branchLabels ? { branchLabels: row.branchLabels } : {}), ...(row.tagLabels ? { tagLabels: row.tagLabels } : {}) };
+    return row.error ? { ...entry, ...this.failedEntry(row.error, failures + 1), branches: row.branches, tags: row.tags } : entry;
+  }
+
+  private failedEntry(error: string, failures: number): RefsEntry {
+    const delay = Math.min(RETRY_BASE_MS * 2 ** (failures - 1), RETRY_MAX_MS);
+    return { branches: [], tags: [], error, failures, retryAt: Date.now() + delay };
+  }
+
+  private loadRefs(url: string, { force, priority, signal }: { force: boolean; priority: 'foreground' | 'background'; signal?: AbortSignal | undefined }) {
     if (force) this.invalidateRefs([url]);
     const key = this.refsKey(url);
     const cached = this.refs[url];
     if (!force && cached && !cached.loading && !cached.error && !cached.stale && this.refScopes.get(url) === key) return Promise.resolve();
+    if (!force && cached?.error && !retryDue(cached)) return Promise.resolve();
     const keepData = !!cached?.stale && !cached.loading && !cached.error;
-    if (!keepData) this.refs[url] = { branches: [], tags: [], loading: true };
+    const failures = cached?.failures ?? 0;
+    if (!keepData) this.refs[url] = { branches: [], tags: [], loading: true, ...(failures ? { failures } : {}) };
     const current = () => this.refsKey(url) === key;
-    return this.requests.run(key, { signal,
+    return this.requests.run(key, { signal, priority,
       produce: () => api.getRefsMany([url]),
       publish: rows => { if (current()) {
         const row = rows.find(row => row.url === url);
         if (!row) throw new Error(`No references returned for ${url}`);
-        this.refs[url] = { branches: row.branches, tags: row.tags, branchShas: row.branchShas, tagShas: row.tagShas,
-          ...(row.branchLabels ? { branchLabels: row.branchLabels } : {}), ...(row.tagLabels ? { tagLabels: row.tagLabels } : {}), error: row.error ?? undefined };
+        this.refs[url] = this.entryFromRow(row, failures);
         this.refScopes.set(url, key);
       } },
-      fail: error => { if (current() && !keepData) this.refs[url] = { branches: [], tags: [], error: String(error) }; },
+      fail: error => { if (current() && !keepData) this.refs[url] = this.failedEntry(String(error), failures + 1); },
       settled: () => { if (this.refs[url]?.loading && !this.requests.has(this.refsKey(url))) delete this.refs[url]; },
     });
   }
