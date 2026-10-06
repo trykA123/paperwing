@@ -9,11 +9,7 @@ pub(super) async fn load(
     path: String,
     repo: &Repository,
 ) -> Result<Source, String> {
-    let repo = Repository {
-        owner: repo.owner.clone(),
-        name: repo.name.clone(),
-        remote: String::new(),
-    };
+    let repo = repo.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let settings = crate::settings::load_settings(app)?;
         for_path(&settings, Path::new(&path), &repo)
@@ -27,6 +23,13 @@ pub(super) fn for_path(
     path: &Path,
     repo: &Repository,
 ) -> Result<Source, String> {
+    if !settings.sources.iter().any(|source| {
+        matches!(source.kind.as_str(), "github" | "ghe")
+            && source.host.eq_ignore_ascii_case(&repo.host)
+            || source.kind == "manual"
+    }) {
+        return Err(format!("Add a source for {}", repo.host));
+    }
     let mut matching = None;
     let sets = settings
         .workspace
@@ -47,7 +50,7 @@ pub(super) fn for_path(
         if crate::compare::registered_clone_destination(settings, id, path, url).is_err() {
             continue;
         }
-        let source = for_item(settings, item, repo, url)?;
+        let source = for_item(settings, item, repo)?;
         if matching
             .as_ref()
             .is_some_and(|previous: &Source| previous.id != source.id)
@@ -62,16 +65,11 @@ pub(super) fn for_path(
     matching.ok_or("Repository path is not registered; add it to a set with a GitHub source".into())
 }
 
-fn for_item(
-    settings: &Settings,
-    item: &Value,
-    repo: &Repository,
-    url: &str,
-) -> Result<Source, String> {
-    let registered = parse_remote(url).map_err(|error| error.to_string())?;
-    if !repo.same_repo(&registered) {
-        return Err("GitHub remote does not match the registered repository".into());
-    }
+fn for_item(settings: &Settings, item: &Value, repo: &Repository) -> Result<Source, String> {
+    let url = item
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or("Registered repository has no URL")?;
     let source_id = item
         .get("repoId")
         .and_then(Value::as_str)
@@ -84,8 +82,25 @@ fn for_item(
         .find(|source| source.id == source_id)
         .ok_or("Registered GitHub source is missing")?;
     crate::settings::valid_id(&source.id)?;
-    if !((source.kind == "github" && source.host == "github.com") || source.kind == "manual") {
-        return Err("Pull requests require a GitHub.com source".into());
+    if !matches!(source.kind.as_str(), "github" | "ghe" | "manual") {
+        return Err("Pull requests require a GitHub source".into());
     }
+    let source = if source.kind == "manual" || source.host.eq_ignore_ascii_case(&repo.host) {
+        source
+    } else {
+        settings
+            .sources
+            .iter()
+            .find(|source| {
+                matches!(source.kind.as_str(), "github" | "ghe")
+                    && source.host.eq_ignore_ascii_case(&repo.host)
+            })
+            .ok_or_else(|| format!("Add a source for {}", repo.host))?
+    };
+    let registered = parse_remote(url, &repo.host).map_err(|error| error.to_string())?;
+    if !repo.same_repo(&registered) {
+        return Err("GitHub remote does not match the registered repository".into());
+    }
+    crate::settings::valid_id(&source.id)?;
     Ok(source.clone())
 }

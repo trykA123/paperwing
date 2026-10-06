@@ -14,16 +14,19 @@
     "path": "/repos/admin/skein-fixture-api",
     "status": 200,
     "body": {
-      "fork": false
+      "fork": true,
+      "parent": {
+        "full_name": "upstream/skein-fixture-api"
+      }
     }
   },
   {
     "method": "POST",
-    "path": "/repos/admin/skein-fixture-api/pulls",
+    "path": "/repos/upstream/skein-fixture-api/pulls",
     "status": 201,
     "body": {
       "number": 28,
-      "html_url": "https://github.com/admin/skein-fixture-api/pull/28"
+      "html_url": "https://github.com/upstream/skein-fixture-api/pull/28"
     }
   }
 ]

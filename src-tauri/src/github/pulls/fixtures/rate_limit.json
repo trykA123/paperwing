@@ -1,6 +1,14 @@
 [
   {
     "method": "GET",
+    "path": "/repos/admin/skein-fixture-api",
+    "status": 200,
+    "body": {
+      "fork": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/repos/admin/skein-fixture-api/pulls?head=admin%3Afeature%2Flogin&state=open&sort=updated&direction=desc&per_page=1&page=1",
     "status": 403,
     "headers": {

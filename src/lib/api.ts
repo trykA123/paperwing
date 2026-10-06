@@ -69,10 +69,13 @@ export type ChecksState = 'success' | 'failure' | 'pending' | 'none';
 export type PullChecks = { state: ChecksState; success: number; failure: number; pending: number; total: number };
 export type PullRequest = {
   number: number; title: string; url: string; state: PullState; base: string; headSha: string;
-  reviewState: ReviewState; checks: PullChecks;
+  reviewState: ReviewState; checks: PullChecks; targetRepo: string; hasUnpushedCommits: boolean;
 };
 export type OpenPullRequest = { head: string; base: string; title: string; body: string; draft?: boolean };
-export type CreatedPullRequest = { number: number; url: string };
+export type CreatedPullRequest = { number: number; url: string; targetRepo: string; hasUnpushedCommits: boolean };
+export type PullsError =
+  | { kind: 'rateLimited'; resetAt: string; message: string }
+  | { kind: 'message'; message: string };
 export type Commit = { sha: string; message: string; author: string; date: string; parents: string[] };
 export type RefsResult = {
   url: string; branches: string[]; tags: string[]; branchShas: string[]; tagShas: string[]; branchLabels?: string[]; tagLabels?: string[]; error: string | null;

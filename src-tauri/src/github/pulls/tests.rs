@@ -1,7 +1,7 @@
 use super::super::http::{Error, Response};
 use super::client::{self, Transport};
 use super::model::{ChecksState, OpenPullRequest, PullState, ReviewState};
-use super::repository::{self, Repository};
+use super::repository::{self, Branch, Repository};
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Method,
@@ -75,7 +75,15 @@ impl Transport for Recorded {
 }
 
 fn repo() -> Repository {
-    repository::parse_remote("git@github.com:admin/skein-fixture-api.git").unwrap()
+    repository::parse_remote("git@github.com:admin/skein-fixture-api.git", "github.com").unwrap()
+}
+
+fn branch() -> Branch {
+    Branch {
+        repo: repo(),
+        head: "feature/login".into(),
+        sha: "a".repeat(40),
+    }
 }
 
 fn request() -> OpenPullRequest {
@@ -85,7 +93,7 @@ fn request() -> OpenPullRequest {
 #[tokio::test]
 async fn open_pull_has_approval_and_combined_green_checks() {
     let recorded = Recorded::new(include_str!("fixtures/approved.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -118,7 +126,7 @@ async fn open_pull_has_approval_and_combined_green_checks() {
 #[tokio::test]
 async fn draft_pull_has_review_required_and_no_checks() {
     let recorded = Recorded::new(include_str!("fixtures/draft.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -132,7 +140,7 @@ async fn draft_pull_has_review_required_and_no_checks() {
 #[tokio::test]
 async fn latest_merged_pull_is_returned_when_no_open_pull_exists() {
     let recorded = Recorded::new(include_str!("fixtures/merged.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -144,7 +152,7 @@ async fn latest_merged_pull_is_returned_when_no_open_pull_exists() {
 #[tokio::test]
 async fn latest_unmerged_closed_pull_is_returned_as_closed() {
     let recorded = Recorded::new(include_str!("fixtures/closed.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -157,22 +165,22 @@ async fn closed_pull_selection_uses_closing_time_across_pages() {
     let recorded = Recorded::new(include_str!("fixtures/closed.json"));
     {
         let mut exchanges = recorded.exchanges.borrow_mut();
-        let mut older = exchanges[1].body[0].clone();
+        let mut older = exchanges[2].body[0].clone();
         older["number"] = 27.into();
         older["closed_at"] = "2026-10-05T12:00:00Z".into();
-        let newest = exchanges[1].body[0].clone();
-        exchanges[1].body = json!([older]);
-        exchanges[1].next = true;
-        let path = exchanges[1].path.replace("&page=1", "&page=2");
+        let newest = exchanges[2].body[0].clone();
+        exchanges[2].body = json!([older]);
+        exchanges[2].next = true;
+        let path = exchanges[2].path.replace("&page=1", "&page=2");
         exchanges.insert(
-            2,
+            3,
             serde_json::from_value(
                 json!({"method":"GET","path":path,"status":200,"body":[newest]}),
             )
             .unwrap(),
         );
     }
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -183,7 +191,7 @@ async fn closed_pull_selection_uses_closing_time_across_pages() {
 #[tokio::test]
 async fn no_pull_returns_none_without_fetching_reviews_or_checks() {
     let recorded = Recorded::new(include_str!("fixtures/none.json"));
-    assert!(client::pull_for_branch(&recorded, &repo(), "feature/login")
+    assert!(client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .is_none());
@@ -193,7 +201,7 @@ async fn no_pull_returns_none_without_fetching_reviews_or_checks() {
 #[tokio::test]
 async fn later_approval_supersedes_changes_from_the_same_reviewer_across_pages() {
     let recorded = Recorded::new(include_str!("fixtures/superseded.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -204,8 +212,8 @@ async fn later_approval_supersedes_changes_from_the_same_reviewer_across_pages()
 #[tokio::test]
 async fn changes_requested_by_another_reviewer_wins_over_approval() {
     let recorded = Recorded::new(include_str!("fixtures/approved.json"));
-    recorded.exchanges.borrow_mut()[1].body.as_array_mut().unwrap().push(json!({"id":5,"state":"CHANGES_REQUESTED","user":{"id":2},"submitted_at":"2026-10-06T12:00:00Z"}));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    recorded.exchanges.borrow_mut()[2].body.as_array_mut().unwrap().push(json!({"id":5,"state":"CHANGES_REQUESTED","user":{"id":2},"submitted_at":"2026-10-06T12:00:00Z"}));
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -220,7 +228,7 @@ async fn changes_requested_by_another_reviewer_wins_over_approval() {
 #[tokio::test]
 async fn pending_check_runs_win_over_successful_commit_statuses() {
     let recorded = Recorded::new(include_str!("fixtures/mixed_pending.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -240,7 +248,7 @@ async fn pending_check_runs_win_over_successful_commit_statuses() {
 #[tokio::test]
 async fn failed_commit_status_wins_over_pending_and_successful_checks() {
     let recorded = Recorded::new(include_str!("fixtures/mixed_failure.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -260,7 +268,7 @@ async fn failed_commit_status_wins_over_pending_and_successful_checks() {
 #[tokio::test]
 async fn latest_status_per_context_supersedes_a_historical_failure() {
     let recorded = Recorded::new(include_str!("fixtures/status_superseded.json"));
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -274,15 +282,15 @@ async fn check_runs_and_statuses_follow_pagination() {
     let recorded = Recorded::new(include_str!("fixtures/mixed_pending.json"));
     {
         let mut exchanges = recorded.exchanges.borrow_mut();
-        exchanges[2].next = true;
+        exchanges[3].next = true;
         let mut page: Exchange = serde_json::from_value(json!({"method":"GET","path":"","status":200,"body":{"check_runs":[{"status":"completed","conclusion":"failure"}]}})).unwrap();
-        page.path = exchanges[2].path.replace("&page=1", "&page=2");
-        exchanges.insert(3, page);
-        exchanges[4].next = true;
-        let path = exchanges[4].path.replace("&page=1", "&page=2");
-        exchanges.push_back(serde_json::from_value(json!({"method":"GET","path":path,"status":200,"body":[{"id":4,"context":"second","state":"pending"}]})).unwrap());
+        page.path = exchanges[3].path.replace("&page=1", "&page=2");
+        exchanges.insert(4, page);
+        exchanges[5].next = true;
+        let path = exchanges[5].path.replace("&page=1", "&page=2");
+        exchanges.push_back(serde_json::from_value(json!({"method":"GET","path":path,"status":200,"body":{"statuses":[{"id":4,"context":"second","state":"pending"}]}})).unwrap());
     }
-    let pull = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let pull = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap()
         .unwrap();
@@ -297,13 +305,15 @@ async fn check_runs_and_statuses_follow_pagination() {
 #[tokio::test]
 async fn pagination_cap_fails_instead_of_returning_an_incomplete_summary() {
     let recorded = Recorded::new(include_str!("fixtures/draft.json"));
+    let metadata = recorded.exchanges.borrow_mut().pop_front().unwrap();
     let first = recorded.exchanges.borrow_mut().pop_front().unwrap();
     recorded.exchanges.borrow_mut().clear();
+    recorded.exchanges.borrow_mut().push_back(metadata);
     recorded.exchanges.borrow_mut().push_back(first);
     for page in 1..=20 {
         recorded.exchanges.borrow_mut().push_back(serde_json::from_value(json!({"method":"GET","path":format!("/repos/admin/skein-fixture-api/pulls/28/reviews?per_page=100&page={page}"),"status":200,"body":[],"next":true})).unwrap());
     }
-    let error = client::pull_for_branch(&recorded, &repo(), "feature/login")
+    let error = client::pull_for_branch(&recorded, &branch())
         .await
         .unwrap_err();
     assert!(error.to_string().contains("pagination limit"));
@@ -314,13 +324,13 @@ async fn pagination_cap_fails_instead_of_returning_an_incomplete_summary() {
 async fn rate_limit_errors_carry_utc_reset_without_retrying_or_disclosing_response_body() {
     for (status, remaining) in [(403, true), (429, true), (403, false)] {
         let recorded = Recorded::new(include_str!("fixtures/rate_limit.json"));
-        recorded.exchanges.borrow_mut()[0].status = status;
+        recorded.exchanges.borrow_mut()[1].status = status;
         if !remaining {
-            recorded.exchanges.borrow_mut()[0]
+            recorded.exchanges.borrow_mut()[1]
                 .headers
                 .remove("x-ratelimit-remaining");
         }
-        let error = client::pull_for_branch(&recorded, &repo(), "feature/login")
+        let error = client::pull_for_branch(&recorded, &branch())
             .await
             .unwrap_err();
         assert!(
@@ -375,16 +385,9 @@ fn ordinary_permission_denial_is_not_misreported_as_a_rate_limit() {
 #[tokio::test]
 async fn already_exists_422_returns_the_existing_pull() {
     let recorded = Recorded::new(include_str!("fixtures/already_exists.json"));
-    let pull = client::open_pull_request(
-        &recorded,
-        &repo(),
-        client::Creation {
-            request: &request(),
-            published: true,
-        },
-    )
-    .await
-    .unwrap();
+    let pull = client::open_pull_request(&recorded, &branch(), &request())
+        .await
+        .unwrap();
     assert_eq!(pull.number, 28);
     assert_eq!(
         pull.url,
@@ -400,16 +403,9 @@ async fn creation_sends_draft_by_default_and_respects_explicit_false() {
         let recorded = Recorded::new(include_str!("fixtures/created.json"));
         let mut request = request();
         request.draft = draft;
-        let pull = client::open_pull_request(
-            &recorded,
-            &repo(),
-            client::Creation {
-                request: &request,
-                published: true,
-            },
-        )
-        .await
-        .unwrap();
+        let pull = client::open_pull_request(&recorded, &branch(), &request)
+            .await
+            .unwrap();
         assert_eq!(pull.number, 28);
         assert_eq!(
             recorded.bodies.borrow()[0],
@@ -424,18 +420,13 @@ async fn creation_sends_draft_by_default_and_respects_explicit_false() {
 }
 
 #[tokio::test]
-async fn unpublished_branch_is_rejected_before_any_api_call() {
-    let recorded = Recorded::new("[]");
-    let error = client::open_pull_request(
-        &recorded,
-        &repo(),
-        client::Creation {
-            request: &request(),
-            published: false,
-        },
-    )
-    .await
-    .unwrap_err();
+async fn unpublished_branch_is_rejected_after_the_authenticated_branch_check() {
+    let recorded = Recorded::new(
+        r#"[{"method":"GET","path":"/repos/admin/skein-fixture-api/branches/feature%2Flogin","status":404,"body":{}}]"#,
+    );
+    let error = client::open_pull_request(&recorded, &branch(), &request())
+        .await
+        .unwrap_err();
     assert!(error.to_string().contains("push it before"));
     recorded.exhausted();
 }
@@ -451,7 +442,7 @@ fn parses_https_ssh_git_suffix_and_trailing_slash() {
         "ssh://git@github.com/admin/skein-fixture-api.git",
         "ssh://git@github.com:22/admin/skein-fixture-api.git/",
     ] {
-        let repo = repository::parse_remote(url).unwrap();
+        let repo = repository::parse_remote(url, "github.com").unwrap();
         assert_eq!(repo.owner, "admin");
         assert_eq!(repo.name, "skein-fixture-api");
     }
@@ -472,7 +463,7 @@ fn rejects_non_github_hosts_and_unsafe_or_malformed_urls_without_echoing_them() 
         "git@github.com:admin",
         "https://github.com/admin/.git",
     ] {
-        let error = repository::parse_remote(url).unwrap_err();
+        let error = repository::parse_remote(url, "github.com").unwrap_err();
         assert!(error.to_string().contains("GitHub remote"));
         assert!(!error.to_string().contains("synthetic-token"));
     }
@@ -484,7 +475,6 @@ fn invalid_creation_arguments_are_rejected() {
         ("title", ""),
         ("title", "title\nnewline"),
         ("head", "-bad"),
-        ("base", "feature/login"),
         ("body", "bad\0body"),
     ] {
         let mut value_json = serde_json::to_value(request()).unwrap();
@@ -527,7 +517,7 @@ async fn transport_failure_is_returned_without_additional_requests() {
             ))
         }
     }
-    let error = client::pull_for_branch(&Offline, &repo(), "feature/login")
+    let error = client::pull_for_branch(&Offline, &branch())
         .await
         .unwrap_err();
     assert!(error.to_string().contains("check your connection"));
@@ -553,6 +543,7 @@ fn registered_path_selects_its_stored_source_without_changing_configuration() {
     assert_eq!(source.id, "fixture-source");
     settings.sources[0].kind = "manual".into();
     settings.sources[0].host.clear();
+    settings.sources[0].urls = vec!["https://github.com/admin/skein-fixture-api.git".into()];
     settings.sources[0].credential_managed = true;
     let source = super::source::for_path(&settings, &path, &repo()).unwrap();
     assert_eq!(
@@ -565,7 +556,7 @@ fn registered_path_selects_its_stored_source_without_changing_configuration() {
 fn source_resolution_rejects_changed_remotes_unregistered_paths_and_missing_sources() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/github");
     let mut settings = source_settings();
-    let other = repository::parse_remote("https://github.com/admin/other").unwrap();
+    let other = repository::parse_remote("https://github.com/admin/other", "github.com").unwrap();
     assert!(super::source::for_path(&settings, &path, &other)
         .unwrap_err()
         .contains("does not match"));
@@ -577,5 +568,7 @@ fn source_resolution_rejects_changed_remotes_unregistered_paths_and_missing_sour
     settings.sources.clear();
     assert!(super::source::for_path(&settings, &path, &repo())
         .unwrap_err()
-        .contains("source is missing"));
+        .contains("Add a source for github.com"));
 }
+
+mod regressions;

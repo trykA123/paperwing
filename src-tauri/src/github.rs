@@ -116,7 +116,7 @@ fn api_base(host: &str) -> Result<String, String> {
     if let Some(endpoint) = crate::test_profile::github_endpoint()? {
         return Ok(endpoint);
     }
-    Ok(if host == "github.com" {
+    Ok(if host.eq_ignore_ascii_case("github.com") {
         "https://api.github.com".into()
     } else {
         format!("https://{host}/api/v3")

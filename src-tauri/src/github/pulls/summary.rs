@@ -4,7 +4,10 @@ use std::collections::HashMap;
 pub(super) fn review_state(reviews: &[Review], state: PullState) -> ReviewState {
     let mut latest: HashMap<u64, &Review> = HashMap::new();
     for review in reviews {
-        if !matches!(review.state.as_str(), "APPROVED" | "CHANGES_REQUESTED") {
+        if !matches!(
+            review.state.as_str(),
+            "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED"
+        ) {
             continue;
         }
         let Some(user) = &review.user else {
@@ -15,6 +18,7 @@ pub(super) fn review_state(reviews: &[Review], state: PullState) -> ReviewState 
             *previous = review;
         }
     }
+    latest.retain(|_, review| review.state != "DISMISSED");
     if latest
         .values()
         .any(|review| review.state == "CHANGES_REQUESTED")
@@ -88,5 +92,30 @@ fn check_state(run: &CheckRun) -> ChecksState {
             "failure" | "timed_out" | "cancelled" | "action_required" | "startup_failure" | "stale",
         ) => ChecksState::Failure,
         _ => ChecksState::Pending,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_check_conclusion_has_a_defined_summary_state() {
+        for (conclusion, expected) in [
+            ("neutral", ChecksState::Success),
+            ("skipped", ChecksState::Success),
+            ("stale", ChecksState::Failure),
+            ("action_required", ChecksState::Failure),
+            ("timed_out", ChecksState::Failure),
+            ("cancelled", ChecksState::Failure),
+            ("startup_failure", ChecksState::Failure),
+            ("unknown", ChecksState::Pending),
+        ] {
+            let run = CheckRun {
+                status: "completed".into(),
+                conclusion: Some(conclusion.into()),
+            };
+            assert_eq!(check_state(&run), expected, "{conclusion}");
+        }
     }
 }

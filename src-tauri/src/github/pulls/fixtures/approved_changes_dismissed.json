@@ -34,7 +34,32 @@
     "method": "GET",
     "path": "/repos/admin/skein-fixture-api/pulls/28/reviews?per_page=100&page=1",
     "status": 200,
-    "body": []
+    "body": [
+      {
+        "id": 1,
+        "user": {
+          "id": 1
+        },
+        "state": "APPROVED",
+        "submitted_at": "2026-10-06T12:00:00Z"
+      },
+      {
+        "id": 2,
+        "user": {
+          "id": 1
+        },
+        "state": "CHANGES_REQUESTED",
+        "submitted_at": "2026-10-06T12:01:00Z"
+      },
+      {
+        "id": 3,
+        "user": {
+          "id": 1
+        },
+        "state": "DISMISSED",
+        "submitted_at": "2026-10-06T12:02:00Z"
+      }
+    ]
   },
   {
     "method": "GET",

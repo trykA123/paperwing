@@ -118,3 +118,20 @@ impl Response {
                 })
     }
 }
+
+pub(super) async fn shared_page<T: DeserializeOwned>(
+    host: &str,
+    status: u16,
+    body: impl std::future::Future<Output = Result<Response, Error>>,
+) -> Result<Page<T>, (u16, String)> {
+    if !(200..300).contains(&status) {
+        return Err(super::http_error(status));
+    }
+    let response = body.await.map_err(|error| (0, error.to_string()))?;
+    let data = serde_json::from_slice(&response.body)
+        .map_err(|_| (0, format!("Unexpected response from {host}")))?;
+    Ok(Page {
+        data,
+        next: response.next,
+    })
+}
