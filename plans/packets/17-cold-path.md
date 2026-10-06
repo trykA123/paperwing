@@ -78,3 +78,6 @@ Reviewer verdict on sfzxd: fix first. Git starts across repos fell from 1062 to 
 6. Working-tree speed: keep one `ReadCache` per worker, not per 128-path chunk. Set `[profile.dev.package.sha1] opt-level = 3`. Measure before and after with a release build.
 7. Frontend: `compare-state.svelte.ts` must not default an unknown entry kind to `'file'`. Use the server's kind, or fetch the row.
 Done when: all phase 1 tests plus the new tests pass; Linux release-build medians are no worse than before on every workload; Git starts are reported; and the Windows CI job is green. Windows VM measurements follow as a separate step.
+
+## After phase 1 merges
+Architecture audit items 2, 8, 9, 10, 12, 13 and 19 (`plans/2026-10-06/audits/architecture.md`) touch the runner and compare code. Also pin the Git locale in the runner env (`LC_ALL=C`, `LANGUAGE=`) for stable messages. Write them as packet 43 once phase 1 is on main.
