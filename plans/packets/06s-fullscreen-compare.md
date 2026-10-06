@@ -1,6 +1,6 @@
 # 06s — Skein step 6: full-screen compare
 
-Status: blocked by the editor decision (pending owner review of the spike report, see 37); layout work can start on the current editor
+Status: ready (editor decided in 37: CodeMirror 6); layout can start now
 Platform: Windows first, Linux parity
 Size: L
 Role: ui-builder
@@ -24,7 +24,7 @@ From the approved spec:
 - Diff colours: added uses ok, removed uses err, changed uses warn. Always add the +/- glyph or a gap stripe.
 - Status colours have a graphic tone (at least 3:1) and a text tone (at least 4.5:1), checked in both themes. Fonts are Geist and Geist Mono.
 Choices made here:
-- "Full screen" means the compare view fills the window below the title bar, with the sidebar and details panel collapsed. Esc or a Back button restores the previous layout. It is not OS full screen.
+- "Full screen" means OS full screen (owner, 2026-10-06): opening a repository compare puts the window in full screen (`getCurrentWindow().setFullscreen(true)`, no title bar, no taskbar), with the sidebar and details panel collapsed. Esc, F11 or a Back button leaves full screen and restores the previous window state (maximized or not) and layout. F11 toggles full screen anywhere in the app. Add only `core:window:allow-set-fullscreen` and `allow-is-fullscreen` to the capabilities.
 - The editor sits behind the adapter from 37. Until the owner decides, the layout uses the current Monaco view.
 - Compare tabs stay in the tab strip (`app.tabs`), so the user can leave and return.
 
@@ -42,7 +42,7 @@ Choices made here:
 - `src/lib/editor.ts` internals and the compare Rust code (37).
 
 ## Steps
-1. Full-screen shell: collapse sidebar and details, Back and Esc restore. Check: browser test of enter and exit, tab switching, layout restored.
+1. Full-screen shell: enter OS full screen and collapse sidebar and details; Back, Esc and F11 restore the window state and layout. Check: a test with the window API mocked (enter, exit, restore maximized), plus a manual check on Windows.
 2. Folder twin trees: aligned rows, filters (all, differences, same, orphans), status markers with the colour rules. Check: screenshots with contrast checked by `node ~/.agents/rules/tools/contrast.mjs` for each text and background pair.
 3. File diff chrome: overview strip, line details panel, per-change copy, Save right, confirm bar for copies. Check: browser test of copy and save on a fixture.
 4. Commits tab with the two-rail graph for the two endpoints. Check: fixture repositories with diverged branches.
@@ -52,7 +52,7 @@ Choices made here:
 ## Done when
 - A repository compare opens full screen at 1440 and 1100 px in both themes, matching the prototype's structure.
 - Colour and glyph rules hold in both themes, with contrast numbers recorded.
-- Esc restores the previous layout; Save right writes through the platform path.
+- Esc, F11 or Back leaves OS full screen and restores the window state and layout; Save right writes through the platform path.
 - Windows: the title bar, window controls and drag region still work in the full-screen view.
 
 ## Gates
