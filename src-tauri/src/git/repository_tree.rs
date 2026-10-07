@@ -1,6 +1,7 @@
 #[path = "tree_identity.rs"]
 mod identity;
 
+use super::remote_list::parse_remote_verbose;
 use super::repo_command::RepoGit;
 use super::{execute, valid_path, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
@@ -126,16 +127,16 @@ async fn read_tree(path: &str) -> Result<RepositoryTree, String> {
             remote_refs.push((name.to_string(), make_ref(name)));
         }
     }
-    let output = tree_output(path, &["remote"], &[0], OutputPolicy::Text).await?;
-    for name in String::from_utf8_lossy(&output.stdout).lines() {
+    let output = tree_output(path, &["remote", "-v"], &[0], OutputPolicy::Metadata).await?;
+    for listed in parse_remote_verbose(&String::from_utf8_lossy(&output.stdout)) {
+        let name = listed.name.as_str();
         valid_ref(name)?;
-        let urls = tree_output(
-            path,
-            &["remote", "get-url", "--all", name],
-            &[0],
-            OutputPolicy::Text,
-        )
-        .await?;
+        let urls = if listed.complete {
+            listed.urls.iter().map(|url| output.safe(url)).collect()
+        } else {
+            let all = tree_output(path, &["remote", "get-url", "--all", name], &[0], OutputPolicy::Metadata).await?;
+            all.safe(&String::from_utf8_lossy(&all.stdout)).lines().map(str::to_string).collect()
+        };
         let refs = remote_refs
             .iter()
             .filter(|(reference, _)| reference.starts_with(&format!("{name}/")))
@@ -149,11 +150,7 @@ async fn read_tree(path: &str) -> Result<RepositoryTree, String> {
             .collect();
         tree.remotes.push(TreeRemote {
             name: output.safe(name),
-            urls: urls
-                .safe(&String::from_utf8_lossy(&urls.stdout))
-                .lines()
-                .map(str::to_string)
-                .collect(),
+            urls,
             refs,
         });
     }
