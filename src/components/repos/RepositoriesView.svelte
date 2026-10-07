@@ -7,6 +7,7 @@
   import Icon from '../Icon.svelte';
   import PageFrame from '../module/PageFrame.svelte';
   import SetHeader from '../set/SetHeader.svelte';
+  import DestinationMenu from './DestinationMenu.svelte';
   import RepoFilterBar from './RepoFilterBar.svelte';
   import RepositoryTable from './RepositoryTable.svelte';
 
@@ -15,6 +16,8 @@
   const cloned = $derived(everything.filter(entry => !entry.remoteOnly && store.localOf(entry)?.repo).length);
   const hosts = $derived(store.tree.length);
   const fetchable = $derived(bulkTargets(everything.filter(entry => !entry.remoteOnly).map(entry => entry.item), rowFacts).fetchable);
+  let destination = $state<HTMLButtonElement>();
+  let destinationOpen = $state(false);
   const busy = $derived(app.running || app.gitBusy || app.clonePreparing);
   const sub = $derived(store.inSetView
     ? `${store.shown.length} of ${plural(store.entries.length, 'repository', 'repositories')} shown`
@@ -27,6 +30,7 @@
 <PageFrame crumb="Local Git" title="Repositories" {sub}>
   {#snippet buttons()}
     {#if !store.inSetView}
+      <button class="btn" bind:this={destination} aria-haspopup="dialog" aria-expanded={destinationOpen} title="Where repositories are cloned" onclick={() => (destinationOpen = !destinationOpen)}><Icon name="folder" tone="folder" /> Clone to…</button>
       <button class="btn" disabled={busy || !fetchable.length} title="git fetch --prune in every cloned repository" onclick={() => app.startClone(fetchable, 'fetch')}><Icon name="refresh" /> Fetch cloned</button>
     {/if}
   {/snippet}
@@ -52,3 +56,5 @@
     {/snippet}
   </RepositoryTable>
 </PageFrame>
+
+{#if destinationOpen && destination}<DestinationMenu anchor={destination} onclose={() => (destinationOpen = false)} />{/if}

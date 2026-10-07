@@ -11,7 +11,6 @@
   import RepositoriesView from './components/repos/RepositoriesView.svelte';
   import RepositoryPage from './components/repos/RepositoryPage.svelte';
   import RepoList from './components/RepoList.svelte';
-  import RightPanel from './components/RightPanel.svelte';
   import Settings from './components/Settings.svelte';
   import Notifications from './components/Notifications.svelte';
   import Tooltip from './components/Tooltip.svelte';
@@ -198,7 +197,7 @@
     {/each}
   </main>
   <div class="shell-right" inert={!rightVisible} aria-hidden={!rightVisible} style:--panel-width="{app.ws.rightWidth}px">
-    {#if rightVisible}<div class="shell-panel-content" transition:fly={{ x: 12, duration: reducedMotion ? 0 : 180 }}>{#if (app.view.kind === 'compare' || app.view.kind === 'fileDiff') && app.comparisons[app.view.comparisonId]}<CompareDetails comparison={app.comparisons[app.view.comparisonId]} comparisonId={app.view.comparisonId} />{:else}<RightPanel />{/if}</div>{/if}
+    {#if rightVisible}<div class="shell-panel-content" transition:fly={{ x: 12, duration: reducedMotion ? 0 : 180 }}>{#if (app.view.kind === 'compare' || app.view.kind === 'fileDiff') && app.comparisons[app.view.comparisonId]}<CompareDetails comparison={app.comparisons[app.view.comparisonId]} comparisonId={app.view.comparisonId} />{/if}</div>{/if}
   </div>
   <footer class="shell-status" class:busy={app.running}><span class="status-context"><Icon name="folder" tone="folder" />{app.set.name} · {app.set.items.length} repositories{#if app.focusedItem} · {app.folderOf(app.focusedItem)}{/if}</span>
     <span class="grow"></span>

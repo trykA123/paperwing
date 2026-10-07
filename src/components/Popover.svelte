@@ -2,7 +2,7 @@
   import { onMount, type Snippet } from 'svelte';
   import { containFocus, trapTab } from '../lib/focus-trap';
 
-  let { anchor, label, onclose, width = 280, children }: { anchor: Element; label: string; onclose: () => void; width?: number; children: Snippet } = $props();
+  let { anchor, label, onclose, width = 280, tall = false, children }: { anchor: Element; label: string; onclose: () => void; width?: number; tall?: boolean; children: Snippet } = $props();
 
   const GAP = 6;
   let panel: HTMLDivElement;
@@ -31,4 +31,4 @@
 <svelte:window onpointerdown={event => { if (!panel.contains(event.target as Node) && !anchor.contains(event.target as Node)) onclose(); }}
   onkeydown={event => { if (event.key === 'Escape' && !document.querySelector('dialog[open]')) { event.preventDefault(); event.stopPropagation(); close(); } }} />
 
-<div class="popover" role="dialog" aria-label={label} tabindex="-1" bind:this={panel} onkeydown={event => trapTab(event, panel)} style:left="{spot.left}px" style:top="{spot.top}px" style:width="{width}px">{@render children()}</div>
+<div class="popover" class:tall role="dialog" aria-label={label} tabindex="-1" bind:this={panel} onkeydown={event => trapTab(event, panel)} style:left="{spot.left}px" style:top="{spot.top}px" style:width="{width}px">{@render children()}</div>

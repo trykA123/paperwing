@@ -164,7 +164,7 @@
         {/snippet}
         {#snippet empty()}{@render none()}{/snippet}
         {#snippet row(item: SetItem, index: number)}
-          <FormationRow row={describeRow(item, { focused: app.detailItem?.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} rowIndex={index + 2} handlers={rowHandlers(item)} />
+          <FormationRow row={describeRow(item, { focused: detailsDrawer.target?.kind === 'repository' && detailsDrawer.target.item.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} rowIndex={index + 2} handlers={rowHandlers(item)} />
         {/snippet}
       </VirtualList>
     {/key}

@@ -5,6 +5,7 @@
   import { needsClone, openHistory, runNextAction } from '../../lib/row-actions';
   import { pullFlow, pullKey } from '../../lib/pull-flow.svelte';
   import { openPull, pulls } from '../../lib/pulls.svelte';
+  import { detailsDrawer } from '../../lib/details-drawer.svelte';
   import { isRemoteItem } from '../../lib/repositories';
   import { stashFlow } from '../../lib/stash-flow.svelte';
   import { tagFlow } from '../../lib/tag-flow.svelte';
@@ -79,7 +80,8 @@
   <button role="menuitem" onclick={() => choose(() => runNextAction(item, 'clone'))}><Icon name="folder" tone="sync" />Clone</button>
 {:else}
   <button role="menuitem" disabled={!cloned} title={cloned ? undefined : 'Clone the repository first'} data-tip-side="left" onclick={() => choose(() => openHistory(item, opener), true)}><Icon name="commit" tone="inspect" />History</button>
-{#if !page}  <button role="menuitem" onclick={() => choose(() => { app.inspectedId = item.id; app.ws.shell.rightVisible = true; })}><Icon name="folder" tone="inspect" />Show details</button>{/if}
+{#if !page}  <button role="menuitem" onclick={() => choose(() => detailsDrawer.open({ kind: 'repository', item }, opener), true)}><Icon name="folder" tone="inspect" />Quick look</button>{/if}
+  <button role="menuitem" onclick={() => choose(() => app.repositories.openRepository(item.repoId), true)}><Icon name="repo" tone="inspect" />Open repository page</button>
   <button role="menuitem" disabled={!!disabledReason(['managed', 'cloned'], facts)} title={disabledReason(['managed', 'cloned'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => app.openCompare(item, true))}><Icon name="code" tone="inspect" />Compare</button>
   <hr />
   {#each commands([item]).filter(command => IDS.includes(command.id) && (command.id !== 'clone' || needsClone(item))) as command (command.id)}

@@ -35,3 +35,16 @@ describe('repository page sections', () => {
     expect(isRepoSection('stash')).toBe(true);
   });
 });
+
+describe('an older saved workspace', () => {
+  test('with a right panel, a width and the sets section loads into Repositories without losing anything else', () => {
+    const saved = {
+      sets: [{ id: 's', name: 'Release', items: [{ id: 'i', repoId: 'a:o/r', url: 'u', org: 'o', name: 'r', ref: { type: 'branch', name: 'main' }, on: true }] }], activeSet: 's', stars: ['a:o/r'], rightWidth: 420, pageSize: 50,
+      shell: { version: 1, sidebarWidth: 300, sidebarVisible: false, rightVisible: false, section: 'sets' },
+    } as unknown as Partial<Workspace>;
+    const loaded = migrateWorkspace(saved);
+    expect(loaded.shell).toMatchObject({ section: 'repos', sidebarWidth: 300, sidebarVisible: false });
+    expect(loaded).toMatchObject({ rightWidth: 420, pageSize: 50, stars: ['a:o/r'], activeSet: 's' });
+    expect(loaded.sets[0].items[0]).toMatchObject({ id: 'i', on: true });
+  });
+});

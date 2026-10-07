@@ -673,3 +673,16 @@
 .link-title:hover {
     color: var(--acc);
 }
+
+.popover.tall {
+    max-height: calc(100vh - 16px);
+}
+
+.popover .rsec {
+    padding: var(--sp-3);
+}
+
+.plan-more {
+    margin: 0;
+    font-size: var(--fs-sm);
+}

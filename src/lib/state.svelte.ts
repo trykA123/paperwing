@@ -200,8 +200,8 @@ class AppState {
     const view = this.view;
     return view.kind === 'item' ? this.set.items.find(item => item.id === view.itemId) : undefined;
   });
-  /** Settings, code search and module pages have nothing for the details panel to describe. */
-  get detailsAvailable() { return !['settings', 'codeSearch', 'module', 'repos', 'repo'].includes(this.view.kind); }
+  /** Only the compare views keep a details panel; everything else opens details in the drawer. */
+  get detailsAvailable() { return this.view.kind === 'compare' || this.view.kind === 'fileDiff'; }
   paletteOpen = $state(false);
   get query() { return this.activeTab?.query ?? ''; }
   set query(value: string) { if (this.activeTab) this.activeTab.query = value; }
@@ -243,11 +243,8 @@ class AppState {
     };
   });
   actionItems = $derived(this.view.kind === 'repos' ? this.repositories.selected : this.view.kind === 'item' ? (this.focusedItem ? [this.focusedItem] : []) : this.selected);
-  inspectedId = $state<string | null>(null);
   /** When each set last finished a clean fetch this session (ms since epoch). */
   lastFetch = $state<Record<string, number>>({});
-  /** The repository the right panel describes: the focused row, else the last row clicked, else the only selected one. */
-  detailItem = $derived(this.focusedItem ?? this.set.items.find(item => item.id === this.inspectedId) ?? (this.selected.length === 1 ? this.selected[0] : undefined));
   clashes = $derived(pathClashes(this.selected.map(item => this.dest(item)), this.nativePlatform, this.pathIdentities));
 
   /** What is happening to this row right now, for its spinner; null when nothing is. */

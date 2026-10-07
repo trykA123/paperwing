@@ -128,11 +128,24 @@ check('the Repositories table does not scroll sideways', await two.evaluate(() =
 await two.click('.side .nav:has-text("All services")');
 await two.waitForSelector('.rf-setbar');
 await two.waitForTimeout(600);
-check(`A set table today: ${wide[0]} px with the details panel`, (await tableWidth(two)) === wide[0], String(await tableWidth(two)));
-await two.click('button[aria-label="Toggle details"]');
-await two.waitForTimeout(500);
-check(`A set table without the details panel: ${wide[1]} px`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
-await two.click('button[aria-label="Toggle details"]');
+check(`A set table is ${wide[1]} px: there is no right panel`, (await tableWidth(two)) === wide[1] && (await two.locator('button[aria-label="Toggle details"]').count()) === 0, String(await tableWidth(two)));
+check('the shell has no right track outside the compare views', await two.evaluate(() => document.querySelector('#shell').classList.contains('noright')));
+await two.click('.rf-setbar button:has-text("Edit")');
+await two.waitForSelector('.popover');
+const edit = (await two.locator('.popover').innerText()).replace(/\s+/g, ' ');
+check('Edit holds the name, the destination and the clone plan', edit.includes('Name') && /destination/i.test(edit) && /will be created/i.test(edit), edit.slice(0, 120));
+check('the clone plan lists at most 8 rows and counts the rest', (await two.locator('.popover .plan-row').count()) === 8 && /and \d+ more/.test(edit), String(await two.locator('.popover .plan-row').count()));
+check('the clone footer sits in the popover', (await two.locator('.popover .rfoot .btn.dark').count()) === 1);
+await two.waitForTimeout(400);
+await shot(two, 'set-edit');
+await two.keyboard.press('Escape');
+await two.waitForSelector('.popover', { state: 'detached' });
+await rail(two, 'Repositories');
+await two.click('.shell-tab:has-text("Repositories") button[role="tab"]');
+await two.click('button:has-text("Clone to")');
+await two.waitForSelector('.popover');
+check('the repositories header opens the destination', (await two.locator('.popover input[aria-label="Destination root"]').count()) === 1);
+await two.keyboard.press('Escape');
 
 await two.locator('.rail-btn[data-provider="github"]').click();
 await two.locator('.rail-flyout [role="group"][aria-label="git.acme.example"] [role="menuitem"]').first().click();
@@ -254,6 +267,7 @@ check('a remote-only row says remote and offers Clone', (await remoteRow.locator
 const before = await setCount('Release train');
 await remoteRow.locator('.fm-action').click();
 await repos.waitForTimeout(500);
+await repos.evaluate(() => window.__emit('clone-finished'));
 check('Clone on a remote row adds it to the active set', (await setCount('Release train')) === before + 1, `${before} -> ${await setCount('Release train')}`);
 await repos.fill('.rf-search input', 'sdk');
 await repos.waitForTimeout(300);
@@ -376,6 +390,18 @@ check('the quick look of a remote-only repository offers the page and says it is
 await repos.keyboard.press('Escape');
 await repos.fill('.rf-search input', '');
 
+await repos.click('.fm-chip:has-text("Cloned")');
+await repos.fill('.rf-search input', 'gateway');
+await repos.waitForTimeout(300);
+await repos.locator('.fm-row[data-id] .fm-name').first().click();
+await repos.click('.side .sec .nav:has-text("Compare")');
+await repos.click('.rf-actions-list .btn:has-text("Compare working tree")');
+await repos.waitForSelector('.compare-details', { timeout: 10000 }).catch(() => {});
+check('a compare view keeps its details panel with the comparison rules and copy buttons', (await repos.locator('.compare-details:has-text("Comparison rules")').count()) === 1 && (await repos.locator('.compare-details:has-text("To left")').count()) === 1);
+await repos.waitForTimeout(500);
+await shot(repos, 'compare');
+await repos.keyboard.press('Control+w');
+await repos.waitForSelector('.rf-head h1');
 const resumed = await open('two', { bigSet: false, section: 'repos', lastRepo: { repoId: 's1:payments/gateway-etl', section: 'history' } });
 await resumed.waitForSelector('.rf-head h1', { timeout: 15000 });
 await resumed.waitForFunction(() => document.querySelector('.rf-page')?.getAttribute('aria-label') === 'History', null, { timeout: 8000 }).catch(() => {});

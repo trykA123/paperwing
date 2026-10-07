@@ -44,8 +44,10 @@
     <button class="kbtn" title="Command palette (Ctrl+K)" onclick={() => (app.paletteOpen = true)}><Icon name="search" /><span>Search or run a command...</span><kbd>Ctrl K</kbd></button>
     <button class="icon shell-control" class:on={app.ws.shell.sidebarVisible} title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.ws.shell.sidebarVisible}
       onclick={() => (app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible)}><Icon name="panel" /></button>
-    <button class="icon shell-control" class:on={app.ws.shell.rightVisible} disabled={!app.detailsAvailable} title="Toggle details" aria-label="Toggle details" aria-pressed={app.ws.shell.rightVisible}
-      onclick={() => (app.ws.shell.rightVisible = !app.ws.shell.rightVisible)}><Icon name="panel" /></button>
+    {#if app.detailsAvailable}
+      <button class="icon shell-control" class:on={app.ws.shell.rightVisible} title="Toggle comparison details" aria-label="Toggle details" aria-pressed={app.ws.shell.rightVisible}
+        onclick={() => (app.ws.shell.rightVisible = !app.ws.shell.rightVisible)}><Icon name="panel" /></button>
+    {/if}
     <button class="icon shell-control" title="Toggle light/dark theme" aria-label="Toggle light/dark theme"
       onclick={() => (app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark')}><Icon name="theme" /></button>
   </div>
