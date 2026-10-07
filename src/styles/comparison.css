@@ -147,16 +147,6 @@
     border-left: 1px solid var(--line);
 }
 
-.monaco-host {
-    flex: 1;
-    min-height: 120px;
-    min-width: 0;
-}
-
-.monaco-host[hidden] {
-    display: none;
-}
-
 .editor-footer {
     display: flex;
     flex: none;

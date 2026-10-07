@@ -69,7 +69,7 @@ Launch the instrumented release artifact from the desktop session:
 bun run scripts/testing/native-profile.ts --launch ABS_PROFILE ABS_RELEASE_BINARY 1
 ```
 
-This test-only scenario waits for a connected, sized Monaco diff containing both texts.
+This test-only scenario waits for a connected, sized editor containing both texts.
 It verifies read-only options and zero edit tickets, then invokes all ten file/copy/recovery
 commands. Each native command must refuse with a Linux capability reason. The result JSON
 records these observations under `proof`. It does not establish native write support,

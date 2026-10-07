@@ -1,58 +1,28 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import type { editor as MonacoEditor } from 'monaco-editor';
+  import { untrack } from 'svelte';
+  import { createCompareEditor, currentTheme, engineFor, LARGE_FILE_NOTICE, type CompareEditor } from '../lib/editor';
+  import { languageId } from '../lib/languages';
+  import { contentFromText } from '../lib/text-format';
 
   let { original, modified, path, inline = false }: { original: string; modified: string; path: string; inline?: boolean } = $props();
   let host: HTMLDivElement;
-  let instance = $state<MonacoEditor.IStandaloneDiffEditor | null>(null);
-  let monacoApi: typeof import('../lib/monaco') | null = null;
-  let models: { original: MonacoEditor.ITextModel; modified: MonacoEditor.ITextModel } | null = null;
+  let instance = $state.raw<CompareEditor | null>(null);
   let failed = $state('');
-
-  onMount(() => {
-    let disposed = false;
-    let observer: MutationObserver | undefined;
-    (async () => {
-      const api = await import('../lib/monaco');
-      if (disposed) return;
-      monacoApi = api;
-      const font = () => getComputedStyle(document.documentElement).getPropertyValue('--mono');
-      const created = api.monaco.editor.createDiffEditor(host, {
-        automaticLayout: true, readOnly: true, originalEditable: false, renderSideBySide: !inline, useInlineViewWhenSpaceIsLimited: false,
-        renderOverviewRuler: true, diffAlgorithm: 'advanced', maxComputationTime: 0, minimap: { enabled: false },
-        fontSize: 13, scrollBeyondLastLine: false, renderIndicators: true, theme: api.applyEditorTheme(), fontFamily: font(),
-      });
-      observer = new MutationObserver(() => { api.applyEditorTheme(); created.updateOptions({ fontFamily: font() }); });
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
-      instance = created;
-    })().catch(reason => { failed = String(reason); });
-    return () => {
-      disposed = true;
-      observer?.disconnect();
-      instance?.dispose();
-      models?.original.dispose();
-      models?.modified.dispose();
-      instance = null;
-      models = null;
-    };
-  });
+  const large = $derived(engineFor([original.length, modified.length]) === 'viewer');
 
   $effect(() => {
-    if (!instance || !monacoApi) return;
-    const { monaco, language } = monacoApi;
-    const next = {
-      original: monaco.editor.createModel(original, language(path)),
-      modified: monaco.editor.createModel(modified, language(path)),
-    };
-    instance.setModel(next);
-    const previous = models;
-    models = next;
-    previous?.original.dispose();
-    previous?.modified.dispose();
+    const left = contentFromText(original), right = contentFromText(modified), language = languageId(path), kind = engineFor([original.length, modified.length]);
+    const layout = untrack(() => (inline ? 'inline' : 'sideBySide'));
+    let disposed = false, created: CompareEditor | undefined;
+    createCompareEditor({ host, kind, left, right, settings: { layout, theme: currentTheme(), language, hideUnchanged: false, ignoreWhitespace: false, readOnly: { left: true, right: true }, locked: true } })
+      .then(editor => { if (disposed) editor.dispose(); else { created = editor; instance = editor; } })
+      .catch(reason => { failed = String(reason); });
+    return () => { disposed = true; created?.dispose(); instance = null; };
   });
 
-  $effect(() => { instance?.updateOptions({ renderSideBySide: !inline }); });
+  $effect(() => { void instance?.configure({ layout: inline ? 'inline' : 'sideBySide' }); });
 </script>
 
 {#if failed}<p class="warn commit-empty">The compare view could not start: {failed}</p>{/if}
-<div class="diff-host" bind:this={host} hidden={!!failed}></div>
+{#if large}<p class="editor-notice" role="status">{LARGE_FILE_NOTICE}</p>{/if}
+<div class="diff-host editor-host" bind:this={host} hidden={!!failed}></div>
