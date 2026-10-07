@@ -62,6 +62,48 @@ fn fixture() -> std::path::PathBuf {
         ],
     );
     run(&dir, &["remote", "add", "plain", "ssh://h.example/o.git"]);
+    run(
+        &dir,
+        &["remote", "add", "hidden", "https://a.example/h.git"],
+    );
+    run(
+        &dir,
+        &[
+            "config",
+            "--add",
+            "remote.hidden.url",
+            "https://b.example/h2.git",
+        ],
+    );
+    run(
+        &dir,
+        &[
+            "config",
+            "remote.hidden.pushurl",
+            "https://mirror.example/h.git",
+        ],
+    );
+    run(
+        &dir,
+        &["remote", "add", "samepush", "https://a.example/s.git"],
+    );
+    run(
+        &dir,
+        &[
+            "config",
+            "--add",
+            "remote.samepush.url",
+            "https://b.example/s2.git",
+        ],
+    );
+    run(
+        &dir,
+        &[
+            "config",
+            "remote.samepush.pushurl",
+            "https://a.example/s.git",
+        ],
+    );
     dir
 }
 
@@ -71,7 +113,7 @@ async fn remote_urls_match_get_url_all_for_every_remote_shape() {
     let dir = fixture();
     let path = dir.to_str().unwrap();
     let tree = repository_tree(path.into()).await.unwrap();
-    assert_eq!(tree.remotes.len(), 4);
+    assert_eq!(tree.remotes.len(), 6);
     for remote in &tree.remotes {
         let expected: Vec<String> = run(&dir, &["remote", "get-url", "--all", &remote.name])
             .lines()

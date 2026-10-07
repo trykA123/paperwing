@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 pub(super) struct ListedRemote {
     pub(super) name: String,
@@ -33,6 +33,19 @@ pub(super) fn parse_remote_verbose(text: &str) -> Vec<ListedRemote> {
         .collect()
 }
 
+pub(super) fn pushurl_remotes(config: &str) -> HashSet<String> {
+    config
+        .lines()
+        .filter_map(|line| line.split(' ').next())
+        .filter_map(|key| {
+            key.strip_prefix("remote")?
+                .strip_prefix('.')?
+                .strip_suffix(".pushurl")
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 #[cfg(test)]
 #[path = "remote_list_tests.rs"]
 mod parity_tests;
@@ -57,6 +70,14 @@ mod tests {
         assert!(!multi[0].complete);
         let pushurl = parse_remote_verbose("origin\ta (fetch)\norigin\tp (push)\n");
         assert!(!pushurl[0].complete);
+    }
+
+    #[test]
+    fn pushurl_names_are_read_from_config_keys() {
+        let names =
+            pushurl_remotes("remote.origin.pushurl https://x/y\nremote.my.fork.pushurl a b\n");
+        assert!(names.contains("origin") && names.contains("my.fork"));
+        assert_eq!(names.len(), 2);
     }
 
     #[test]
