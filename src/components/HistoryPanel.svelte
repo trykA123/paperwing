@@ -47,7 +47,7 @@
   }
 
   async function readTags() {
-    try { const next = await api.listTags(path); if (alive) tags = next; } catch { tags = []; }
+    try { const next = await api.listTags(path); if (alive) tags = next ?? []; } catch { tags = []; }
   }
 
   $effect(() => { void tagFlow.revision; void readTags(); });

@@ -13,7 +13,7 @@
 
 <div class="rf-filters">
   <div class="fm-filters" role="group" aria-label="Filter repositories">
-    <FilterChips filters={REPO_FILTERS} counts={store.counts} value={store.chip} onchange={chip => store.filter({ chip })} />
+    <FilterChips filters={REPO_FILTERS} counts={store.counts} value={store.chip} partial={store.partial ? ['cloned', 'changes', 'behind'] : []} onchange={chip => store.filter({ chip })} />
     <button class="fm-chip rf-setchip" class:on={!!scoped} bind:this={setChip} aria-haspopup="dialog" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>
       <Icon name="folder" size={14} tone={scoped ? undefined : 'folder'} />{scoped ?? 'Any set'}<span class="car" aria-hidden="true">▾</span>
     </button>

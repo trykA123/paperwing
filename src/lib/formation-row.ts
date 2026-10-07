@@ -23,20 +23,28 @@ function refProblem(item: SetItem): { bad: boolean; title: string } {
 }
 
 function problemOf(item: SetItem): string | null {
-  if (item.on && app.hasClash(item)) return 'Same folder as another row';
+  if (item.on && app.view.kind !== 'repos' && app.hasClash(item)) return 'Same folder as another row';
   const job = app.jobs[item.id];
   return job?.phase === 'failed' ? job.msg : null;
 }
 
-function describeRemote(item: SetItem, state: { focused: boolean; canAct: boolean }): RowModel {
+/** A repository the listing has and no set holds. Its expected folder may already be on disk; then it is offered to a set, not cloned. */
+function describeRemote(item: SetItem, state: RowState): RowModel {
+  const local = app.local[app.dest(item)];
+  const onDisk = isCloned(local);
+  const label = local?.branchLabel ?? local?.branch ?? item.ref.name;
   return {
-    item, folder: item.name, sub: item.org, onDisk: false, problem: null, refType: 'branch', refLabel: item.ref.name, refBad: false, refTitle: 'Default branch on the remote', localNote: null,
-    local: undefined, sync: { kind: 'missing' }, next: { kind: 'clone', label: 'Clone', title: `Clone ${item.org}/${item.name}` }, busy: app.rowBusy(item), fixed: true,
-    selected: item.on, focused: state.focused, canAct: state.canAct, pull: null, remote: true, favorite: app.ws.stars.includes(item.repoId),
+    item, folder: item.name, sub: item.org, onDisk, problem: null, refType: 'branch', refLabel: onDisk ? label : item.ref.name, refBad: false,
+    refTitle: onDisk ? 'The branch this folder has checked out' : 'Default branch on the remote', localNote: null,
+    local: onDisk ? local : undefined, sync: onDisk ? syncView(local) : { kind: 'missing' }, busy: app.rowBusy(item), fixed: true,
+    next: onDisk ? { kind: 'adopt', label: 'Add to set', title: 'This folder is already on disk. Add it to a set to manage it.' } : { kind: 'clone', label: 'Clone', title: `Clone ${item.org}/${item.name}` },
+    selected: state.selected ?? item.on, focused: state.focused, canAct: state.canAct, pull: onDisk ? pullKey(item) : null, remote: !onDisk, favorite: app.ws.stars.includes(item.repoId),
   };
 }
 
-export function describeRow(item: SetItem, state: { focused: boolean; canAct: boolean }): RowModel {
+type RowState = { focused: boolean; canAct: boolean; selected?: boolean };
+
+export function describeRow(item: SetItem, state: RowState): RowModel {
   if (isRemoteItem(item)) return describeRemote(item, state);
   const facts = rowFacts(item);
   const ref = refProblem(item);
@@ -48,6 +56,6 @@ export function describeRow(item: SetItem, state: { focused: boolean; canAct: bo
     refType: item.ref.type, refLabel: facts.refLabel, refBad: ref.bad, refTitle: ref.title,
     localNote: isCloned(local) && !facts.onRef && !item.path && localLabel ? `on ${localLabel}` : null,
     local, sync: syncView(local, app.statusFailures[app.dest(item)]), next: nextAction(facts), busy: app.rowBusy(item), fixed: !!item.path,
-    selected: item.on, focused: state.focused, canAct: state.canAct, pull: pullKey(item), remote: false, favorite: app.ws.stars.includes(item.repoId),
+    selected: state.selected ?? item.on, focused: state.focused, canAct: state.canAct, pull: pullKey(item), remote: false, favorite: app.ws.stars.includes(item.repoId),
   };
 }

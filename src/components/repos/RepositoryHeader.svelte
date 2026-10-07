@@ -1,5 +1,6 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
+  import { isCloned } from '../../lib/formation';
   import { describeRow } from '../../lib/formation-row';
   import type { RepoEntry } from '../../lib/repositories';
   import { applyRef } from '../../lib/ref-apply';
@@ -16,13 +17,14 @@
 
   const store = app.repositories;
   const ICONS: Record<string, { icon: IconName; tone: IconTone }> = {
-    clone: { icon: 'folder', tone: 'sync' }, commit: { icon: 'check', tone: 'record' }, switch: { icon: 'branch', tone: 'branch' },
+    clone: { icon: 'folder', tone: 'sync' }, adopt: { icon: 'plus', tone: 'sync' }, commit: { icon: 'check', tone: 'record' }, switch: { icon: 'branch', tone: 'branch' },
     diverged: { icon: 'commit', tone: 'warn' }, pull: { icon: 'download', tone: 'sync' }, push: { icon: 'upload', tone: 'sync' },
   };
   let picker = $state<DOMRect | null>(null);
   let openIn = $state<HTMLElement | null>(null);
   let more = $state<{ x: number; y: number; opener: HTMLElement } | null>(null);
   let addTo = $state<HTMLElement | null>(null);
+  const cloned = $derived(isCloned(app.local[app.dest(entry.item)]));
   const busy = $derived(app.running || app.gitBusy || app.clonePreparing);
   const row = $derived(describeRow(entry.item, { focused: false, canAct: !busy }));
   const path = $derived(app.dest(entry.item));
@@ -35,17 +37,17 @@
 <header class="mh rf-head">
   <div class="grow">
     <nav class="rf-crumbs" aria-label="Breadcrumb">
-      <button onclick={() => { store.clearFilters(); store.back(); }}>Repositories</button><span aria-hidden="true">›</span>
-      <button title="Show only {entry.host}" onclick={() => narrow({ hostFilter: entry.host })}>{entry.host}</button><span aria-hidden="true">›</span>
-      <button title="Show only {entry.org}" onclick={() => narrow({ hostFilter: entry.host, org: entry.org })}>{entry.org}</button>
+      <button onclick={() => { store.clearFilters(); store.back(); }}>Repositories</button>
+      {#if entry.host}<span aria-hidden="true">›</span><button title="Show only {entry.host}" onclick={() => narrow({ hostFilter: entry.host })}>{entry.host}</button>{/if}
+      {#if entry.org}<span aria-hidden="true">›</span><button title="Show only {entry.org}" onclick={() => narrow({ hostFilter: entry.host, org: entry.org })}>{entry.org}</button>{/if}
     </nav>
     <h1>{app.folderOf(entry.item)}
       <button class="rf-star" class:on={entry.favorite} aria-pressed={entry.favorite} title={entry.favorite ? 'Remove from favorites' : 'Add to favorites'} aria-label="{entry.favorite ? 'Remove' : 'Add'} {entry.name} {entry.favorite ? 'from' : 'to'} favorites" onclick={() => app.toggleStar(entry.repoId)}><Icon name="star" size={16} /></button>
-      <span class="rf-tag" class:remote={entry.remoteOnly}>{entry.remoteOnly ? 'remote only' : 'cloned'}</span>
+      <span class="rf-tag" class:remote={!cloned}>{cloned ? (entry.remoteOnly ? 'on disk · no set' : 'cloned') : 'remote only'}</span>
     </h1>
     <div class="rf-meta">
       <span class="rf-meta-i"><Icon name="server" size={12} />{entry.host}</span>
-      {#if !entry.remoteOnly}
+      {#if cloned}
         <span class="mono rf-path" title={path}>{path}</span>
         {#if row.fixed}<span class="fm-ref static"><span class="t-{row.refType}"><Icon name={row.refType} /></span><span class="nm">{row.refLabel || 'detached'}</span></span>
         {:else}
@@ -63,7 +65,7 @@
   <div class="hbtns">
     {#if row.busy}<span class="fm-busy" role="status"><span class="spin"></span>{row.busy}…</span>
     {:else if row.next}{@const kind = row.next.kind}<button class="btn dark" disabled={busy} title={row.next.title} aria-label={row.next.aria} onclick={() => runNextAction(entry.item, kind)}><Icon name={ICONS[kind].icon} />{row.next.label}</button>{/if}
-    {#if !entry.remoteOnly}<button class="btn" disabled={busy || !!entry.item.path} title="git fetch --prune" onclick={() => app.startClone([entry.item], 'fetch')}><Icon name="refresh" />Fetch</button>{/if}
+    {#if cloned}<button class="btn" disabled={busy || !!entry.item.path} title="git fetch --prune" onclick={() => app.startClone([entry.item], 'fetch')}><Icon name="refresh" />Fetch</button>{/if}
     <button class="btn" aria-haspopup="dialog" aria-expanded={!!openIn} onclick={event => (openIn = openIn ? null : event.currentTarget)}><Icon name="external" />Open in<span class="car" aria-hidden="true">▾</span></button>
     <button class="btn icon-only" aria-haspopup="menu" aria-label="More actions" title="More actions" onclick={event => { const box = event.currentTarget.getBoundingClientRect(); more = { x: Math.max(8, box.right - 290), y: box.bottom + 4, opener: event.currentTarget }; }}><Icon name="more" /></button>
   </div>
@@ -74,7 +76,7 @@
   <Popover anchor={openIn} label="Open in" onclose={() => (openIn = null)} width={240}>
     <div class="menu-list">
       <button class="menu-item" onclick={() => { openIn = null; void openUrl(web); }}><Icon name="remote" tone="inspect" /><span class="lbl">Browser on {entry.host}</span></button>
-      {#if !entry.remoteOnly}
+      {#if cloned}
         <button class="menu-item" onclick={() => { openIn = null; app.openVscode(path); }}><Icon name="code" /><span class="lbl">VS Code</span></button>
         <button class="menu-item" onclick={() => { openIn = null; copy(path); }}><Icon name="copy" /><span class="lbl">Copy folder path</span></button>
       {/if}

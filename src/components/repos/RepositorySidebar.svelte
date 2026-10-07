@@ -11,7 +11,7 @@
 
   const store = app.repositories;
   const entry = $derived(store.resolve(view.repoId));
-  const cloned = $derived(!!entry && !entry.remoteOnly && isCloned(app.local[app.dest(entry.item)]));
+  const cloned = $derived(!!entry && isCloned(app.local[app.dest(entry.item)]));
   const counts = $derived(entry ? repoCounts(entry) : { changes: 0, branches: null, stash: null, prs: null });
   const locked = $derived(REPO_SECTIONS.filter(section => section.needsClone && !cloned));
   const branch = $derived(entry ? app.local[app.dest(entry.item)]?.branch : null);

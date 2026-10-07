@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
   import type { Snippet } from 'svelte';
 
-  let { items, rowHeight, key, row, header, empty, role, label, onkeydown, activeKey, initialScroll = 0, onscrolled }: {
+  let { items, rowHeight, key, row, header, empty, role, label, onkeydown, activeKey, initialScroll = 0, onscrolled, onvisible, keyshortcuts }: {
     items: T[];
     rowHeight: number;
     key: (item: T) => string;
@@ -14,6 +14,8 @@
     onkeydown?: (event: KeyboardEvent) => void;
     initialScroll?: number;
     onscrolled?: (top: number) => void;
+    onvisible?: (items: T[]) => void;
+    keyshortcuts?: string;
   } = $props();
 
   const OVERSCAN = 6;
@@ -35,6 +37,8 @@
     scrollTop = box.scrollTop;
   }
 
+  $effect(() => { onvisible?.(visible); });
+
   let restored = false;
   $effect(() => {
     if (!box || restored || !initialScroll) return;
@@ -50,7 +54,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<div class="vbox" bind:this={box} bind:clientHeight={viewH} onscroll={() => { if (!box) return; scrollTop = box.scrollTop; onscrolled?.(scrollTop); }} {role} aria-label={label} aria-multiselectable={role === 'grid' ? true : undefined} aria-rowcount={role === 'grid' ? items.length + (header ? 1 : 0) : undefined}
+<div class="vbox" bind:this={box} bind:clientHeight={viewH} onscroll={() => { if (!box) return; scrollTop = box.scrollTop; onscrolled?.(scrollTop); }} {role} aria-label={label} aria-multiselectable={role === 'grid' ? true : undefined} aria-keyshortcuts={keyshortcuts} aria-rowcount={role === 'grid' ? items.length + (header ? 1 : 0) : undefined}
   tabindex={role === 'grid' && !activeShown ? 0 : undefined} {onkeydown}>
   {#if header}<div class="vhead" bind:offsetHeight={headH}>{@render header()}</div>{/if}
   {#if items.length === 0 && empty}{@render empty()}{/if}

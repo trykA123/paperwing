@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 9139,
-  "normalizedSourceSHA256": "5031aa6b3238b9bd97e8c75e17cb03e1d475e49f084f15e17c43b82d40676476",
+  "originalLineCount": 9140,
+  "normalizedSourceSHA256": "3cd9b2a421fde7bc492513c0afdaa4a3b34add81bf1e015ab95f7f920d43dfa6",
   "chapters": [
     {
       "path": "comparison.css",
@@ -131,15 +131,39 @@
       "normalizedSHA256": "17b858e1d2611f21b6b63964417e44e7434f276e6f630e2492246f6e52e2afe0"
     },
     {
-      "path": "repositories.css",
+      "path": "repo-list.css",
       "firstLine": 8269,
-      "lastLine": 8956,
-      "normalizedSHA256": "30d77a277c9d10e1e5c6013aeb686d8de85aaa44b3b7d56dd18992feea5388e5"
+      "lastLine": 8383,
+      "normalizedSHA256": "d38facd9b38b238f58a707796c029693b0fd6b850f65ede407f031d4a2cd4187"
+    },
+    {
+      "path": "set-bar.css",
+      "firstLine": 8384,
+      "lastLine": 8437,
+      "normalizedSHA256": "220e013c6033583afc086f58f528f0505e0d0ff5949c58a841d719f7918a83ba"
+    },
+    {
+      "path": "popovers.css",
+      "firstLine": 8438,
+      "lastLine": 8546,
+      "normalizedSHA256": "ca2c04c755771d5f92f722660bf323614685db71f11b98beddc073a29edb39be"
+    },
+    {
+      "path": "repo-page.css",
+      "firstLine": 8547,
+      "lastLine": 8859,
+      "normalizedSHA256": "410897c00fb3ee6c884a4a18ae20946017d1ac0041ae1b8b7b1a113c9a6d8aa7"
+    },
+    {
+      "path": "details-drawer.css",
+      "firstLine": 8860,
+      "lastLine": 8957,
+      "normalizedSHA256": "6e1e0adb2b6115c6aa2d38853f8b32e7f30804ffd35333e00a718407e8ab9ecc"
     },
     {
       "path": "editor.css",
-      "firstLine": 8957,
-      "lastLine": 9139,
+      "firstLine": 8958,
+      "lastLine": 9140,
       "normalizedSHA256": "e5b90cf427558b1aa9bc0d8d133796fc5da5eaebd3da538ca0e734302469f660"
     }
   ]

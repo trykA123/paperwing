@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { isCloned } from '../../../lib/formation';
   import { plural } from '../../../lib/plural';
   import type { RepoEntry } from '../../../lib/repositories';
   import { app } from '../../../lib/state.svelte';
@@ -12,12 +13,13 @@
   const path = $derived(app.dest(entry.item));
   const tree = $derived(app.trees[path]);
   const remote = $derived(app.refs[entry.url]);
+  const cloned = $derived(isCloned(app.local[path]));
   const busy = $derived(app.running || app.gitBusy || app.clonePreparing);
 
-  $effect(() => { if (entry.remoteOnly) { const url = entry.url; untrack(() => void app.ensureRefs([url])); } });
+  $effect(() => { if (!cloned) { const url = entry.url; untrack(() => void app.ensureRefs([url])); } });
 </script>
 
-{#if entry.remoteOnly}
+{#if !cloned}
   <SectionCard title="Branches on {entry.host}" sub="Read only until the repository is cloned">
     {#if !remote}<p class="mut"><span class="spin"></span> Asking {entry.host}…</p>
     {:else if remote.error}<p class="warn" role="status">{remote.error}</p>

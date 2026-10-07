@@ -20,6 +20,7 @@ export const pushTarget = (item: SetItem) => ({ path: app.dest(item), name: app.
 export function runNextAction(item: SetItem, kind: NextActionKind): void {
   switch (kind) {
     case 'clone': void (isRemoteItem(item) ? app.repositories.cloneRemote(item) : app.startClone([item])); break;
+    case 'adopt': app.repositories.adopt([item]); break;
     case 'commit': app.openGitDialog('commit', item); break;
     case 'switch': void app.startClone([item], 'switch'); break;
     case 'pull': void app.startClone([item], 'pull'); break;

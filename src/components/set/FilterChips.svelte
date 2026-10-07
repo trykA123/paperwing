@@ -1,8 +1,8 @@
 <script lang="ts" generics="Id extends string">
   import Icon from '../Icon.svelte';
 
-  let { filters, counts, value, onchange }: {
-    filters: readonly { id: Id; label: string }[]; counts: Record<Id, number>; value: Id; onchange: (next: Id) => void;
+  let { filters, counts, value, onchange, partial = [] }: {
+    filters: readonly { id: Id; label: string }[]; counts: Record<Id, number>; value: Id; onchange: (next: Id) => void; partial?: readonly Id[];
   } = $props();
 
   function move(event: KeyboardEvent, index: number) {
@@ -17,6 +17,6 @@
 {#each filters as filter, index (filter.id)}
   <button class="fm-chip {filter.id}" class:on={value === filter.id} aria-pressed={value === filter.id}
     onclick={() => onchange(filter.id)} onkeydown={event => move(event, index)}>
-    {#if filter.id === 'favorites'}<Icon name="star" size={12} />{:else if filter.id !== 'all'}<i class="fm-dot {filter.id}" aria-hidden="true"></i>{/if}{filter.label} <b>{counts[filter.id]}</b>
+    {#if filter.id === 'favorites'}<Icon name="star" size={12} />{:else if filter.id !== 'all'}<i class="fm-dot {filter.id}" aria-hidden="true"></i>{/if}{filter.label} <b title={partial.includes(filter.id) ? 'Counts the folders whose status has been read so far' : undefined}>{counts[filter.id]}{partial.includes(filter.id) ? '+' : ''}</b>
   </button>
 {/each}

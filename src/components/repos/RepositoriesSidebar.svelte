@@ -29,8 +29,8 @@
 <div class="sec">
   <h6>Views</h6>
   <button class="nav" class:on={onList && store.chip === 'all'} onclick={() => view('all')}><Icon name="repo" /><span class="lbl">All repositories</span><span class="cnt">{store.everything.length}</span></button>
-  <button class="nav" class:on={onList && store.chip === 'cloned'} onclick={() => view('cloned')}><Icon name="check" tone="ok" /><span class="lbl">Cloned</span><span class="cnt">{clonedCount}</span></button>
-  <button class="nav" class:on={onList && store.chip === 'changes'} onclick={() => view('changes')}><Icon name="changes" tone="record" /><span class="lbl">Has changes</span><span class="cnt">{changedCount}</span></button>
+  <button class="nav" class:on={onList && store.chip === 'cloned'} onclick={() => view('cloned')}><Icon name="check" tone="ok" /><span class="lbl">Cloned</span><span class="cnt" title={store.partial ? 'Counts the folders whose status has been read so far' : undefined}>{clonedCount}{store.partial ? '+' : ''}</span></button>
+  <button class="nav" class:on={onList && store.chip === 'changes'} onclick={() => view('changes')}><Icon name="changes" tone="record" /><span class="lbl">Has changes</span><span class="cnt" title={store.partial ? 'Counts the folders whose status has been read so far' : undefined}>{changedCount}{store.partial ? '+' : ''}</span></button>
 </div>
 
 <FavoriteNav />

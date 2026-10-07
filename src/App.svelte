@@ -10,6 +10,7 @@
   import { applyAppearance, onSystemThemeChange } from './lib/appearance';
   import RepositoriesView from './components/repos/RepositoriesView.svelte';
   import RepositoryPage from './components/repos/RepositoryPage.svelte';
+  import AddToSetMenu from './components/repos/AddToSetMenu.svelte';
   import RepoList from './components/RepoList.svelte';
   import Settings from './components/Settings.svelte';
   import Notifications from './components/Notifications.svelte';
@@ -131,7 +132,8 @@
   function onFocus() {
     if (!benchmarkEnabled && app.ready && !app.running) {
       app.markMetadataStale();
-      void app.checkExists(app.set.items.map(i => app.dest(i)));
+      if (app.view.kind === 'repos') app.repositories.refreshStatus(true);
+      else if (app.view.kind !== 'repo') void app.checkExists(app.set.items.map(i => app.dest(i, app.set.id)));
     }
   }
 
@@ -151,8 +153,9 @@
 
   // Keep "already on disk" markers in sync with the destination.
   $effect(() => {
-    if (benchmarkEnabled || !app.ready || !(app.rootSupport.valid || app.set.items.some(item => item.path))) return;
-    const dests = app.set.items.map(i => app.dest(i));
+    if (benchmarkEnabled || !app.ready || app.view.kind === 'repos' || app.view.kind === 'repo' || !(app.rootSupport.valid || app.set.items.some(item => item.path))) return;
+    const setId = app.set.id;
+    const dests = app.set.items.map(i => app.dest(i, setId));
     const t = setTimeout(() => {
       void app.checkExists(dests);
       void app.refreshPathIdentities(dests).catch(reason => app.toast(String(reason), 'warn'));
@@ -214,6 +217,7 @@
 {#if app.recoveryOpen}<RecoveryPanel />{/if}
 {#if app.gitDialog?.kind === 'commit'}<CommitDialog request={app.gitDialog} />{:else if app.gitDialog?.kind === 'branch'}<BranchDialog request={app.gitDialog} />{/if}
 {#if app.cleanupDialog}<BranchCleanup request={app.cleanupDialog} />{/if}
+{#if app.repositories.askSet}{@const ask = app.repositories.askSet}<AddToSetMenu items={ask.items} anchor={ask.anchor} clone={ask.clone} onclose={() => (app.repositories.askSet = null)} />{/if}
 {#if stashFlow.dialog?.kind === 'push'}<StashPushDialog targets={stashFlow.dialog.targets} />{:else if stashFlow.dialog?.kind === 'switch'}<StashSwitchDialog targets={stashFlow.dialog.targets} />{/if}
 {#if tagFlow.dialog?.kind === 'create'}<TagDialog targets={tagFlow.dialog.targets} />{:else if tagFlow.dialog?.kind === 'delete'}<TagDeleteDialog targets={tagFlow.dialog.targets} tag={tagFlow.dialog.tag} />{/if}
 {#if pullFlow.dialog?.kind === 'open'}<OpenPullDialog item={pullFlow.dialog.item} />{:else if pullFlow.dialog?.kind === 'bulk'}<BulkPullDialog items={pullFlow.dialog.items} />{/if}

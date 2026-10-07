@@ -21,18 +21,23 @@
   const store = app.repositories;
   const entry = $derived(store.resolve(view.repoId));
   const path = $derived(entry ? app.dest(entry.item) : '');
-  const cloned = $derived(!!entry && !entry.remoteOnly && isCloned(app.local[path]));
+  const cloned = $derived(!!entry && isCloned(app.local[path]));
   const section = $derived(usableSection(view.section, cloned));
   const loading = $derived(Object.values(app.loadingRepos).some(Boolean) || !app.ready);
   const goto = (next: RepoSection) => store.openRepository(view.repoId, next);
 
-  $effect(() => { store.refreshStatus(); });
+  $effect(() => {
+    if (!entry || cloned || app.local[path]) return;
+    const target = path;
+    untrack(() => void app.checkExists([target]));
+  });
 
   $effect(() => {
     if (!cloned) return;
     const target = path;
-    untrack(() => { app.openTreePaths = [target]; void app.loadTree(target); void app.checkExists([target]); });
-    return () => { app.openTreePaths = []; };
+    const reading = new AbortController();
+    untrack(() => { app.openTreePaths = [target]; void app.loadTree(target, false, reading.signal); });
+    return () => { reading.abort(); app.openTreePaths = []; };
   });
 </script>
 

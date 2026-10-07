@@ -1,4 +1,6 @@
+import { SvelteSet } from 'svelte/reactivity';
 import type { LocalStatus, Repo, RepoSet, SetItem, Source, Workspace } from '../api';
+import { isCloned } from '../formation';
 import { collectEntries, hostOfItem, hostTree, isRemoteItem, matchesRepoFilter, matchesScope, repoFilterCounts, setEntries, type RepoEntry, type RepoFilter } from '../repositories';
 import { usableSection, type RepoSection } from '../repo-sections';
 import type { View } from '../workspace';
@@ -10,6 +12,7 @@ export type RepositoriesHost = {
   readonly local: Record<string, LocalStatus>;
   readonly view: View;
   readonly set: RepoSet;
+  readonly temporary: { readonly sets: readonly RepoSet[] };
   dest: (item: SetItem, setId?: string) => string;
   collisionKey: (path: string) => string;
   readonly activeTabId: string;
@@ -25,6 +28,9 @@ export type RepositoriesHost = {
 };
 
 const RECHECK_MS = 300;
+const STATUS_CHIPS: readonly RepoFilter[] = ['cloned', 'changes', 'behind'];
+
+export type SetAsk = { items: SetItem[]; anchor: Element; clone: boolean };
 
 /** Every repository the app knows, the filters that narrow the table, and the actions on rows that no set owns yet. */
 export class Repositories {
@@ -39,6 +45,11 @@ export class Repositories {
   /** The tab a repository page was opened from; Back returns to it with its filters and scroll. */
   private origin: string | null = null;
   private remote = new Map<string, SetItem>();
+  /** The rows the user ticked on the home list; set tabs keep their own `on` flags. */
+  private picked = new SvelteSet<string>();
+  private visible: readonly SetItem[] = [];
+  /** Asks which set a repository joins before it is cloned or added. */
+  askSet = $state<SetAsk | null>(null);
   private checkTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(app: RepositoriesHost) { this.app = app; }
@@ -54,9 +65,25 @@ export class Repositories {
   scoped = $derived(this.entries.filter(entry => matchesScope(entry, { host: this.hostFilter, org: this.org, query: this.query })));
   counts = $derived(repoFilterCounts(this.scoped.map(entry => ({ local: this.localOf(entry), favorite: entry.favorite }))));
   shown = $derived(this.chip === 'all' ? this.scoped : this.scoped.filter(entry => matchesRepoFilter(this.chip, this.localOf(entry), entry.favorite)));
-  selected = $derived(this.entries.filter(entry => entry.item.on).map(entry => entry.item));
+  selected = $derived(this.inSetView ? this.entries.filter(entry => entry.item.on).map(entry => entry.item) : this.shown.filter(entry => this.picked.has(entry.key)).map(entry => entry.item));
+  tempEntries = $derived(this.app.temporary.sets.flatMap(set => setEntries(set, this.facts)));
+  /** True while some counted folder has no status yet, so the chip counts are a lower bound. */
+  partial = $derived(this.scoped.some(entry => !entry.remoteOnly && !this.localOf(entry)));
   tree = $derived(hostTree(this.everything));
   favorites = $derived(this.everything.filter(entry => entry.favorite));
+
+  isOn(item: SetItem): boolean { return this.inSetView ? item.on : this.picked.has(item.id); }
+
+  setOn(item: SetItem, on: boolean) {
+    if (this.inSetView) item.on = on;
+    else if (on) this.picked.add(item.id);
+    else this.picked.delete(item.id);
+  }
+
+  clearSelection() {
+    if (this.inSetView) for (const entry of this.entries) entry.item.on = false;
+    else this.picked.clear();
+  }
 
   localOf(entry: RepoEntry): LocalStatus | undefined { return this.app.local[this.app.dest(entry.item)]; }
 
@@ -82,17 +109,17 @@ export class Repositories {
 
   /** The entry a repository page shows: the folder on disk when there is one, else the first. */
   resolve(repoId: string): RepoEntry | undefined {
-    const known = this.everything.filter(entry => entry.repoId === repoId);
+    const known = [...this.everything, ...this.tempEntries].filter(entry => entry.repoId === repoId);
     return known.find(entry => !entry.remoteOnly && this.localOf(entry)?.repo) ?? known[0];
   }
 
-  setIdOf(item: SetItem): string { return this.app.ws.sets.find(set => set.items.some(entry => entry.id === item.id))?.id ?? this.app.set.id; }
+  setIdOf(item: SetItem): string { return [...this.app.ws.sets, ...this.app.temporary.sets].find(set => set.items.some(entry => entry.id === item.id))?.id ?? this.app.set.id; }
 
   openRepository(repoId: string, section: RepoSection = 'overview') {
     const entry = this.resolve(repoId);
     if (!entry) { this.app.toast('That repository is not in any source or set', 'warn'); return; }
     if (this.app.view.kind !== 'repo') this.origin = this.app.activeTabId;
-    const cloned = !entry.remoteOnly && !!this.localOf(entry)?.repo;
+    const cloned = !!this.localOf(entry)?.repo;
     this.app.openView({ kind: 'repo', repoId, section: usableSection(section, cloned) }, entry.setIds[0]);
   }
 
@@ -115,19 +142,30 @@ export class Repositories {
 
   clearFilters() { this.filter({ chip: 'all', hostFilter: '', org: '', query: '' }); }
 
-  /** A repository that no set holds joins this set before it is cloned. */
-  cloneTarget(): RepoSet { return this.app.ws.sets.find(set => set.id === this.app.ws.activeSet) ?? this.app.ws.sets[0]; }
+  /** A repository the listing has but no set does, and that is not on disk either. */
+  isUncloned(item: SetItem): boolean { return isRemoteItem(item) && !isCloned(this.app.local[this.app.dest(item)]); }
 
-  /** Repositories that no set holds join the target set first, then everything is cloned in one run. */
-  async cloneItems(items: readonly SetItem[]) {
-    const set = this.cloneTarget();
-    const ready = items.flatMap(item => (isRemoteItem(item) ? this.promote(item, set) : [item]));
-    const joined = ready.length - items.filter(item => !isRemoteItem(item)).length;
-    if (joined > 0) this.app.toast(`${joined} added to ${set.name}`, 'info');
-    if (ready.length) await this.app.startClone(ready, 'clone');
+  /** In a set tab the set is known; at home the user picks or creates one before anything joins it or is cloned. */
+  cloneItems(items: readonly SetItem[]) {
+    if (!items.some(item => this.isUncloned(item))) return this.cloneInto(items);
+    if (this.inSetView) return this.cloneInto(items, this.app.set);
+    this.askSet = { items: [...items], anchor: document.activeElement ?? document.body, clone: true };
+    return Promise.resolve();
   }
 
   cloneRemote(item: SetItem) { return this.cloneItems([item]); }
+
+  /** Rows that no set holds join `set` first, then everything is cloned in one run. */
+  async cloneInto(items: readonly SetItem[], set?: RepoSet) {
+    const ready = items.flatMap(item => (this.isUncloned(item) && set ? this.promote(item, set) : [item]));
+    const joined = ready.length - items.filter(item => !isRemoteItem(item)).length;
+    if (joined > 0 && set) this.app.toast(`${joined} added to ${set.name}`, 'info');
+    const runnable = ready.filter(item => !isRemoteItem(item));
+    if (runnable.length) await this.app.startClone(runnable, 'clone');
+  }
+
+  /** A folder already on disk that no set holds: pick the set it joins. */
+  adopt(items: readonly SetItem[]) { this.askSet = { items: [...items], anchor: document.activeElement ?? document.body, clone: false }; }
 
   private promote(item: SetItem, set: RepoSet): SetItem[] {
     const repo = this.app.allRepos.find(entry => entry.id === item.repoId);
@@ -143,17 +181,27 @@ export class Repositories {
     this.app.toast(`${added.length} added to ${set.name}${skipped ? `, ${skipped} already there or unavailable` : ''}`, added.length ? 'success' : 'warn');
   }
 
-  newSet(items: readonly SetItem[] = []) {
+  newSet(items: readonly SetItem[] = [], clone = false) {
     this.app.newSet();
-    if (items.length) this.addToSet(items, this.app.set);
+    if (!items.length) return;
+    if (clone) void this.cloneInto(items, this.app.set);
+    else this.addToSet(items, this.app.set);
   }
 
-  /** Status of every folder of every set, so the table can tell cloned from remote. */
-  refreshStatus() {
+  /** The table tells the store which rows it shows; only those, the ticked rows and, for a status chip, the folders that chip must judge are read. */
+  setVisible(items: readonly SetItem[]) {
+    this.visible = items;
+    this.refreshStatus();
+  }
+
+  /** Reads the status of the rows in view and the ticked rows; `force` reads known ones again (window focus). */
+  refreshStatus(force = false) {
     clearTimeout(this.checkTimer);
     this.checkTimer = setTimeout(() => {
-      const paths = this.app.ws.sets.flatMap(set => set.items.filter(item => !this.app.local[this.app.dest(item, set.id)]).map(item => this.app.dest(item, set.id)));
-      if (paths.length) void this.app.checkExists(paths);
+      const judged = STATUS_CHIPS.includes(this.chip) ? this.everything.filter(entry => !entry.remoteOnly).map(entry => entry.item) : [];
+      const paths = [...new Set([...this.visible, ...this.selected, ...judged].map(item => this.app.dest(item)))];
+      const due = force ? paths : paths.filter(path => !this.app.local[path]);
+      if (due.length) void this.app.checkExists(due);
     }, RECHECK_MS);
   }
 }

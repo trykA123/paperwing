@@ -22,3 +22,10 @@ Moved out: branch cleanup and set search are in 39.
 
 ## Test stability
 - `git::process_tests::linux_post_spawn_capture_failure_retains_registration_and_permits_until_reap` flakes under parallel load (CI run 37573417043, passed on rerun). Make the process tests take `TEST_RUNNER_LOCK` or wait for runner idleness.
+
+## Packet 44 follow-ups (pass 2 review, 2026-10-08)
+- Shell cleanup: delete the dead right-panel CSS (`.item-details`, `.set-summary`, `.tree-*` rules in `workflow-overrides.css` and `workspace.css`) and rename the drawer `history-*` classes to `details-*` (update `ui-26`, `ui-33` and `ui-44` selectors with them).
+- Compare details panel: move comparison rules and Copy to left/right out of the right grid track (packet 37), then drop the track, `rightVisible` and `rightWidth`.
+- Unbuilt in the repository shell: clone by URL ("Clone repository…"), discard in the Changes section (packet 29 UI), failing runs in the quick look and run details in the drawer (packet 31 run data), pull requests for remote-only repositories (needs a remote lookup, not a local path).
+- Chip counts on the Repositories home are a lower bound until statuses are read (shown with a "+"). A cheap on-disk probe (`paths_exist`) could give exact "Cloned" counts without full status.
+- Packet 38 nit: the events bus serialises each event twice (`RawValue`); skip the second pass when no bus subscribers are registered.

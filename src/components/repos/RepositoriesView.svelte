@@ -23,8 +23,6 @@
     ? `${store.shown.length} of ${plural(store.entries.length, 'repository', 'repositories')} shown`
     : `${store.shown.length.toLocaleString('en')} shown · ${everything.length.toLocaleString('en')} known · ${cloned} cloned · ${everything.filter(entry => entry.remoteOnly).length.toLocaleString('en')} remote only on ${plural(hosts, 'host')}`);
   const items = $derived(store.shown.map(entry => entry.item));
-
-  $effect(() => { if (!store.inSetView) store.refreshStatus(); });
 </script>
 
 <PageFrame crumb="Local Git" title="Repositories" {sub}>

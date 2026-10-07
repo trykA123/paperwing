@@ -1,0 +1,115 @@
+/* repositories module: filter bar, row marks, sidebar */
+.rf-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2) var(--sp-3);
+}
+
+.rf-search {
+    width: 240px;
+    max-width: 100%;
+}
+
+.fm-dot.cloned {
+    background: var(--ok);
+}
+
+.fm-chip .car {
+    font-size: var(--fs-xs);
+}
+
+.rf-setchip.on {
+    background: var(--accs);
+    border-color: var(--acc);
+    color: var(--acc);
+    font-weight: 600;
+}
+
+.fm-namerow {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    min-width: 0;
+}
+
+.fm-table.compact .fm-namerow {
+    flex: none;
+    max-width: 60%;
+}
+
+.fm-fav {
+    flex: none;
+    display: inline-flex;
+    color: var(--warn);
+}
+
+.fm-fav .i {
+    fill: currentColor;
+}
+
+.fm-remote {
+    flex: none;
+    padding: 0 6px;
+    border: 1px dashed var(--line-ctl);
+    border-radius: 99px;
+    color: var(--dim);
+    font-size: var(--fs-xs);
+    line-height: 16px;
+}
+
+/* sidebar */
+.rf-hostbtn .lbl {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+}
+
+.nav.p-sub {
+    padding-left: var(--sp-5);
+}
+
+.sec h6 .rf-add-btn {
+    margin-left: auto;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    color: var(--dim);
+}
+
+.sec h6 .rf-add-btn:hover {
+    background: var(--soft);
+    color: var(--text);
+}
+
+.rf-mini {
+    display: inline-flex;
+    gap: var(--sp-1);
+    margin-left: auto;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.rf-cnt-dirty {
+    color: var(--warn-text);
+}
+
+.rf-cnt-up {
+    color: var(--err-text);
+}
+
+.rf-cnt-down {
+    color: var(--hl-text);
+}
+
+.fav .star {
+    display: inline-flex;
+}
+
+.fav .star .i {
+    fill: currentColor;
+}
+

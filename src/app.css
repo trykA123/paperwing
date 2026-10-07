@@ -19,5 +19,9 @@
 @import './styles/tags.css';
 @import './styles/pulls.css';
 @import './styles/modules.css';
-@import './styles/repositories.css';
+@import './styles/repo-list.css';
+@import './styles/set-bar.css';
+@import './styles/popovers.css';
+@import './styles/repo-page.css';
+@import './styles/details-drawer.css';
 @import './styles/editor.css';

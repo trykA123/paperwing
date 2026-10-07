@@ -20,7 +20,7 @@
   const targets = $derived(bulkTargets(selected, rowFacts));
   const dirty = $derived(targets.cloned.filter(item => (app.local[app.dest(item)]?.dirty ?? 0) > 0));
   const remote = $derived(selected.filter(item => !item.path && !isRemoteItem(item)));
-  const cloneable = $derived(selected.filter(item => isRemoteItem(item) || needsClone(item)));
+  const cloneable = $derived(selected.filter(item => app.repositories.isUncloned(item) || (!isRemoteItem(item) && needsClone(item))));
   const moreButton = () => document.querySelector<HTMLElement>('.fm-bar .more');
 
   export function pickRef(items: SetItem[], anchor: DOMRect) { picker = { items, anchor }; }
@@ -54,7 +54,7 @@
     deleteTag: () => tagFlow.openDelete(targets.cloned, moreButton()),
     pulls: () => pullFlow.openBulk(selected, moreButton()),
     addToSet: () => { addAnchor = moreButton() ?? document.body; },
-    clear: () => { for (const item of selected) item.on = false; },
+    clear: () => app.repositories.clearSelection(),
   };
 </script>
 

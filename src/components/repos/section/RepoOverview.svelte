@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isCloned } from '../../../lib/formation';
   import { describeRow } from '../../../lib/formation-row';
   import { plural } from '../../../lib/plural';
   import { repoCounts } from '../../../lib/repo-counts';
@@ -15,6 +16,7 @@
 
   let { entry, goto }: { entry: RepoEntry; goto: (section: RepoSection) => void } = $props();
 
+  const cloned = $derived(isCloned(app.local[app.dest(entry.item)]));
   const counts = $derived(repoCounts(entry));
   const row = $derived(describeRow(entry.item, { focused: false, canAct: true }));
   const busy = $derived(app.running || app.gitBusy || app.clonePreparing);
@@ -26,7 +28,7 @@
   ]);
 </script>
 
-{#if entry.remoteOnly}
+{#if !cloned}
   <div class="rf-grid">
     <SectionCard title="Next step">
       <div class="rf-empty"><Icon name="cloud" size={18} /><b>Not cloned</b><p class="mut">Clone {entry.name} to see local changes, history and stashes.</p>

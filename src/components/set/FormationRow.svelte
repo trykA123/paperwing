@@ -19,7 +19,7 @@
   const stop = $derived(active ? 0 : -1);
 
   const ICONS: Record<NextActionKind, { icon: IconName; tone: IconTone }> = {
-    clone: { icon: 'folder', tone: 'sync' }, commit: { icon: 'check', tone: 'record' }, switch: { icon: 'branch', tone: 'branch' },
+    clone: { icon: 'folder', tone: 'sync' }, adopt: { icon: 'plus', tone: 'sync' }, commit: { icon: 'check', tone: 'record' }, switch: { icon: 'branch', tone: 'branch' },
     diverged: { icon: 'commit', tone: 'warn' }, pull: { icon: 'download', tone: 'sync' }, push: { icon: 'upload', tone: 'sync' },
   };
 

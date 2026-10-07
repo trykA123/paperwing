@@ -36,8 +36,9 @@
   const density = $derived(app.ws.density ?? 'comfortable');
   const activeRow = $derived(rows.find(item => item.id === activeId) ?? rows[0]);
   const selected = $derived(store.selected);
-  const allOn = $derived(rows.length > 0 && rows.every(item => item.on));
-  const offer = $derived(selectionOffer(rows, items));
+  const flag = (item: SetItem) => ({ on: store.isOn(item) });
+  const allOn = $derived(rows.length > 0 && rows.every(item => store.isOn(item)));
+  const offer = $derived(selectionOffer(rows.map(flag), items.map(flag)));
   const listKey = $derived(`${scopeKey}|${store.chip}|${store.query}|${store.hostFilter}|${store.org}|${cur}|${size}`);
   const firstKey = untrack(() => listKey), firstScroll = untrack(() => store.scroll);
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing);
@@ -81,9 +82,9 @@
   function extendTo(target: SetItem) {
     anchorId ??= activeRow?.id ?? target.id;
     const byId = new Map(items.map(item => [item.id, item]));
-    const result = shiftRange(ids(), anchorId, target.id, id => !!byId.get(id)?.on, rangeAdded);
-    for (const id of result.on) byId.get(id)!.on = true;
-    for (const id of result.off) byId.get(id)!.on = false;
+    const result = shiftRange(ids(), anchorId, target.id, id => { const found = byId.get(id); return !!found && store.isOn(found); }, rangeAdded);
+    for (const id of result.on) store.setOn(byId.get(id)!, true);
+    for (const id of result.off) store.setOn(byId.get(id)!, false);
     rangeAdded = result.added;
   }
 
@@ -110,7 +111,7 @@
       void focusRow(at, false);
       return;
     }
-    if (control && event.key.toLowerCase() === 'a') { for (const item of rows) item.on = true; }
+    if (control && event.key.toLowerCase() === 'a') { for (const item of rows) store.setOn(item, true); }
     else if (event.key === 'ArrowDown') void focusRow(at + 1, event.shiftKey);
     else if (event.key === 'ArrowUp') void focusRow(at - 1, event.shiftKey);
     else if (event.key === 'PageDown') void focusRow(at + PAGE_STEP, event.shiftKey);
@@ -118,7 +119,7 @@
     else if (event.key === 'Home') void focusRow(0, event.shiftKey);
     else if (event.key === 'End') void focusRow(rows.length - 1, event.shiftKey);
     else if (event.key === ' ' && !control) detailsDrawer.open({ kind: 'repository', item: activeRow }, event.target as Element);
-    else if (event.key === ' ' || event.key.toLowerCase() === 'x') { activeRow.on = !activeRow.on; anchorAt(activeRow.id); }
+    else if (event.key === ' ' || event.key.toLowerCase() === 'x') { store.setOn(activeRow, !store.isOn(activeRow)); anchorAt(activeRow.id); }
     else if (event.key === 'Enter') store.openRepository(activeRow.repoId);
     else return;
     event.preventDefault();
@@ -135,8 +136,8 @@
     toggle: (on: boolean, range: boolean) => {
       if (range && anchorId) {
         if (on) extendTo(item);
-        else { const byId = new Map(items.map(entry => [entry.id, entry])); for (const id of clearRange(ids(), anchorId, item.id)) byId.get(id)!.on = false; rangeAdded = new Set(); }
-      } else { item.on = on; anchorAt(item.id); }
+        else { const byId = new Map(items.map(entry => [entry.id, entry])); for (const id of clearRange(ids(), anchorId, item.id)) store.setOn(byId.get(id)!, false); rangeAdded = new Set(); }
+      } else { store.setOn(item, on); anchorAt(item.id); }
     },
     activate: () => { activeId = item.id; },
     inspect: () => detailsDrawer.open({ kind: 'repository', item }),
@@ -152,11 +153,11 @@
 <div class="fm-wrap">
   <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
     {#key listKey}
-      <VirtualList bind:this={list} role="grid" activeKey={activeRow?.id} {label} onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id} initialScroll={listKey === firstKey ? firstScroll : 0} onscrolled={top => (store.scroll = top)}>
+      <VirtualList bind:this={list} role="grid" activeKey={activeRow?.id} {label} onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id} initialScroll={listKey === firstKey ? firstScroll : 0} onscrolled={top => (store.scroll = top)} onvisible={visible => store.setVisible(visible)} keyshortcuts="Space Control+Space X Enter">
         {#snippet header()}
           <div class="fm-row fm-head" role="row">
-            <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && rows.some(item => item.on)}
-              onchange={e => { for (const item of rows) item.on = e.currentTarget.checked; }} aria-label="Select all repositories on this page" /></label></div>
+            <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && rows.some(item => store.isOn(item))}
+              onchange={e => { for (const item of rows) store.setOn(item, e.currentTarget.checked); }} aria-label="Select all repositories on this page" /></label></div>
             <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div>
             <div class="fm-cell fm-pull-head" role="columnheader"><span>Pull request</span><button class="fm-menu-btn" aria-label="Refresh pull request status" title="Check pull requests again for the rows shown and selected" onclick={() => pulls.refresh()}><Icon name="refresh" size={12} /></button></div>
             <div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
@@ -164,13 +165,13 @@
         {/snippet}
         {#snippet empty()}{@render none()}{/snippet}
         {#snippet row(item: SetItem, index: number)}
-          <FormationRow row={describeRow(item, { focused: detailsDrawer.target?.kind === 'repository' && detailsDrawer.target.item.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} rowIndex={index + 2} handlers={rowHandlers(item)} />
+          <FormationRow row={describeRow(item, { selected: store.isOn(item), focused: detailsDrawer.target?.kind === 'repository' && detailsDrawer.target.item.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} rowIndex={index + 2} handlers={rowHandlers(item)} />
         {/snippet}
       </VirtualList>
     {/key}
     {#if items.length}<Pager total={items.length} bind:page={store.page} bind:size={app.ws.pageSize} {density} ondensity={value => (app.ws.density = value)} />{/if}
   </div>
-  <RepositoryBulk bind:this={bulk} {selected} busy={gitBusy} extend={offer ? { count: offer, run: () => { for (const item of items) item.on = true; } } : null} />
+  <RepositoryBulk bind:this={bulk} {selected} busy={gitBusy} extend={offer ? { count: offer, run: () => { for (const item of items) store.setOn(item, true); } } : null} />
 </div>
 
 {#if menu}

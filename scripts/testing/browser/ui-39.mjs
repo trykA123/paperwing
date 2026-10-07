@@ -80,6 +80,8 @@ const branches = dir => git(dir, 'for-each-ref', '--format=%(refname:short)', 'r
 await page.goto(url);
 await page.waitForTimeout(5500);
 await page.waitForSelector('.fm-row[data-id]');
+await page.click('.side .nav:has-text("Fixture set")');
+await page.waitForSelector('.rf-setbar');
 await page.waitForTimeout(800);
 await shot('set');
 
