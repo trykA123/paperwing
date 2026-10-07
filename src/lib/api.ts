@@ -150,6 +150,7 @@ export type Workspace = {
   cols: ColWidths;
   shallow: boolean; parallel: number; onExisting: OnExisting; pageSize: PageSize; density?: RowDensity; rightWidth: number;
   theme: Theme; uiFont: string; codeFont: string;
+  languageMap?: Record<string, string>;
   shell: ShellLayout;
 };
 

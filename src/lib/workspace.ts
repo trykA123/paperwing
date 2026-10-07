@@ -1,4 +1,5 @@
 import type { CompareEndpoint, PlatformInfo, RailSection, Workspace } from './api';
+import { cleanLanguageMap } from './languages';
 import { HOME_MODULE, isSection } from './modules';
 import { isRepoSection, type RepoSection } from './repo-sections';
 
@@ -43,7 +44,7 @@ export function defaultWorkspace(platform: PlatformInfo['platform'] = 'windows')
     sets: [{ id, name: 'My first set', items: [] }], stars: [], activeSet: id,
     root: platform === 'windows' ? 'C:\\Dev\\repos' : '', layout: 'flat', pathTemplate: DEFAULT_TEMPLATE, cols: { ...DEFAULT_COLS },
     shallow: false, parallel: 4, onExisting: 'fetch', pageSize: 25, rightWidth: 380,
-    theme: 'system', uiFont: 'geist', codeFont: 'geist-mono',
+    theme: 'system', uiFont: 'geist', codeFont: 'geist-mono', languageMap: {},
     shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: HOME_MODULE },
   };
 }
@@ -58,6 +59,7 @@ export function migrateWorkspace(saved: Partial<Workspace> | null, platform: Pla
     ws.pathTemplate = DEFAULT_TEMPLATE;
   }
   ws.cols = { ...defaults.cols, ...ws.cols };
+  ws.languageMap = cleanLanguageMap(ws.languageMap);
   ws.shell = { ...defaults.shell, ...ws.shell };
   if ((ws.shell.section as string) === 'sets') ws.shell.section = HOME_MODULE;
   if (!isSection(ws.shell.section)) ws.shell.section = HOME_MODULE;
