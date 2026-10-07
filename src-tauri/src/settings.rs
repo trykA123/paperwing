@@ -75,7 +75,10 @@ fn load_with_status<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Loaded, Str
         return load_persisted(app);
     };
     if state.check().is_ok() {
-        return load_persisted(app);
+        let loaded = load_persisted(app);
+        if loaded.is_ok() {
+            return loaded;
+        }
     }
     match load_persisted(app) {
         Ok(loaded) => {
@@ -181,7 +184,7 @@ fn prepare_initial_settings<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Set
         }
     }
     let _ = file;
-    load_settings(app.clone())
+    load_persisted(app).map(|loaded| loaded.settings)
 }
 
 pub(crate) fn initialize<R: tauri::Runtime>(app: AppHandle<R>) -> Result<(), String> {

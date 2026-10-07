@@ -7,6 +7,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 static WRITES: Mutex<()> = Mutex::new(());
+const PRESERVE_VALID_ERROR: &str = "Refusing to overwrite existing settings after a startup load error. Retry loading settings or restart the app.";
 
 fn parse(bytes: &[u8]) -> Result<Settings, String> {
     let settings: Settings = serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
@@ -79,12 +80,20 @@ pub(super) fn save(file: &Path, settings: &Settings, preserve_valid: bool) -> Re
     let _guard = WRITES
         .lock()
         .map_err(|_| "Settings persistence is unavailable")?;
+    if preserve_valid {
+        match read_file(&file.with_extension("json.bak")) {
+            Ok(previous) if parse(&previous).is_ok() => return Err(PRESERVE_VALID_ERROR.into()),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
     let text = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
     match std::fs::read(file) {
         Ok(previous) => {
             if parse(&previous).is_ok() {
                 if preserve_valid {
-                    return Err("Refusing to overwrite existing settings after a startup load error. Retry loading settings or restart the app.".into());
+                    return Err(PRESERVE_VALID_ERROR.into());
                 }
                 durable_replace(&file.with_extension("json.bak"), &previous)?;
             } else {

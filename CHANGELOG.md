@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep close and clone available during settings recovery, add Retry to the startup notice, protect valid or unreadable backups, and allow two minutes for stash status snapshots.
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
 - Retry settings after startup read errors, show defaults with a notice, protect valid settings from auto-save, and avoid retrying partially applied untracked stashes.
 - Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
