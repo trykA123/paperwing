@@ -673,9 +673,18 @@ button.fm-ref:hover {
 .btn.progress .bar {
     position: absolute;
     inset: 0;
-    background: color-mix(in oklch, var(--acc-fg) 22%, transparent);
+    background: color-mix(in oklch, var(--acc) 22%, transparent);
     transform-origin: left center;
     transition: transform 200ms var(--ease-out);
+}
+
+.btn.dark.progress .bar {
+    background: color-mix(in oklch, var(--acc-fg) 22%, transparent);
+}
+
+.fm-table .vbox:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
 }
 
 .btn.progress .lbl {
@@ -967,4 +976,8 @@ button.fm-ref:hover {
 .set-summary dd.zero {
     color: var(--faint-text);
     font-weight: 400;
+}
+
+.err-line {
+    display: block;
 }

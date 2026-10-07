@@ -3,6 +3,7 @@
   import { app } from '../lib/state.svelte';
   import type { Ref, SetItem } from '../lib/api';
   import { bulkTargets, filterCounts, matchesFilter, FILTERS, type FormationFilter } from '../lib/formation';
+  import { clearRange, selectionOffer, shiftRange } from '../lib/selection';
   import { describeRow } from '../lib/formation-row';
   import { plural } from '../lib/plural';
   import { pushTarget, rowFacts, runNextAction } from '../lib/row-actions';
@@ -27,6 +28,7 @@
   let list = $state<ReturnType<typeof VirtualList<SetItem>>>();
   let activeId = $state<string | null>(null);
   let anchorId: string | null = null;
+  let rangeAdded = new Set<string>();
   let picker = $state<{ items: SetItem[]; anchor: DOMRect } | null>(null);
   let menu = $state<{ item: SetItem; x: number; y: number; opener: HTMLElement | null } | null>(null);
   $effect(() => { if (tab) { tab.page = page; tab.filter = filter; } });
@@ -43,7 +45,8 @@
   const density = $derived(app.ws.density ?? autoDensity);
   const activeRow = $derived(rows.find(item => item.id === activeId) ?? rows[0]);
   const selected = $derived(app.selected);
-  const allOn = $derived(shown.length > 0 && shown.every(item => item.on));
+  const allOn = $derived(rows.length > 0 && rows.every(item => item.on));
+  const offer = $derived(selectionOffer(rows, shown));
   const targets = $derived(bulkTargets(selected, rowFacts));
   const dirty = $derived(targets.cloned.filter(item => (app.local[app.dest(item)]?.dirty ?? 0) > 0));
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing);
@@ -89,7 +92,11 @@
     checking = false;
   }
 
+  let menuNeighbour: string | undefined;
+
   function openMenu(item: SetItem, anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) {
+    const at = rows.indexOf(item);
+    menuNeighbour = (rows[at + 1] ?? rows[at - 1])?.id;
     if (anchor instanceof HTMLElement) {
       const box = anchor.getBoundingClientRect();
       menu = { item, x: Math.max(8, Math.min(box.right - 290, innerWidth - 300)), y: Math.max(8, Math.min(box.bottom + 4, innerHeight - 420)), opener: anchor };
@@ -103,18 +110,26 @@
   }
 
   const PAGE_STEP = 10;
+  const ids = () => shown.map(item => item.id);
 
-  function setRange(from: string | null, to: SetItem, on: boolean) {
-    const a = shown.findIndex(item => item.id === from);
-    const b = shown.indexOf(to);
-    if (a < 0 || b < 0) { to.on = on; return; }
-    for (const item of shown.slice(Math.min(a, b), Math.max(a, b) + 1)) item.on = on;
+  function anchorAt(id: string | null) {
+    anchorId = id;
+    rangeAdded = new Set();
+  }
+
+  function extendTo(target: SetItem) {
+    anchorId ??= activeRow?.id ?? target.id;
+    const byId = new Map(shown.map(item => [item.id, item]));
+    const result = shiftRange(ids(), anchorId, target.id, id => !!byId.get(id)?.on, rangeAdded);
+    for (const id of result.on) byId.get(id)!.on = true;
+    for (const id of result.off) byId.get(id)!.on = false;
+    rangeAdded = result.added;
   }
 
   async function focusRow(index: number, extend: boolean) {
     const target = rows[Math.max(0, Math.min(rows.length - 1, index))];
     if (!target) return;
-    if (extend) { anchorId ??= activeRow?.id ?? target.id; setRange(anchorId, target, true); } else anchorId = null;
+    if (extend) extendTo(target); else anchorAt(target.id);
     activeId = target.id;
     list?.reveal(rows.indexOf(target));
     await tick();
@@ -122,29 +137,44 @@
   }
 
   function gridKey(event: KeyboardEvent) {
+    if (!activeRow) return;
     const row = (event.target as Element).closest<HTMLElement>('.fm-row[data-id]');
-    if (event.target !== row || !activeRow) return;
+    const onGrid = event.currentTarget === event.target;
+    if (event.target !== row && !onGrid) return;
     const at = rows.indexOf(activeRow);
     const control = event.ctrlKey || event.metaKey;
-    if (control && event.key.toLowerCase() === 'a') { for (const item of shown) item.on = true; }
+    if (onGrid) {
+      if (!['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', 'Enter', ' '].includes(event.key)) return;
+      event.preventDefault();
+      void focusRow(at, false);
+      return;
+    }
+    if (control && event.key.toLowerCase() === 'a') { for (const item of rows) item.on = true; }
     else if (event.key === 'ArrowDown') void focusRow(at + 1, event.shiftKey);
     else if (event.key === 'ArrowUp') void focusRow(at - 1, event.shiftKey);
     else if (event.key === 'PageDown') void focusRow(at + PAGE_STEP, event.shiftKey);
     else if (event.key === 'PageUp') void focusRow(at - PAGE_STEP, event.shiftKey);
     else if (event.key === 'Home') void focusRow(0, event.shiftKey);
     else if (event.key === 'End') void focusRow(rows.length - 1, event.shiftKey);
-    else if (event.key === ' ') { activeRow.on = !activeRow.on; anchorId = activeRow.id; }
+    else if (event.key === ' ') { activeRow.on = !activeRow.on; anchorAt(activeRow.id); }
     else if (event.key === 'Enter') app.inspectedId = activeRow.id;
     else return;
     event.preventDefault();
   }
 
-  let lastToggled: string | null = null;
+  function removed(id: string, neighbour: string | undefined) {
+    if (items.some(item => item.id === id)) return;
+    const target = rows.find(item => item.id === neighbour) ?? rows[0];
+    if (!target) { document.querySelector<HTMLElement>('.fm-table .vbox')?.focus(); return; }
+    void focusRow(rows.indexOf(target), false);
+  }
+
   const rowHandlers = (item: SetItem) => ({
     toggle: (on: boolean, range: boolean) => {
-      if (range && lastToggled) setRange(lastToggled, item, on); else item.on = on;
-      lastToggled = item.id;
-      anchorId = item.id;
+      if (range && anchorId) {
+        if (on) extendTo(item);
+        else { const byId = new Map(shown.map(entry => [entry.id, entry])); for (const id of clearRange(ids(), anchorId, item.id)) byId.get(id)!.on = false; rangeAdded = new Set(); }
+      } else { item.on = on; anchorAt(item.id); }
     },
     activate: () => { activeId = item.id; },
     inspect: () => { app.inspectedId = item.id; },
@@ -172,18 +202,18 @@
   };
 </script>
 
-<SetHeader />
+<SetHeader extend={offer ? { count: offer, run: () => { for (const item of shown) item.on = true; } } : null} />
 
 <FilterChips {counts} value={filter} onchange={setFilter} />
 
 <div class="fm-wrap">
   <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
     {#key `${set.id}|${filter}|${cur}|${size}`}
-      <VirtualList bind:this={list} role="grid" label="Repositories in {set.name}" onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
+      <VirtualList bind:this={list} role="grid" activeKey={activeRow?.id} label="Repositories in {set.name}" onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
         {#snippet header()}
           <div class="fm-row fm-head" role="row">
-            <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && shown.some(item => item.on)}
-              onchange={e => { for (const item of shown) item.on = e.currentTarget.checked; }} aria-label="Select all shown repositories" /></label></div>
+            <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && rows.some(item => item.on)}
+              onchange={e => { for (const item of rows) item.on = e.currentTarget.checked; }} aria-label="Select all repositories on this page" /></label></div>
             <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div><div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
           </div>
         {/snippet}
@@ -201,8 +231,8 @@
             </EmptyState>
           {/if}
         {/snippet}
-        {#snippet row(item: SetItem)}
-          <FormationRow row={describeRow(item, { focused: app.detailItem?.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} handlers={rowHandlers(item)} />
+        {#snippet row(item: SetItem, index: number)}
+          <FormationRow row={describeRow(item, { focused: app.detailItem?.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} rowIndex={index + 2} handlers={rowHandlers(item)} />
         {/snippet}
       </VirtualList>
     {/key}
@@ -216,5 +246,5 @@
 {/if}
 
 {#if menu}
-  <RowMenu item={menu.item} x={menu.x} y={menu.y} opener={menu.opener} onclose={() => (menu = null)} onrename={id => (editingId = id)} />
+  <RowMenu item={menu.item} x={menu.x} y={menu.y} opener={menu.opener} onclose={() => (menu = null)} onrename={id => (editingId = id)} onremove={id => removed(id, menuNeighbour)} />
 {/if}

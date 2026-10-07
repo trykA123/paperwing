@@ -25,7 +25,7 @@
     {#each rows as row (row.label)}<dt>{row.label}</dt><dd class:zero={!row.n}>{row.n}</dd>{/each}
   </dl>
   <div class="item-actions">
-    <button class="btn small dark" disabled={busy || !targets.fetchable.length} onclick={() => app.startClone(targets.fetchable, 'fetch')}><Icon name="refresh" /> Fetch all</button>
+    <button class="btn small" disabled={busy || !targets.fetchable.length} onclick={() => app.startClone(targets.fetchable, 'fetch')}><Icon name="refresh" /> Fetch all</button>
     <button class="btn small" disabled={busy || !targets.behind.length} onclick={() => app.startClone(targets.behind, 'pull')}><Icon name="download" tone="sync" /> Pull {targets.behind.length || ''}</button>
     <button class="btn small" disabled={busy || !targets.pushable.length} onclick={() => app.pushRepos(targets.pushable.map(pushTarget))}><Icon name="upload" tone="sync" /> Push {targets.pushable.length || ''}</button>
   </div>

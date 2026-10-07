@@ -13,7 +13,7 @@
   import Icon, { type IconName, type IconTone } from '../Icon.svelte';
   import SyncRails from './SyncRails.svelte';
 
-  let { row, editing, active, handlers }: { row: RowModel; editing: boolean; active: boolean; handlers: RowHandlers } = $props();
+  let { row, editing, active, rowIndex, handlers }: { row: RowModel; editing: boolean; active: boolean; rowIndex: number; handlers: RowHandlers } = $props();
 
   const stop = $derived(active ? 0 : -1);
 
@@ -38,7 +38,7 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<div class="fm-row" role="row" tabindex={stop} data-id={row.item.id} aria-selected={row.selected} class:sel={row.selected} class:focus={row.focused} class:busy={!!row.busy}
+<div class="fm-row" role="row" aria-rowindex={rowIndex} tabindex={stop} data-id={row.item.id} aria-selected={row.selected} class:sel={row.selected} class:focus={row.focused} class:busy={!!row.busy}
   onclick={onRowClick} onfocusin={handlers.activate} onkeydown={onKey} oncontextmenu={event => { event.preventDefault(); handlers.menu({ x: event.clientX, y: event.clientY }); }}>
   <div class="fm-cell fm-check" role="gridcell">
     <label class="fm-hit"><input type="checkbox" tabindex={stop} checked={row.selected} onclick={event => handlers.toggle(event.currentTarget.checked, event.shiftKey)} aria-label="Select {row.folder}" /></label>

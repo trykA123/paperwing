@@ -23,11 +23,9 @@ const SHORTCUT_OF: Record<string, string> = {
   'difference-next': 'F7', 'difference-previous': 'Shift F7', 'hunk-left': 'Ctrl Alt ←', 'hunk-right': 'Ctrl Alt →',
 };
 
-const CLOSING = new Set(['tab-close', 'cleanup', 'copy-left', 'copy-right', 'file-undo', 'hunk-left', 'hunk-right']);
-
 export const commandGroup = (command: Pick<Command, 'id'>): CommandGroup => (command.id.startsWith('set:') ? 'Navigate' : GROUP_OF[command.id] ?? 'Actions');
 export const commandShortcut = (command: Pick<Command, 'id'>): string | undefined => SHORTCUT_OF[command.id];
-export const isRisky = (command: Pick<Command, 'id'>): boolean => CLOSING.has(command.id);
+export { isRisky } from './palette';
 
 export function commands(items: SetItem[] = app.actionItems): Command[] {
   const local = items.filter(item => app.local[app.dest(item)]?.repo);

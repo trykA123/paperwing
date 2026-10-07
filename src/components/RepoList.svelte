@@ -11,7 +11,7 @@
   import EmptyState from './EmptyState.svelte';
   import Skeleton from './Skeleton.svelte';
   import { countLabel, errorSummary } from '../lib/source-status';
-  import { describeError } from '../lib/errors';
+  import { explainError } from '../lib/errors';
   import { plural } from '../lib/plural';
 
   let { mode, source = '', org = '' }: { mode: 'org' | 'search'; source?: string; org?: string } = $props();
@@ -41,7 +41,8 @@
     previousQuery = query;
   });
 
-  const errorText = $derived(mode === 'org' ? errorSummary(errors) : failing.map(s => `${s.name}: ${errorSummary(app.repoErrors[s.id])}`).join(' \u00b7 '));
+  const explain = (raw: string) => { const { cause, detail } = explainError(raw); return `${cause ?? 'Try again.'}${detail ? ` Details: ${detail}` : ''}`; };
+  const errorLines = $derived(mode === 'org' ? [explain(errorSummary(errors))] : failing.map(s => `${s.name}: ${explain(errorSummary(app.repoErrors[s.id]))}`));
   const retry = () => failing.forEach(s => void app.loadRepos(s, true));
 
   async function addAll() {
@@ -82,7 +83,7 @@
 
 {#if errors.length}
   <Alert kind="err" role="status" title="Can't reach {failing.map(s => s.name).join(', ') || 'the source'}">
-    <span title={errorText}>{describeError(errorText, 'load the repository list')}</span>
+    {#each errorLines as line}<span class="err-line">{line}</span>{/each}
     {#snippet action()}<button class="btn small" disabled={loading} onclick={retry}>Retry</button>{/snippet}
   </Alert>
 {/if}
