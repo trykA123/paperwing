@@ -27,6 +27,9 @@ impl GitBinary {
     }
 }
 
+#[cfg(windows)]
+const DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 #[cfg(any(windows, test))]
 const RUNTIME_DIRS: [&str; 3] = ["mingw64", "mingw32", "clangarm64"];
 
@@ -52,17 +55,16 @@ pub(super) fn from_exec_path(exec_path: &Path) -> GitBinary {
     let Some(program) = candidates.into_iter().find(|candidate| candidate.is_file()) else {
         return GitBinary::plain();
     };
-    let path_prefix = prefix
-        .map(|prefix| {
-            [
-                prefix.join("mingw64").join("bin"),
-                prefix.join("usr").join("bin"),
-            ]
-            .into_iter()
-            .filter(|dir| dir.is_dir())
-            .collect()
-        })
-        .unwrap_or_default();
+    let runtime_bin = match runtime {
+        Some(dir) => Some(dir.join("bin")),
+        None => prefix.map(|prefix| prefix.join("mingw64").join("bin")),
+    };
+    let user_bin = prefix.map(|prefix| prefix.join("usr").join("bin"));
+    let path_prefix = [runtime_bin, user_bin]
+        .into_iter()
+        .flatten()
+        .filter(|dir| dir.is_dir())
+        .collect();
     GitBinary {
         program,
         path_prefix,
@@ -72,11 +74,15 @@ pub(super) fn from_exec_path(exec_path: &Path) -> GitBinary {
 #[cfg(windows)]
 fn discover() -> GitBinary {
     use std::os::windows::process::CommandExt;
-    let output = std::process::Command::new("git")
-        .arg("--exec-path")
-        .creation_flags(0x0800_0000)
-        .output();
-    let Ok(output) = output else {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let output = std::process::Command::new("git")
+            .arg("--exec-path")
+            .creation_flags(0x0800_0000)
+            .output();
+        let _ = sender.send(output);
+    });
+    let Ok(Ok(output)) = receiver.recv_timeout(DISCOVERY_TIMEOUT) else {
         return GitBinary::plain();
     };
     if !output.status.success() {
@@ -99,13 +105,22 @@ fn discover() -> GitBinary {
 #[cfg(test)]
 static OVERRIDE: std::sync::Mutex<Option<GitBinary>> = std::sync::Mutex::new(None);
 
+static BINARY: OnceLock<GitBinary> = OnceLock::new();
+
+fn resolved(cell: &OnceLock<GitBinary>) -> GitBinary {
+    cell.get().cloned().unwrap_or_else(GitBinary::plain)
+}
+
 pub(super) fn current() -> GitBinary {
     #[cfg(test)]
     if let Some(binary) = OVERRIDE.lock().unwrap().clone() {
         return binary;
     }
-    static BINARY: OnceLock<GitBinary> = OnceLock::new();
-    BINARY.get_or_init(discover).clone()
+    resolved(&BINARY)
+}
+
+pub(super) fn resolve() {
+    BINARY.get_or_init(discover);
 }
 
 #[cfg(test)]
@@ -200,6 +215,32 @@ mod tests {
         assert_eq!(
             from_exec_path(&root.join("Git/mingw64/libexec/git-core")),
             GitBinary::plain()
+        );
+    }
+
+    #[test]
+    fn an_unresolved_binary_falls_back_to_plain_git_without_blocking() {
+        let cell = OnceLock::new();
+        assert_eq!(resolved(&cell), GitBinary::plain());
+        let found = GitBinary {
+            program: "/x/git.exe".into(),
+            path_prefix: Vec::new(),
+        };
+        cell.set(found.clone()).unwrap();
+        assert_eq!(resolved(&cell), found);
+    }
+
+    #[test]
+    fn clangarm64_installs_get_their_own_runtime_bin_first() {
+        let root = layout(
+            "arm",
+            &["Git/clangarm64/libexec/git-core/git.exe"],
+            &["Git/clangarm64/bin", "Git/mingw64/bin", "Git/usr/bin"],
+        );
+        let binary = from_exec_path(&root.join("Git/clangarm64/libexec/git-core"));
+        assert_eq!(
+            binary.path_prefix,
+            vec![root.join("Git/clangarm64/bin"), root.join("Git/usr/bin")]
         );
     }
 

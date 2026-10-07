@@ -74,7 +74,7 @@ pub struct Activity {
 
 pub fn attach(app: AppHandle) {
     activity::attach(app);
-    std::thread::spawn(|| { binary::current(); });
+    std::thread::spawn(binary::resolve);
 }
 
 pub fn configure_sources(ids: Vec<String>) {
