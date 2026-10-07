@@ -1,6 +1,8 @@
 use crate::kernel::events::CoreEvent;
 #[path = "batch.rs"]
 mod batch;
+#[path = "binary.rs"]
+pub(super) mod binary;
 pub(crate) use batch::BatchReader;
 use serde::Serialize;
 use std::process::Stdio;
@@ -64,6 +66,7 @@ pub struct Activity {
 
 pub fn attach(app: AppHandle) {
     let _ = APPLICATION.set(app);
+    std::thread::spawn(|| { binary::current(); });
 }
 
 pub fn configure_sources(ids: Vec<String>) {
@@ -614,7 +617,9 @@ pub(super) fn publish_cleanup_state(context: &str, state: &str) {
 
 /// `git` with prompts disabled and (on Windows) no console window.
 fn git() -> tokio::process::Command {
-    let mut c = tokio::process::Command::new("git");
+    let binary = binary::current();
+    let mut c = tokio::process::Command::new(&binary.program);
+    if let Some(path) = binary.path_value(std::env::var_os("PATH")) { c.env("PATH", path); }
     c.env("GIT_TERMINAL_PROMPT", "0").env("GCM_INTERACTIVE", "Never")
         .env("GIT_ASKPASS", "").env("SSH_ASKPASS", "")
         .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes -oConnectTimeout=15")
@@ -670,6 +675,10 @@ impl Drop for CredentialFixture {
         configure_sources(self.sources.clone());
     }
 }
+
+#[cfg(test)]
+#[path = "runner_tests.rs"]
+mod runner_tests;
 
 #[cfg(test)]
 mod write_root_tests {
