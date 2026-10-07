@@ -1,7 +1,7 @@
 import './test-support/svelte-loader.js';
 import { describe, expect, test } from 'bun:test';
 import { withIpc } from './test-support/ipc-fixture.js';
-import { createTags, deleteLocalTags, deleteRemoteTags, moveConfirmMessage, planTags, refreshAfterTagChange, remoteDeleteMessage } from './tags-set.ts';
+import { compareTagsDesc, createTags, deleteLocalTags, deleteRemoteTags, moveConfirmMessage, planTags, refreshAfterTagChange, remoteDeleteMessage } from './tags-set.ts';
 
 const target = name => ({ path: `/r/${name}`, name, remote: 'origin', commit: null });
 const repo = path => path.split('/').pop();
@@ -27,7 +27,7 @@ function fake({ tags = {}, fail = {}, pushFail = {}, heads = {} } = {}) {
       return { remote, name, forced: lease !== null };
     },
     deleteTag: async (path, name) => { calls.push(['delete', repo(path)]); if (fail[repo(path)] === 'delete') throw 'There is no local tag named ' + name; return { name, object: 'f'.repeat(40) }; },
-    deleteRemoteTag: async (path, remote, name) => { calls.push(['delete-remote', repo(path), remote]); if (fail[repo(path)] === 'remote') throw 'could not resolve host'; return { remote, name, forced: false }; },
+    deleteRemoteTag: async (path, remote, name, expected) => { calls.push(['delete-remote', repo(path), remote, expected]); if (fail[repo(path)] === 'remote') throw 'could not resolve host'; return { remote, name, forced: false }; },
   };
 }
 const request = (patch = {}) => ({ name: 'v2.4.0', message: 'Release', push: false, move: false, ...patch });
@@ -120,6 +120,13 @@ describe('create', () => {
   });
 });
 
+describe('order', () => {
+  test('versions sort newest first, v10 above v9, a pre-release below its release', () => {
+    const names = ['v9', 'v10', 'v2.5.0-rc', 'v2.5.0', 'v2.10.0', 'v2.9.1', 'nightly', 'release-b', 'release-a'];
+    expect([...names].sort(compareTagsDesc)).toEqual(['v10', 'v9', 'v2.10.0', 'v2.9.1', 'v2.5.0', 'v2.5.0-rc', 'release-b', 'release-a', 'nightly']);
+  });
+});
+
 describe('delete', () => {
   test('local delete records a failure and goes on', async () => {
     const api = fake({ fail: { b: 'delete' } });
@@ -130,14 +137,24 @@ describe('delete', () => {
 
   test('remote delete is separate, per remote, and names every repository', async () => {
     const api = fake({ fail: { b: 'remote' } });
-    const targets = [target('a'), { ...target('b'), remote: 'upstream' }, target('c')];
+    const targets = [{ ...target('a'), expected: old.object }, { ...target('b'), remote: 'upstream', expected: old.object }, { ...target('c'), expected: old.object }];
     const result = await deleteRemoteTags(targets, 'v1', api);
     expect(result.map(row => row.status)).toEqual(['removed', 'failed', 'removed']);
     expect(api.calls.map(call => call[2])).toEqual(['origin', 'upstream', 'origin']);
     expect(api.calls.every(call => call[0] === 'delete-remote')).toBe(true);
     const text = remoteDeleteMessage(targets, 'v1');
     expect(text).toContain('a (origin)');
-    expect(text).toContain('b (upstream)');
+    expect(text).toContain('b (upstream): object dddddddd');
+  });
+
+  test('a repository with no known object is listed as refused and never submitted', async () => {
+    const api = fake();
+    const targets = [{ ...target('a'), expected: old.object }, { ...target('b'), expected: null }];
+    const result = await deleteRemoteTags(targets, 'v1', api);
+    expect(result.map(row => row.status)).toEqual(['removed', 'refused']);
+    expect(api.calls.map(call => call[1])).toEqual(['a']);
+    expect(api.calls[0][3]).toBe(old.object);
+    expect(remoteDeleteMessage(targets, 'v1')).toContain('b (origin): unknown — will be refused');
   });
 });
 

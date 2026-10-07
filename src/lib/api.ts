@@ -246,7 +246,7 @@ export const api = {
   createTag: (path: string, request: CreateTagRequest) => invoke<CreatedTag>('create_tag', { path, request }),
   pushTag: (path: string, remote: string, name: string, lease: string | null) => invoke<PushedTag>('push_tag', { path, remote, name, lease }),
   deleteTag: (path: string, name: string) => invoke<DeletedTag>('delete_tag', { path, name }),
-  deleteRemoteTag: (path: string, remote: string, name: string) => invoke<PushedTag>('delete_remote_tag', { path, remote, name }),
+  deleteRemoteTag: (path: string, remote: string, name: string, expected: string | null) => invoke<PushedTag>('delete_remote_tag', { path, remote, name, expected }),
   mergedBranches: (path: string, base: string | null = null, remote: string | null = null) => invoke<MergedBranches>('merged_branches', { path, base, remote }),
   deleteMergedBranches: (path: string, names: string[], expected: string[], base: string | null = null) => invoke<BranchOutcome[]>('delete_merged_branches', { path, names, expected, base }),
   deleteRemoteBranches: (path: string, remote: string, names: string[], expected: string[], base: string | null = null) => invoke<BranchOutcome[]>('delete_remote_branches', { path, remote, names, expected, base }),

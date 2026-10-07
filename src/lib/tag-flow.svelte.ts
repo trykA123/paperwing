@@ -38,6 +38,7 @@ class TagFlow {
   restoreFocus() {
     const opener = this.opener;
     if (opener?.isConnected) opener.focus();
+    else document.querySelector<HTMLElement>('[data-tag-new]')?.focus();
   }
 
   changed(paths: string[]) {

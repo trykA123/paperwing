@@ -23,6 +23,7 @@
   let phase = $state<'review' | 'running' | 'done'>('review');
   let results = $state<CreateRow[]>([]);
   let sequence = 0;
+  let confirming = false;
   let lists: Record<string, Promise<TagInfo[]>> = {};
 
   const many = $derived(targets.length > 1);
@@ -37,7 +38,7 @@
 
   async function refresh() {
     const mine = ++sequence;
-    if (!tag) { plan = targets.map(target => ({ ...target, existing: null, error: null })); return; }
+    if (!tag) { plan = targets.map(target => ({ ...target, existing: null, error: null })); planning = false; return; }
     planning = true;
     const next = await planTags(targets, tag, cached);
     if (mine === sequence) { plan = next; planning = false; }
@@ -46,8 +47,13 @@
   $effect(() => { if (!clashes.length) move = false; });
 
   async function run() {
-    if (phase !== 'review' || !tag || blocked) return;
-    if (move && clashes.length && !await confirm(moveConfirmMessage(clashes.map(row => ({ ...row, remote: remoteOf(row) })), tag), { title: 'Move tag', kind: 'warning', okLabel: 'Move tag', destructive: true })) return;
+    if (phase !== 'review' || confirming || !tag || blocked) return;
+    if (move && clashes.length) {
+      confirming = true;
+      const accepted = await confirm(moveConfirmMessage(clashes.map(row => ({ ...row, remote: remoteOf(row) })), tag), { title: 'Move tag', kind: 'warning', okLabel: 'Move tag', destructive: true });
+      confirming = false;
+      if (!accepted || phase !== 'review') return;
+    }
     phase = 'running';
     results = [];
     const request = { name: tag, message, push, move };
@@ -91,8 +97,8 @@
     {:else}
       <p class="tag-lead" role="status" aria-live="polite">
         {#if phase === 'running'}<span class="spin"></span> Tagging {Math.min(results.length + 1, targets.length)} of {targets.length}…
-        {:else if failed}Tagged {ok} of {plural(results.length, 'repository', 'repositories')} with <span class="mono">{tag}</span>.
-        {:else}Tagged {plural(results.length, 'repository', 'repositories')} with <span class="mono">{tag}</span>.{/if}
+        {:else if failed}<span>Tagged {ok} of {plural(results.length, 'repository', 'repositories')} with <span class="mono">{tag}</span>.</span>
+        {:else}<span>Tagged {plural(results.length, 'repository', 'repositories')} with <span class="mono">{tag}</span>.</span>{/if}
       </p>
     {/if}
 

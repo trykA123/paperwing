@@ -200,3 +200,7 @@
     font-weight: 500;
     white-space: nowrap;
 }
+
+.tag-more {
+    align-self: flex-start;
+}

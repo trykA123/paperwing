@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { api } from '../../lib/api';
+  import { api, type TagInfo } from '../../lib/api';
   import { confirm } from '../../lib/confirm';
   import { dialogOut } from '../../lib/motion';
   import { plural } from '../../lib/plural';
   import { tagFlow } from '../../lib/tag-flow.svelte';
-  import { deleteLocalTags, deleteRemoteTags, planTags, remoteDeleteMessage, shortId, type PlanRow, type RemoveRow, type TagTarget } from '../../lib/tags-set';
+  import { deleteLocalTags, deleteRemoteTags, planTags, remoteDeleteMessage, shortId, type PlanRow, type RemoteTarget, type RemoveRow, type TagTarget } from '../../lib/tags-set';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
 
@@ -20,6 +20,8 @@
   let local = $state<Record<string, RemoveRow>>({});
   let remote = $state<Record<string, RemoveRow>>({});
   let sequence = 0;
+  let lists: Record<string, Promise<TagInfo[]>> = {};
+  let listsAt = -1;
 
   const many = $derived(targets.length > 1);
   const tag = $derived(name.trim());
@@ -30,7 +32,9 @@
 
   async function refresh() {
     const mine = ++sequence;
-    const next = tag ? await planTags(targets, tag, { listTags: path => api.listTags(path), localStatus: async () => [] }) : targets.map(target => ({ ...target, existing: null, error: null }));
+    if (listsAt !== tagFlow.revision) { lists = {}; listsAt = tagFlow.revision; }
+    const cached = { listTags: (path: string) => (lists[path] ??= api.listTags(path)), localStatus: async () => [] };
+    const next = tag ? await planTags(targets, tag, cached) : targets.map(target => ({ ...target, existing: null, error: null }));
     if (mine === sequence) plan = next;
   }
   $effect(() => { void tag; void tagFlow.revision; void refresh(); });
@@ -53,14 +57,15 @@
 
   async function deleteRemote() {
     if (busy || !tag) return;
-    const rows = targets.filter(target => remote[target.path]?.status !== 'removed').map(target => ({ ...target, remote: remoteOf(target) }));
+    const objectOf = (path: string) => local[path]?.deleted?.object ?? plan.find(row => row.path === path)?.existing?.object ?? null;
+    const rows: RemoteTarget[] = targets.filter(target => remote[target.path]?.status !== 'removed').map(target => ({ ...target, remote: remoteOf(target), expected: objectOf(target.path) }));
     if (!rows.length) return;
     busy = 'remote';
     try {
       if (!await confirm(remoteDeleteMessage(rows, tag), { title: 'Delete remote tag', kind: 'warning', okLabel: 'Delete from remote', destructive: true })) return;
       const guarded = await tagFlow.guarded(rows.map(row => row.path), () => deleteRemoteTags(rows, tag, api, (_, row) => { remote[row.path] = row; }));
       if (!guarded.ran) { app.toast('A Git operation is already running', 'warn'); return; }
-      const failures = guarded.value.filter(row => row.status === 'failed').length;
+      const failures = guarded.value.filter(row => row.status !== 'removed').length;
       app.toast(failures ? `Deleted ${tag} from the remote in ${guarded.value.length - failures} of ${plural(guarded.value.length, 'repository', 'repositories')}` : `Deleted ${tag} from the remote in ${plural(guarded.value.length, 'repository', 'repositories')}`, failures ? 'warn' : 'success');
     } finally { busy = null; }
   }
@@ -101,7 +106,7 @@
           {:else if row.existing}<span class="mono mut" title="Commit the tag points at">{shortId(row.existing.commit)}</span>
           {:else}<span class="mut">No local tag</span>{/if}
           <input class="tag-remote mono" aria-label="Remote for {row.name}" value={remoteOf(row)} oninput={event => (remotes[row.path] = event.currentTarget.value)} disabled={!!busy} spellcheck="false" autocomplete="off" />
-          {#if remote[row.path]}<span class={remote[row.path].status === 'removed' ? 'okc' : 'err'}>{remote[row.path].status === 'removed' ? 'Deleted on remote' : 'Remote kept'}</span>{/if}
+          {#if remote[row.path]}<span class={remote[row.path].status === 'removed' ? 'okc' : 'err'}>{remote[row.path].status === 'removed' ? 'Deleted on remote' : remote[row.path].status === 'refused' ? 'Not submitted' : 'Remote kept'}</span>{/if}
           {#each [local[row.path]?.error, remote[row.path]?.error, row.error] as message}{#if message}<p class="tag-error err" role="alert">{message}</p>{/if}{/each}
         </li>
       {/each}

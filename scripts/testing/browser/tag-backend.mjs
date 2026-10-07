@@ -56,10 +56,14 @@ export function remove(path, name) {
   return { name, object };
 }
 
-export function removeRemote(path, remote, name) {
-  calls.push({ command: 'delete_remote_tag', remote });
+export function removeRemote(path, remote, name, expected) {
+  calls.push({ command: 'delete_remote_tag', remote, expected });
   validName(path, name);
   validRemote(path, remote);
+  if (!expected) throw new Error('Expected tag object is required');
+  const url = git(path, 'remote', 'get-url', remote).trim();
+  const current = tryGit(url, 'rev-parse', '--verify', '--quiet', `refs/tags/${name}`);
+  if (typeof current !== 'string' || current.trim() !== expected) throw new Error(`stale info: ${name} on ${remote} is not the expected object`);
   const out = tryGit(path, 'push', '-q', remote, '--delete', `refs/tags/${name}`);
   if (typeof out !== 'string') throw new Error(failure(out));
   return { remote, name, forced: false };
