@@ -136,6 +136,7 @@ fn scan(search: Scan<'_>) -> RepoResult {
             matches: matches.len(),
             truncated: sink.truncated || budget.is_capped(),
             error: None,
+            engine_note: None,
         },
         matches,
     }

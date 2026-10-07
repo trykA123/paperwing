@@ -205,6 +205,7 @@ impl Drop for DoneGuard {
     }
 }
 
+#[cfg(test)]
 pub async fn run_job(request: SearchRequest, job: Job) -> Result<Summary, String> {
     run_with_engine(request, job, Engine::default()).await
 }

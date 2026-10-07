@@ -237,6 +237,7 @@ fn finish(sink: &RowSink, context: u8) -> RepoResult {
         matches: matches.len(),
         truncated: state.truncated,
         error: None,
+        engine_note: None,
     };
     RepoResult { status, matches }
 }

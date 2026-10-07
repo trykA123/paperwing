@@ -317,3 +317,51 @@ async fn untracked_search_respects_nested_info_and_configured_global_excludes() 
         run(query, Engine::GitGrep, Arc::default()).await.1
     );
 }
+
+#[tokio::test]
+async fn settings_changes_apply_to_the_next_search_and_fallbacks_are_explicit() {
+    let _guard = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("builtin-settings");
+    let path = repo(&fixture, "a", &[("a.txt", b"foofoo\nd\n123\n")]);
+    std::fs::write(Path::new(&path).join("untracked.txt"), b"foofoo\n").unwrap();
+    for (value, expected_operation) in [("builtIn", "ls-files"), ("gitGrep", "grep")] {
+        let settings: crate::settings::Settings = serde_json::from_value(serde_json::json!({"workspace":{"searchEngine":value,"searchFiles":"trackedAndUntracked"}})).unwrap();
+        let mut query = request(&[&path], "foo");
+        let engine = crate::search_service::configure_request(
+            &mut query,
+            settings.search_options().unwrap(),
+        );
+        crate::git::clear_activity();
+        let result = run(query, engine, Arc::default()).await;
+        assert_eq!(result.1.len(), 2);
+        let calls = serde_json::to_value(crate::git::activity_snapshot()).unwrap();
+        assert!(calls.as_array().unwrap().iter().any(|call| call["argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|arg| arg == expected_operation)));
+    }
+    for pattern in [r"\(foo\)\1", r"\d"] {
+        let mut query = request(&[&path], pattern);
+        query.mode = Mode::Basic;
+        let expected = run(query.clone(), Engine::GitGrep, Arc::default()).await;
+        let actual = run(query, Engine::BuiltIn, Arc::default()).await;
+        assert_eq!(actual.1, expected.1);
+        assert!(actual.2[0]
+            .engine_note
+            .as_ref()
+            .unwrap()
+            .contains("Git grep"));
+    }
+    if crate::search_grep::perl_supported().await {
+        let mut query = request(&[&path], "foo+");
+        query.mode = Mode::Perl;
+        let result = run(query, Engine::BuiltIn, Arc::default()).await;
+        assert_eq!(result.1.len(), 1);
+        assert!(result.2[0].engine_note.as_ref().unwrap().contains("Perl"));
+        assert_eq!(
+            serde_json::to_value(&result.2[0]).unwrap()["engineNote"],
+            result.2[0].engine_note.clone().unwrap()
+        );
+    }
+}

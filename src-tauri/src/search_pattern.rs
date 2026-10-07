@@ -23,12 +23,27 @@ pub fn needs_git(plan: &Plan) -> bool {
         return false;
     }
     let mut chars = plan.pattern.chars();
+    let mut in_class = false;
     while let Some(c) = chars.next() {
-        if c == '\\' && chars.next().is_some_and(|next| next.is_ascii_digit()) {
-            return true;
+        match c {
+            '[' => in_class = true,
+            ']' => in_class = false,
+            '\\' => {
+                if in_class {
+                    return true;
+                }
+                if chars.next().is_some_and(|next| {
+                    next.is_ascii_digit()
+                        || (next.is_ascii_alphabetic()
+                            && !matches!(next, 'b' | 'B' | 'w' | 'W' | 's' | 'S'))
+                }) {
+                    return true;
+                }
+            }
+            _ => {}
         }
     }
-    false
+    matcher(plan).is_err()
 }
 
 fn basic(pattern: &str) -> String {

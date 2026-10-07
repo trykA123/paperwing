@@ -180,7 +180,7 @@ export type SearchRequest = {
 };
 export type SearchContextLine = { line: number; text: string };
 export type SearchMatch = { path: string; line: number; column: number; text: string; context: SearchContextLine[] };
-export type SearchRepoStatus = { state: 'done' | 'skipped' | 'cancelled' | 'failed'; matches: number; truncated: boolean; error: string | null };
+export type SearchRepoStatus = { state: 'done' | 'skipped' | 'cancelled' | 'failed'; matches: number; truncated: boolean; error: string | null; engineNote?: string };
 export type SearchMatches = { id: number; repo: string; matches: SearchMatch[] };
 export type SearchRepoResult = { id: number; repo: string; status: SearchRepoStatus };
 export type SearchSummary = { repos: number; matches: number; failed: number; capped: boolean; cancelled: boolean };

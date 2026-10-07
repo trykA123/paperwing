@@ -80,17 +80,46 @@ impl SearchEngine for Engine {
         &'a self,
         search: RepoSearch<'a>,
     ) -> Pin<Box<dyn Future<Output = RepoResult> + Send + 'a>> {
-        let engine = if search.target.git_ref.is_some()
-            || search.plan.flags.contains(&"-P")
-            || crate::search_pattern::needs_git(search.plan)
-        {
+        let reason = self.fallback_reason(search.target, search.plan);
+        let engine = if reason.is_some() {
             Self::GitGrep
         } else {
             *self
         };
+        Box::pin(async move {
+            let mut result = match engine {
+                Self::GitGrep => GitGrep.search(search).await,
+                Self::BuiltIn => crate::search_builtin::BuiltIn.search(search).await,
+            };
+            result.status.engine_note = reason.map(String::from);
+            result
+        })
+    }
+}
+
+impl Engine {
+    fn fallback_reason(&self, target: &RepoTarget, plan: &Plan) -> Option<&'static str> {
+        if matches!(self, Self::GitGrep) {
+            return None;
+        }
+        if plan.flags.contains(&"-P") {
+            return Some("Using Git grep: Perl expressions require Git grep.");
+        }
+        if target.git_ref.is_some() {
+            return Some("Using Git grep: committed refs require Git grep.");
+        }
+        if crate::search_pattern::needs_git(plan) {
+            return Some("Using Git grep: this basic-regex construct requires Git grep.");
+        }
+        None
+    }
+}
+
+impl From<crate::settings::SearchEngine> for Engine {
+    fn from(engine: crate::settings::SearchEngine) -> Self {
         match engine {
-            Self::GitGrep => GitGrep.search(search),
-            Self::BuiltIn => crate::search_builtin::BuiltIn.search(search),
+            crate::settings::SearchEngine::BuiltIn => Self::BuiltIn,
+            crate::settings::SearchEngine::GitGrep => Self::GitGrep,
         }
     }
 }
