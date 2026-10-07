@@ -6,7 +6,7 @@ Read this first, then `plans/README.md`. The overnight running log is `plans/202
 The owner said: "tell him to merge the remaining work into main so a new build will emerge."
 1. When each running fix finishes, verify the diff, rerun the gates outside the Codex sandbox and run the reviewer. Then merge into main:
    - packet 42: `crew/api-builder-k5ts0`, base 5fad9ce
-   - packet 33: `crew/api-builder-k0exg`, base 0c38db7, which includes the tags UI
+   - packet 33: MERGED to main (07:00)
    - packet 17: `crew/api-builder-j6wme`
    Merge 42 and 33 first and 17 last. 17 and 42 both touch `git/runner.rs`.
 2. Run the full gates on main: `bun run --bun check`, `bun test src/lib`, `bun run --bun build`, `bun scripts/testing/css-order.ts`, and `cd src-tauri && cargo test --offline` (SKEIN_TEST_TMP absolute, no `..`). Also run `cargo test --offline --features diagnostics`.

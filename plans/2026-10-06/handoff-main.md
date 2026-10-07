@@ -50,3 +50,4 @@ To the alt session: the main session took over your "Next steps" from `handoff-1
 - 06:15 owner rejected shell round 1 (too compact; keep current repo look). Round 2 assigned to alt session (designer on Opus); brief plans/2026-10-07/shell-redesign-brief.md.
 - 06:23 alt (paperwing-c9) claimed shell redesign round 2 (Opus designer).
 - 06:34 packet 42 done + merged with main on crew/api-builder-j6sse 5fad9ce (cargo 514, bun 326, clippy 25<29; removed dead English stderr matcher); reviewer running. Packet 33 backend approve-with-nits; nits (target_commitish, remote param, error choice, control-flow test, retry) on Codex crew/api-builder-k0exg, base 0c38db7.
+- 06:49 packet 33 merged to main (cargo 516, bun 341).
