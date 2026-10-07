@@ -172,6 +172,11 @@ export type DiscoverSummary = {
   capped: 'directories' | 'repositories' | null; cancelled: boolean;
 };
 export type DiscoverDone = { id: number; summary: DiscoverSummary };
+export type FinderRequest = { repos: string[]; query: string; maxResults?: number };
+export type FinderMatch = { repo: string; path: string; score: number; positions: number[] };
+export type FinderMatches = { id: number; sequence: number; matches: FinderMatch[] };
+export type FinderSummary = { scanned: number; matches: number; cancelled: boolean; errors: { repo: string; error: string }[] };
+export type FinderDone = { id: number; summary: FinderSummary };
 export type SearchMode = 'fixed' | 'basic' | 'perl';
 export type SearchRepoTarget = { path: string; gitRef?: string | null };
 export type SearchRequest = {
@@ -188,6 +193,7 @@ export type SearchDone = { id: number; summary: SearchSummary };
 export type SearchCapabilities = { perl: boolean };
 export const events = {
   launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done',
+  finderMatches: 'finder-matches', finderDone: 'finder-done',
   searchMatches: 'search-matches', searchRepo: 'search-repo', searchDone: 'search-done',
 } as const;
 
@@ -266,6 +272,8 @@ export const api = {
   discoverStart: (path: string, maxDepth?: number) => invoke<number>('discover_start', { path, maxDepth: maxDepth ?? null }),
   discoverCancel: (id: number) => invoke<boolean>('discover_cancel', { id }),
   discoverCancelAll: () => invoke<number>('discover_cancel_all'),
+  finderStart: (request: FinderRequest) => invoke<number>('finder_start', { request }),
+  finderCancel: (id: number) => invoke<boolean>('search_cancel', { id }),
   searchStart: (request: SearchRequest) => invoke<number>('search_start', { request }),
   searchCancel: (id: number) => invoke<boolean>('search_cancel', { id }),
   searchCancelAll: () => invoke<number>('search_cancel_all'),

@@ -2,7 +2,7 @@ use ignore::{WalkBuilder, WalkState};
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub struct WalkRequest<'a> {
     pub root: &'a str,
@@ -11,9 +11,9 @@ pub struct WalkRequest<'a> {
     pub exclude_ignored: bool,
 }
 
-pub fn visit(
+pub fn visit<'a>(
     request: WalkRequest<'_>,
-    receive: &(dyn Fn(PathBuf) + Send + Sync),
+    create: impl Fn() -> Box<dyn FnMut(PathBuf) + Send + 'a> + Sync,
 ) -> Result<(), String> {
     let WalkRequest {
         root,
@@ -23,28 +23,16 @@ pub fn visit(
     } = request;
     let root =
         crate::platform::canonical_path(Path::new(root)).map_err(|error| error.to_string())?;
-    let paths: HashSet<_> = files.into_iter().map(|path| root.join(path)).collect();
-    let directories: HashSet<_> = paths
-        .iter()
-        .flat_map(|path| path.ancestors().skip(1).map(Path::to_path_buf))
-        .collect();
-    let admitted = paths.clone();
-    let mut builder = WalkBuilder::new(&root);
-    builder
-        .hidden(false)
-        .ignore(false)
-        .git_ignore(exclude_ignored)
-        .git_global(exclude_ignored)
-        .git_exclude(exclude_ignored)
-        .parents(exclude_ignored)
-        .follow_links(false)
-        .threads(4)
-        .filter_entry(move |entry| {
-            let path = entry.path();
-            admitted.contains(path) || directories.contains(path)
-        });
+    let paths = Arc::new(
+        files
+            .into_iter()
+            .map(|path| key(&root.join(path)))
+            .collect::<HashSet<_>>(),
+    );
+    let builder = build_walker(&root, paths.clone(), exclude_ignored);
     let error = Mutex::new(None);
     builder.build_parallel().run(|| {
+        let mut receive = create();
         let root = &root;
         let paths = &paths;
         let error = &error;
@@ -55,7 +43,7 @@ pub fn visit(
             match entry {
                 Ok(entry)
                     if entry.file_type().is_some_and(|kind| kind.is_file())
-                        && paths.contains(entry.path()) =>
+                        && contains(paths, entry.path()) =>
                 {
                     if let Ok(relative) = entry.path().strip_prefix(root) {
                         receive(relative.to_path_buf());
@@ -84,6 +72,54 @@ pub fn visit(
     }
 }
 
+fn build_walker(root: &Path, paths: Arc<HashSet<PathBuf>>, exclude_ignored: bool) -> WalkBuilder {
+    let mut directories = HashSet::new();
+    for path in paths.iter() {
+        for parent in path.ancestors().skip(1) {
+            if !directories.insert(parent.to_path_buf()) {
+                break;
+            }
+        }
+    }
+    let mut builder = WalkBuilder::new(root);
+    builder
+        .hidden(false)
+        .ignore(false)
+        .git_ignore(exclude_ignored)
+        .git_global(exclude_ignored)
+        .git_exclude(exclude_ignored)
+        .parents(exclude_ignored)
+        .follow_links(false)
+        .threads(4)
+        .filter_entry(move |entry| {
+            let path = entry.path();
+            contains(&paths, path) || contains(&directories, path)
+        });
+    builder
+}
+
+fn key(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        PathBuf::from(path.to_string_lossy().to_lowercase())
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_path_buf()
+    }
+}
+
+fn contains(paths: &HashSet<PathBuf>, path: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        paths.contains(&key(path))
+    }
+    #[cfg(not(windows))]
+    {
+        paths.contains(path)
+    }
+}
+
 pub fn collect(
     root: &str,
     files: Vec<PathBuf>,
@@ -97,11 +133,13 @@ pub fn collect(
             cancel,
             exclude_ignored: true,
         },
-        &|path| {
-            paths
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .insert(path);
+        || {
+            Box::new(|path| {
+                paths
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(path);
+            })
         },
     )?;
     Ok(paths

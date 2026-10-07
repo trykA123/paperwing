@@ -17,7 +17,7 @@ pub struct Service {
 }
 
 impl Service {
-    fn register(&self) -> Result<(u64, Arc<AtomicBool>), String> {
+    pub(crate) fn register(&self) -> Result<(u64, Arc<AtomicBool>), String> {
         let mut active = self
             .active
             .lock()
@@ -29,6 +29,13 @@ impl Service {
         let flag = Arc::new(AtomicBool::new(false));
         active.insert(id, flag.clone());
         Ok((id, flag))
+    }
+
+    pub(crate) fn slot(&self, id: u64) -> Slot {
+        Slot {
+            active: self.active.clone(),
+            id,
+        }
     }
 
     fn cancel_all(&self) -> usize {
@@ -55,7 +62,7 @@ impl Service {
     }
 }
 
-struct Slot {
+pub(crate) struct Slot {
     active: Arc<Mutex<HashMap<u64, Arc<AtomicBool>>>>,
     id: u64,
 }

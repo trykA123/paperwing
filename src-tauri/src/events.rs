@@ -38,6 +38,8 @@ fn frontend_event(event: &CoreEvent) -> Option<(&'static str, Option<&EventPaylo
         CoreEvent::SearchMatches(payload) => (crate::search_job::MATCHES_EVENT, Some(payload)),
         CoreEvent::SearchRepo(payload) => (crate::search_job::REPO_EVENT, Some(payload)),
         CoreEvent::SearchDone(payload) => (crate::search_job::DONE_EVENT, Some(payload)),
+        CoreEvent::FinderMatches(payload) => (crate::finder_job::MATCHES_EVENT, Some(payload)),
+        CoreEvent::FinderDone(payload) => (crate::finder_job::DONE_EVENT, Some(payload)),
         CoreEvent::CloneProgress(payload) => ("clone-progress", Some(payload)),
         CoreEvent::CloneFinished => ("clone-finished", None),
         CoreEvent::LaunchRequest => (crate::launch::LAUNCH_EVENT, None),

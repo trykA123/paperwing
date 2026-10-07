@@ -13,3 +13,11 @@ The backend reads preferences for each new search. An existing request with `unt
 Built-in search uses one cancellable `git ls-files` command per repository to read indexed paths and apply Git path filters. Content matching uses ripgrep libraries inside the application. Untracked searches walk the admitted paths in parallel with `ignore`, respecting Git ignores, info excludes and global excludes. Tracked-only searches include force-added ignored files; untracked searches exclude ignored files, matching the existing Git grep behavior.
 
 Git grep remains available as the selected engine. Built-in requests also use Git grep for Perl expressions, committed refs, backreferences and other unsupported basic-regex constructs. A repository completion event includes optional `status.engineNote` when a fallback occurs. Existing search requests and event names remain intact.
+
+## File finder commands
+
+`finder_start` accepts `{ repos: string[], query: string, maxResults?: number }` and returns a job id. The default result limit is 100; the maximum is 500. Use existing `search_cancel` or `search_cancel_all` to cancel finder jobs. The code search and finder share the same four-job registry.
+
+`finder-matches` carries `{ id, sequence, matches }`. Each snapshot replaces the previous results for that job; sequence numbers increase. Results contain `{ repo, path, score, positions }`, sorted by descending score, then repository and path. Positions identify UTF-16 code units for frontend highlighting. `finder-done` carries `{ id, summary }`, where the summary includes scanned files, total matches, cancellation and per-repository errors.
+
+Fuzzy matching treats query words as subsequences with Nucleo's path scoring. Exact substring matching treats the entire query literally, including spaces. Both modes ignore case. File names use forward slashes on every platform.

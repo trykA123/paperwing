@@ -16,9 +16,12 @@ struct Listing {
 impl Listing {
     fn feed(&mut self, bytes: &[u8]) -> bool {
         self.pending.extend_from_slice(bytes);
-        while let Some(end) = self.pending.iter().position(|byte| *byte == 0) {
-            let row: Vec<u8> = self.pending.drain(..=end).collect();
-            if let Err(error) = self.accept(&row[..end]) {
+        let Some(end) = self.pending.iter().rposition(|byte| *byte == 0) else {
+            return false;
+        };
+        let rows: Vec<u8> = self.pending.drain(..=end).collect();
+        for row in rows[..end].split(|byte| *byte == 0) {
+            if let Err(error) = self.accept(row) {
                 self.error = Some(error);
                 return true;
             }
