@@ -162,6 +162,28 @@ async fn patterns_starting_with_a_dash_are_data() {
 }
 
 #[tokio::test]
+async fn quotes_equals_and_crlf_lines_match_in_a_folder_with_spaces() {
+    let fixture = Fixture::new("search-quotes");
+    let path = repo(
+        &fixture,
+        "repo with spaces",
+        &[("cfg/variant.ini", b"[build]\r\nsw_variant=\"Product_Variant_1\"\r\nother=1\r\n")],
+    );
+    for pattern in [
+        "sw_variant=\"Product_Variant_1\"",
+        "SW_VARIANT=\"product_variant_1\"",
+        "Variant_1\"",
+    ] {
+        let mut options = request(&[&path], pattern);
+        options.ignore_case = true;
+        let (_, payloads) = run(options, 4).await;
+        let found = only(&payloads);
+        assert_eq!(found.matches.len(), 1, "{pattern}");
+        assert_eq!((found.matches[0].path.as_str(), found.matches[0].line), ("cfg/variant.ini", 2));
+    }
+}
+
+#[tokio::test]
 async fn case_and_whole_word_flags_apply() {
     let fixture = Fixture::new("search-case");
     let path = repo(&fixture, "a", &[("f.txt", b"Foo\nfoo\nfoobar\n")]);
