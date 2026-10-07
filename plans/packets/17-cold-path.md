@@ -91,3 +91,12 @@ Base 9eeecd5 on `crew/api-builder-368uj`. Reviewer: changes-needed.
 5. The eligibility cache is cleared only on refresh. Make config and attributes changes visible on open.
 6. `close_root` before fetch and pull.
 Then merge main, run the gates, and rerun the release benchmark (plus one run with `normalize_eol=false`).
+
+## Windows CI round (2026-10-07, run 37579389858)
+- Fixed on branch `fix/windows-verbatim-paths`: canonical Git directories carried the `\\?\` prefix and failed path validation, so batch readers never started on Windows.
+- Still failing on `test-windows`:
+  - CRLF line counts: `cold_path` cross_format and git_clean_crlf, and `review_round3` crlf_counts. Expected 2/2, got 1/1 or 0/0. Git for Windows ships `core.autocrlf=true` in its system config; the fixtures do not isolate it (`GIT_CONFIG_NOSYSTEM=1`).
+  - Decide what raw counts mean under the owner's real config: raw compares bytes, so CRLF against LF lines are changes. Make the in-process path and the Git fallback agree, and isolate the test config.
+  - `review_fixes::attribute_probes_match_no_index_configuration`: the test writes a Windows path into a global config file without escaping backslashes ("bad config line 2").
+  - `cold_lifecycle` cancellation tests: one is the prefix error; the other times out (`Elapsed`). Re-check after the prefix fix.
+- Linux `linux_guard::tests::bounded_private_files_and_handle_ownership_fail_closed` failed once with 7 against 6 handles. It looks flaky; make it robust or serialise it.
