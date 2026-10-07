@@ -206,6 +206,7 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 
 ## Unreleased
 
+- Colour automotive and embedded files in compare: ARXML and other XML configs, m4, A2L, DBC, LDF, CAPL, OIL, linker scripts, map files, S-record, Intel HEX, MATLAB, TLC, assembler, Makefiles, CMake and batch files, with first-line sniffing for unknown extensions. Pick the language from the compare toolbar, remember it per extension, and manage mappings in Settings > Editor (packet 46).
 - Remote branch and tag deletion removed; deletes are local only. The cleanup dialog lists local branches only, the tag delete dialog deletes the local tag only, and the `delete_remote_branches` and `delete_remote_tag` commands are no longer registered.
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
 - Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
