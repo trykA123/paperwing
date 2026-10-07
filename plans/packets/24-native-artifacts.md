@@ -28,7 +28,7 @@ Launch the fresh Windows and Linux artifacts outside dev mode, prove the key wor
 
 ## Read first
 - `src-tauri/tauri.conf.json`, `tauri.windows.conf.json`, `tauri.linux.conf.json`, `src-tauri/windows/hooks.nsh`
-- `.github/workflows/build.yml`, `README.md`, `docs/testing.md`, `docs/implementation-status.md`
+- `.github/workflows/build.yml`, `README.md`, `docs/testing.md`
 - Evidence from packet 23
 
 ## Steps

@@ -1,6 +1,6 @@
 # 46 — Syntax colouring for automotive and embedded files in compare
 
-Status: waits for packet 37 step 1 (CodeMirror swap); retargeted from Monaco to CodeMirror 6 on 2026-10-07 (owner request 2026-10-07: "add support for more types of file extensions … automotive programming languages, .m4, .arxml, etc")
+Status: ready once packet 37 step 1 is on main. Retargeted from Monaco to CodeMirror 6 on 2026-10-07.
 Platform: both
 Size: M
 Role: ui-builder (frontend only)

@@ -1,6 +1,6 @@
 # 38 — Core boundaries: skein-core, capability registry, event bus
 
-Status: ready (34 merged 2026-10-06). Must land before 31 (Actions) and 35 (Jira).
+Status: in review on `crew/api-builder-p38-core` (boundaries inside the app crate; a separate crate is a later step).
 Platform: both; no platform-specific behaviour
 Size: L
 Role: api-builder (gpt-6.1-sol xhigh), one writer; frontend only for the enable/disable setting

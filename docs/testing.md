@@ -51,8 +51,8 @@ proves rendering and refusal, without ratifying editor latency targets. Logs con
 
 Windows write, junction and recovery checks require native Windows. Linux compilation and server tests do not substitute for them. Current Linux save/copy/recovery support remains gated by the Linux protection contract and later backend packets.
 
-See [packet execution status](implementation-status.md) and the [Linux write contract](linux-write-contract.md)
-for completed work, deferred checks and the accepted practical contract.
+See the [Linux write contract](linux-write-contract.md) for the accepted practical contract,
+and [`plans/README.md`](../plans/README.md) for work still to do.
 
 ## Linux read-only editor acceptance
 

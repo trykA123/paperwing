@@ -6,7 +6,6 @@
 
 **A desktop workspace for Git repository sets, local comparison, and reviewed changes.**
 
-<img src="docs/paperwing-tour.svg" alt="Animated tour with sample repositories: browse an organization, build a set, pick a branch, tag or commit per repository, clone in parallel, use the right-click menu, review and commit changes side by side, branch into a new folder, compare folders, and confirm destructive actions" width="100%" />
 
 </div>
 
@@ -496,7 +495,7 @@ before releasing runner resources. Detached helpers are outside that boundary; s
 [durable Linux recovery](docs/linux-recovery.md) supply the Linux file service. Folder
 workflows still need packet15. The accepted
 [Linux write contract](docs/linux-write-contract.md) records concurrent-writer race limits.
-See [implementation status](docs/implementation-status.md) and [isolated testing](docs/testing.md).
+See [isolated testing](docs/testing.md) and the [plans](plans/README.md).
 
 ### Check a source change
 
