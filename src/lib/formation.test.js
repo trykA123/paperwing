@@ -12,13 +12,13 @@ test('A repository that is not on disk offers Clone', () => {
 
 test('Uncommitted files come first and name their count', () => {
   const action = nextAction(facts(repo({ dirty: 3, behind: 2, ahead: 1 })));
-  expect(action).toMatchObject({ kind: 'commit', label: 'Commit 3 files' });
-  expect(nextAction(facts(repo({ dirty: 1 })))?.label).toBe('Commit 1 file');
+  expect(action).toMatchObject({ kind: 'commit', label: 'Commit 3', aria: 'Commit 3 changed files' });
+  expect(nextAction(facts(repo({ dirty: 1 })))?.aria).toBe('Commit 1 changed file');
 });
 
 test('A repository on another branch is asked to switch before it pulls or pushes', () => {
   const action = nextAction(facts(repo({ behind: 2 }), { onRef: false, refLabel: 'release/2.4' }));
-  expect(action).toMatchObject({ kind: 'switch', label: 'Switch to release/2.4' });
+  expect(action).toMatchObject({ kind: 'switch', label: 'Switch', title: 'Fetch and check out release/2.4', aria: 'Switch to release/2.4' });
 });
 
 test('Diverged history is not pulled or pushed; History is the suggested action', () => {
