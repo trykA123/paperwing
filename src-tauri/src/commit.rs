@@ -1,3 +1,13 @@
+#[cfg(test)]
+pub(crate) mod test_fixture;
+pub(crate) mod patch;
+pub(crate) mod snapshot;
+pub(crate) mod stage;
+mod discard;
+pub use snapshot::*;
+pub use stage::*;
+pub use discard::*;
+
 use crate::git::{execute_cancellable_input, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::collections::HashMap;

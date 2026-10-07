@@ -1,3 +1,7 @@
+mod untracked;
+pub(crate) use untracked::trash_untracked;
+#[cfg(target_os = "linux")]
+mod linux_file;
 #[cfg(target_os = "linux")]
 mod linux;
 

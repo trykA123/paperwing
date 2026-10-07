@@ -1,3 +1,6 @@
+mod trash_file;
+pub(crate) use trash_file::FileMove;
+
 use super::{metadata, Error, ErrorKind, Handle, Identity, Root, CONFINED};
 use rustix::fs::{Mode, OFlags, RenameFlags};
 use std::os::fd::AsRawFd;

@@ -1,5 +1,8 @@
 #![cfg(windows)]
 
+mod discard;
+pub(crate) use discard::discard_restore;
+
 use crate::file_guard::{PinnedPath, Transaction};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
