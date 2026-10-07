@@ -6,7 +6,7 @@ import { parse } from 'svelte/compiler';
 import { render } from 'svelte/server';
 import { refChoices } from './compare-refs';
 import { compareRows, detailFile, pathMatches } from './compare-view';
-import { copyHunk, decodeText, encodeText } from './editor';
+import { decodeText, encodeText } from './text-format';
 import { fuzzy, rank, segments } from './fuzzy';
 import { tabId } from './workspace';
 import { windowsPlatform, supportedRoot } from './test-support/platform-fixture';
@@ -173,13 +173,6 @@ test('P6 text saves preserve UTF-8 BOM, CRLF, LF, CR and trailing newlines', () 
     const mixed = decodeText(new TextEncoder().encode('one\r\ntwo\n'));
     expect(mixed.editable).toBe(false);
     expect(() => encodeText(mixed.text, mixed)).toThrow();
-});
-
-test('P7 hunk mappings support replacement, insertion and deletion without stale indices', () => {
-    expect(copyHunk('one\nchanged\nthree', 'one\nold\nthree', 2, 2, 2, 2)).toBe('one\nchanged\nthree');
-    expect(copyHunk('one\ninserted\nthree', 'one\nthree', 2, 2, 1, 0)).toBe('one\ninserted\nthree');
-    expect(copyHunk('one\nthree', 'one\nremoved\nthree', 1, 0, 2, 2)).toBe('one\nthree');
-    expect(() => copyHunk('one', 'two', 3, 3, 1, 1)).toThrow();
 });
 
 test('P4 folder filters preserve matching ancestors, exclusions and collapsed paths', () => {

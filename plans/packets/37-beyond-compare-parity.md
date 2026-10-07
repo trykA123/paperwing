@@ -26,6 +26,7 @@ Skein does what the owner uses Beyond Compare for, inside Git workflows and on p
   - Bundle, gzip: Monaco about 1.05 MB trimmed (3.4 MB full); CodeMirror about 281 KB; custom about 3 KB.
   - Open question for the review: the custom renderer is fast but its editing, search and highlighting scope was not measured as full features. `results.json` has no round-trip (BOM and EOL) data.
 - Large-file mode (virtualised read-only above an editor limit) is required whatever editor wins.
+- Deferred from step 1: the 30 fps scroll fallback (CodeMirror measured 19–22 fps at 5 MB, so the 5 MB limit applies alone until it exists).
 - Every save uses the platform write path (tickets, fresh authority, recovery records). No generic file write.
 - BOM and line endings are preserved byte for byte on save.
 - Git tools: `skein diff <a> <b>` and `skein merge <base> <local> <remote> <output>` plus a documented config snippet. Skein never writes global Git config.

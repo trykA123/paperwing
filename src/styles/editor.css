@@ -1,0 +1,183 @@
+.editor-host {
+    position: relative;
+    flex: 1;
+    min-height: 120px;
+    min-width: 0;
+    background: var(--editor);
+}
+
+.editor-host[hidden] {
+    display: none;
+}
+
+.editor-host>.cm-mergeView,
+.editor-host>.cm-editor,
+.editor-host>.vw {
+    position: absolute;
+    inset: 0;
+}
+
+.editor-host>.cm-mergeView {
+    overflow: auto;
+}
+
+.editor-host .cm-mergeViewEditor {
+    min-width: 0;
+    overflow: clip;
+}
+
+.editor-host .cm-mergeViewEditor+.cm-mergeViewEditor {
+    border-left: 1px solid var(--line);
+}
+
+.editor-host .cm-panels-top {
+    position: sticky;
+    top: 0;
+    height: 0;
+    overflow: visible;
+    border: 0;
+}
+
+.editor-host .cm-panels-top .cm-panel {
+    position: absolute;
+    top: var(--sp-1);
+    right: var(--sp-2);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1);
+    max-width: calc(100% - var(--sp-3));
+    padding: var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--panel);
+    box-shadow: var(--shadow-1);
+}
+
+.editor-host .cm-panels-top .cm-panel br {
+    flex-basis: 100%;
+    height: 0;
+}
+
+.editor-host .cm-panels-top .cm-panel [name="close"] {
+    position: static;
+    margin-left: auto;
+}
+
+.editor-notice {
+    flex: none;
+    margin: 0;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--info-bg);
+    border-bottom-color: var(--info-line);
+    color: var(--text);
+    font-size: var(--fs-sm);
+}
+
+.vw {
+    color: var(--text);
+    font: 13px/20px var(--mono);
+}
+
+.vw-scroll {
+    position: absolute;
+    inset: 0 0 var(--vw-hbar, 0) 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.vw-hbar {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid var(--line);
+}
+
+.vw-hspacer {
+    height: 1px;
+}
+
+.vw-scroll:focus-visible {
+    outline: none;
+    box-shadow: inset var(--ring);
+}
+
+.vw-layer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    will-change: transform;
+}
+
+.vw-row {
+    display: flex;
+    height: 20px;
+}
+
+.vw-cell {
+    display: flex;
+    flex: 1 1 50%;
+    min-width: 0;
+    overflow: hidden;
+    white-space: pre;
+}
+
+.vw-cell+.vw-cell {
+    border-left: 1px solid var(--line);
+}
+
+.vw-no {
+    flex: none;
+    width: 56px;
+    padding-right: 8px;
+    box-sizing: border-box;
+    text-align: right;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+}
+
+.vw-tx {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.vw-text {
+    display: block;
+    width: max-content;
+    padding-left: var(--sp-1);
+    transform: translateX(var(--vw-shift, 0px));
+}
+
+.is-removed {
+    background: var(--err-bg);
+}
+
+.is-added {
+    background: var(--ok-bg);
+}
+
+.is-void {
+    background: var(--soft);
+}
+
+.vw-gap {
+    flex: 1;
+    padding: 0 10px;
+    background: var(--soft);
+    color: var(--dim);
+    font: 12px/20px var(--font);
+}
+
+.vw-probe {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre;
+    pointer-events: none;
+}

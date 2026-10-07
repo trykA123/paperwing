@@ -5,11 +5,9 @@ src-tauri/target/
 src-tauri/gen/schemas/
 
 # Local plans, evidence, and design experiments
-.skillify/*
-!.skillify/plans/
-.skillify/plans/**
-!.skillify/plans/*/
-!.skillify/plans/*/packet.md
+.skillify/
+.gate-tmp/
+.shots/
 prototype/
 
 # Built binaries are attached to releases, not committed

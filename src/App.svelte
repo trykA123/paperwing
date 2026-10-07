@@ -94,7 +94,7 @@
     if (app.view.kind !== 'fileDiff' || app.paletteOpen) return;
     const target = event.target as HTMLElement;
     if (target.closest('[role="dialog"], .compare-menu, .row-menu')) return;
-    if (target.closest('input, textarea, select, [contenteditable="true"]') && !target.closest('.monaco-editor')) return;
+    if (target.closest('input, textarea, select, [contenteditable="true"]') && !target.closest('.cm-editor')) return;
     const command = commands().find(command => command.id === id);
     if (!command?.enabled) return;
     event.preventDefault(); event.stopPropagation(); execute(command);
