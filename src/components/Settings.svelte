@@ -9,13 +9,15 @@
   import AppearanceSection from './settings/AppearanceSection.svelte';
   import CloningSection from './settings/CloningSection.svelte';
   import DiagnosticsSection from './settings/DiagnosticsSection.svelte';
+  import EditorSection from './settings/EditorSection.svelte';
   import { DiagnosticsStore, tauriDiagnostics } from '../lib/diagnostics.svelte';
   import SourceForm from './settings/SourceForm.svelte';
 
-  type Section = 'sources' | 'appearance' | 'cloning' | 'diagnostics';
+  type Section = 'sources' | 'appearance' | 'editor' | 'cloning' | 'diagnostics';
   const SECTIONS_BASE: { id: Section; label: string; icon: IconName; tone?: IconTone }[] = [
     { id: 'sources', label: 'Sources', icon: 'folder', tone: 'folder' },
     { id: 'appearance', label: 'Appearance', icon: 'theme', tone: 'brand' },
+    { id: 'editor', label: 'Editor', icon: 'code', tone: 'file' },
     { id: 'cloning', label: 'Cloning', icon: 'download', tone: 'branch' },
   ];
   const diagnostics = new DiagnosticsStore(tauriDiagnostics, (message, kind) => app.toast(message, kind));
@@ -274,6 +276,8 @@
 
   {:else if section === 'appearance'}
   <AppearanceSection bind:theme={app.ws.theme} bind:uiFont={app.ws.uiFont} bind:codeFont={app.ws.codeFont} />
+  {:else if section === 'editor'}
+  <EditorSection bind:map={app.ws.languageMap} />
   {:else if section === 'diagnostics' && diagnostics.available}
   <DiagnosticsSection store={diagnostics} />
   {:else}
