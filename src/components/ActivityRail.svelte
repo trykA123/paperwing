@@ -21,14 +21,14 @@
   {#each RAIL_SECTIONS as entry, index (entry.id)}
     {@const active = app.ws.shell.sidebarVisible && app.ws.shell.section === entry.id}
     {@const badge = badges[entry.id]}
-    <button class="rail-btn" class:on={active} title="{entry.label} ({KEYS[index]})" aria-label={entry.label}
+    <button class="rail-btn" class:on={active} title="{entry.label} ({KEYS[index]})" aria-label={entry.label} data-tip-side="right"
       aria-pressed={active} onclick={() => app.clickRail(entry.id)}>
       <Icon name={entry.icon} size={18} />
       {#if badge?.count}<span class="rail-badge" class:err={badge.tone === 'err'}><span class="sr-only">{badge.count} </span><span aria-hidden="true">{badge.count > 9 ? '9+' : badge.count}</span></span>{/if}
     </button>
   {/each}
   <span class="grow"></span>
-  <button class="rail-btn" class:on={app.view.kind === 'settings'} title="Settings (Ctrl+5)" aria-label="Settings"
+  <button class="rail-btn" class:on={app.view.kind === 'settings'} title="Settings (Ctrl+5)" aria-label="Settings" data-tip-side="right"
     aria-pressed={app.view.kind === 'settings'} onclick={() => app.openView({ kind: 'settings' })}>
     <Icon name="gear" size={18} />
   </button>

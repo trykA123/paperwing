@@ -14,3 +14,6 @@
 @import './styles/select.css';
 @import './styles/history.css';
 @import './styles/formation.css';
+@import './styles/cleanup-search.css';
+@import './styles/stash.css';
+@import './styles/pulls.css';

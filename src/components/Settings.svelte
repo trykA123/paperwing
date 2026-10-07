@@ -8,14 +8,21 @@
   import Alert from './Alert.svelte';
   import AppearanceSection from './settings/AppearanceSection.svelte';
   import CloningSection from './settings/CloningSection.svelte';
+  import DiagnosticsSection from './settings/DiagnosticsSection.svelte';
+  import { DiagnosticsStore, tauriDiagnostics } from '../lib/diagnostics.svelte';
   import SourceForm from './settings/SourceForm.svelte';
 
-  type Section = 'sources' | 'appearance' | 'cloning';
-  const SECTIONS: { id: Section; label: string; icon: IconName; tone?: IconTone }[] = [
+  type Section = 'sources' | 'appearance' | 'cloning' | 'diagnostics';
+  const SECTIONS_BASE: { id: Section; label: string; icon: IconName; tone?: IconTone }[] = [
     { id: 'sources', label: 'Sources', icon: 'folder', tone: 'folder' },
     { id: 'appearance', label: 'Appearance', icon: 'theme', tone: 'brand' },
     { id: 'cloning', label: 'Cloning', icon: 'download', tone: 'branch' },
   ];
+  const diagnostics = new DiagnosticsStore(tauriDiagnostics, (message, kind) => app.toast(message, kind));
+  const SECTIONS = $derived(diagnostics.available
+    ? [...SECTIONS_BASE, { id: 'diagnostics' as const, label: 'Diagnostics', icon: 'activity' as IconName }]
+    : SECTIONS_BASE);
+  void diagnostics.probe();
   let section = $state<Section>('sources');
 
   function setParallel(event: Event) {
@@ -242,6 +249,8 @@
 
   {:else if section === 'appearance'}
   <AppearanceSection bind:theme={app.ws.theme} bind:uiFont={app.ws.uiFont} bind:codeFont={app.ws.codeFont} />
+  {:else if section === 'diagnostics' && diagnostics.available}
+  <DiagnosticsSection store={diagnostics} />
   {:else}
   <CloningSection bind:shallow={app.ws.shallow} bind:onExisting={app.ws.onExisting} parallel={app.ws.parallel} running={app.running} onparallel={setParallel} />
   {/if}

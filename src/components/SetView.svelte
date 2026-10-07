@@ -1,10 +1,15 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { app } from '../lib/state.svelte';
   import type { Ref, SetItem } from '../lib/api';
   import { bulkTargets, filterCounts, matchesFilter, FILTERS, type FormationFilter } from '../lib/formation';
+  import { clearRange, selectionOffer, shiftRange } from '../lib/selection';
   import { describeRow } from '../lib/formation-row';
+  import { plural } from '../lib/plural';
   import { pushTarget, rowFacts, runNextAction } from '../lib/row-actions';
+  import { pullFlow, pullable, pullKey } from '../lib/pull-flow.svelte';
+  import { pulls } from '../lib/pulls.svelte';
+  import { stashFlow, switchable } from '../lib/stash-flow.svelte';
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
   import RefPicker from './RefPicker.svelte';
@@ -22,6 +27,10 @@
   let filter = $state<FormationFilter>(isFilter(tab?.filter) ? tab.filter : 'all');
   let editingId = $state<string | null>(null);
   let checking = $state(false);
+  let list = $state<ReturnType<typeof VirtualList<SetItem>>>();
+  let activeId = $state<string | null>(null);
+  let anchorId: string | null = null;
+  let rangeAdded = new Set<string>();
   let picker = $state<{ items: SetItem[]; anchor: DOMRect } | null>(null);
   let menu = $state<{ item: SetItem; x: number; y: number; opener: HTMLElement | null } | null>(null);
   $effect(() => { if (tab) { tab.page = page; tab.filter = filter; } });
@@ -34,11 +43,16 @@
   const pages = $derived(size === 'all' ? 1 : Math.max(1, Math.ceil(shown.length / size)));
   const cur = $derived(Math.min(page, pages - 1));
   const rows = $derived(size === 'all' ? shown : shown.slice(cur * size, cur * size + size));
+  const density = $derived(app.ws.density ?? 'comfortable');
+  const activeRow = $derived(rows.find(item => item.id === activeId) ?? rows[0]);
   const selected = $derived(app.selected);
-  const allOn = $derived(shown.length > 0 && shown.every(item => item.on));
+  const allOn = $derived(rows.length > 0 && rows.every(item => item.on));
+  const offer = $derived(selectionOffer(rows, shown));
   const targets = $derived(bulkTargets(selected, rowFacts));
   const dirty = $derived(targets.cloned.filter(item => (app.local[app.dest(item)]?.dirty ?? 0) > 0));
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing);
+
+  $effect(() => { pulls.pin(selected.flatMap(item => pullKey(item) ?? [])); });
 
   $effect(() => {
     app.ws.activeSet;
@@ -72,7 +86,7 @@
     ok.forEach(i => app.setRef(i, ref));
     const miss = targets.filter(i => !ok.includes(i)).map(i => i.name);
     const tail = miss.length ? ` (not in ${miss.slice(0, 4).join(', ')}${miss.length > 4 ? ` +${miss.length - 4} more` : ''})` : '';
-    app.toast(`${app.refLabel({ ...targets[0], ref })} applied to ${ok.length} of ${targets.length} repos${tail}`, miss.length ? 'warn' : 'success');
+    app.toast(`${app.refLabel({ ...targets[0], ref })} applied to ${ok.length} of ${plural(targets.length, 'repository', 'repositories')}${tail}`, miss.length ? 'warn' : 'success');
   }
 
   async function checkRefs() {
@@ -81,7 +95,11 @@
     checking = false;
   }
 
+  let menuNeighbour: string | undefined;
+
   function openMenu(item: SetItem, anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) {
+    const at = rows.indexOf(item);
+    menuNeighbour = (rows[at + 1] ?? rows[at - 1])?.id;
     if (anchor instanceof HTMLElement) {
       const box = anchor.getBoundingClientRect();
       menu = { item, x: Math.max(8, Math.min(box.right - 290, innerWidth - 300)), y: Math.max(8, Math.min(box.bottom + 4, innerHeight - 420)), opener: anchor };
@@ -94,8 +112,74 @@
     editingId = null;
   }
 
+  const PAGE_STEP = 10;
+  const ids = () => shown.map(item => item.id);
+
+  function anchorAt(id: string | null) {
+    anchorId = id;
+    rangeAdded = new Set();
+  }
+
+  function extendTo(target: SetItem) {
+    anchorId ??= activeRow?.id ?? target.id;
+    const byId = new Map(shown.map(item => [item.id, item]));
+    const result = shiftRange(ids(), anchorId, target.id, id => !!byId.get(id)?.on, rangeAdded);
+    for (const id of result.on) byId.get(id)!.on = true;
+    for (const id of result.off) byId.get(id)!.on = false;
+    rangeAdded = result.added;
+  }
+
+  async function focusRow(index: number, extend: boolean) {
+    const target = rows[Math.max(0, Math.min(rows.length - 1, index))];
+    if (!target) return;
+    if (extend) extendTo(target); else anchorAt(target.id);
+    activeId = target.id;
+    list?.reveal(rows.indexOf(target));
+    await tick();
+    document.querySelector<HTMLElement>(`.fm-table .fm-row[data-id="${CSS.escape(target.id)}"]`)?.focus();
+  }
+
+  function gridKey(event: KeyboardEvent) {
+    if (!activeRow) return;
+    const row = (event.target as Element).closest<HTMLElement>('.fm-row[data-id]');
+    const onGrid = event.currentTarget === event.target;
+    if (event.target !== row && !onGrid) return;
+    const at = rows.indexOf(activeRow);
+    const control = event.ctrlKey || event.metaKey;
+    if (onGrid) {
+      if (!['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', 'Enter', ' '].includes(event.key)) return;
+      event.preventDefault();
+      void focusRow(at, false);
+      return;
+    }
+    if (control && event.key.toLowerCase() === 'a') { for (const item of rows) item.on = true; }
+    else if (event.key === 'ArrowDown') void focusRow(at + 1, event.shiftKey);
+    else if (event.key === 'ArrowUp') void focusRow(at - 1, event.shiftKey);
+    else if (event.key === 'PageDown') void focusRow(at + PAGE_STEP, event.shiftKey);
+    else if (event.key === 'PageUp') void focusRow(at - PAGE_STEP, event.shiftKey);
+    else if (event.key === 'Home') void focusRow(0, event.shiftKey);
+    else if (event.key === 'End') void focusRow(rows.length - 1, event.shiftKey);
+    else if (event.key === ' ') { activeRow.on = !activeRow.on; anchorAt(activeRow.id); }
+    else if (event.key === 'Enter') app.inspectedId = activeRow.id;
+    else return;
+    event.preventDefault();
+  }
+
+  function removed(id: string, neighbour: string | undefined) {
+    if (items.some(item => item.id === id)) return;
+    const target = rows.find(item => item.id === neighbour) ?? rows[0];
+    if (!target) { document.querySelector<HTMLElement>('.fm-table .vbox')?.focus(); return; }
+    void focusRow(rows.indexOf(target), false);
+  }
+
   const rowHandlers = (item: SetItem) => ({
-    toggle: (on: boolean) => { item.on = on; },
+    toggle: (on: boolean, range: boolean) => {
+      if (range && anchorId) {
+        if (on) extendTo(item);
+        else { const byId = new Map(shown.map(entry => [entry.id, entry])); for (const id of clearRange(ids(), anchorId, item.id)) byId.get(id)!.on = false; rangeAdded = new Set(); }
+      } else { item.on = on; anchorAt(item.id); }
+    },
+    activate: () => { activeId = item.id; },
     inspect: () => { app.inspectedId = item.id; },
     pickRef: (anchor: HTMLElement) => { picker = { items: [item], anchor: anchor.getBoundingClientRect() }; },
     next: (kind: Parameters<typeof runNextAction>[1]) => runNextAction(item, kind),
@@ -103,6 +187,8 @@
     rename: (value: string | null) => rename(item, value),
     retryStatus: () => { void app.checkExists([app.dest(item)]); },
   });
+
+  const moreButton = () => document.querySelector<HTMLElement>('.fm-bar .more');
 
   const bulk = {
     fetch: () => app.startClone(targets.fetchable, 'fetch'),
@@ -115,24 +201,32 @@
     },
     check: checkRefs,
     branch: () => app.openBranchDialog(targets.cloned),
+    cleanup: () => app.openCleanupDialog(targets.cloned),
     commit: () => { if (dirty[0]) app.openGitDialog('commit', dirty[0]); },
+    stash: () => stashFlow.openPush(dirty, moreButton()),
+    switchStash: () => stashFlow.openSwitch(selected, moreButton()),
+    pulls: () => pullFlow.openBulk(selected, moreButton()),
     clear: () => app.setAllOn(false),
   };
 </script>
 
-<SetHeader />
+<SetHeader extend={offer ? { count: offer, run: () => { for (const item of shown) item.on = true; } } : null} />
 
 <FilterChips {counts} value={filter} onchange={setFilter} />
 
+<p class="sr-only" role="status" aria-live="polite">{pulls.limit ? pulls.limit.message : pulls.loading ? 'Loading pull requests' : ''}</p>
+
 <div class="fm-wrap">
-  <div class="card fill repository-table fm-table" class:running={app.running || app.clonePreparing}>
+  <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
     {#key `${set.id}|${filter}|${cur}|${size}`}
-      <VirtualList items={rows} rowHeight={56} key={i => i.id}>
+      <VirtualList bind:this={list} role="grid" activeKey={activeRow?.id} label="Repositories in {set.name}" onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
         {#snippet header()}
-          <div class="fm-row fm-head">
-            <div class="fm-cell fm-check"><input type="checkbox" checked={allOn} indeterminate={!allOn && shown.some(item => item.on)}
-              onchange={e => { for (const item of shown) item.on = e.currentTarget.checked; }} aria-label="Select all shown repositories" /></div>
-            <div class="fm-cell">Repository</div><div class="fm-cell">Branch</div><div class="fm-cell">Sync</div><div class="fm-cell">Next action</div><div class="fm-cell"></div>
+          <div class="fm-row fm-head" role="row">
+            <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && rows.some(item => item.on)}
+              onchange={e => { for (const item of rows) item.on = e.currentTarget.checked; }} aria-label="Select all repositories on this page" /></label></div>
+            <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div>
+            <div class="fm-cell fm-pull-head" role="columnheader"><span>Pull request</span><button class="fm-menu-btn" aria-label="Refresh pull request status" title="Check pull requests again for the rows shown and selected" onclick={() => pulls.refresh()}><Icon name="refresh" size={12} /></button></div>
+            <div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
           </div>
         {/snippet}
         {#snippet empty()}
@@ -149,14 +243,14 @@
             </EmptyState>
           {/if}
         {/snippet}
-        {#snippet row(item: SetItem)}
-          <FormationRow row={describeRow(item, { focused: app.detailItem?.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} handlers={rowHandlers(item)} />
+        {#snippet row(item: SetItem, index: number)}
+          <FormationRow row={describeRow(item, { focused: app.detailItem?.id === item.id, canAct: !gitBusy })} editing={editingId === item.id} active={activeRow?.id === item.id} rowIndex={index + 2} handlers={rowHandlers(item)} />
         {/snippet}
       </VirtualList>
     {/key}
-    {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} />{/if}
+    {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} {density} ondensity={value => (app.ws.density = value)} />{/if}
   </div>
-  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} busy={gitBusy} {checking} handlers={bulk} />
+  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} stashSwitch={switchable(selected).length} pullable={pullable(selected).length} busy={gitBusy} {checking} handlers={bulk} />
 </div>
 
 {#if picker}
@@ -164,5 +258,5 @@
 {/if}
 
 {#if menu}
-  <RowMenu item={menu.item} x={menu.x} y={menu.y} opener={menu.opener} onclose={() => (menu = null)} onrename={id => (editingId = id)} />
+  <RowMenu item={menu.item} x={menu.x} y={menu.y} opener={menu.opener} onclose={() => (menu = null)} onrename={id => (editingId = id)} onremove={id => removed(id, menuNeighbour)} />
 {/if}

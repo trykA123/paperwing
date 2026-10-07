@@ -5,11 +5,19 @@
   import type { SetCompareState } from '../lib/compare.svelte';
   import CompareReferencePicker from './CompareReferencePicker.svelte';
   import Icon from './Icon.svelte';
+  import { RESULT_GLYPH, hasDifferences, nextSort, rowView, sortRows, type Sort, type SortKey } from '../lib/set-compare-view';
+
+  const COLUMNS: { key: SortKey; label: string; num?: boolean }[] = [
+    { key: 'folder', label: 'Repository folder' }, { key: 'result', label: 'Result' }, { key: 'different', label: 'Different', num: true },
+    { key: 'leftOnly', label: 'Only left', num: true }, { key: 'rightOnly', label: 'Only right', num: true },
+    { key: 'lines', label: 'Lines + / \u2212', num: true }, { key: 'history', label: 'Ahead / behind', num: true },
+  ];
+  const UNKNOWN = '\u2013';
   let { comparison }: { comparison: SetCompareState } = $props();
-  let differences = $state(false), preparing = $state(false), error = $state('');
+  let differences = $state(true), sort = $state<Sort | null>(null), preparing = $state(false), error = $state('');
   const owner = $derived(app.ws.sets.find(set => set.id === comparison.setId));
   const ready = $derived(comparison.rows.filter(row => row.state === 'ready'));
-  const rows = $derived(comparison.rows.filter(row => !differences || !row.snapshot || row.snapshot.display.different + row.snapshot.display.leftOnly + row.snapshot.display.rightOnly + row.snapshot.display.typeConflict + row.snapshot.display.unavailable > 0));
+  const rows = $derived(sortRows(comparison.rows.filter(row => !differences || hasDifferences(row)), sort));
   const total = $derived(ready.reduce((total, row) => total + row.snapshot!.display.different + row.snapshot!.display.leftOnly + row.snapshot!.display.rightOnly + row.snapshot!.display.typeConflict, 0));
   let fingerprint = '';
   let mounted = false;
@@ -43,10 +51,24 @@
   <div class="compare-filters"><label><input type="checkbox" bind:checked={differences} /> Differences only</label><label><input type="checkbox" bind:checked={comparison.options.normalizeEol} disabled={comparison.busy} /> Normalize EOL</label><label><input type="checkbox" bind:checked={comparison.options.ignoreWhitespace} disabled={comparison.busy} /> Ignore whitespace</label><span class="grow"></span><span class="faint">All files · no exclusions</span></div>
   <div class="compare-summary"><b>{comparison.rows.filter(row => !['queued', 'comparing'].includes(row.state)).length} / {comparison.rows.length} completed</b><span>{ready.length} comparable</span><span>{total} changed files</span><span>{comparison.rows.filter(row => !['ready', 'queued', 'comparing'].includes(row.state)).length} unavailable or cancelled</span></div>
   {#if comparison.stale}<p class="warn">Set context changed. Compare again before opening results.</p>{/if}{#if error}<p class="warn" role="alert">{error}</p>{/if}
-  <div class="set-compare-table"><table><thead><tr><th>Repository folder</th><th>Result</th><th>Different</th><th>Only left</th><th>Only right</th><th>Lines + / -</th><th>Ahead / behind</th></tr></thead><tbody>
-    {#each rows as row (row.itemId)}<tr><td><button class="set-result" disabled={comparison.stale || !row.snapshot || row.state !== 'ready'} onclick={() => app.openSetCompareRow(row)}>{row.folder}</button></td>
-      <td>{row.snapshot ? row.snapshot.display.unavailable ? 'Partly unavailable' : row.snapshot.display.different + row.snapshot.display.leftOnly + row.snapshot.display.rightOnly + row.snapshot.display.typeConflict ? 'Different' : 'Identical' : row.state}{#if row.message}<div class="warn">{row.message}</div>{/if}</td>
-      <td>{row.snapshot ? row.snapshot.display.different + row.snapshot.display.typeConflict : '-'}</td><td>{row.snapshot?.display.leftOnly ?? '-'}</td><td>{row.snapshot?.display.rightOnly ?? '-'}</td>
-      <td>{#if row.added === null}N/A{:else}<span class="set-added">+{row.added}</span> / <span class="set-removed">-{row.removed}</span>{/if}</td><td>{row.snapshot?.history.available ? `${row.snapshot.history.rightCount} / ${row.snapshot.history.leftCount}` : 'N/A'}</td></tr>{/each}
+  <div class="set-compare-table"><table><thead><tr>
+    {#each COLUMNS as column (column.key)}
+      <th class:num={column.num} aria-sort={sort?.key === column.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+        <button class="sort-head" onclick={() => (sort = nextSort(sort, column.key))}>{column.label}<span class="sort-mark" aria-hidden="true">{sort?.key === column.key ? (sort.dir === 'asc' ? '\u2191' : '\u2193') : ''}</span></button>
+      </th>
+    {/each}
+  </tr></thead><tbody>
+    {#each rows as row (row.itemId)}
+      {@const view = rowView(row)}
+      <tr><td><button class="set-result" disabled={comparison.stale || !row.snapshot || row.state !== 'ready'} onclick={() => app.openSetCompareRow(row)}>{row.folder}</button></td>
+        <td><span class="cmp-chip k-{view.kind}">{#if RESULT_GLYPH[view.kind]}<b aria-hidden="true">{RESULT_GLYPH[view.kind]}</b>{/if}{view.label}</span>{#if row.message}<div class="warn">{row.message}</div>{/if}</td>
+        <td class="num">{view.different ?? UNKNOWN}</td><td class="num">{view.leftOnly ?? UNKNOWN}</td><td class="num">{view.rightOnly ?? UNKNOWN}</td>
+        <td class="num">{#if row.added === null}N/A{:else}<span class="set-added">+{row.added}</span> <span class="set-removed">−{row.removed}</span>{/if}</td>
+        <td class="num">{row.snapshot?.history.available ? `${row.snapshot.history.rightCount} / ${row.snapshot.history.leftCount}` : 'N/A'}</td></tr>
+    {:else}
+      {#if differences && !comparison.busy && comparison.rows.length}
+        <tr><td colspan={COLUMNS.length} class="set-compare-empty">All {comparison.rows.length} repositories are identical. <button class="link" onclick={() => (differences = false)}>Show all</button></td></tr>
+      {/if}
+    {/each}
   </tbody></table></div>
 </section>

@@ -1,6 +1,6 @@
 # 28 — Pull request UI: status column, open dialog, bulk open
 
-Status: ready
+Status: UI merged 2026-10-07 (57cd8d9). Left: rail badge (after the shell pick, seam `pulls.awaitingReview`); backend `target_repo` lookup so forks show their exact target; listing fork flag.
 Platform: Windows first, Linux parity
 Size: M
 Role: ui-builder (a small api-builder step for the batch runner and the optional CI status cache)

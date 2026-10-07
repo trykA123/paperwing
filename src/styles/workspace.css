@@ -201,8 +201,9 @@ h2 {
 
 .pager {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: var(--sp-1) 10px;
     padding: 8px 14px;
     border-top: 1px solid var(--line);
     font-size: var(--fs-sm);
@@ -466,7 +467,7 @@ h2 {
 }
 
 .t-branch {
-    color: var(--tone-branch);
+    color: var(--dim);
 }
 
 .t-tag {

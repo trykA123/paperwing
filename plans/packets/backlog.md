@@ -12,3 +12,9 @@
 - Squash-merge detection for branch cleanup (39 states the gap).
 
 Moved out: branch cleanup and set search are in 39.
+
+## Search follow-ups (owner, 2026-10-06; wait for the shell pick)
+- File-name search across a set (`git ls-files` / `ls-tree` for a ref), same view as code search.
+- Several refs per repo in one search (backend already accepts repeated repos with different refs), e.g. all remote branches.
+- History search: `git log -S` / `-G` across a set.
+- A match limit selector (default caps are 200 per repo, 2000 overall).

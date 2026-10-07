@@ -11,7 +11,6 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 | [38](packets/38-core-boundaries.md) | Core boundaries (34 merged) | L |
 | [06](packets/06-windows-write-boundaries.md) | Split `files.rs` on Windows, no behaviour change | M |
 | [03b](packets/03b-rail-context-menus.md) | Activity rail panels and context menus | M |
-| [26](packets/26-stash-switch.md) | Stash UI and switch with stash across a set | M |
 | [28](packets/28-pull-requests.md) | Pull request column, open dialog, bulk open | M |
 | [33](packets/33-tags.md) | Tags UI, set-wide tagging, GitHub release | M |
 | [29](packets/29-discard-partial-staging.md) | Discard changes and partial staging (backend first) | M |
@@ -24,9 +23,6 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 | Packet | Where |
 |---|---|
 | [17](packets/17-cold-path.md) | Phase 1, Codex run in `.crew/paperwing-api-builder-sfzxd` |
-| [41](packets/41-windows-diagnostics.md) | Backend, Codex run in `.crew/paperwing-api-builder-1ci2m` |
-| [39](packets/39-backend-ui-wiring.md) | ui-builder in `.alt/ui-39`, branch `ui/39-cleanup-search` |
-| Perf fixes (no packet) | `merge/perf` plus review fixes in `.crew/paperwing-api-builder-24d6y` |
 
 ## Blocked
 | Packet | Waits for |
@@ -39,7 +35,7 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 | [22](packets/22-prewarm.md) prewarm, Bank A/B/C | 38, 19, 21a |
 | [23](packets/23-native-github-acceptance.md) native GitHub acceptance | 17, 20, 21a, 06 |
 | [36](packets/36-frontend-performance.md) frontend performance | 20 (step 1 can start) |
-| [27](packets/27-release-snapshots.md) release snapshots | 26, 06s |
+| [27](packets/27-release-snapshots.md) release snapshots | 06s |
 
 ## Parked
 - [32](packets/32-linux-filesystems.md) Linux writes beyond ext4 — Windows first.

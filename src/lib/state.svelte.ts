@@ -19,8 +19,11 @@ import {
 } from './api';
 import { CompareState, SetCompareState, type SetCompareRow } from './compare.svelte';
 import { confirm } from './confirm';
+import { SearchSession } from './search.svelte';
+import type { CleanupTarget } from './branch-cleanup';
 import { defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } from './workspace';
 import { NotificationStore, type NoticeAction, type NoticeKind, type NoticeOptions } from './notifications.svelte';
+import { describeError } from './errors';
 export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
 export type { View } from './workspace';
 
@@ -108,6 +111,7 @@ class AppState {
   recoveryOpen = $state(false);
   readonlyBenchmark = false;
   gitDialog = $state<{ kind: 'commit' | 'branch'; path: string; name: string; itemId?: string; targets?: { path: string; name: string }[] } | null>(null);
+  cleanupDialog = $state<{ targets: CleanupTarget[] } | null>(null);
   /** True while a push or branch deletion runs; clone jobs use `running` instead. */
   gitBusy = $state(false);
   copyActions = $state<Record<string, { left: boolean; right: boolean; copy: (side: 'left' | 'right') => void; leftReason?: string | null; rightReason?: string | null }>>({});
@@ -138,7 +142,8 @@ class AppState {
   ready = $state(false);
   sources = $state<Source[]>([]);
   ws = $state<Workspace>(defaultWorkspace('unsupported'));
-  private repositoryMetadata = new RepositoryMetadata(() => this.sources, () => this.ws.sets.flatMap(set => set.items));
+  private repositoryMetadata = new RepositoryMetadata(() => this.sources, () => this.ws.sets.flatMap(set => set.items),
+    (source, message) => this.toast(`Can't reach ${source.name}`, 'error', { label: 'Open Settings', run: () => this.openView({ kind: 'settings' }) }, { detail: message }));
   credentials = new Credentials(sourceId => {
     const paths = this.ws.sets.flatMap(set => set.items.filter(item => item.repoId.startsWith(`${sourceId}:`)).map(item => this.dest(item, set.id)));
     this.#invalidateTrees(paths);
@@ -180,6 +185,7 @@ class AppState {
   activeTabId = $state('');
   comparisons = $state<Record<string, CompareState>>({});
   setComparisons = $state<Record<string, SetCompareState>>({});
+  codeSearches = $state<Record<string, SearchSession>>({});
   activeTab = $derived(this.tabs.find(tab => tab.id === this.activeTabId));
   view = $derived<View>(this.activeTab?.view ?? { kind: 'set' });
   focusedItem = $derived.by(() => {
@@ -204,6 +210,7 @@ class AppState {
   #runItems: SetItem[] = [];
   #runSetId = '';
   #runNotice = 0;
+  get runMode() { return this.#runMode; }
   pushing = $state<Record<string, 'Pushing' | 'Waiting'>>({});
   #cloneWaiters: (() => void)[] = [];
   #statusGeneration = 0;
@@ -331,6 +338,7 @@ class AppState {
       void this.setComparisons[view.comparisonId]?.cancel().catch(error => this.toast(String(error), 'error'));
       delete this.setComparisons[view.comparisonId];
     }
+    if (view.kind === 'codeSearch') this.#disposeSearch(id);
     if (view.kind === 'compare') {
       const state = this.comparisons[view.comparisonId];
       if (state) void state.close().catch(error => this.toast(String(error), 'error'));
@@ -355,6 +363,7 @@ class AppState {
         ?? set?.items.find(item => item.id === view.itemId)?.name ?? 'Repository';
       case 'org': return `${view.org} → ${set?.name ?? 'Set'}`;
       case 'search': return `Search → ${set?.name ?? 'Set'}`;
+      case 'codeSearch': return `Code search → ${set?.name ?? 'Set'}`;
       case 'compare': return view.readOnly ? 'Compare (read-only)' : 'Compare';
       case 'setCompare': return `Compare ${set?.name ?? 'Set'}`;
       case 'fileDiff': return view.path.split('/').at(-1) ?? 'File diff';
@@ -369,6 +378,27 @@ class AppState {
     this.openView({ kind: 'compare', comparisonId, readOnly,
       left: { setId: this.set.id, itemId: item.id, reference: { kind: 'head' } },
       right: { setId: this.set.id, itemId: item.id, reference: { kind: readOnly ? 'head' : 'workingTree' } } });
+  }
+
+  #disposeSearch(id: string) {
+    void this.codeSearches[id]?.dispose().catch(error => this.toast(`Could not stop the search: ${error}`, 'error'));
+    delete this.codeSearches[id];
+  }
+
+  openCodeSearch() {
+    const id = tabId({ kind: 'codeSearch' }, this.set.id);
+    if (!this.codeSearches[id]) {
+      const session = new SearchSession();
+      void session.loadCapabilities();
+      this.codeSearches[id] = session;
+    }
+    this.openView({ kind: 'codeSearch' }, this.set.id);
+  }
+
+  openCleanupDialog(items: SetItem[]) {
+    const targets = items.filter(item => this.local[this.dest(item)]?.repo).map(item => ({ path: this.dest(item), name: this.folderOf(item) }));
+    if (!targets.length) { this.toast('Clone the repositories first', 'warn'); return; }
+    if (!this.cleanupDialog) this.cleanupDialog = { targets };
   }
 
   openSetCompare() {
@@ -513,7 +543,7 @@ class AppState {
     if (this.bufferGuards.size && !await this.guardBuffers()) return;
     if (trashFolders && (this.running || this.clonePreparing || this.gitBusy)) { this.toast('Wait for the running Git operation to finish first', 'warn'); return; }
     for (const tab of [...this.tabs]) {
-      if (tab.setId === id && tab.view.kind === 'setCompare') await this.closeTab(tab.id);
+      if (tab.setId === id && (tab.view.kind === 'setCompare' || tab.view.kind === 'codeSearch')) await this.closeTab(tab.id);
       if (tab.view.kind === 'compare' && (tab.setId === id || [tab.view.left, tab.view.right].some(endpoint => endpoint.setId === id))) await this.closeTab(tab.id);
     }
     if (trashFolders) {
@@ -529,7 +559,7 @@ class AppState {
           if (this.nativePlatform === 'linux') { await this.checkExists(this.ws.sets.find(set => set.id === id)?.items.map(item => this.dest(item, id)) ?? []); return; }
         }
       } catch (reason) {
-        this.toast(String(reason), 'error');
+        this.toast(describeError(reason, 'remove the set'), 'error');
         return;
       } finally { this.gitBusy = false; }
     }
@@ -634,7 +664,7 @@ class AppState {
   }
 
   openVscode(path: string) {
-    api.openInVscode(path).catch(e => this.toast(String(e), 'error'));
+    api.openInVscode(path).catch(e => this.toast(describeError(e, 'open the folder in VS Code'), 'error'));
   }
 
   /** Refreshes "on disk" markers and the Local column (branch, ahead/behind, changes) for these folders. */
@@ -710,7 +740,7 @@ class AppState {
       const jobs = items.map(i => ({ id: i.id, url: i.url, dest: this.dest(i, setId), refType: i.ref.type, refName: i.ref.name }));
       let observations: PathIdentity[];
       try { observations = await this.refreshPathIdentities(jobs.map(job => job.dest)); }
-      catch (reason) { this.toast(String(reason), 'error'); return; }
+      catch (reason) { this.toast(describeError(reason, 'check the destination folders'), 'error'); return; }
       const identities = Object.fromEntries(observations.map(observation => [observation.path, observation]));
       const invalid = jobs.find(job => identities[job.dest]?.reason);
       if (invalid) { this.toast(identities[invalid.dest].reason!, 'warn'); return; }
@@ -740,7 +770,7 @@ class AppState {
       } catch (e) {
         this.running = false;
         this.notices.dismiss(this.#runNotice);
-        this.toast(String(e), 'error');
+        this.toast(describeError(e, 'start the Git run'), 'error');
       }
     } finally { this.clonePreparing = false; }
   }

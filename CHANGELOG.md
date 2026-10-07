@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
 - Bind saved tokens to their hosts, recover settings from durable backups, move disk IPC work off the main thread, remove locale-dependent Git decisions, wait up to five seconds for the local store, and share full object-id validation. Stop writing the unused commit cache.
 
 - Rename the remaining PaperWing names in code and docs to Skein: the Cargo package (`skein`, `skein_lib`), the HTTP user agent, and test variables (`SKEIN_*`, with `PAPERWING_*` still read as a fallback). Identifiers stored on disk keep the old name; see `docs/naming.md`.

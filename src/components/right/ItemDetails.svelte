@@ -5,6 +5,7 @@
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
   import SyncRails from '../set/SyncRails.svelte';
+  import PullSection from '../pulls/PullSection.svelte';
   import RepositoryTree from './RepositoryTree.svelte';
 
   let { item }: { item: SetItem } = $props();
@@ -34,5 +35,6 @@
       <button class="btn small" onclick={() => app.openVscode(app.dest(item))}><Icon name="code" /> VS Code</button>
     {/if}
   </div>
+  {#if cloned}<PullSection {item} />{/if}
   {#if cloned}{#key item.id}<RepositoryTree {item} />{/key}{/if}
 </div>
