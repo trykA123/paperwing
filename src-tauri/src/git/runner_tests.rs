@@ -152,7 +152,8 @@ async fn a_throttled_line_is_flushed_while_the_command_is_still_running() {
 
 #[test]
 #[should_panic(expected = "must hold test_support::git_runner()")]
-fn the_check_fails_when_no_test_at_all_holds_the_runner_lock_though_it_cannot_tell_which_test_holds_it() {
+fn the_check_fails_when_no_test_at_all_holds_the_runner_lock_though_it_cannot_tell_which_test_holds_it(
+) {
     require_runner_lock(&tokio::sync::Mutex::new(()));
 }
 
