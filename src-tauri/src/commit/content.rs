@@ -35,22 +35,30 @@ pub(super) async fn refuse_filters(path: &str, file: &str) -> Result<(), String>
     Ok(())
 }
 
-async fn text_attribute(path: &str, file: &str) -> Result<String, String> {
+async fn text_and_eol_attributes(path: &str, file: &str) -> (String, String) {
     let output = run(
         path,
-        &["check-attr", "-z", "text", "--", file],
-        "Check text attribute",
+        &["check-attr", "-z", "text", "eol", "--", file],
+        "Check text and eol attributes",
         &[0],
         OutputPolicy::Metadata,
         None,
         Duration::from_secs(45),
     )
-    .await?;
-    let fields: Vec<_> = output.stdout.split(|byte| *byte == 0).collect();
-    match fields.as_slice() {
-        [_, b"text", value, b""] => Ok(String::from_utf8_lossy(value).into_owned()),
-        _ => Ok("unspecified".into()),
+    .await;
+    let mut text = "unspecified".to_string();
+    let mut eol = "unspecified".to_string();
+    if let Ok(output) = output {
+        let fields: Vec<_> = output.stdout.split(|byte| *byte == 0).collect();
+        for chunk in fields.as_chunks::<3>().0 {
+            match chunk[1] {
+                b"text" => text = String::from_utf8_lossy(chunk[2]).to_string(),
+                b"eol" => eol = String::from_utf8_lossy(chunk[2]).to_string(),
+                _ => {}
+            }
+        }
     }
+    (text, eol)
 }
 
 async fn repo_objects_dir(path: &str) -> Result<PathBuf, String> {
@@ -162,10 +170,8 @@ pub(super) async fn clean(
 
     let use_no_filters = if let Some(index) = index_bytes {
         if index.contains(&b'\r') {
-            let attr = text_attribute(path, file)
-                .await
-                .unwrap_or_else(|_| "unspecified".into());
-            attr == "unspecified" || attr == "auto"
+            let (text, eol) = text_and_eol_attributes(path, file).await;
+            text == "auto" || (text == "unspecified" && eol == "unspecified")
         } else {
             false
         }
@@ -231,4 +237,52 @@ pub(super) async fn smudge(path: &str, file: &str, spec: &str) -> Result<Vec<u8>
         return Err("The restored file is too large".into());
     }
     Ok(output.stdout)
+}
+
+pub(crate) fn sweep_stale_temp_dirs(temp_root: &Path) {
+    let Ok(entries) = std::fs::read_dir(temp_root) else {
+        return;
+    };
+    let cutoff = std::time::Duration::from_secs(3600);
+    let now = std::time::SystemTime::now();
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name_str) = name.to_str() else {
+            continue;
+        };
+        if !name_str.starts_with("skein-obj-") {
+            continue;
+        }
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let is_stale = entry
+            .metadata()
+            .ok()
+            .and_then(|meta| meta.modified().ok())
+            .and_then(|mtime| now.duration_since(mtime).ok())
+            .map(|elapsed| elapsed >= cutoff)
+            .unwrap_or_else(|| {
+                let parts: Vec<&str> = name_str.split('-').collect();
+                if parts.len() >= 4 {
+                    if let Ok(nanos) = parts[2].parse::<u128>() {
+                        let dir_time =
+                            std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos as u64);
+                        if let Ok(elapsed) = now.duration_since(dir_time) {
+                            return elapsed >= cutoff;
+                        }
+                    }
+                }
+                false
+            });
+
+        if is_stale {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }

@@ -9,6 +9,7 @@ mod discard;
 pub use snapshot::*;
 pub use stage::*;
 pub use discard::*;
+pub(crate) use content::sweep_stale_temp_dirs;
 #[cfg(not(test))]
 pub(crate) use content::configure_temp_root;
 

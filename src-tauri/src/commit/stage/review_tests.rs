@@ -510,3 +510,80 @@ async fn stage_holding_path_completes_within_timeout_without_deadlock() {
     .expect("stage_hunks deadlocked")
     .unwrap();
 }
+
+#[tokio::test]
+async fn eol_lf_cr_in_index_hunk_stage_normalizes_matching_git_add() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.commit(".gitattributes", b"* eol=lf\n");
+    let before = b"line1\r\nline2\r\nline3\r\n";
+    fixture.git(&["config", "core.autocrlf", "false"]);
+    let oid = fixture.git_input(&["hash-object", "-w", "--stdin", "--no-filters"], before);
+    let oid_str = std::str::from_utf8(&oid).unwrap().trim();
+    fixture.git(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        "100644",
+        oid_str,
+        "file.txt",
+    ]);
+    fixture.git(&["commit", "-qm", "base with crlf in index"]);
+
+    let modified = b"line1\r\nLINE2\r\nline3\r\n";
+    fixture.write("file.txt", modified);
+
+    // Scratch copy to see what git add would store
+    fixture.write("scratch.txt", modified);
+    fixture.git(&["add", "scratch.txt"]);
+    let expected_blob = fixture.git(&["rev-parse", ":scratch.txt"]);
+    let expected_content = fixture.git(&["show", ":scratch.txt"]);
+    assert_eq!(expected_content, b"line1\nLINE2\nline3\n");
+
+    let request = tests::request(&fixture, "file.txt", "unstaged", 0).await;
+    stage_hunks(fixture.path(), request).await.unwrap();
+
+    let actual_blob = fixture.git(&["rev-parse", ":file.txt"]);
+    let actual_content = fixture.git(&["show", ":file.txt"]);
+    assert_eq!(actual_blob, expected_blob);
+    assert_eq!(actual_content, expected_content);
+}
+
+#[tokio::test]
+async fn sweep_stale_temp_dirs_removes_directories_older_than_one_hour() {
+    let _serial = crate::test_support::serial().await;
+    let base = crate::test_support::tmp_root().join("sweep-test");
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+
+    let now = std::time::SystemTime::now();
+    let two_hours_ago = now - std::time::Duration::from_secs(7200);
+    let stale_nanos = two_hours_ago
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let fresh_nanos = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+
+    let stale_dir = base.join(format!("skein-obj-12345-{stale_nanos}-0"));
+    let fresh_dir = base.join(format!("skein-obj-12345-{fresh_nanos}-1"));
+    let other_dir = base.join("not-a-skein-obj");
+    std::fs::create_dir_all(&stale_dir).unwrap();
+    std::fs::create_dir_all(&fresh_dir).unwrap();
+    std::fs::create_dir_all(&other_dir).unwrap();
+
+    let times = std::fs::FileTimes::new().set_modified(two_hours_ago);
+    if let Ok(file) = std::fs::File::open(&stale_dir) {
+        let _ = file.set_times(times);
+    }
+
+    crate::commit::sweep_stale_temp_dirs(&base);
+
+    assert!(!stale_dir.exists(), "Stale directory should be removed");
+    assert!(fresh_dir.exists(), "Fresh directory should be retained");
+    assert!(other_dir.exists(), "Unrelated directory should be retained");
+
+    let _ = std::fs::remove_dir_all(&base);
+}

@@ -129,6 +129,7 @@ pub fn run() {
             {
                 let temp_root = app.path().app_data_dir()?.join("temp");
                 let _ = std::fs::create_dir_all(&temp_root);
+                commit::sweep_stale_temp_dirs(&temp_root);
                 commit::configure_temp_root(temp_root);
             }
             events::install(app.handle());

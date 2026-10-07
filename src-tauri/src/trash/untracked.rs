@@ -79,11 +79,28 @@ pub(crate) async fn recycle<R: tauri::Runtime>(
             let output = tokio::time::timeout(std::time::Duration::from_secs(45), command.output())
                 .await
                 .map_err(|_| {
-                    "Could not remove intent-to-add index entry in time; retry".to_string()
+                    format!(
+                        "Could not remove intent-to-add index entry for '{file}' in time; '{file}' is in the Trash and can be restored"
+                    )
                 })?
-                .map_err(|error| format!("Could not remove intent-to-add index entry: {error}"))?;
+                .map_err(|error| {
+                    format!(
+                        "Could not remove intent-to-add index entry for '{file}': {error}; '{file}' is in the Trash and can be restored"
+                    )
+                })?;
             if !output.status.success() {
-                return Err("Could not remove intent-to-add index entry".into());
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let detail = stderr.trim();
+                let message = if detail.is_empty() {
+                    format!(
+                        "Could not remove intent-to-add index entry for '{file}'; '{file}' is in the Trash and can be restored"
+                    )
+                } else {
+                    format!(
+                        "Could not remove intent-to-add index entry for '{file}': {detail}; '{file}' is in the Trash and can be restored"
+                    )
+                };
+                return Err(message);
             }
         }
         Ok("Moved to the desktop Trash; restore it from Trash".into())

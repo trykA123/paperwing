@@ -13,13 +13,6 @@ pub(crate) enum Kind {
     Remove,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CheckoutEol {
-    None,
-    Crlf,
-    Lf,
-}
-
 #[derive(Clone)]
 struct Edit<'a> {
     kind: Kind,
@@ -261,15 +254,17 @@ impl<'a> Diff<'a> {
     pub fn rebuild_working(
         &self,
         working: &[u8],
+        smudged: &[u8],
         selections: &[Selection],
-        eol: CheckoutEol,
     ) -> Result<Vec<u8>, String> {
         let selected = self.selected(selections)?;
         let raw_working_lines: Vec<&[u8]> =
             working.split_inclusive(|byte| *byte == b'\n').collect();
+        let smudged_lines: Vec<&[u8]> = smudged.split_inclusive(|byte| *byte == b'\n').collect();
 
         let mut rebuilt = Vec::with_capacity(working.len());
         let mut working_line_idx = 0;
+        let mut index_line_idx = 0;
 
         for (edit_idx, edit) in self.edits.iter().enumerate() {
             if selected.contains(&edit_idx) {
@@ -279,52 +274,43 @@ impl<'a> Diff<'a> {
                             rebuilt.extend_from_slice(line);
                         }
                         working_line_idx += 1;
+                        index_line_idx += 1;
                     }
                     Kind::Add => {
                         working_line_idx += 1;
                     }
                     Kind::Remove => {
-                        let restored = match eol {
-                            CheckoutEol::None => edit.bytes.to_vec(),
-                            CheckoutEol::Crlf => adjust_eol(edit.bytes, true),
-                            CheckoutEol::Lf => adjust_eol(edit.bytes, false),
-                        };
-                        rebuilt.extend_from_slice(&restored);
+                        let restored = smudged_lines
+                            .get(index_line_idx)
+                            .ok_or("Index line number out of bounds in smudged index")?;
+                        rebuilt.extend_from_slice(restored);
+                        index_line_idx += 1;
                     }
                 }
             } else {
                 match edit.kind {
-                    Kind::Context | Kind::Add => {
+                    Kind::Context => {
+                        if let Some(line) = raw_working_lines.get(working_line_idx) {
+                            rebuilt.extend_from_slice(line);
+                        }
+                        working_line_idx += 1;
+                        index_line_idx += 1;
+                    }
+                    Kind::Add => {
                         if let Some(line) = raw_working_lines.get(working_line_idx) {
                             rebuilt.extend_from_slice(line);
                         }
                         working_line_idx += 1;
                     }
-                    Kind::Remove => {}
+                    Kind::Remove => {
+                        index_line_idx += 1;
+                    }
                 }
             }
         }
 
         Ok(rebuilt)
     }
-}
-
-fn adjust_eol(line: &[u8], target_crlf: bool) -> Vec<u8> {
-    if !line.ends_with(b"\n") {
-        return line.to_vec();
-    }
-    let content = if line.ends_with(b"\r\n") {
-        &line[..line.len() - 2]
-    } else {
-        &line[..line.len() - 1]
-    };
-    let mut res = content.to_vec();
-    if target_crlf {
-        res.extend_from_slice(b"\r\n");
-    } else {
-        res.push(b'\n');
-    }
-    res
 }
 
 #[cfg(test)]

@@ -174,4 +174,104 @@ mod tests {
         assert!(!fixture.root.join("file.txt").exists());
         assert_eq!(fixture.git(&["status", "--porcelain"]), b"");
     }
+
+    #[tokio::test]
+    async fn intent_to_add_rm_cached_failure_reports_file_in_trash_for_restore() {
+        let _serial = crate::test_support::serial().await;
+        let fixture = crate::commit::test_fixture::Fixture::new();
+        fixture.commit("base.txt", b"base\n");
+        let bytes = b"keep these bytes\nlast";
+        fixture.write("file.txt", bytes);
+        fixture.git(&["add", "-N", "file.txt"]);
+        let diff =
+            crate::commit::change_hunks(fixture.path(), "file.txt".into(), None, "unstaged".into())
+                .await
+                .unwrap();
+        let plan = crate::commit::prepare_file(
+            &fixture.path(),
+            &crate::commit::DiscardFile {
+                file: "file.txt".into(),
+                orig_path: None,
+                content_hash: diff.content_hash,
+            },
+        )
+        .await
+        .unwrap();
+        let crate::commit::DiscardPlan::Trash(write) = plan else {
+            panic!("Expected desktop Trash");
+        };
+
+        let repo_name = fixture.root.file_name().unwrap().to_str().unwrap();
+        let config_dir = fixture.base.join("config");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        let settings_json = serde_json::json!({
+            "sources": [],
+            "workspace": {
+                "root": fixture.base,
+                "layout": "flat",
+                "sets": [{
+                    "id": "set1",
+                    "name": "Set 1",
+                    "items": [{
+                        "id": "repo1",
+                        "name": repo_name
+                    }]
+                }]
+            }
+        });
+        std::fs::write(
+            config_dir.join("settings.json"),
+            serde_json::to_vec(&settings_json).unwrap(),
+        )
+        .unwrap();
+
+        let mut context = tauri::test::mock_context(tauri::test::noop_assets());
+        context.config_mut().app.app_directories_override =
+            Some(serde_json::from_value(serde_json::json!({ "config": config_dir })).unwrap());
+        let trash_data = fixture.base.join("trash-data");
+        std::fs::create_dir_all(&trash_data).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&trash_data, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        std::env::set_var("XDG_DATA_HOME", &trash_data);
+        struct ResetEnv;
+        impl Drop for ResetEnv {
+            fn drop(&mut self) {
+                std::env::remove_var("XDG_DATA_HOME");
+            }
+        }
+        let _reset = ResetEnv;
+
+        let app = tauri::test::mock_builder().build(context).unwrap();
+
+        let lock_path = fixture.root.join(".git/index.lock");
+        std::fs::write(&lock_path, b"").unwrap();
+
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            crate::trash::untracked::recycle(app.handle().clone(), write),
+        )
+        .await
+        .expect("Operation deadlocked")
+        .unwrap_err();
+
+        assert!(
+            err.contains("file.txt"),
+            "Error should name the file: {err}"
+        );
+        assert!(
+            err.contains("Trash"),
+            "Error should say file is in the Trash: {err}"
+        );
+        assert!(
+            err.to_lowercase().contains("restore"),
+            "Error should tell user they can restore it: {err}"
+        );
+        assert!(
+            !fixture.root.join("file.txt").exists(),
+            "File was moved to trash"
+        );
+    }
 }
