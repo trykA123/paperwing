@@ -84,7 +84,7 @@ export function deleteRemote(path, remote, names, expected, base) {
 export function localStatus(paths) {
   return paths.map(path => ({
     path, exists: true, repo: true, branch: git(path, 'branch', '--show-current').trim() || null, tag: null, sha: git(path, 'rev-parse', 'HEAD').trim(),
-    upstream: null, ahead: 0, behind: 0, dirty: 0, error: null,
+    upstream: null, ahead: 0, behind: 0, dirty: lines(tryGit(path, 'status', '--porcelain', '--untracked-files=all') ?? '').length, error: null,
   }));
 }
 
