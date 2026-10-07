@@ -221,3 +221,141 @@ async fn changed_same_path_index_entry_still_refuses_stage() {
         .contains("changed"));
     assert_eq!(fixture.git(&["show", ":file.txt"]), b"before\n");
 }
+
+#[tokio::test]
+async fn one_mebibyte_intent_to_add_file_supports_partial_staging() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.commit("base.txt", b"base\n");
+    let line = "0123456789abcdef0123456789abcdef\n";
+    let content = line.repeat(32 * 1024).into_bytes();
+    fixture.write("large.txt", &content);
+    fixture.git(&["add", "-N", "large.txt"]);
+
+    let diff = change_hunks(fixture.path(), "large.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(diff.hunks.len(), 1);
+    let request = tests::request(&fixture, "large.txt", "unstaged", 0).await;
+    stage_hunks(fixture.path(), request).await.unwrap();
+    assert_eq!(fixture.git(&["show", ":large.txt"]), content);
+}
+
+#[tokio::test]
+async fn crlf_already_in_index_retains_crlf_and_shows_one_changed_line() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.git(&["config", "core.autocrlf", "false"]);
+    fixture.commit("file.txt", b"a\r\nb\r\nc\r\n");
+    fixture.git(&["config", "core.autocrlf", "true"]);
+    fixture.write("file.txt", b"a\r\nB\r\nc\r\n");
+
+    let diff = change_hunks(fixture.path(), "file.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(diff.hunks.len(), 1);
+    let value = serde_json::to_value(&diff.hunks[0]).unwrap();
+    let changed: Vec<_> = value["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|line| line["kind"] != "context")
+        .collect();
+    assert_eq!(changed.len(), 2);
+    assert_eq!(changed[0]["kind"], "remove");
+    assert_eq!(changed[0]["text"], "b\r");
+    assert_eq!(changed[1]["kind"], "add");
+    assert_eq!(changed[1]["text"], "B\r");
+
+    let request = tests::request(&fixture, "file.txt", "unstaged", 0).await;
+    stage_hunks(fixture.path(), request).await.unwrap();
+    assert_eq!(fixture.git(&["show", ":file.txt"]), b"a\r\nB\r\nc\r\n");
+
+    fixture.git(&["reset", "--hard", "HEAD"]);
+    fixture.write("file.txt", b"a\r\nB\r\nc\r\n");
+    let snapshot = snapshot::read(&fixture.path(), "file.txt", None, "unstaged")
+        .await
+        .unwrap();
+    let discard_request = HunkRequest {
+        file: "file.txt".into(),
+        orig_path: None,
+        area: "unstaged".into(),
+        content_hash: snapshot.hash.clone(),
+        hunks: vec![crate::commit::patch::Selection {
+            hunk: 0,
+            ranges: None,
+        }],
+    };
+    let restored = crate::commit::discard::hunk_bytes(&fixture.path(), &snapshot, &discard_request)
+        .await
+        .unwrap();
+    assert_eq!(restored, b"a\r\nb\r\nc\r\n");
+}
+
+#[tokio::test]
+async fn clean_and_diff_do_not_grow_repository_objects_and_work_on_read_only_objects_dir() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.commit("file.txt", b"before\n");
+    fixture.write("file.txt", b"modified content\n");
+
+    let objects_dir = fixture.root.join(".git/objects");
+
+    fn count_objects(dir: &std::path::Path) -> usize {
+        let mut count = 0;
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.len() == 2 && entry.path().is_dir() {
+                    if let Ok(sub) = std::fs::read_dir(entry.path()) {
+                        count += sub.count();
+                    }
+                }
+            }
+        }
+        count
+    }
+
+    let before_count = count_objects(&objects_dir);
+
+    struct PermGuard(std::path::PathBuf);
+    impl Drop for PermGuard {
+        fn drop(&mut self) {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+            }
+        }
+    }
+    let _perm_guard = PermGuard(objects_dir.clone());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&objects_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    }
+
+    let content = change_content(fixture.path(), "file.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(content.original, "before\n");
+    assert_eq!(content.modified, "modified content\n");
+
+    let diff = change_hunks(fixture.path(), "file.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(diff.hunks.len(), 1);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&objects_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let after_count = count_objects(&objects_dir);
+    assert_eq!(
+        before_count, after_count,
+        "object count grew in repo objects dir"
+    );
+}

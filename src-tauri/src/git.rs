@@ -2,11 +2,13 @@ pub(crate) use runner::CAPTURE_LIMIT;
 pub(crate) mod batch_repository;
 pub(crate) use runner::BatchReader;
 mod runner;
-pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_streaming, filesystem_gate, StdoutSink};
+pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_cancellable_input_env, execute_streaming, filesystem_gate, StdoutSink};
 pub type ActivityOutput = runner::ActivityOutput;
 use runner::configured_secrets;
 #[cfg(test)]
 pub(crate) use runner::TEST_RUNNER_LOCK;
+// Runs Git under the runner's environment without taking the filesystem gate.
+pub(crate) use runner::git as hygienic_git;
 #[cfg(test)]
 use runner::{ExitObserver, NEXT_ID, Observer, drain, execute_inner};
 

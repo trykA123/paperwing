@@ -57,6 +57,7 @@ pub(crate) struct Diff<'a> {
 
 pub(crate) struct Built {
     pub patch: Vec<u8>,
+    #[allow(dead_code)]
     pub content: Option<Vec<u8>>,
 }
 
@@ -249,6 +250,97 @@ impl<'a> Diff<'a> {
             content: exists.then_some(content),
         })
     }
+
+    pub fn rebuild_working(
+        &self,
+        working: &[u8],
+        selections: &[Selection],
+    ) -> Result<Vec<u8>, String> {
+        let selected = self.selected(selections)?;
+        let raw_working_lines: Vec<&[u8]> =
+            working.split_inclusive(|byte| *byte == b'\n').collect();
+
+        let mut target_crlf = None;
+        let mut working_line_idx = 0;
+        for (edit_idx, edit) in self.edits.iter().enumerate() {
+            if edit.kind != Kind::Remove {
+                if selected.contains(&edit_idx) && edit.kind == Kind::Add {
+                    if let Some(line) = raw_working_lines.get(working_line_idx) {
+                        if line.ends_with(b"\r\n") {
+                            target_crlf = Some(true);
+                        } else if line.ends_with(b"\n") {
+                            target_crlf = Some(false);
+                        }
+                    }
+                }
+                working_line_idx += 1;
+            }
+        }
+
+        let target_crlf = target_crlf.unwrap_or_else(|| {
+            for &edit_idx in &selected {
+                if self.edits[edit_idx].kind == Kind::Remove
+                    && self.edits[edit_idx].bytes.ends_with(b"\r\n")
+                {
+                    return true;
+                }
+            }
+            working.windows(2).any(|w| w == b"\r\n")
+        });
+
+        let mut rebuilt = Vec::with_capacity(working.len());
+        working_line_idx = 0;
+
+        for (edit_idx, edit) in self.edits.iter().enumerate() {
+            if selected.contains(&edit_idx) {
+                match edit.kind {
+                    Kind::Context => {
+                        if let Some(line) = raw_working_lines.get(working_line_idx) {
+                            rebuilt.extend_from_slice(line);
+                        }
+                        working_line_idx += 1;
+                    }
+                    Kind::Add => {
+                        working_line_idx += 1;
+                    }
+                    Kind::Remove => {
+                        let restored = adjust_eol(edit.bytes, target_crlf);
+                        rebuilt.extend_from_slice(&restored);
+                    }
+                }
+            } else {
+                match edit.kind {
+                    Kind::Context | Kind::Add => {
+                        if let Some(line) = raw_working_lines.get(working_line_idx) {
+                            rebuilt.extend_from_slice(line);
+                        }
+                        working_line_idx += 1;
+                    }
+                    Kind::Remove => {}
+                }
+            }
+        }
+
+        Ok(rebuilt)
+    }
+}
+
+fn adjust_eol(line: &[u8], target_crlf: bool) -> Vec<u8> {
+    if !line.ends_with(b"\n") {
+        return line.to_vec();
+    }
+    let content = if line.ends_with(b"\r\n") {
+        &line[..line.len() - 2]
+    } else {
+        &line[..line.len() - 1]
+    };
+    let mut res = content.to_vec();
+    if target_crlf {
+        res.extend_from_slice(b"\r\n");
+    } else {
+        res.push(b'\n');
+    }
+    res
 }
 
 #[cfg(test)]

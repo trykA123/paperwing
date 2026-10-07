@@ -107,3 +107,32 @@ async fn intent_to_add_discard_has_no_index_version_to_overwrite_with() {
     };
     assert_eq!(write.expected.unwrap(), b"keep these bytes\r\n");
 }
+
+#[tokio::test]
+async fn hunk_discard_preserves_mixed_lf_and_crlf_line_endings_of_kept_lines() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.git(&["config", "core.autocrlf", "true"]);
+    let before = b"line 1\nline 2\r\nline 3\nline 4\r\n";
+    fixture.commit("file.txt", before);
+    let after = b"line 1\nLINE 2\r\nline 3\nline 4\r\n";
+    fixture.write("file.txt", after);
+
+    let snapshot = snapshot::read(&fixture.path(), "file.txt", None, "unstaged")
+        .await
+        .unwrap();
+    let request = stage::HunkRequest {
+        file: "file.txt".into(),
+        orig_path: None,
+        area: "unstaged".into(),
+        content_hash: snapshot.hash.clone(),
+        hunks: vec![crate::commit::patch::Selection {
+            hunk: 0,
+            ranges: None,
+        }],
+    };
+    let bytes = hunk_bytes(&fixture.path(), &snapshot, &request)
+        .await
+        .unwrap();
+    assert_eq!(bytes, before);
+}

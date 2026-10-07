@@ -50,7 +50,7 @@ pub(super) async fn replace(
     let settings = environment.load()?;
     let safe = crate::compare::registered_write_root(&settings, &write.root, &write.file).await?;
     let _filesystem = filesystem()?;
-    write.index_state.validate()?;
+    write.index_state.validate().await?;
     environment.revalidate(&settings)?;
     let value = safe.linux_value()?;
     let root = Root::reopen(&value).map_err(|error| error.to_string())?;

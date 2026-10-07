@@ -36,7 +36,7 @@ async fn recycle(app: tauri::AppHandle, write: DiscardWrite) -> Result<String, S
         .try_write()
         .map_err(|_| "Git or another write is running; retry discard after it finishes")?;
     crate::commit::idle_check()?;
-    index_state.validate()?;
+    index_state.validate().await?;
     if serde_json::to_value(crate::settings::load_settings(app)?)
         .map_err(|error| error.to_string())?
         != serde_json::to_value(&settings).map_err(|error| error.to_string())?
@@ -53,9 +53,22 @@ async fn recycle(app: tauri::AppHandle, write: DiscardWrite) -> Result<String, S
     }
     #[cfg(target_os = "linux")]
     {
-        let root = crate::linux_guard::Root::reopen(&safe.linux_value()?)
+        let linux_root = crate::linux_guard::Root::reopen(&safe.linux_value()?)
             .map_err(|error| error.to_string())?;
-        super::linux::recycle_file(&root, &file, &expected, &super::linux::data_home()?)?;
+        super::linux::recycle_file(&linux_root, &file, &expected, &super::linux::data_home()?)?;
+        if index_state.intent_to_add() {
+            let root_str = root.to_str().ok_or("Unsupported repository path")?;
+            crate::commit::run(
+                root_str,
+                &["rm", "--cached", "--quiet", "--", &file],
+                "Remove intent-to-add index entry",
+                &[0],
+                crate::git::OutputPolicy::Metadata,
+                None,
+                std::time::Duration::from_secs(45),
+            )
+            .await?;
+        }
         Ok("Moved to the desktop Trash; restore it from Trash".into())
     }
 }

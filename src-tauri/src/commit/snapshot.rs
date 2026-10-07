@@ -123,7 +123,7 @@ pub(crate) async fn read(
         (head.clone(), index.clone(), head_path.to_string())
     } else {
         let cleaned = match &working {
-            Some(bytes) => Some(content::clean(path, file, bytes).await?),
+            Some(bytes) => Some(content::clean(path, file, bytes, index.as_deref()).await?),
             None => None,
         };
         (index.clone(), cleaned, file.to_string())
@@ -152,22 +152,18 @@ pub(crate) async fn read(
             hash.update(bytes);
         }
     }
-    tauri::async_runtime::spawn_blocking(move || {
-        index_state.validate()?;
-        Ok(Snapshot {
-            before,
-            after,
-            working,
-            index,
-            intent_to_add,
-            hash: format!("{:x}", hash.finalize()),
-            mode,
-            old_path,
-            index_state,
-        })
+    index_state.validate().await?;
+    Ok(Snapshot {
+        before,
+        after,
+        working,
+        index,
+        intent_to_add,
+        hash: format!("{:x}", hash.finalize()),
+        mode,
+        old_path,
+        index_state,
     })
-    .await
-    .map_err(|_| "Could not verify the index")?
 }
 
 pub(crate) fn require_hash(snapshot: &Snapshot, expected: &str) -> Result<(), String> {

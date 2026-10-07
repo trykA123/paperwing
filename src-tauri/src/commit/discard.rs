@@ -211,14 +211,21 @@ pub async fn discard_hunk(
 }
 
 pub(crate) async fn hunk_bytes(
-    path: &str,
+    _path: &str,
     snapshot: &snapshot::Snapshot,
     request: &stage::HunkRequest,
 ) -> Result<Vec<u8>, String> {
-    let bytes = stage::build(snapshot, request, true)?
-        .content
-        .ok_or("Hunk discard must retain the file")?;
-    content::smudge_bytes(path, &request.file, &bytes).await
+    let before = snapshot
+        .before
+        .as_deref()
+        .ok_or("Missing index content to restore")?;
+    let after = snapshot.after.as_deref().ok_or("Missing diff content")?;
+    let working = snapshot
+        .working
+        .as_deref()
+        .ok_or("Missing working file content")?;
+    let diff = super::patch::Diff::new(before, after)?;
+    diff.rebuild_working(working, &request.hunks)
 }
 
 #[cfg(test)]

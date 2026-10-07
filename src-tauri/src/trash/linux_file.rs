@@ -124,6 +124,19 @@ mod tests {
             &data,
         )
         .unwrap();
+        if write.index_state.intent_to_add() {
+            crate::commit::run(
+                &fixture.path(),
+                &["rm", "--cached", "--quiet", "--", &write.file],
+                "Remove intent-to-add index entry",
+                &[0],
+                crate::git::OutputPolicy::Metadata,
+                None,
+                std::time::Duration::from_secs(45),
+            )
+            .await
+            .unwrap();
+        }
         assert!(!fixture.root.join("file.txt").exists());
         let moved = std::fs::read_dir(data.join("Trash/files"))
             .unwrap()
@@ -131,6 +144,6 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(std::fs::read(moved.path()).unwrap(), bytes);
-        assert_eq!(fixture.git(&["show", ":file.txt"]), b"");
+        assert_eq!(fixture.git(&["status", "--porcelain"]), b"");
     }
 }

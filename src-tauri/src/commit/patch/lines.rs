@@ -39,6 +39,24 @@ pub(super) fn diff_lines<'a>(old: &[&'a [u8]], new: &[&'a [u8]]) -> Result<Vec<E
     if max == 0 {
         return Ok(Vec::new());
     }
+    if old.is_empty() {
+        return Ok(new
+            .iter()
+            .map(|bytes| Edit {
+                kind: Kind::Add,
+                bytes,
+            })
+            .collect());
+    }
+    if new.is_empty() {
+        return Ok(old
+            .iter()
+            .map(|bytes| Edit {
+                kind: Kind::Remove,
+                bytes,
+            })
+            .collect());
+    }
     if max > 200_000 {
         return Err("Too many lines for partial staging".into());
     }

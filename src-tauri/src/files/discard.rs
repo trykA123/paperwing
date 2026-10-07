@@ -23,7 +23,7 @@ async fn replace(app: tauri::AppHandle, write: DiscardWrite) -> Result<DiscardRe
         .try_write()
         .map_err(|_| "Git or another write is running; retry discard after it finishes")?;
     crate::commit::idle_check()?;
-    write.index_state.validate()?;
+    write.index_state.validate().await?;
     if serde_json::to_value(crate::settings::load_settings(app.clone())?)
         .map_err(|error| error.to_string())?
         != serde_json::to_value(&settings).map_err(|error| error.to_string())?
