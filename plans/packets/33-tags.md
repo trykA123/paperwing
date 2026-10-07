@@ -57,5 +57,10 @@ The user creates, pushes and deletes tags for one repository or a whole set in o
 ## Report
 Commit sha, files changed, each step's check result, gate results, anything skipped.
 
+## Backend and release implementation (2026-10-07)
+- Remote deletion requires a validated object lease; stale or missing objects are refused.
+- Release creation uses the registered GitHub source and stored token, verifies the annotated remote tag object, and defaults to draft.
+- Tag results offer release creation only after annotated pushes, with editable notes and per-repository links or errors.
+
 ## Decided 2026-10-07 (review of the UI, steps 1–4)
 - Remote tag delete takes a lease. `delete_remote_tag` gains an optional `expected` object id and pushes `--force-with-lease=refs/tags/<name>:<object>`. The UI never submits a repository whose object it does not know. This is a backend change; do it with step 5 on Codex. Tests: a remote tag moved by someone else is refused; a matching object is deleted.

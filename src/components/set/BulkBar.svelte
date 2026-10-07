@@ -1,7 +1,7 @@
 <script lang="ts" module>
   export type BulkHandlers = {
     fetch: () => void; pull: () => void; push: () => void; switch: () => void; ref: (anchor: HTMLElement) => void;
-    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; stash: () => void; switchStash: () => void; pulls: () => void; clear: () => void;
+    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; stash: () => void; switchStash: () => void; tag: () => void; deleteTag: () => void; pulls: () => void; clear: () => void;
   };
 </script>
 
@@ -81,6 +81,12 @@
         </button>
         <button role="menuitem" disabled={busy || !dirty} title={dirty ? undefined : reason('No selected repository has changes')} onclick={() => run(handlers.stash)}>
           <Icon name="stash" />Stash changes…{#if dirty > 1}<small>{dirty}</small>{/if}
+        </button>
+        <button role="menuitem" disabled={busy || !targets.cloned.length} title={targets.cloned.length ? 'Create a tag, optionally push it' : reason('Clone the selected repositories first')} onclick={() => run(handlers.tag)}>
+          <Icon name="tag" />Tag…{#if targets.cloned.length > 1}<small>{targets.cloned.length}</small>{/if}
+        </button>
+        <button role="menuitem" disabled={busy || !targets.cloned.length} title={targets.cloned.length ? undefined : reason('Clone the selected repositories first')} onclick={() => run(handlers.deleteTag)}>
+          <Icon name="trash" />Delete tag…
         </button>
       </div>
     {/if}

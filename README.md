@@ -65,6 +65,12 @@ The app uses ordinary Git repositories, so terminal commands and other editors s
 The pull request client supports GitHub.com and separately configured GitHub Enterprise Server hosts.
 It uses each host's stored token, targets fork parents, follows branch upstream names, and reports unpushed commits.
 Manual source tokens are used only when every configured URL belongs to the requested API host.
+
+After pushing an annotated tag, choose **Create GitHub release** in the tag results.
+Release notes start with the tag message, and **Save as draft** is checked by default.
+Each repository shows its release link or error. The release uses the configured source and stored token
+for the repository remote, including GitHub Enterprise Server. The remote must still contain the same tag object.
+
 Skein reduces terminal juggling; Git retains its right to complain about conflicts.
 
 ## The workspace model
