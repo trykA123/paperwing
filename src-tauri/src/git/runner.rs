@@ -1,4 +1,4 @@
-use crate::core::events::CoreEvent;
+use crate::kernel::events::CoreEvent;
 #[path = "batch.rs"]
 mod batch;
 pub(crate) use batch::BatchReader;

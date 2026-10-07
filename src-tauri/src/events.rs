@@ -1,64 +1,49 @@
-use crate::core::events::{CoreEvent, EventBus};
+use crate::kernel::events::{CoreEvent, EventBus, EventPayload};
 use serde::Serialize;
-use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 pub(crate) fn install<R: Runtime>(app: &AppHandle<R>) {
-    let bus = EventBus::default();
-    let mut receiver = bus.subscribe();
-    app.manage(bus);
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        loop {
-            match receiver.recv().await {
-                Ok(event) => {
-                    if let Err(error) = forward(&app, &event) {
-                        eprintln!("Core event forwarding failed: {error}");
-                    }
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
-                    eprintln!("Core event forwarder missed {count} events");
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-            }
-        }
-    });
+    app.manage(EventBus::default());
 }
 
 pub(crate) fn publish<R: Runtime>(app: &AppHandle<R>, event: CoreEvent) -> Result<(), String> {
-    if let Some(bus) = app.try_state::<EventBus>() {
-        return bus
-            .publish(event)
-            .map(|_| ())
-            .map_err(|error| error.to_string());
-    }
-    forward(app, &event)
+    forward(app, &event)?;
+    publish_bus(app, event);
+    Ok(())
 }
 
 pub(crate) fn publish_payload<R: Runtime>(
     app: &AppHandle<R>,
-    event: fn(Value) -> CoreEvent,
+    event: fn(EventPayload) -> CoreEvent,
     payload: &impl Serialize,
 ) -> Result<(), String> {
-    publish(
-        app,
-        event(serde_json::to_value(payload).map_err(|error| error.to_string())?),
-    )
+    let event = event(EventPayload::new(payload).map_err(|error| error.to_string())?);
+    if let Some((name, _)) = frontend_event(&event) {
+        emit_frontend(app, name, payload)?;
+    }
+    publish_bus(app, event);
+    Ok(())
 }
 
-fn frontend_event(event: &CoreEvent) -> Option<(&'static str, Value)> {
+fn publish_bus<R: Runtime>(app: &AppHandle<R>, event: CoreEvent) {
+    if let Some(bus) = app.try_state::<EventBus>() {
+        let _ = bus.publish(event);
+    }
+}
+
+fn frontend_event(event: &CoreEvent) -> Option<(&'static str, Option<&EventPayload>)> {
     let (name, payload) = match event {
-        CoreEvent::DiscoverBatch(payload) => ("discover-batch", payload.clone()),
-        CoreEvent::DiscoverDone(payload) => ("discover-done", payload.clone()),
-        CoreEvent::SearchMatches(payload) => (crate::search_job::MATCHES_EVENT, payload.clone()),
-        CoreEvent::SearchRepo(payload) => (crate::search_job::REPO_EVENT, payload.clone()),
-        CoreEvent::SearchDone(payload) => (crate::search_job::DONE_EVENT, payload.clone()),
-        CoreEvent::CloneProgress(payload) => ("clone-progress", payload.clone()),
-        CoreEvent::CloneFinished => ("clone-finished", Value::Null),
-        CoreEvent::LaunchRequest => (crate::launch::LAUNCH_EVENT, Value::Null),
-        CoreEvent::CredentialChanged(payload) => ("credential-changed", payload.clone()),
-        CoreEvent::GitActivity(payload) => ("git-activity", payload.clone()),
-        CoreEvent::DiagnosticsProgress(payload) => ("diagnostics-progress", payload.clone()),
+        CoreEvent::DiscoverBatch(payload) => ("discover-batch", Some(payload)),
+        CoreEvent::DiscoverDone(payload) => ("discover-done", Some(payload)),
+        CoreEvent::SearchMatches(payload) => (crate::search_job::MATCHES_EVENT, Some(payload)),
+        CoreEvent::SearchRepo(payload) => (crate::search_job::REPO_EVENT, Some(payload)),
+        CoreEvent::SearchDone(payload) => (crate::search_job::DONE_EVENT, Some(payload)),
+        CoreEvent::CloneProgress(payload) => ("clone-progress", Some(payload)),
+        CoreEvent::CloneFinished => ("clone-finished", None),
+        CoreEvent::LaunchRequest => (crate::launch::LAUNCH_EVENT, None),
+        CoreEvent::CredentialChanged(payload) => ("credential-changed", Some(payload)),
+        CoreEvent::GitActivity(payload) => ("git-activity", Some(payload)),
+        CoreEvent::DiagnosticsProgress(payload) => ("diagnostics-progress", Some(payload)),
         _ => return None,
     };
     Some((name, payload))
@@ -66,10 +51,28 @@ fn frontend_event(event: &CoreEvent) -> Option<(&'static str, Value)> {
 
 fn forward<R: Runtime>(app: &AppHandle<R>, event: &CoreEvent) -> Result<(), String> {
     if let Some((name, payload)) = frontend_event(event) {
-        app.emit(name, payload).map_err(|error| error.to_string())?;
+        match payload {
+            Some(payload) => emit_frontend(app, name, payload)?,
+            None => emit_frontend(app, name, &())?,
+        }
     }
     Ok(())
 }
+
+fn emit_frontend<R: Runtime>(
+    app: &AppHandle<R>,
+    name: &str,
+    payload: &impl Serialize,
+) -> Result<(), String> {
+    #[cfg(test)]
+    if app.try_state::<EmitFailure>().is_some() {
+        return Err("frontend window is gone".into());
+    }
+    app.emit(name, payload).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+pub(crate) struct EmitFailure;
 
 #[cfg(test)]
 mod tests;

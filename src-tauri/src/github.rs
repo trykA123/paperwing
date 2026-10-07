@@ -9,7 +9,7 @@ mod commit_cache;
 mod http;
 mod listing;
 pub(crate) mod provider;
-use crate::core::capabilities::{RepositoryProvider, RepositoryRevision};
+use crate::kernel::capabilities::{RepositoryProvider, RepositoryRevision};
 pub mod pulls;
 pub mod releases;
 use http::{get_json, GithubApi};

@@ -1,5 +1,5 @@
 use super::{cache, http, listing, pulls, Commit, RepoList};
-use crate::core::{
+use crate::kernel::{
     capabilities::{ProviderFuture, PullRequestProvider, RepositoryProvider, RepositoryRevision},
     registry::ProviderKey,
 };

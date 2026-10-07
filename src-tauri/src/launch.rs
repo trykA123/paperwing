@@ -1,4 +1,4 @@
-use crate::core::events::CoreEvent;
+use crate::kernel::events::CoreEvent;
 use crate::discover_job::chosen_folder;
 use serde::Serialize;
 use std::path::Path;

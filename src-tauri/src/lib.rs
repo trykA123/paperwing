@@ -7,7 +7,7 @@ mod test_profile;
 #[cfg(any(test, feature = "test-profile"))]
 mod env_names;
 mod commands;
-pub mod core;
+pub mod kernel;
 mod events;
 mod providers;
 mod clone;

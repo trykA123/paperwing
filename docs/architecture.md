@@ -1,6 +1,6 @@
 # Core boundaries
 
-Skein hosts its core in process. Packet 38 uses `src-tauri/src/core/` inside
+Skein hosts its core in process. Packet 38 uses `src-tauri/src/kernel/` inside
 `skein_lib`; it does not add a crate, daemon, plugin ABI or network service.
 
 ## Layers
@@ -11,10 +11,11 @@ flowchart LR
   IPC --> Providers[Provider adapters]
   Providers --> Registry[Core registry and leases]
   Providers --> Store[SQLite store]
-  Jobs[Application jobs] --> Bus[CoreEvent broadcast]
-  Providers --> Bus
-  Bus --> Forwarder[Tauri event forwarder]
-  Forwarder --> UI
+  Jobs[Application jobs] --> Delivery[Synchronous Tauri event delivery]
+  Providers --> Delivery
+  Delivery --> UI
+  Delivery --> Bus[CoreEvent broadcast]
+  Bus --> Subscribers[In-process subscribers]
 ```
 
 - `lib.rs` hosts setup and composes the handlers exported by `commands/` domains.
@@ -22,7 +23,7 @@ flowchart LR
   There are 74 default command names, 82 with optional features, and 102 raw
   registrations including platform alternatives. Names, arguments and results
   remain compatible.
-- `core/` owns serializable events, typed capability traits and provider lifecycle.
+- `kernel/` owns serializable events, typed capability traits and provider lifecycle.
   It has no Tauri imports. Traits use associated types for each capability's
   domain inputs, outputs and errors; asynchronous methods return `ProviderFuture`.
 - `github/provider.rs` adapts the existing listing, commit, ref and pull clients.
@@ -30,14 +31,13 @@ flowchart LR
   Enterprise source have separate instances and retain their existing HTTP routes,
   credential scopes and errors. Manual sources retain URL listing and Git refs;
   their pull requests use the resolved remote host.
-- `providers.rs` is application glue. It supplies the SQLite store, restores
-  settings, constructs enabled adapters and passes requests through registry leases.
+- `providers.rs` is application glue. It supplies the SQLite cache store,
+  constructs enabled adapters and passes requests through registry leases.
   Remote refs preserve input order and the existing concurrency bound. URLs shared
   by sources use an enabled matching source when available.
-- `store/` owns persistence, serialized writes, cache pruning and recovery.
-  Schema migration 2 adds `providers(source_id, enabled)`. An absent row means
-  enabled, preserving older settings. Existing listings, refs and commit schemas
-  stay in the app crate.
+- `store/` owns cache persistence, serialized writes, cache pruning and recovery.
+  Schema migration 3 removes the provider flag table introduced by migration 2.
+  Existing listings, refs and commit schemas stay in the app crate.
 
 ## Capabilities and lifecycle
 
@@ -45,7 +45,7 @@ flowchart LR
 `PullRequestProvider` offers lookup and creation. `CiProvider` offers start and
 cancel; `IssueProvider` offers issue lookup. A provider implements its supported
 traits. Actions and Jira can implement these contracts and use `Registry<P>`
-without changing `core/`.
+without changing `kernel/`.
 
 The registry keys instances by source ID and normalized host. An unchanged source
 keeps its instance. Disabled sources are checked before construction and request
@@ -53,35 +53,48 @@ admission. Disabling signals every active lease, drops the registry's instance
 and cancels request futures, including HTTP dispatch. Reenabling creates a fresh
 instance. Providers currently do foreground work; no polling task is introduced.
 
-SQLite persists enabled flags. Existing Settings load/save commands carry the
-optional `Source.enabled` field; Settings supplies one toggle per source.
-Unchanged flags require no SQLite write. Disabled listing commands return an empty
+`settings.json` is the single source of truth for `Source.enabled`. Older files
+without this field default to enabled. Settings load and startup configuration
+never wait for store open or fail because SQLite is unavailable. Existing Settings
+load/save commands carry the optional field; Settings supplies one labeled switch
+per source. Disabled listing commands return an empty
 list or a cache miss, so startup does not report an unreachable host for a source
 the user disabled. Other provider requests report that the source is disabled.
 
-Disabling removes listing, repository, commit and associated ref cache rows in
-the flag transaction. A writer-side enabled check rejects late listing writes.
+Disabling schedules best-effort removal of listing, repository, commit and
+associated ref cache rows. A writer-side check of in-memory admission state
+derived from settings rejects late listing writes. Reenabling prevents an older
+queued cleanup from removing the newly enabled source's cache.
 Credential configuration revisions also invalidate requests when enabled state
-changes. Settings retain a disabled flag as a recovery fallback; SQLite is
-authoritative when its row exists. Tokens remain in the existing keyring service
+changes. SQLite never supplies enabled flags. Tokens remain in the existing keyring service
 `paperwing`, and the app identifier remains `dev.paperwing.app`.
+
+Disabling the only configured github.com source also refuses `git ls-remote` for
+github.com URLs. This is intentional: a disabled host means no traffic, including
+Git ref queries. An enabled matching source on that host still admits requests.
 
 ## Events
 
-`CoreEvent` is serde serializable and travels through a bounded Tokio broadcast
-bus. Its domain contracts are `RepoOpened`, `RepoCloned`, `BranchChanged`,
+`CoreEvent` is serde serializable. Its domain contracts are `RepoOpened`,
+`RepoCloned`, `BranchChanged`,
 `PullRequestUpdated`, `CiStarted`, `CiCompleted`, `IssueUpdated` and
 `ProviderHealthChanged`. Future integrations can subscribe to the bus or receive
 a cloned bus at construction. These domain variants do not add frontend events
 automatically.
 
-Compatibility variants retain the previous serialized payloads. The single Tauri
-forwarder maps them to `discover-batch`, `discover-done`, `search-matches`,
+`events::publish` delivers frontend events synchronously through the existing
+Tauri emitter and returns its error to the producer. Search and discovery jobs
+cancel on delivery failure. Typed payloads go directly to the emitter, preserving
+their original JSON bytes, including `f32` percentages. Compatibility variants
+keep raw JSON for in-process subscribers, preserving those bytes during serde
+round trips. The single delivery adapter maps them to `discover-batch`, `discover-done`, `search-matches`,
 `search-repo`, `search-done`, `clone-progress`, `clone-finished`, `launch-request`,
 `credential-changed`, `git-activity` and optional `diagnostics-progress`.
-Bus round-trip and Tauri listener tests cover every name and payload. Forwarding
-errors and a lagging receiver are reported. Hosts without a managed bus use the
-same forwarding adapter, including existing mock-runtime tests.
+Bus round-trip and Tauri listener tests cover every name and payload. Frontend
+delivery is independent of the bounded Tokio broadcast bus. The bus serves only
+in-process subscribers, which may lag and must handle `RecvError::Lagged`.
+Publishing with no subscribers succeeds. Hosts without a managed bus use the
+same synchronous delivery adapter, including existing mock-runtime tests.
 
 ## Follow-up: crate extraction
 

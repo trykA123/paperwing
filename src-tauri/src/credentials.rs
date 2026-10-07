@@ -1,4 +1,4 @@
-use crate::core::events::CoreEvent;
+use crate::kernel::events::CoreEvent;
 mod host;
 pub(crate) use host::{bind_before_host_edits, check_saved_host};
 

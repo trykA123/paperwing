@@ -172,7 +172,8 @@
     finally { busy = ''; }
   }
 
-  async function toggleProvider(s: Source) {
+  async function toggleProvider(s: Source, event: MouseEvent) {
+    event.preventDefault();
     if (busy) return;
     busy = 'form';
     const enabled = s.enabled === false;
@@ -250,8 +251,10 @@
             {#if s.kind !== 'manual' && app.credentials.statuses[s.id]?.reason}<p class="hint">{app.credentials.statuses[s.id].reason} <button class="link" onclick={() => app.credentials.refresh(s.id)}>Check again</button></p>{/if}
             {#if app.repoErrors[s.id]?.length}<div class="err" style="font-size:var(--fs-sm);margin-top:4px">{app.repoErrors[s.id].join(' · ')}</div>{/if}
           </div>
-          <button class="btn" aria-pressed={s.enabled !== false} aria-label={`Enable ${s.name}`}
-            disabled={!!busy} onclick={() => toggleProvider(s)}>{s.enabled === false ? 'Disabled' : 'Enabled'}</button>
+          <label class="btn">Enabled
+            <input type="checkbox" role="switch" aria-checked={s.enabled !== false} checked={s.enabled !== false}
+              disabled={!!busy} onclick={(event) => toggleProvider(s, event)} />
+          </label>
           {#if s.kind !== 'manual'}
             <button class="btn" disabled={!!busy || s.enabled === false || app.loadingRepos[s.id]} onclick={() => app.loadRepos(s, true)}><Icon name="refresh" /> Refresh</button>
           {/if}

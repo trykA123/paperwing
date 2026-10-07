@@ -9,6 +9,7 @@ pub struct Migration {
 pub const MIGRATIONS: &[Migration] = &[
     Migration { version: 1, sql: include_str!("migrations/0001_initial.sql") },
     Migration { version: 2, sql: include_str!("migrations/0002_providers.sql") },
+    Migration { version: 3, sql: include_str!("migrations/0003_remove_provider_flags.sql") },
 ];
 
 pub fn apply(connection: &mut Connection, migrations: &[Migration]) -> Result<(), Error> {

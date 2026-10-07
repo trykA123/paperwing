@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::value::{RawValue, to_raw_value};
 use tokio::sync::broadcast;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -13,17 +13,33 @@ pub enum CoreEvent {
     CiCompleted { source: String, run: String },
     IssueUpdated { source: String, issue: String },
     ProviderHealthChanged { source: String, healthy: bool },
-    DiscoverBatch(Value),
-    DiscoverDone(Value),
-    SearchMatches(Value),
-    SearchRepo(Value),
-    SearchDone(Value),
-    CloneProgress(Value),
+    DiscoverBatch(EventPayload),
+    DiscoverDone(EventPayload),
+    SearchMatches(EventPayload),
+    SearchRepo(EventPayload),
+    SearchDone(EventPayload),
+    CloneProgress(EventPayload),
     CloneFinished,
     LaunchRequest,
-    CredentialChanged(Value),
-    GitActivity(Value),
-    DiagnosticsProgress(Value),
+    CredentialChanged(EventPayload),
+    GitActivity(EventPayload),
+    DiagnosticsProgress(EventPayload),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EventPayload(Box<RawValue>);
+
+impl EventPayload {
+    pub fn new(payload: &impl Serialize) -> Result<Self, serde_json::Error> {
+        to_raw_value(payload).map(Self)
+    }
+}
+
+impl PartialEq for EventPayload {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.get() == other.0.get()
+    }
 }
 
 #[derive(Clone)]
@@ -40,6 +56,7 @@ impl EventBus {
         Self(broadcast::channel(capacity).0)
     }
 
+    /// Subscribers may lag; frontend delivery is synchronous and bypasses this bus.
     pub fn subscribe(&self) -> broadcast::Receiver<CoreEvent> {
         self.0.subscribe()
     }

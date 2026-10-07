@@ -103,7 +103,7 @@ pub async fn diagnostics_preview(
     let progress = Arc::new(move |completed, total| {
         let _ = crate::events::publish_payload(
             &progress_app,
-            crate::core::events::CoreEvent::DiagnosticsProgress,
+            crate::kernel::events::CoreEvent::DiagnosticsProgress,
             &Progress {
                 phase: "scale",
                 completed,

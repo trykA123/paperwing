@@ -10,7 +10,7 @@ pub use model::{CreatedPullRequest, OpenPullRequest, PullRequest};
 
 use super::http::Http;
 use tauri::AppHandle;
-use crate::core::capabilities::PullRequestProvider;
+use crate::kernel::capabilities::PullRequestProvider;
 
 pub(super) async fn connect<'a>(
     source: &'a crate::settings::Source,

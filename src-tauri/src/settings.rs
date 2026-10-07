@@ -110,10 +110,7 @@ fn load_persisted<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Loaded, Strin
     if !file.exists() {
         return Err("Test profile settings must be prepared before launch".into());
     }
-    let (mut settings, restored_from_backup) = persistence::load(&file)?;
-    if let Some(runtime) = app.try_state::<crate::providers::Runtime>() {
-        runtime.restore(&mut settings.sources)?;
-    }
+    let (settings, restored_from_backup) = persistence::load(&file)?;
     #[cfg(feature = "test-profile")]
     crate::test_profile::settings(&settings)?;
     for source in &settings.sources { valid_id(&source.id)?; }
@@ -132,9 +129,6 @@ fn save_settings<R: tauri::Runtime>(app: AppHandle<R>, settings: Settings) -> Re
     let state = app.try_state::<Startup>();
     let preserve_valid = state.as_ref().is_some_and(|state| state.check().is_err());
     persistence::save(&file, &settings, preserve_valid)?;
-    if let Some(runtime) = app.try_state::<crate::providers::Runtime>() {
-        runtime.save(&settings.sources)?;
-    }
     if let Some(state) = state {
         state.clear()?;
     }

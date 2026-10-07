@@ -1,4 +1,4 @@
-use crate::core::events::CoreEvent;
+use crate::kernel::events::CoreEvent;
 #[cfg(not(target_os = "linux"))]
 use crate::git::{buffered, valid_root};
 use crate::git::{execute, safe, valid_path, valid_ref, valid_url, OutputPolicy, Request};
@@ -462,3 +462,6 @@ mod tests {
         assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 3);
     }
 }
+
+#[cfg(all(test, not(windows)))]
+mod event_tests;

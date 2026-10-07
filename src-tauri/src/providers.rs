@@ -1,4 +1,4 @@
-use crate::core::registry::{Lease, ProviderConfig, ProviderKey, Registry};
+use crate::kernel::registry::{Lease, ProviderConfig, ProviderKey, Registry};
 use crate::{
     github::provider::GithubProvider,
     settings::Source,
@@ -51,6 +51,14 @@ impl Runtime {
     }
 
     pub(crate) fn configure(&self, sources: &[Source]) -> Result<(), String> {
+        let disabled = providers::configure(
+            &self.store,
+            sources
+                .iter()
+                .map(|source| (source.id.clone(), source.enabled))
+                .collect(),
+        )
+        .map_err(|error| format!("Could not configure provider cache admission: {error}"))?;
         let configs = sources
             .iter()
             .map(|source| configuration(source, &source.host))
@@ -64,33 +72,14 @@ impl Runtime {
             .sources
             .lock()
             .map_err(|_| "Provider sources are unavailable")? = sources.to_vec();
+        self.purge_disabled(disabled, sources);
         Ok(())
     }
 
-    pub(crate) fn save(&self, sources: &[Source]) -> Result<(), String> {
-        let changed = {
-            let previous = self
-                .sources
-                .lock()
-                .map_err(|_| "Provider sources are unavailable")?;
-            sources.iter().any(|source| {
-                previous
-                    .iter()
-                    .find(|saved| saved.id == source.id)
-                    .is_none_or(|saved| saved.enabled)
-                    != source.enabled
-            })
-        };
-        if !changed {
-            return self.configure(sources);
-        }
-        providers::save(
-            &self.store,
-            sources
-                .iter()
-                .map(|source| (source.id.clone(), source.enabled))
-                .collect(),
-            sources
+    fn purge_disabled(&self, disabled: Vec<String>, sources: &[Source]) {
+        if !disabled.is_empty() {
+            let store = self.store.clone();
+            let urls = sources
                 .iter()
                 .flat_map(|source| {
                     source
@@ -98,28 +87,12 @@ impl Runtime {
                         .iter()
                         .map(|url| (source.id.clone(), url.clone()))
                 })
-                .collect(),
-        )
-        .map_err(|error| format!("Could not save enabled providers: {error}"))?;
-        self.configure(sources)
-    }
-
-    pub(crate) fn restore(&self, sources: &mut [Source]) -> Result<(), String> {
-        let flags = providers::flags(&self.store);
-        match flags {
-            Ok(flags) => {
-                for source in sources {
-                    source.enabled = flags.get(&source.id).copied().unwrap_or(source.enabled);
+                .collect();
+            tauri::async_runtime::spawn_blocking(move || {
+                if let Err(error) = providers::purge(&store, disabled, urls) {
+                    eprintln!("Disabled provider cache cleanup failed: {error}");
                 }
-                Ok(())
-            }
-            Err(error) => {
-                if sources.iter().any(|source| !source.enabled) {
-                    return Err(format!("Could not restore enabled providers: {error}"));
-                }
-                eprintln!("Provider settings unavailable: {error}");
-                Ok(())
-            }
+            });
         }
     }
 
@@ -167,7 +140,7 @@ pub(crate) fn is_enabled(source: &Source) -> Result<bool, String> {
     if let Some(runtime) = APPLICATION.get() {
         return match runtime.registry.check_enabled(&source.id) {
             Ok(()) => Ok(true),
-            Err(crate::core::registry::RegistryError::Disabled(_)) => Ok(false),
+            Err(crate::kernel::registry::RegistryError::Disabled(_)) => Ok(false),
             Err(error) => Err(error.to_string()),
         };
     }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::capabilities::RepositoryProvider;
+use crate::kernel::capabilities::RepositoryProvider;
 use crate::git::{remote_refs, RefsResult};
 
 fn configured_source(url: &str) -> Result<Option<Source>, String> {

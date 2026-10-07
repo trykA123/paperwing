@@ -1,46 +1,52 @@
 use super::{commits, listings, Error, Store};
-use rusqlite::{Connection, OptionalExtension};
-use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::MutexGuard;
 
-pub(crate) fn enabled(connection: &Connection, source_id: &str) -> Result<bool, Error> {
-    Ok(connection
-        .query_row(
-            "SELECT enabled FROM providers WHERE source_id = ?1",
-            [source_id],
-            |row| row.get(0),
-        )
-        .optional()?
-        .unwrap_or(true))
+pub(crate) fn disabled_sources(store: &Store) -> Result<MutexGuard<'_, HashSet<String>>, Error> {
+    store
+        .disabled_sources
+        .lock()
+        .map_err(|_| Error::Unavailable)
 }
 
-pub(crate) fn flags(store: &Store) -> Result<HashMap<String, bool>, Error> {
-    store.read_blocking(|connection| {
-        let mut query = connection.prepare("SELECT source_id, enabled FROM providers")?;
-        let flags = query
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<_, _>>()?;
-        Ok(flags)
-    })
+pub(crate) fn configure(store: &Store, flags: Vec<(String, bool)>) -> Result<Vec<String>, Error> {
+    let mut disabled = disabled_sources(store)?;
+    let next: HashSet<_> = flags
+        .into_iter()
+        .filter_map(|(id, enabled)| (!enabled).then_some(id))
+        .collect();
+    let newly_disabled = next.difference(&disabled).cloned().collect();
+    *disabled = next;
+    Ok(newly_disabled)
 }
 
+pub(crate) fn purge(
+    store: &Store,
+    sources: Vec<String>,
+    urls: Vec<(String, String)>,
+) -> Result<(), Error> {
+    let admission = store.clone();
+    store.enqueue(move |connection| {
+        let disabled = disabled_sources(&admission)?;
+        let transaction = connection.transaction()?;
+        for source_id in sources.into_iter().filter(|id| disabled.contains(id)) {
+            transaction.execute("DELETE FROM ref_sets WHERE url IN (SELECT url FROM repositories WHERE source_id = ?1)", [&source_id])?;
+            for (_, url) in urls.iter().filter(|(id, _)| id == &source_id) {
+                transaction.execute("DELETE FROM ref_sets WHERE url = ?1", [url])?;
+            }
+            listings::remove(&transaction, &source_id)?;
+            commits::remove_source(&transaction, &source_id)?;
+        }
+        Ok(transaction.commit()?)
+    })?.blocking_recv().map_err(|_| Error::Unavailable)?
+}
+
+#[cfg(test)]
 pub(crate) fn save(
     store: &Store,
     flags: Vec<(String, bool)>,
     urls: Vec<(String, String)>,
 ) -> Result<(), Error> {
-    store.enqueue(move |connection| {
-        let transaction = connection.transaction()?;
-        for (source_id, enabled) in flags {
-            transaction.execute("INSERT INTO providers(source_id, enabled) VALUES (?1, ?2) ON CONFLICT(source_id) DO UPDATE SET enabled = excluded.enabled", (&source_id, enabled))?;
-            if !enabled {
-                transaction.execute("DELETE FROM ref_sets WHERE url IN (SELECT url FROM repositories WHERE source_id = ?1)", [&source_id])?;
-                for (_, url) in urls.iter().filter(|(id, _)| id == &source_id) {
-                    transaction.execute("DELETE FROM ref_sets WHERE url = ?1", [url])?;
-                }
-                listings::remove(&transaction, &source_id)?;
-                commits::remove_source(&transaction, &source_id)?;
-            }
-        }
-        Ok(transaction.commit()?)
-    })?.blocking_recv().map_err(|_| Error::Unavailable)?
+    let disabled = configure(store, flags)?;
+    purge(store, disabled, urls)
 }

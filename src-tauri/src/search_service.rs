@@ -1,4 +1,4 @@
-use crate::core::events::CoreEvent;
+use crate::kernel::events::CoreEvent;
 use crate::search::{plan, Mode, SearchRequest};
 use crate::search_grep::perl_supported;
 use crate::search_job::{
@@ -72,6 +72,23 @@ impl Drop for Slot {
     }
 }
 
+fn emit_outbound<R: tauri::Runtime>(app: &AppHandle<R>, cancel: &AtomicBool, outbound: Outbound) {
+    let sent = match outbound {
+        Outbound::Matches(payload) => {
+            crate::events::publish_payload(app, CoreEvent::SearchMatches, &payload)
+        }
+        Outbound::Repo(payload) => {
+            crate::events::publish_payload(app, CoreEvent::SearchRepo, &payload)
+        }
+        Outbound::Done(payload) => {
+            crate::events::publish_payload(app, CoreEvent::SearchDone, &payload)
+        }
+    };
+    if sent.is_err() {
+        cancel.store(true, Ordering::Relaxed);
+    }
+}
+
 #[tauri::command]
 pub async fn search_capabilities() -> Capabilities {
     Capabilities {
@@ -96,14 +113,7 @@ pub async fn search_start(
     };
     let stop = cancel.clone();
     let send: Emit = Arc::new(move |outbound| {
-        let sent = match outbound {
-            Outbound::Matches(payload) => crate::events::publish_payload(&app, CoreEvent::SearchMatches, &payload),
-            Outbound::Repo(payload) => crate::events::publish_payload(&app, CoreEvent::SearchRepo, &payload),
-            Outbound::Done(payload) => crate::events::publish_payload(&app, CoreEvent::SearchDone, &payload),
-        };
-        if sent.is_err() {
-            stop.store(true, Ordering::Relaxed);
-        }
+        emit_outbound(&app, &stop, outbound);
     });
     tauri::async_runtime::spawn(async move {
         let _slot = slot;
@@ -133,6 +143,30 @@ pub async fn search_cancel_all(service: TauriState<'_, Service>) -> Result<usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_frontend_emit_failure_cancels_the_search() {
+        use tauri::test::{mock_builder, mock_context, noop_assets};
+        let app = mock_builder()
+            .manage(crate::events::EmitFailure)
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let bus = crate::kernel::events::EventBus::default();
+        let _subscriber = bus.subscribe();
+        tauri::Manager::manage(&app, bus);
+        let cancel = AtomicBool::new(false);
+        emit_outbound(
+            app.handle(),
+            &cancel,
+            Outbound::Matches(crate::search_job::MatchesPayload {
+                id: 1,
+                repo: "admin".into(),
+                matches: Vec::new(),
+            }),
+        );
+        assert!(cancel.load(Ordering::Relaxed));
+    }
 
     #[test]
     fn service_limits_and_cancels_searches() {

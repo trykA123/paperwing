@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::registry::{ProviderConfig, Registry};
+use crate::kernel::registry::{ProviderConfig, Registry};
 use crate::store::providers;
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -110,10 +110,6 @@ async fn disable_restart_enable_keeps_zero_traffic_and_cache_until_listing_resum
     store.close();
 
     let reopened = Store::open(&path, &Default::default()).unwrap();
-    assert_eq!(
-        providers::flags(&reopened).unwrap().get(&source.id),
-        Some(&false)
-    );
     let registry = Registry::default();
     let factory = |key: &ProviderKey| {
         constructed.fetch_add(1, Ordering::SeqCst);
