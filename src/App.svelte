@@ -33,6 +33,9 @@
   import CodeSearch from './components/CodeSearch.svelte';
   import ActivityRail from './components/ActivityRail.svelte';
   import SidePanel from './components/SidePanel.svelte';
+  import StashPushDialog from './components/stash/StashPushDialog.svelte';
+  import StashSwitchDialog from './components/stash/StashSwitchDialog.svelte';
+  import { stashFlow } from './lib/stash-flow.svelte';
   import { RAIL_SECTIONS, railShortcut } from './lib/rail';
 
   const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings' && app.view.kind !== 'codeSearch');
@@ -194,6 +197,7 @@
 {#if app.recoveryOpen}<RecoveryPanel />{/if}
 {#if app.gitDialog?.kind === 'commit'}<CommitDialog request={app.gitDialog} />{:else if app.gitDialog?.kind === 'branch'}<BranchDialog request={app.gitDialog} />{/if}
 {#if app.cleanupDialog}<BranchCleanup request={app.cleanupDialog} />{/if}
+{#if stashFlow.dialog?.kind === 'push'}<StashPushDialog targets={stashFlow.dialog.targets} />{:else if stashFlow.dialog?.kind === 'switch'}<StashSwitchDialog targets={stashFlow.dialog.targets} />{/if}
 {#if $confirmQueue.length}{#key $confirmQueue[0]}<ConfirmDialog request={$confirmQueue[0]} />{/key}{/if}
 <Notifications />
 <Tooltip />

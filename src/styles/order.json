@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 7402,
-  "normalizedSourceSHA256": "9ab51e89815313a0f79e4b6a75517b139e14d17f34beef5c7821de82c3a43f47",
+  "originalLineCount": 7663,
+  "normalizedSourceSHA256": "60ee7fb5743cdb302992828cebe4d17a9af4910f93a3ec33eb1ad8a7ee9ad407",
   "chapters": [
     {
       "path": "comparison.css",
@@ -105,6 +105,12 @@
       "firstLine": 7085,
       "lastLine": 7402,
       "normalizedSHA256": "54a5eb4c409bd5ee5aa001c33d2895accec9edd9956cf28539752be4ea3e2459"
+    },
+    {
+      "path": "stash.css",
+      "firstLine": 7403,
+      "lastLine": 7663,
+      "normalizedSHA256": "a3fc7ee4fae89a665bdf4816e98c6d483204008859fbe8162ef0d653af3423e8"
     }
   ]
 }

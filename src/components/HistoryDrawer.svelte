@@ -14,6 +14,7 @@
   import HistoryGraph from './HistoryGraph.svelte';
   import Icon from './Icon.svelte';
   import Skeleton from './Skeleton.svelte';
+  import StashSection from './stash/StashSection.svelte';
 
   const NOTE = {
     detached: 'HEAD is not on a branch, so there is no origin to compare with. Showing commits that are not on any remote.',
@@ -108,6 +109,7 @@
       {:else if !hasSharedBase(history)}
         <Alert kind="warn" role="status">Local and origin share no history, so the rails do not join.</Alert>
       {/if}
+      <StashSection path={target.path} name={target.name} />
       {#if layout.rows.length}
         <HistoryGraph {layout} {shownId} bind:activeId />
         {#if canLoadMore(history)}

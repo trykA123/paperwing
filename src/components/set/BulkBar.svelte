@@ -1,7 +1,7 @@
 <script lang="ts" module>
   export type BulkHandlers = {
     fetch: () => void; pull: () => void; push: () => void; switch: () => void; ref: (anchor: HTMLElement) => void;
-    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; clear: () => void;
+    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; stash: () => void; switchStash: () => void; clear: () => void;
   };
 </script>
 
@@ -10,8 +10,8 @@
   import type { SetItem } from '../../lib/api';
   import Icon from '../Icon.svelte';
 
-  let { count, targets, dirty, busy, checking, refEligible, handlers }: {
-    count: number; refEligible: number; targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
+  let { count, targets, dirty, busy, checking, refEligible, stashSwitch, handlers }: {
+    count: number; refEligible: number; stashSwitch: number; targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
   } = $props();
 
   let open = $state(false);
@@ -64,6 +64,9 @@
         <button role="menuitem" disabled={busy || !targets.offRef.length} title={targets.offRef.length ? undefined : reason('Every selected repository is already on its branch')} onclick={() => run(handlers.switch)}>
           <Icon name="branch" />Switch to the set’s branch{#if targets.offRef.length}<small>{targets.offRef.length}</small>{/if}
         </button>
+        <button role="menuitem" disabled={busy || !stashSwitch} title={stashSwitch ? 'Stash uncommitted changes, switch, then restore them' : reason('No selected repository is off a branch it could switch to')} onclick={() => run(handlers.switchStash)}>
+          <Icon name="stash" />Switch with stash…{#if stashSwitch}<small>{stashSwitch}</small>{/if}
+        </button>
         <button role="menuitem" disabled={busy || !refEligible} title={busy || !refEligible ? reason(refReason) : undefined} onclick={() => run(() => handlers.ref(more))}><Icon name="tag" />Choose branch, tag or commit…</button>
         <button role="menuitem" disabled={checking} onclick={() => run(handlers.check)}>
           {#if checking}<span class="spin"></span>{:else}<Icon name="search" />{/if}Check which refs exist
@@ -72,6 +75,9 @@
         <button role="menuitem" disabled={busy || !targets.cloned.length} title={targets.cloned.length ? undefined : reason('Clone the selected repositories first')} onclick={() => run(handlers.cleanup)}><Icon name="trash" />Clean up merged branches…</button>
         <button role="menuitem" disabled={busy || !dirty} title={dirty ? undefined : reason('No selected repository has changes')} onclick={() => run(handlers.commit)}>
           <Icon name="check" />Commit changes…{#if dirty > 1}<small>{dirty}</small>{/if}
+        </button>
+        <button role="menuitem" disabled={busy || !dirty} title={dirty ? undefined : reason('No selected repository has changes')} onclick={() => run(handlers.stash)}>
+          <Icon name="stash" />Stash changes…{#if dirty > 1}<small>{dirty}</small>{/if}
         </button>
       </div>
     {/if}

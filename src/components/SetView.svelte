@@ -7,6 +7,7 @@
   import { describeRow } from '../lib/formation-row';
   import { plural } from '../lib/plural';
   import { pushTarget, rowFacts, runNextAction } from '../lib/row-actions';
+  import { stashFlow, switchable } from '../lib/stash-flow.svelte';
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
   import RefPicker from './RefPicker.svelte';
@@ -198,6 +199,8 @@
     branch: () => app.openBranchDialog(targets.cloned),
     cleanup: () => app.openCleanupDialog(targets.cloned),
     commit: () => { if (dirty[0]) app.openGitDialog('commit', dirty[0]); },
+    stash: () => stashFlow.openPush(dirty),
+    switchStash: () => stashFlow.openSwitch(selected),
     clear: () => app.setAllOn(false),
   };
 </script>
@@ -238,7 +241,7 @@
     {/key}
     {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} {density} ondensity={value => (app.ws.density = value)} />{/if}
   </div>
-  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} busy={gitBusy} {checking} handlers={bulk} />
+  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} stashSwitch={switchable(selected).length} busy={gitBusy} {checking} handlers={bulk} />
 </div>
 
 {#if picker}
