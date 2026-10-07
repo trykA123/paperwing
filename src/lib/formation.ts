@@ -22,7 +22,7 @@ export const isDiverged = (local: LocalStatus | undefined) => isCloned(local) &&
 export function nextAction({ local, onRef, refLabel, fixedFolder, refMissing }: RowFacts): NextAction | null {
   if (isMissing(local)) return fixedFolder ? null : { kind: 'clone', label: 'Clone', title: 'Clone this repository' };
   if (!local || !isCloned(local)) return null;
-  if (local.dirty > 0) return { kind: 'commit', label: `Commit ${plural(local.dirty, 'file')}`, title: 'Review, stage and commit the changed files' };
+  if (local.dirty > 0) return { kind: 'commit', label: `Commit ${local.dirty}`, title: `Review, stage and commit ${plural(local.dirty, 'changed file')}`, aria: `Commit ${plural(local.dirty, 'changed file')}` };
   if (!onRef && !fixedFolder && !refMissing) return { kind: 'switch', label: 'Switch', title: `Fetch and check out ${refLabel}`, aria: `Switch to ${refLabel}` };
   if (isDiverged(local)) return { kind: 'diverged', label: 'Diverged', title: 'Local and remote both have new commits. Open History to decide how to reconcile.' };
   if (local.branch && local.behind > 0 && !fixedFolder) return { kind: 'pull', label: `Pull ${local.behind}`, title: `Fast-forward ${local.branchLabel ?? local.branch}, ${plural(local.behind, 'commit')} behind` };
