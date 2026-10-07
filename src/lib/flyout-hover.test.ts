@@ -1,7 +1,7 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
 import { HoverIntent, HOVER_DELAY, inTriangle, menuStep, onSafePath, typeaheadMatch, type Timers } from './flyout-hover';
-import { awaitingByHost } from './host-counts';
+import { awaitingByHost, hostOfRepoId } from './host-counts';
 
 function clock() {
   let now = 0, next = 1;
@@ -137,11 +137,25 @@ describe('counts per host', () => {
   const hosts = [{ host: 'github.com', sourceIds: ['s2'] }, { host: 'git.acme.example', sourceIds: ['s1'] }];
   const repoIds = new Map([['/w/a', 's1:platform/a'], ['/w/b', 's1:platform/b'], ['/w/c', 's2:acme-oss/c'], ['/w/d', 'manual:d']]);
 
-  test('awaiting pull requests count under their repository host', () => {
+  test('pull requests that need review count under their repository host', () => {
     expect(awaitingByHost([{ path: '/w/a' }, { path: '/w/b' }, { path: '/w/c' }], repoIds, hosts)).toEqual({ 'github.com': 1, 'git.acme.example': 2 });
   });
 
   test('repositories without a source, or with an unknown path, count nowhere', () => {
     expect(awaitingByHost([{ path: '/w/d' }, { path: '/nowhere' }], repoIds, hosts)).toEqual({ 'github.com': 0, 'git.acme.example': 0 });
+  });
+});
+
+describe('host of a repository', () => {
+  const hosts = [{ host: 'github.com', sourceIds: ['s2'] }, { host: 'git.acme.example', sourceIds: ['s1', 's3'] }];
+
+  test('reads the source from the repository id', () => {
+    expect(hostOfRepoId('s2:acme-oss/cli', hosts)).toBe('github.com');
+    expect(hostOfRepoId('s3:team/api', hosts)).toBe('git.acme.example');
+  });
+
+  test('an id of no known source has no host', () => {
+    expect(hostOfRepoId('s22:other', hosts)).toBeUndefined();
+    expect(hostOfRepoId('manual:x', hosts)).toBeUndefined();
   });
 });

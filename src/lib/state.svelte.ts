@@ -4,7 +4,8 @@ import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
 import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
-import { HOME_MODULE, isModuleVisible, moduleById, moduleOfView, railClick, viewOfModule, type ModuleId } from './modules';
+import { moduleById } from './modules';
+import { ModuleNavigation } from './state/modules.svelte';
 import { doingWord, RunNotices } from './state/run-notices';
 import { TemporarySets } from './state/temporary-sets.svelte';
 import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
@@ -174,22 +175,10 @@ class AppState {
     if (open) { this.ws.shell.section = 'activity'; this.ws.shell.sidebarVisible = true; }
     else if (this.activityOpen) this.ws.shell.sidebarVisible = false;
   }
-  /** A rail click: fold the sidebar when its module is already showing, otherwise show the module and open its page. */
-  openModule(id: ModuleId) {
-    const shell = this.ws.shell;
-    const hasPage = id === 'search' || !!viewOfModule(id);
-    if (id !== 'settings' && shell.sidebarVisible && shell.section === id && (!hasPage || moduleOfView(this.view) === id)) { Object.assign(shell, railClick(shell, id)); return; }
-    this.showModule(id);
-  }
-  /** Shows a module's sidebar and page; unlike a rail click it never folds the sidebar. */
-  showModule(id: ModuleId) {
-    if (id === 'settings') { this.openView({ kind: 'settings' }); return; }
-    this.ws.shell.section = id;
-    this.ws.shell.sidebarVisible = true;
-    if (id === 'search') { this.openCodeSearch(); return; }
-    const view = viewOfModule(id);
-    if (view) this.openView(view);
-  }
+  modules = new ModuleNavigation({
+    get ws() { return app.ws; }, get sources() { return app.sources; }, get view() { return app.view; },
+    openView: view => this.openView(view), openCodeSearch: () => this.openCodeSearch(),
+  });
   private gitActivity = new GitActivity();
   get activity() { return this.gitActivity.activity; }
   set activity(value: Activity[]) { this.gitActivity.activity = value; }
@@ -282,7 +271,7 @@ class AppState {
     await listen<Activity>('git-activity', event => this.mergeActivity(event.payload));
     await this.refreshActivity();
     this.ready = true;
-    this.#restoreModule();
+    this.modules.restore();
     if (!this.sources.length) this.openView({ kind: 'settings' });
     await Promise.all(this.sources.map(s => this.loadRepos(s, false)));
     if (benchmarkEnabled) {
@@ -292,14 +281,6 @@ class AppState {
       this.comparisons[comparisonId] = new CompareState();
       this.openView({ kind: 'compare', comparisonId, left: plan.left, right: plan.right });
     }
-  }
-
-  /** Tabs are not saved, so a saved module with a page opens that page again; Search starts from Sets. */
-  #restoreModule() {
-    const shell = this.ws.shell;
-    if (shell.section === 'search' || !isModuleVisible(shell.section, this.sources)) shell.section = HOME_MODULE;
-    const view = viewOfModule(shell.section);
-    if (view && shell.section !== HOME_MODULE) this.openView(view);
   }
 
   #applySettings(saved: Awaited<ReturnType<typeof api.loadSettings>>) {
@@ -379,8 +360,7 @@ class AppState {
     if (!tab) return;
     if (tab.view.kind !== 'module' && (this.ws.sets.some(set => set.id === tab.setId) || this.temporary.find(tab.setId))) this.ws.activeSet = tab.setId;
     this.activeTabId = id;
-    const module = moduleOfView(tab.view);
-    if (module && this.ready) this.ws.shell.section = module;
+    if (this.ready) this.modules.follow(tab.view);
   }
 
   cycleTab(direction: number) {

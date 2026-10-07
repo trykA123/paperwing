@@ -22,12 +22,14 @@
   const titleOf = (module: ModuleDef) => { const keys = shortcutLabel(module); return keys ? `${module.label} (${keys})` : module.label; };
   const buttonOf = (id: string) => document.querySelector<HTMLElement>(`.rail-btn[data-provider="${id}"]`);
 
-  function countFor(host: string, id: ModuleId): RailBadge | undefined {
-    if (id !== 'prs' || !shown) return undefined;
+  const awaiting = $derived.by(() => {
+    if (!shown) return {};
     const repoIds = new Map(app.ws.sets.flatMap(set => set.items.map(item => [app.dest(item, set.id), item.repoId] as const)));
-    const count = awaitingByHost(pulls.awaitingPaths, repoIds, shown.hosts)[host];
-    return count ? { count, tone: 'acc' } : undefined;
-  }
+    return awaitingByHost(pulls.awaitingPaths, repoIds, shown.hosts);
+  });
+  const countFor = (host: string, id: ModuleId): RailBadge | undefined => (id === 'prs' && awaiting[host] ? { count: awaiting[host], tone: 'acc', label: 'need review' } : undefined);
+  const badgeNote = (entry: ProviderEntry) => entry.items.flatMap(item => (item.badge ? [`${item.badge.count} ${item.badge.label}`] : [])).join(', ');
+  const providerTitle = (entry: ProviderEntry) => [`${entry.provider.label} · ${entry.hosts.map(host => host.host).join(', ')}`, badgeNote(entry)].filter(Boolean).join(' · ');
 
   function close(restoreFocus: boolean) {
     const id = flyout.open?.id;
@@ -35,8 +37,8 @@
     if (restoreFocus && id) buttonOf(id)?.focus();
   }
 
-  function pick(id: ModuleId) {
-    app.showModule(id);
+  function pick(id: ModuleId, host: string) {
+    app.modules.show(id, host);
     close(true);
   }
 
@@ -56,7 +58,7 @@
       const panel = document.querySelector('.rail-flyout');
       if (open.mode === 'hover' && panel) flyout.move({ x: event.clientX, y: event.clientY }, panel.getBoundingClientRect());
     };
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') close(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && flyout.open) close(false); };
     document.addEventListener('pointerdown', outside, true);
     document.addEventListener('pointermove', move);
     document.addEventListener('keydown', escape);
@@ -69,12 +71,12 @@
 </script>
 
 {#snippet badgeOf(badge: RailBadge | undefined)}
-  {#if badge}<span class="rail-badge" class:err={badge.tone === 'err'}><span class="sr-only">{badge.count} </span><span aria-hidden="true">{badge.count > 99 ? '99+' : badge.count}</span></span>{/if}
+  {#if badge}<span class="rail-badge" class:err={badge.tone === 'err'}><span class="sr-only">{badge.count} {badge.label} </span><span aria-hidden="true">{badge.count > 99 ? '99+' : badge.count}</span></span>{/if}
 {/snippet}
 
 {#snippet moduleButton(module: ModuleDef, badge: RailBadge | undefined)}
   {@const on = isOn(module)}
-  <button class="rail-btn" class:on title={titleOf(module)} aria-label={module.label} data-tip-side="right" aria-pressed={on} onclick={() => app.openModule(module.id)}>
+  <button class="rail-btn" class:on title={titleOf(module)} aria-label={module.label} data-tip-side="right" aria-pressed={on} onclick={() => app.modules.open(module.id)}>
     <Icon name={module.icon} size={18} />{@render badgeOf(badge)}
   </button>
 {/snippet}
@@ -86,7 +88,7 @@
   {#each layout.providers as entry (entry.provider.id)}
     {@const id = entry.provider.id}
     <button class="rail-btn" class:on={entry.items.some(item => isOn(item.module))} class:open={flyout.open?.id === id} data-provider={id} aria-haspopup="menu" aria-expanded={flyout.open?.id === id}
-      aria-label="{entry.provider.label}, {entry.hosts.map(host => host.host).join(', ')}" title="{entry.provider.label} · {entry.hosts.map(host => host.host).join(', ')}" data-tip-side="right"
+      aria-label="{providerTitle(entry)}" title={providerTitle(entry)} data-tip-side="right"
       onpointerenter={event => event.pointerType === 'mouse' && flyout.enterTrigger(id)} onpointerleave={event => event.pointerType === 'mouse' && flyout.leave({ x: event.clientX, y: event.clientY })}
       onclick={event => flyout.toggle(id, event.detail === 0)} onkeydown={event => triggerKey(event, entry)}>
       <Icon name={entry.provider.icon} size={18} />{@render badgeOf(entry.badge)}
@@ -100,7 +102,7 @@
   {@const anchor = buttonOf(shown.provider.id)}
   {#if anchor}
     {#key flyout.open.id}
-      <RailFlyout entry={shown} {anchor} focusFirst={flyout.open.focus} current={app.ws.shell.sidebarVisible ? app.ws.shell.section : null} count={countFor}
+      <RailFlyout entry={shown} {anchor} focusFirst={flyout.open.focus} current={app.ws.shell.sidebarVisible ? { id: app.ws.shell.section, host: app.modules.host } : null} count={countFor}
         onpick={pick} onclose={close} onenter={() => flyout.enterPanel()} onleave={event => flyout.leave({ x: event.clientX, y: event.clientY })} />
     {/key}
   {/if}

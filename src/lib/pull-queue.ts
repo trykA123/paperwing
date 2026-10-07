@@ -6,9 +6,9 @@ export type QueueDef = { id: QueueId; label: string; unavailable?: string };
 
 const NO_AUTHOR = 'Needs the pull request author, which Skein does not read yet';
 
-/** Created by me and Assigned to me wait for the author and assignee fields. */
+/** Needs review means open with no review yet; it does not say who was asked. Created by me and Assigned to me wait for the author and assignee fields. */
 export const SIDEBAR_QUEUES: readonly QueueDef[] = [
-  { id: 'review', label: 'Awaiting my review' },
+  { id: 'review', label: 'Needs review' },
   { id: 'mine', label: 'Created by me', unavailable: NO_AUTHOR },
   { id: 'assigned', label: 'Assigned to me', unavailable: 'Needs the pull request assignees, which Skein does not read yet' },
   { id: 'drafts', label: 'Drafts' },
@@ -16,7 +16,7 @@ export const SIDEBAR_QUEUES: readonly QueueDef[] = [
 ];
 
 export const CHIP_QUEUES: readonly QueueDef[] = [
-  { id: 'open', label: 'All' }, { id: 'review', label: 'Awaiting my review' }, { id: 'drafts', label: 'Drafts' }, { id: 'failing', label: 'Checks failing' },
+  { id: 'open', label: 'All' }, { id: 'review', label: 'Needs review' }, { id: 'drafts', label: 'Drafts' }, { id: 'failing', label: 'Checks failing' },
 ];
 
 const isLive = (pull: PullRequest) => pull.state === 'open' || pull.state === 'draft';
@@ -56,3 +56,6 @@ export function matchesText(query: string, fields: readonly string[]): boolean {
 
 /** A set this size would ask GitHub once per repository, so it waits for a click. */
 export const AUTO_LOAD_LIMIT = 50;
+
+/** Loads on its own for a small set, or once the user has asked for this one; never for an empty list. */
+export const shouldAutoLoad = ({ count, armed }: { count: number; armed: boolean }) => count > 0 && (count <= AUTO_LOAD_LIMIT || armed);

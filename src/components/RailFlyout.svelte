@@ -4,9 +4,9 @@
   import Icon from './Icon.svelte';
 
   let { entry, anchor, focusFirst, current, count, onpick, onclose, onenter, onleave }: {
-    entry: ProviderEntry; anchor: HTMLElement; focusFirst: boolean; current: ModuleId | null;
+    entry: ProviderEntry; anchor: HTMLElement; focusFirst: boolean; current: { id: ModuleId; host: string | null } | null;
     count: (host: string, id: ModuleId) => RailBadge | undefined;
-    onpick: (id: ModuleId) => void; onclose: (restoreFocus: boolean) => void; onenter: () => void; onleave: (event: PointerEvent) => void;
+    onpick: (id: ModuleId, host: string) => void; onclose: (restoreFocus: boolean) => void; onenter: () => void; onleave: (event: PointerEvent) => void;
   } = $props();
 
   const EDGE = 8;
@@ -17,6 +17,7 @@
   let typed = '';
   let typedAt: ReturnType<typeof setTimeout> | undefined;
   const rows = $derived(entry.hosts.flatMap(host => entry.items.map(item => ({ host: host.host, item: item.module }))));
+  const isCurrent = (id: ModuleId, host: string) => current?.id === id && (current.host ? current.host === host : entry.hosts.length === 1);
   const items = () => [...panel.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
 
   $effect(() => {
@@ -58,9 +59,9 @@
       {#each entry.items as { module }, itemIndex (module.id)}
         {@const index = hostIndex * entry.items.length + itemIndex}
         {@const badge = count(host.host, module.id)}
-        <button class="fly-item" class:on={module.id === current} role="menuitem" tabindex={index === active ? 0 : -1} onclick={() => onpick(module.id)} onfocus={() => (active = index)}>
+        <button class="fly-item" class:on={isCurrent(module.id, host.host)} role="menuitem" tabindex={index === active ? 0 : -1} onclick={() => onpick(module.id, host.host)} onfocus={() => (active = index)}>
           <span class="fly-ico"><Icon name={module.icon} /></span><span class="lbl">{module.itemLabel ?? module.label}</span>
-          {#if badge}<span class="cnt" class:err={badge.tone === 'err'}>{badge.count}</span>{/if}
+          {#if badge}<span class="cnt" class:err={badge.tone === 'err'} title="{badge.count} {badge.label}">{badge.count}<span class="sr-only"> {badge.label}</span></span>{/if}
         </button>
       {/each}
     </div>

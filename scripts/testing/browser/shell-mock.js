@@ -15,14 +15,14 @@
   const empty = cfg.emptySets;
   const workspace = {
     sets: empty ? [{ id: 'a', name: 'My first set', items: [] }] : [
-      { id: 'a', name: cfg.bigSet ? 'All services (800)' : 'Release train', items: setItems(cfg.bigSet ? N : 24) },
+      { id: 'a', name: cfg.bigSet ? 'All services (800)' : 'Release train', items: [...setItems(cfg.bigSet ? N : 24), ...(cfg.mixed ? setItems(6, 0, ossRepos).map(item => ({ ...item, id: `m${item.id}` })) : [])] },
       { id: 'b', name: 'Mobile hotfix', items: setItems(6, 0, ossRepos) },
       { id: 'c', name: 'Empty set', items: [] },
     ],
     stars: [repos[1].id, repos[5].id], activeSet: 'a', root: platform === 'windows' ? 'C:\\Dev\\repos' : '/home/dev/repos', layout: 'flat',
     pathTemplate: '{org}\\{folder}', cols: { repo: 210, checkout: 190, local: 220, status: 170 }, shallow: false, parallel: 4, onExisting: 'fetch', pageSize: 25, rightWidth: 380,
     theme: cfg.theme || 'system', uiFont: 'geist', codeFont: 'geist-mono',
-    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: 'sets' },
+    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: cfg.section || 'sets' },
   };
   const cap = { supported: true, reason: null };
   const caps = { readCompare: cap, edit: cap, copy: cap, recovery: cap, trash: cap };

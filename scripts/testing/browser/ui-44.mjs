@@ -18,27 +18,27 @@ const browser = await chromium.launch({ executablePath: '/opt/helium-browser-bin
 mkdirSync(shots, { recursive: true });
 const check = (label, ok, detail = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label} ${detail}`); if (!ok) process.exitCode = 1; };
 
-async function open(name) {
+async function open(name, extra = {}) {
   const page = await (await browser.newContext({ viewport: { width: Number(width), height: 900 }, colorScheme: theme })).newPage();
   page.on('pageerror', error => { console.log('PAGE ERROR', error.message); process.exitCode = 1; });
-  await page.addInitScript(`window.__AUDIT=${JSON.stringify({ theme, bigSet: true, sources: sources[name] })};`);
+  await page.addInitScript(`window.__AUDIT=${JSON.stringify({ theme, bigSet: true, sources: sources[name], ...extra })};`);
   await page.addInitScript(mock);
   await page.goto(url);
   await page.waitForTimeout(5500);
   await page.reload();
-  await page.waitForSelector('.fm-row[data-id]');
+  await page.waitForSelector(extra.section ? 'main h1' : '.fm-row[data-id]');
   return page;
 }
 
 const shot = (page, name) => page.screenshot({ path: join(shots, `44-${theme}-${width}-${name}.png`) });
-const buttons = page => page.$$eval('.activity-rail .rail-btn', list => list.map(button => button.getAttribute('aria-label')));
+const buttons = page => page.$$eval('.activity-rail .rail-btn', list => list.map(button => button.getAttribute('aria-label').split(' · ')[0]));
 const flyout = page => page.locator('.rail-flyout');
 const focused = page => page.evaluate(() => document.activeElement?.textContent?.replace(/\s+/g, ' ').trim() || document.activeElement?.getAttribute('aria-label'));
 const provider = page => page.locator('.rail-btn[data-provider="github"]');
 const brand = page => page.locator('.shell-brand span').innerText();
 
 const two = await open('two');
-check('rail groups: Local Git, GitHub, System', JSON.stringify(await buttons(two)) === JSON.stringify(['Sets', 'Changes', 'Branches & tags', 'Compare', 'Search', 'GitHub, github.com, git.acme.example', 'Activity', 'Recovery', 'Settings']), JSON.stringify(await buttons(two)));
+check('rail groups: Local Git, GitHub, System', JSON.stringify(await buttons(two)) === JSON.stringify(['Sets', 'Changes', 'Branches & tags', 'Compare', 'Search', 'GitHub', 'Activity', 'Recovery', 'Settings']), JSON.stringify(await buttons(two)));
 check('the provider button announces a menu', (await provider(two).getAttribute('aria-haspopup')) === 'menu' && (await provider(two).getAttribute('aria-expanded')) === 'false');
 
 await two.waitForSelector('.rail-btn[data-provider="github"] .rail-badge');
@@ -131,7 +131,7 @@ check('the Sets table does not scroll sideways', await two.evaluate(() => { cons
 await two.click('button[aria-label="Toggle details"]');
 
 await two.locator('.rail-btn[data-provider="github"]').click();
-await two.locator('.rail-flyout [role="menuitem"]').first().click();
+await two.locator('.rail-flyout [role="group"][aria-label="git.acme.example"] [role="menuitem"]').first().click();
 await two.waitForSelector('.module-table .fm-row[data-id], .module-table .fm-row[role="row"]:not(.fm-head)');
 await two.waitForTimeout(1500);
 const pullRows = async () => Number(await two.locator('.module-table [role="grid"]').getAttribute('aria-rowcount')) - 1;
@@ -141,16 +141,16 @@ check('the pull request page lists the queue', (await pullRows()) > 0 && (await 
 check(`the pull request table is ${wide[1]} px wide`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
 check('the module page leaves no room for the details panel', (await two.locator('.shell-right [class]').count()) === 0 || (await two.evaluate(() => document.querySelector('#shell').classList.contains('noright'))));
 await shot(two, 'prs');
-await two.click('.fm-chip:has-text("Awaiting")');
-check('the Awaiting my review chip narrows the rows to its count', await settled(pullRows, async () => Math.min(25, await chipCount('Awaiting'))));
-check('the sidebar queue count matches the chip', (await two.locator('.side .nav:has-text("Awaiting my review") .cnt').innerText()).trim() === String(await chipCount('Awaiting')));
+await two.click('.fm-chip:has-text("Needs review")');
+check('the Needs review chip narrows the rows to its count', await settled(pullRows, async () => Math.min(25, await chipCount('Needs review'))));
+check('the sidebar queue count matches the chip', (await two.locator('.side .nav:has-text("Needs review") .cnt').innerText()).trim() === String(await chipCount('Needs review')));
 check('queues that need author data are disabled', (await two.locator('.side .nav:has-text("Created by me")').isDisabled()) && (await two.locator('.side .nav:has-text("Assigned to me")').isDisabled()));
 await two.fill('.side .gsearch input', 'zzz-nothing');
 await two.waitForTimeout(400);
 check('the filter box empties the table', (await pullRows()) === 0 && (await two.locator('.module-table .empty-state').count()) === 1, `${await pullRows()} rows`);
 await two.fill('.side .gsearch input', '');
 await two.click('.fm-chip:has-text("All")');
-check('the Pull requests rail badge matches the awaiting count', (await two.locator('.rail-btn[data-provider="github"] .rail-badge').innerText()).includes(String(await chipCount('Awaiting'))));
+check('the Pull requests rail badge matches the needs-review count', (await two.locator('.rail-btn[data-provider="github"] .rail-badge').innerText()).includes(String(await chipCount('Needs review'))));
 
 await rail(two, 'Branches & tags');
 await two.waitForTimeout(500);
@@ -184,6 +184,40 @@ await two.locator('.rail-flyout [role="menuitem"]').nth(1).click();
 await two.waitForTimeout(300);
 check('Actions shows its placeholder', (await two.locator('main h1:visible').innerText()) === 'Workflow runs');
 await shot(two, 'actions');
+
+
+const restored = await open('two', { bigSet: false, mixed: true, section: 'prs' });
+await restored.waitForTimeout(3000);
+check('a Pull requests page restored at launch loads its rows without a click', (await restored.locator('.module-table [role="grid"]').getAttribute('aria-rowcount')) !== '1' && (await restored.locator('.module-table .empty-state').count()) === 0, await restored.locator('.module-table [role="grid"]').getAttribute('aria-rowcount'));
+check('and its sidebar is the Pull requests sidebar', (await brand(restored)) === 'PULL REQUESTS');
+const total = Number(await restored.locator('.fm-chip:has-text("All") b').innerText());
+await restored.locator('.rail-btn[data-provider="github"]').click();
+await restored.locator('.rail-flyout [role="group"][aria-label="github.com"] [role="menuitem"]').first().click();
+await restored.waitForTimeout(800);
+const chipHost = restored.locator('.host-chip');
+check('picking a host row scopes the page and shows a host chip', (await chipHost.count()) === 1 && (await chipHost.innerText()).includes('github.com'), await chipHost.innerText());
+const hostTotal = Number(await restored.locator('.fm-chip:has-text("All") b').innerText());
+check('the scope narrows the counts to that host', hostTotal > 0 && hostTotal < total, `${hostTotal} of ${total}`);
+await restored.locator('.rail-btn[data-provider="github"]').click();
+check('only the chosen host row is marked current', (await restored.locator('.rail-flyout .fly-item.on').count()) === 1 && (await restored.locator('.rail-flyout [aria-label="github.com"] .fly-item.on').count()) === 1);
+await restored.keyboard.press('Escape');
+await restored.locator('.rail-flyout').waitFor({ state: 'detached' });
+await shot(restored, 'prs-host');
+await restored.click('.host-chip');
+await restored.waitForTimeout(500);
+check('the host chip clears the scope', (await restored.locator('.host-chip').count()) === 0 && Number(await restored.locator('.fm-chip:has-text("All") b').innerText()) === total);
+await restored.locator('.rail-btn[data-provider="github"]').click();
+await restored.locator('.rail-flyout [role="group"][aria-label="git.acme.example"] [role="menuitem"]').nth(1).click();
+await restored.waitForTimeout(400);
+check('Actions accepts the host too', (await restored.locator('main h1:visible').innerText()) === 'Workflow runs' && (await restored.locator('.host-chip').innerText()).includes('git.acme.example'));
+await restored.keyboard.press('Control+j');
+await restored.waitForTimeout(200);
+await restored.click('.shell-tab:has-text("Release train") button[role="tab"]');
+await restored.waitForTimeout(300);
+check('opening a set tab leaves the Activity sidebar in place', (await brand(restored)) === 'ACTIVITY' && (await restored.locator('main .fm-table').count()) > 0);
+await restored.click('.rail-btn[aria-label="Recovery"]');
+await restored.click('.shell-tab:has-text("Pull requests") button[role="tab"]');
+check('and the Recovery sidebar too', (await brand(restored)) === 'RECOVERY');
 
 const github = await open('github');
 check('one GitHub host shows one section', (await (async () => { await provider(github).click(); return github.locator('.rail-flyout [role="group"]').count(); })()) === 1);

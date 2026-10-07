@@ -1,14 +1,14 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
 import type { PullRequest } from './api';
-import { CHIP_QUEUES, inQueue, matchesText, pullStep, queueCounts, SIDEBAR_QUEUES } from './pull-queue';
+import { CHIP_QUEUES, inQueue, matchesText, pullStep, queueCounts, shouldAutoLoad, SIDEBAR_QUEUES } from './pull-queue';
 
 const none = { state: 'none', success: 0, failure: 0, pending: 0, total: 0 } as const;
 const pull = (patch: Partial<PullRequest> = {}): PullRequest => ({ number: 1, title: 'Retry 429', url: 'u', state: 'open', base: 'main', headSha: 'a', reviewState: 'none', checks: none, targetRepo: 'o/r', hasUnpushedCommits: false, ...patch });
 const failing = { state: 'failure', success: 1, failure: 2, pending: 0, total: 3 } as const;
 
 describe('queues', () => {
-  test('awaiting my review is an open pull request that needs a review', () => {
+  test('needs review is an open pull request without a review yet', () => {
     expect(inQueue('review', pull({ reviewState: 'reviewRequired' }))).toBe(true);
     expect(inQueue('review', pull({ state: 'draft', reviewState: 'reviewRequired' }))).toBe(false);
     expect(inQueue('review', pull({ reviewState: 'approved' }))).toBe(false);
@@ -50,3 +50,22 @@ describe('row text and steps', () => {
     expect(matchesText('  ', ['anything'])).toBe(true);
   });
 });
+
+describe('loading', () => {
+  test('a small set loads on its own, so keys that appear later load too', () => {
+    expect(shouldAutoLoad({ count: 0, armed: false })).toBe(false);
+    expect(shouldAutoLoad({ count: 1, armed: false })).toBe(true);
+    expect(shouldAutoLoad({ count: 50, armed: false })).toBe(true);
+  });
+
+  test('a large set waits for a click, then keeps loading', () => {
+    expect(shouldAutoLoad({ count: 51, armed: false })).toBe(false);
+    expect(shouldAutoLoad({ count: 800, armed: true })).toBe(true);
+    expect(shouldAutoLoad({ count: 0, armed: true })).toBe(false);
+  });
+
+  test('the queue labels never say whose review', () => {
+    for (const queue of [...SIDEBAR_QUEUES, ...CHIP_QUEUES]) expect(queue.label).not.toMatch(/my review|awaiting/i);
+  });
+});
+

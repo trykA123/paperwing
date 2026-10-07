@@ -75,7 +75,7 @@
       if (!app.ready || app.paletteOpen) return;
       event.preventDefault(); event.stopPropagation();
       const target = moduleShortcut(id.slice(5));
-      if (target) app.openModule(target);
+      if (target) app.modules.open(target);
       return;
     }
     if (id.startsWith('tab-') || id === 'search-code') {

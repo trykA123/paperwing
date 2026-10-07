@@ -2,7 +2,7 @@
 .history-scrim {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    z-index: var(--z-scrim);
     background: var(--scrim);
 }
 
@@ -11,7 +11,7 @@
     position: fixed;
     inset-block: 0;
     inset-inline-end: 0;
-    z-index: 41;
+    z-index: var(--z-drawer);
     display: flex;
     flex-direction: column;
     width: min(440px, 100vw);

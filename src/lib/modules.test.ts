@@ -1,6 +1,6 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
-import { isModuleVisible, isSection, moduleOfView, moduleShortcut, providerHosts, PROVIDERS, railClick, railLayout, viewOfModule, visibleProviders, type BadgeContext } from './modules';
+import { isModuleVisible, ownsPage, sectionOnActivate, isSection, moduleOfView, moduleShortcut, providerHosts, PROVIDERS, railClick, railLayout, viewOfModule, visibleProviders, type BadgeContext } from './modules';
 import { migrateWorkspace, tabId } from './workspace';
 import type { Workspace } from './api';
 
@@ -62,12 +62,12 @@ describe('provider hosts', () => {
 describe('badges', () => {
   test('the provider badge sums its modules and stays blue', () => {
     const [entry] = railLayout([github], { ...quiet, awaitingReview: 4 }).providers;
-    expect(entry.badge).toEqual({ count: 4, tone: 'acc' });
+    expect(entry.badge).toEqual({ count: 4, tone: 'acc', label: 'need review' });
   });
 
   test('a failed run turns the provider badge red and adds to the sum', () => {
     const [entry] = railLayout([github], { ...quiet, awaitingReview: 4, failedRuns: 2 }).providers;
-    expect(entry.badge).toEqual({ count: 6, tone: 'err' });
+    expect(entry.badge).toEqual({ count: 6, tone: 'err', label: 'need review and failed' });
   });
 
   test('no count means no badge', () => {
@@ -77,9 +77,9 @@ describe('badges', () => {
 
   test('compare counts open comparisons; activity is red when a command failed, else counts running ones', () => {
     const busy = railLayout([], { ...quiet, comparisons: 2, gitRunning: 3 });
-    expect(busy.local.find(item => item.module.id === 'compare')?.badge).toEqual({ count: 2, tone: undefined });
-    expect(busy.system[0].badge).toEqual({ count: 3, tone: undefined });
-    expect(railLayout([], { ...quiet, gitRunning: 3, gitFailed: 1 }).system[0].badge).toEqual({ count: 1, tone: 'err' });
+    expect(busy.local.find(item => item.module.id === 'compare')?.badge).toEqual({ count: 2, tone: undefined, label: 'open' });
+    expect(busy.system[0].badge).toEqual({ count: 3, tone: undefined, label: 'running' });
+    expect(railLayout([], { ...quiet, gitRunning: 3, gitFailed: 1 }).system[0].badge).toEqual({ count: 1, tone: 'err', label: 'failed' });
   });
 });
 
@@ -119,6 +119,17 @@ describe('views and workspaces', () => {
     expect(viewOfModule('settings')).toEqual({ kind: 'settings' });
     for (const id of ['search', 'compare', 'activity', 'recovery'] as const) expect(viewOfModule(id)).toBeUndefined();
     expect(tabId({ kind: 'module', module: 'prs' }, 'a')).toBe(tabId({ kind: 'module', module: 'prs' }, 'b'));
+  });
+
+  test('opening a tab moves the sidebar only while it shows a page module', () => {
+    expect(sectionOnActivate('prs', 'sets')).toBe('sets');
+    expect(sectionOnActivate('sets', 'compare')).toBe('compare');
+    expect(sectionOnActivate('search', 'branches')).toBe('branches');
+    expect(sectionOnActivate('activity', 'sets')).toBe('activity');
+    expect(sectionOnActivate('recovery', 'prs')).toBe('recovery');
+    expect(sectionOnActivate('compare', 'sets')).toBe('compare');
+    expect(sectionOnActivate('prs', undefined)).toBe('prs');
+    expect(['sets', 'search', 'prs'].every(id => ownsPage(id as never))).toBe(true);
   });
 
   test('a saved section survives only when it is a module', () => {

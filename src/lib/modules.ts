@@ -5,7 +5,7 @@ import type { View } from './workspace';
 export type ModuleId = RailSection | 'settings';
 export type ModuleGroup = 'local' | 'provider' | 'system';
 export type ProviderId = 'github' | 'jira';
-export type RailBadge = { count: number; tone?: 'err' | 'acc' };
+export type RailBadge = { count: number; tone?: 'err' | 'acc'; label?: string };
 export type BadgeContext = { comparisons: number; awaitingReview: number; failedRuns: number; gitFailed: number; gitRunning: number };
 export type ModuleDef = {
   id: ModuleId; label: string; icon: IconName; group: ModuleGroup; provider?: ProviderId;
@@ -17,20 +17,20 @@ export type RailItem = { module: ModuleDef; badge?: RailBadge };
 export type ProviderEntry = { provider: ProviderDef; hosts: ProviderHost[]; items: RailItem[]; badge?: RailBadge };
 export type RailLayout = { local: RailItem[]; providers: ProviderEntry[]; system: RailItem[] };
 
-const count = (value: number, tone?: RailBadge['tone']): RailBadge | undefined => (value > 0 ? { count: value, tone } : undefined);
+const count = (value: number, label: string, tone?: RailBadge['tone']): RailBadge | undefined => (value > 0 ? { count: value, tone, label } : undefined);
 
 export const MODULES: readonly ModuleDef[] = [
   { id: 'sets', label: 'Sets', icon: 'layers', group: 'local', shortcutKey: '1' },
   { id: 'changes', label: 'Changes', icon: 'changes', group: 'local', shortcutKey: '2' },
   { id: 'branches', label: 'Branches & tags', icon: 'branch', group: 'local', shortcutKey: '3' },
-  { id: 'compare', label: 'Compare', icon: 'copy', group: 'local', shortcutKey: '4', badge: context => count(context.comparisons) },
+  { id: 'compare', label: 'Compare', icon: 'copy', group: 'local', shortcutKey: '4', badge: context => count(context.comparisons, 'open') },
   { id: 'search', label: 'Search', icon: 'search', group: 'local', shortcutKey: '5' },
-  { id: 'prs', label: 'Pull requests', icon: 'pr', group: 'provider', provider: 'github', badge: context => count(context.awaitingReview) },
-  { id: 'actions', label: 'Actions', icon: 'actions', group: 'provider', provider: 'github', badge: context => count(context.failedRuns, 'err') },
+  { id: 'prs', label: 'Pull requests', icon: 'pr', group: 'provider', provider: 'github', badge: context => count(context.awaitingReview, 'need review') },
+  { id: 'actions', label: 'Actions', icon: 'actions', group: 'provider', provider: 'github', badge: context => count(context.failedRuns, 'failed', 'err') },
   { id: 'releases', label: 'Releases', icon: 'tag', group: 'provider', provider: 'github' },
   { id: 'jira', label: 'Jira', itemLabel: 'Issues', icon: 'jira', group: 'provider', provider: 'jira' },
   { id: 'activity', label: 'Activity', icon: 'activity', group: 'system', shortcutKey: 'j',
-    badge: context => (context.gitFailed ? count(context.gitFailed, 'err') : count(context.gitRunning)) },
+    badge: context => (context.gitFailed ? count(context.gitFailed, 'failed', 'err') : count(context.gitRunning, 'running')) },
   { id: 'recovery', label: 'Recovery', icon: 'undo', group: 'system' },
   { id: 'settings', label: 'Settings', icon: 'gear', group: 'system', shortcutKey: ',' },
 ];
@@ -74,7 +74,8 @@ export function isModuleVisible(id: ModuleId, sources: readonly SourceFacts[]): 
 export function providerBadge(items: readonly RailItem[]): RailBadge | undefined {
   const badges = items.flatMap(item => item.badge ?? []);
   const total = badges.reduce((sum, badge) => sum + badge.count, 0);
-  return total ? { count: total, tone: badges.some(badge => badge.tone === 'err') ? 'err' : 'acc' } : undefined;
+  const label = [...new Set(badges.map(badge => badge.label).filter(Boolean))].join(' and ');
+  return total ? { count: total, tone: badges.some(badge => badge.tone === 'err') ? 'err' : 'acc', label } : undefined;
 }
 
 export function railLayout(sources: readonly SourceFacts[], context: BadgeContext): RailLayout {
@@ -101,13 +102,13 @@ export function moduleShortcut(key: string): ModuleId | undefined {
   return MODULES.find(module => module.shortcutKey === lower)?.id;
 }
 
-const HOME_VIEWS: readonly View['kind'][] = ['set', 'item', 'org', 'search'];
+const SET_VIEWS: readonly View['kind'][] = ['set', 'item', 'org', 'search'];
 const COMPARE_VIEWS: readonly View['kind'][] = ['compare', 'setCompare', 'fileDiff'];
 
 export function moduleOfView(view: View): RailSection | undefined {
   if (view.kind === 'module') return view.module;
   if (view.kind === 'codeSearch') return 'search';
-  if (HOME_VIEWS.includes(view.kind)) return HOME_MODULE;
+  if (SET_VIEWS.includes(view.kind)) return 'sets';
   return COMPARE_VIEWS.includes(view.kind) ? 'compare' : undefined;
 }
 
@@ -117,4 +118,12 @@ const OWN_VIEWS: Partial<Record<ModuleId, View>> = { sets: { kind: 'set' }, sett
 /** The main-area view a module opens; Search, Compare, Activity and Recovery open theirs through their own flows. */
 export function viewOfModule(id: ModuleId): View | undefined {
   return OWN_VIEWS[id] ?? (PAGE_MODULES.includes(id) ? { kind: 'module', module: id as RailSection } : undefined);
+}
+
+/** Search and every module with a tab own a page; Activity, Recovery and Compare are sidebar-only. */
+export const ownsPage = (id: ModuleId) => id === 'search' || !!viewOfModule(id);
+
+/** Opening a tab moves the sidebar to its module only when the sidebar is showing a page module. */
+export function sectionOnActivate(current: RailSection, tabModule: RailSection | undefined): RailSection {
+  return tabModule && ownsPage(current) ? tabModule : current;
 }

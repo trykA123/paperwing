@@ -31,7 +31,7 @@
 
 .rail-flyout {
     position: fixed;
-    z-index: 30;
+    z-index: var(--z-flyout);
     display: flex;
     flex-direction: column;
     gap: 2px;

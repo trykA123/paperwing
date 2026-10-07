@@ -8,15 +8,18 @@
   import { app } from '../../lib/state.svelte';
   import EmptyState from '../EmptyState.svelte';
   import Icon from '../Icon.svelte';
+  import HostChip from './HostChip.svelte';
   import PullChip from '../pulls/PullChip.svelte';
   import ModuleTable from './ModuleTable.svelte';
   import PageFrame from './PageFrame.svelte';
 
   const counts = $derived(pullQueue.counts);
-  const sub = $derived(`${plural(counts.open, 'open pull request')} in ${app.set.name} · ${counts.review} wait for your review${pulls.loading ? ' · loading…' : ''}`);
+  const scope = $derived(app.modules.host ? `${app.set.name} on ${app.modules.host}` : app.set.name);
+  const sub = $derived(`${plural(counts.open, 'open pull request')} in ${scope} · ${counts.review} need review${pulls.loading ? ' · loading…' : ''}`);
 
   $effect(() => {
-    if (!pullQueue.needsClick) void untrack(() => pullQueue.load());
+    const keys = pullQueue.keys;
+    if (pullQueue.autoLoad) void untrack(() => pulls.ensure(keys));
   });
 
   async function open(row: PullRow) {
@@ -31,6 +34,7 @@
   {/snippet}
   {#snippet chips()}
     <div class="fm-filters" role="group" aria-label="Pull request queue">
+      <HostChip />
       {#each CHIP_QUEUES as chip (chip.id)}
         <button class="fm-chip" class:on={pullQueue.queue === chip.id} aria-pressed={pullQueue.queue === chip.id} onclick={() => pullQueue.select(chip.id)}>
           {#if chip.id !== 'open'}<i class="fm-dot {chip.id === 'review' ? 'behind' : chip.id === 'failing' ? 'ahead' : 'notCloned'}" aria-hidden="true"></i>{/if}{chip.label} <b>{counts[chip.id]}</b>

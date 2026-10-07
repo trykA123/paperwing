@@ -5,7 +5,7 @@
     background: var(--panel);
     border-radius: 14px;
     box-shadow: 0 0 0 1px var(--line), var(--shadow-3);
-    z-index: 50;
+    z-index: var(--z-popover);
     display: flex;
     flex-direction: column;
 }
