@@ -63,3 +63,6 @@ pub(super) async fn run<T>(
         .await
         .map_err(|error| CiError::message(error.to_string()))?
 }
+
+#[cfg(test)]
+mod tests;

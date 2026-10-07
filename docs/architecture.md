@@ -67,6 +67,11 @@ requests to the configured API origin. No CI logs, artifacts or metadata persist
 in SQLite. UI polling, event observation and native acceptance belong to later
 Packet 31 steps.
 
+Counting-transport tests cover disabled construction and requests, stale enabled
+admission, one explicit enabled request, and cancellation of deferred HTTP dispatch
+when the source lease stops. They exercise the production connection boundary and
+the existing registry without credentials, live data or network calls.
+
 The registry keys instances by source ID and normalized host. An unchanged source
 keeps its instance. Disabled sources are checked before construction and request
 admission. Disabling signals every active lease, drops the registry's instance
