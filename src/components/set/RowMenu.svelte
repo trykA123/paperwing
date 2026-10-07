@@ -2,17 +2,18 @@
   import { onMount } from 'svelte';
   import type { SetItem } from '../../lib/api';
   import { commands, execute } from '../../lib/commands';
-  import { needsClone, openHistory } from '../../lib/row-actions';
+  import { needsClone, openHistory, runNextAction } from '../../lib/row-actions';
   import { pullFlow, pullKey } from '../../lib/pull-flow.svelte';
   import { openPull, pulls } from '../../lib/pulls.svelte';
+  import { isRemoteItem } from '../../lib/repositories';
   import { stashFlow } from '../../lib/stash-flow.svelte';
   import { tagFlow } from '../../lib/tag-flow.svelte';
   import { app } from '../../lib/state.svelte';
   import { disabledReason, type MenuFacts, type Need } from '../../lib/menu-reason';
   import Icon from '../Icon.svelte';
 
-  let { item, x, y, opener, onclose, onrename, onremove }: {
-    item: SetItem; x: number; y: number; opener: HTMLElement | null; onclose: () => void; onrename: (id: string) => void; onremove: (id: string) => void;
+  let { item, x, y, opener, onclose, onrename, onremove, onaddset }: {
+    item: SetItem; x: number; y: number; opener: HTMLElement | null; onclose: () => void; onrename: (id: string) => void; onremove: (id: string) => void; onaddset: (item: SetItem) => void;
   } = $props();
 
   const LABELS: Record<string, string> = {
@@ -26,6 +27,8 @@
   const IDS = Object.keys(LABELS);
   const FOCUS_TAKERS = ['commit', 'new-branch', 'cleanup', 'code'];
   const gitBusy = $derived(app.running || app.gitBusy);
+  const remote = $derived(isRemoteItem(item));
+  const starred = $derived(app.ws.stars.includes(item.repoId));
   const cloned = $derived(!!app.local[app.dest(item)]?.repo);
   const facts = $derived.by((): MenuFacts => {
     const local = app.local[app.dest(item)];
@@ -69,6 +72,12 @@
 <svelte:window onpointerdown={event => { if (!(event.target as Element).closest('.row-menu')) onclose(); }} />
 
 <div class="row-menu" role="menu" tabindex="-1" bind:this={menu} style:left="{x}px" style:top="{y}px" onkeydown={onKey}>
+  <button role="menuitem" onclick={() => choose(() => app.toggleStar(item.repoId))}><Icon name="star" tone="warn" />{starred ? 'Remove from favorites' : 'Add to favorites'}</button>
+  <button role="menuitem" onclick={() => choose(() => onaddset(item), true)}><Icon name="folder" tone="folder" />Add to set…</button>
+  <hr />
+{#if remote}
+  <button role="menuitem" onclick={() => choose(() => runNextAction(item, 'clone'))}><Icon name="folder" tone="sync" />Clone</button>
+{:else}
   <button role="menuitem" disabled={!cloned} title={cloned ? undefined : 'Clone the repository first'} data-tip-side="left" onclick={() => choose(() => openHistory(item, opener), true)}><Icon name="commit" tone="inspect" />History</button>
   <button role="menuitem" onclick={() => choose(() => { app.inspectedId = item.id; app.ws.shell.rightVisible = true; })}><Icon name="folder" tone="inspect" />Show details</button>
   <button role="menuitem" disabled={!!disabledReason(['managed', 'cloned'], facts)} title={disabledReason(['managed', 'cloned'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => app.openCompare(item, true))}><Icon name="code" tone="inspect" />Compare</button>
@@ -86,4 +95,5 @@
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => onrename(item.id), true)}>Rename folder</button>
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => app.duplicateItem(item.id))}><Icon name="copy" />Duplicate into another folder</button>
   <button role="menuitem" onclick={() => { const id = item.id; choose(() => { void app.removeItem(id).then(() => onremove(id)); }, true); }}><Icon name="close" />Remove from set</button>
+{/if}
 </div>

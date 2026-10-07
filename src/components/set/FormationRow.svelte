@@ -49,11 +49,11 @@
       <input class="fname-edit" value={row.folder} use:focus spellcheck="false" aria-label="Folder name" onblur={event => handlers.rename(event.currentTarget.value)}
         onkeydown={event => { if (event.key === 'Enter') event.currentTarget.blur(); else if (event.key === 'Escape') handlers.rename(null); }} />
     {:else}
-      <button class="fm-name" title="{row.item.org}/{row.item.name} · show details" tabindex={stop} onclick={handlers.inspect}>{row.folder}</button>
+      <span class="fm-namerow"><button class="fm-name" title="{row.item.org}/{row.item.name} · show details" tabindex={stop} onclick={handlers.inspect}>{row.folder}</button>{#if row.favorite}<span class="fm-fav" role="img" aria-label="Favorite" title="Favorite"><Icon name="star" size={12} /></span>{/if}</span>
     {/if}
     <small class="fm-sub">
       {#if row.problem}<span class="fm-problem" title={row.problem}><Icon name="alert" size={12} tone="err" />{row.problem}</span>
-      {:else}<span class="fm-org" title={row.sub}>{row.sub}</span>{#if row.onDisk}<span class="fm-ondisk"><Icon name="check" size={11} tone="ok" />on disk</span>{/if}{/if}
+      {:else}<span class="fm-org" title={row.sub}>{row.sub}</span>{#if row.remote}<span class="fm-remote" title="Not cloned">remote</span>{/if}{#if row.onDisk}<span class="fm-ondisk"><Icon name="check" size={11} tone="ok" />on disk</span>{/if}{/if}
     </small>
   </div>
   <div class="fm-cell fm-branch" role="gridcell">

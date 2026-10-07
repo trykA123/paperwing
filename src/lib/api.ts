@@ -141,7 +141,7 @@ export type SetItem = {
 };
 export type RepoSet = { id: string; name: string; items: SetItem[] };
 export type ColWidths = { repo: number; checkout: number; local: number; status: number };
-export type RailSection = 'sets' | 'changes' | 'branches' | 'compare' | 'search' | 'prs' | 'actions' | 'releases' | 'jira' | 'activity' | 'recovery';
+export type RailSection = 'repos' | 'changes' | 'branches' | 'compare' | 'search' | 'prs' | 'actions' | 'releases' | 'jira' | 'activity' | 'recovery';
 export type ShellLayout = { version: 1; sidebarWidth: number; sidebarVisible: boolean; rightVisible: boolean; section: RailSection };
 export type RowDensity = 'comfortable' | 'compact';
 export type Workspace = {

@@ -38,7 +38,7 @@ const provider = page => page.locator('.rail-btn[data-provider="github"]');
 const brand = page => page.locator('.shell-brand span').innerText();
 
 const two = await open('two');
-check('rail groups: Local Git, GitHub, System', JSON.stringify(await buttons(two)) === JSON.stringify(['Sets', 'Changes', 'Branches & tags', 'Compare', 'Search', 'GitHub', 'Activity', 'Recovery', 'Settings']), JSON.stringify(await buttons(two)));
+check('rail groups: Local Git, GitHub, System', JSON.stringify(await buttons(two)) === JSON.stringify(['Repositories', 'Changes', 'Branches & tags', 'Compare', 'Search', 'GitHub', 'Activity', 'Recovery', 'Settings']), JSON.stringify(await buttons(two)));
 check('the provider button announces a menu', (await provider(two).getAttribute('aria-haspopup')) === 'menu' && (await provider(two).getAttribute('aria-expanded')) === 'false');
 
 await two.waitForSelector('.rail-btn[data-provider="github"] .rail-badge');
@@ -105,7 +105,7 @@ await two.mouse.click(700, 400);
 await two.waitForTimeout(200);
 check('a click outside closes it', (await flyout(two).count()) === 0);
 
-for (const [key, label] of [['Control+1', 'SETS'], ['Control+2', 'CHANGES'], ['Control+3', 'BRANCHES & TAGS'], ['Control+4', 'COMPARE'], ['Control+5', 'SEARCH'], ['Control+j', 'ACTIVITY']]) {
+for (const [key, label] of [['Control+1', 'REPOSITORIES'], ['Control+2', 'CHANGES'], ['Control+3', 'BRANCHES & TAGS'], ['Control+4', 'COMPARE'], ['Control+5', 'SEARCH'], ['Control+j', 'ACTIVITY']]) {
   await two.keyboard.press(key);
   await two.waitForTimeout(200);
   check(`${key} shows ${label}`, (await brand(two)) === label, await brand(two));
@@ -119,15 +119,19 @@ check('no horizontal overflow on the page', await two.evaluate(() => document.do
 const rail = (page, label) => page.click(`.activity-rail .rail-btn[aria-label="${label}"]`);
 const tableWidth = page => page.evaluate(() => Math.round(document.querySelector('.fm-table')?.getBoundingClientRect().width ?? -1));
 
-await rail(two, 'Sets');
+await rail(two, 'Repositories');
 await two.waitForSelector('.fm-row[data-id]');
 await two.waitForTimeout(600);
 const wide = Number(width) === 1440 ? [714, 1094] : [390, 770];
-check(`Sets table today: ${wide[0]} px with the details panel`, (await tableWidth(two)) === wide[0], String(await tableWidth(two)));
+check(`Repositories table: ${wide[1]} px`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
+check('the Repositories table does not scroll sideways', await two.evaluate(() => { const box = document.querySelector('.fm-table .vbox'); return box.scrollWidth <= box.clientWidth; }));
+await two.click('.side .nav:has-text("All services")');
+await two.waitForSelector('.rf-setbar');
+await two.waitForTimeout(600);
+check(`A set table today: ${wide[0]} px with the details panel`, (await tableWidth(two)) === wide[0], String(await tableWidth(two)));
 await two.click('button[aria-label="Toggle details"]');
 await two.waitForTimeout(500);
-check(`Sets table without the details panel: ${wide[1]} px`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
-check('the Sets table does not scroll sideways', await two.evaluate(() => { const box = document.querySelector('.fm-table .vbox'); return box.scrollWidth <= box.clientWidth; }));
+check(`A set table without the details panel: ${wide[1]} px`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
 await two.click('button[aria-label="Toggle details"]');
 
 await two.locator('.rail-btn[data-provider="github"]').click();
@@ -212,19 +216,73 @@ await restored.waitForTimeout(400);
 check('Actions accepts the host too', (await restored.locator('main h1:visible').innerText()) === 'Workflow runs' && (await restored.locator('.host-chip').innerText()).includes('git.acme.example'));
 await restored.keyboard.press('Control+j');
 await restored.waitForTimeout(200);
-await restored.click('.shell-tab:has-text("Release train") button[role="tab"]');
+await restored.click('.shell-tab:has-text("Repositories") button[role="tab"]');
 await restored.waitForTimeout(300);
 check('opening a set tab leaves the Activity sidebar in place', (await brand(restored)) === 'ACTIVITY' && (await restored.locator('main .fm-table').count()) > 0);
 await restored.click('.rail-btn[aria-label="Recovery"]');
 await restored.click('.shell-tab:has-text("Pull requests") button[role="tab"]');
 check('and the Recovery sidebar too', (await brand(restored)) === 'RECOVERY');
 
+const repos = await open('two', { bigSet: false });
+const chipN = async name => Number((await repos.locator(`.fm-chip:has-text("${name}") b`).first().innerText()).trim());
+const setCount = async name => Number((await repos.locator(`.side .nav:has-text("${name}") .cnt`).first().innerText()).trim());
+await repos.waitForFunction(() => document.querySelector('.fm-chip b')?.textContent === '806');
+check('Repositories is home and lists cloned and remote-only rows', (await chipN('All')) > (await chipN('Cloned')) && (await repos.locator('.fm-row[data-id]').count()) > 0);
+check('the known count covers every source', (await chipN('All')) === 800 + 6, String(await chipN('All')));
+check('Cloned counts the folders on disk', (await chipN('Cloned')) > 0 && (await chipN('Cloned')) < 30, String(await chipN('Cloned')));
+check('Favorites counts the starred repositories', (await chipN('Favorites')) === 2, String(await chipN('Favorites')));
+check('the sidebar lists the favorites', (await repos.locator('.side .nav.fav').count()) === 2);
+check('the sidebar tree lists both hosts with their organizations', (await repos.locator('.side .rf-hostbtn').allInnerTexts()).length === 2 && (await repos.locator('.side .nav.p-sub').count()) === 5);
+await shot(repos, 'repos');
+await repos.fill('.rf-search input', 'gateway');
+await repos.waitForTimeout(300);
+check('the name filter narrows the table and the chips', (await chipN('All')) < 200 && (await chipN('All')) > 0, String(await chipN('All')));
+await repos.fill('.rf-search input', '');
+await repos.click('.side .rf-hostbtn:has-text("github.com")');
+await repos.waitForTimeout(300);
+check('a host in the tree filters the table and shows a removable chip', (await chipN('All')) === 6 && (await repos.locator('.fm-chip.on:has-text("github.com")').count()) === 1, String(await chipN('All')));
+await repos.click('.fm-chip.on:has-text("github.com")');
+await repos.click('.fm-chip:has-text("Favorites")');
+await repos.waitForTimeout(300);
+check('the Favorites chip shows only starred rows', (await repos.locator('.fm-row[data-id]').count()) === 2);
+await repos.click('.fm-chip:has-text("All")');
+
+await repos.fill('.rf-search input', 'cli');
+await repos.waitForTimeout(300);
+const remoteRow = repos.locator('.fm-row:has(.fm-remote)').first();
+check('a remote-only row says remote and offers Clone', (await remoteRow.locator('.fm-action').innerText()).trim() === 'Clone' && (await remoteRow.locator('.fm-quiet').innerText()).includes('Not cloned'));
+const before = await setCount('Release train');
+await remoteRow.locator('.fm-action').click();
+await repos.waitForTimeout(500);
+check('Clone on a remote row adds it to the active set', (await setCount('Release train')) === before + 1, `${before} -> ${await setCount('Release train')}`);
+await repos.fill('.rf-search input', 'sdk');
+await repos.waitForTimeout(300);
+await repos.locator('.fm-row:has(.fm-remote) .fm-more button').first().click();
+await repos.click('.row-menu button:has-text("Add to set")');
+await repos.click('.popover .menu-item:has-text("Empty set")');
+await repos.waitForTimeout(300);
+check('Add to set from the row menu fills the chosen set', (await setCount('Empty set')) === 1, String(await setCount('Empty set')));
+await repos.fill('.rf-search input', '');
+
+await repos.click('.rf-setchip');
+await repos.click('.popover .menu-item:has-text("Mobile hotfix")');
+await repos.waitForSelector('.rf-setbar');
+check('Any set filters to a set and shows the set bar', (await repos.locator('.shell-tab.on').innerText()).includes('Mobile hotfix') && (await repos.locator('.rf-setbar .btn').allInnerTexts()).join('|').replace(/\s+/g, ' ').includes('Compare set'), (await repos.locator('.rf-setbar .btn').allInnerTexts()).join('|'));
+await shot(repos, 'set-bar');
+await repos.click('.rf-setbar button:has-text("Delete set"), .rf-setbar button[aria-label="Delete set"]');
+await repos.waitForSelector('dialog[open]');
+check('deleting a set says it is local only', (await repos.locator('dialog[open] p').first().innerText()).includes('Local only. Nothing on github.com changes.'), await repos.locator('dialog[open] p').first().innerText());
+await repos.click('dialog[open] button:has-text("Cancel")');
+await repos.click('.rf-setbar button[aria-label="Leave this set"]');
+await repos.waitForTimeout(300);
+check('leaving the set returns to every repository', (await repos.locator('.shell-tab.on').innerText()).includes('Repositories') && (await chipN('All')) === 806);
+
 const github = await open('github');
 check('one GitHub host shows one section', (await (async () => { await provider(github).click(); return github.locator('.rail-flyout [role="group"]').count(); })()) === 1);
 check('Jira stays off the rail without a Jira source', !(await buttons(github)).some(label => label.startsWith('Jira')));
 
 const manual = await open('manual');
-check('no provider button without a GitHub or Jira source', (await buttons(manual)).join() === 'Sets,Changes,Branches & tags,Compare,Search,Activity,Recovery,Settings', (await buttons(manual)).join());
+check('no provider button without a GitHub or Jira source', (await buttons(manual)).join() === 'Repositories,Changes,Branches & tags,Compare,Search,Activity,Recovery,Settings', (await buttons(manual)).join());
 
 const jira = await open('jira');
 check('a Jira source adds the Jira button', (await buttons(jira)).some(label => label.startsWith('Jira')));

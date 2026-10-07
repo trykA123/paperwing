@@ -6,6 +6,7 @@ import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
 import { moduleById } from './modules';
 import { ModuleNavigation } from './state/modules.svelte';
+import { Repositories } from './state/repositories.svelte';
 import { doingWord, RunNotices } from './state/run-notices';
 import { TemporarySets } from './state/temporary-sets.svelte';
 import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
@@ -25,8 +26,8 @@ import type { CleanupTarget } from './branch-cleanup';
 import { defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } from './workspace';
 import { NotificationStore, type NoticeAction, type NoticeKind, type NoticeOptions } from './notifications.svelte';
 import { describeError } from './errors';
-export { DEFAULT_COLS, DEFAULT_TEMPLATE } from './workspace';
-export type { View } from './workspace';
+import { localOnlyNote } from './local-only';
+export { DEFAULT_COLS, DEFAULT_TEMPLATE, type View } from './workspace';
 
 export type { RefsEntry, CommitsEntry, RefState } from './state/repository-metadata.svelte';
 const STATUS_CHUNK = 8;
@@ -179,6 +180,7 @@ class AppState {
     get ws() { return app.ws; }, get sources() { return app.sources; }, get view() { return app.view; },
     openView: view => this.openView(view), openCodeSearch: () => this.openCodeSearch(),
   });
+  repositories = new Repositories(this);
   private gitActivity = new GitActivity();
   get activity() { return this.gitActivity.activity; }
   set activity(value: Activity[]) { this.gitActivity.activity = value; }
@@ -193,13 +195,13 @@ class AppState {
   setComparisons = $state<Record<string, SetCompareState>>({});
   codeSearches = $state<Record<string, SearchSession>>({});
   activeTab = $derived(this.tabs.find(tab => tab.id === this.activeTabId));
-  view = $derived<View>(this.activeTab?.view ?? { kind: 'set' });
+  view = $derived<View>(this.activeTab?.view ?? { kind: 'repos' });
   focusedItem = $derived.by(() => {
     const view = this.view;
     return view.kind === 'item' ? this.set.items.find(item => item.id === view.itemId) : undefined;
   });
   /** Settings, code search and module pages have nothing for the details panel to describe. */
-  get detailsAvailable() { return this.view.kind !== 'settings' && this.view.kind !== 'codeSearch' && this.view.kind !== 'module'; }
+  get detailsAvailable() { return !['settings', 'codeSearch', 'module', 'repos'].includes(this.view.kind); }
   paletteOpen = $state(false);
   get query() { return this.activeTab?.query ?? ''; }
   set query(value: string) { if (this.activeTab) this.activeTab.query = value; }
@@ -240,7 +242,7 @@ class AppState {
       pct: jobs.length ? Math.round(sum / jobs.length) : 0,
     };
   });
-  actionItems = $derived(this.view.kind === 'item' ? (this.focusedItem ? [this.focusedItem] : []) : this.selected);
+  actionItems = $derived(this.view.kind === 'repos' ? this.repositories.selected : this.view.kind === 'item' ? (this.focusedItem ? [this.focusedItem] : []) : this.selected);
   inspectedId = $state<string | null>(null);
   /** When each set last finished a clean fetch this session (ms since epoch). */
   lastFetch = $state<Record<string, number>>({});
@@ -264,7 +266,7 @@ class AppState {
     this.#applySettings(saved);
     if (saved.startupError) this.#settingsLoadFailed(saved.startupError);
     await this.probeRoot();
-    this.openView({ kind: 'set' });
+    this.openView({ kind: 'repos' });
     await listen<Progress>('clone-progress', e => { this.jobs[e.payload.id] = e.payload; });
     await listen('clone-finished', () => this.#finished());
     await listen<{ sourceId: string; revision: number }>('credential-changed', event => this.credentials.invalidate(event.payload.sourceId, event.payload.revision));
@@ -398,13 +400,14 @@ class AppState {
     if (!activeRemoved) return;
     const next = this.tabs[Math.min(index, this.tabs.length - 1)];
     if (next) this.activateTab(next.id);
-    else this.openView({ kind: 'set' });
+    else this.openView({ kind: 'repos' });
   }
 
   tabTitle(tab: ShellTab) {
     const set = this.ws.sets.find(set => set.id === tab.setId) ?? this.temporary.find(tab.setId);
     const view = tab.view;
     switch (view.kind) {
+      case 'repos': return 'Repositories';
       case 'set': return set?.name ?? 'Set';
       case 'item': return set?.items.find(item => item.id === view.itemId)?.folder
         ?? set?.items.find(item => item.id === view.itemId)?.name ?? 'Repository';
@@ -472,8 +475,8 @@ class AppState {
     return segments(this.ws, this.sources, item, setName, this.nativePlatform);
   }
 
-  dest(item: SetItem, setId = this.set.id) {
-    return destination(this.ws, this.sources, item, this.ws.sets.find(set => set.id === setId)?.name ?? this.set.name, this.nativePlatform);
+  dest(item: SetItem, setId?: string) {
+    return destination(this.ws, this.sources, item, this.repositories.setNameOf(item, setId), this.nativePlatform);
   }
 
   folderOf(item: SetItem) { return folderOf(item); }
@@ -498,36 +501,33 @@ class AppState {
 
   commitsFor(item: SetItem) { return this.repositoryMetadata.commitsFor(item); }
 
-  inSet(repoId: string) {
-    return this.set.items.some(i => i.repoId === repoId);
-  }
+  inSet(repoId: string) { return this.set.items.some(i => i.repoId === repoId); }
 
-  countInSet(repoId: string) {
-    return this.set.items.filter(i => i.repoId === repoId).length;
-  }
+  countInSet(repoId: string) { return this.set.items.filter(i => i.repoId === repoId).length; }
 
   /** `base`, or `base_2`, `base_3`… — whichever is not yet used in the set. */
   uniqueFolder(base: string) { return uniqueFolder(base, this.set.items, this.nativePlatform); }
 
-  addRepo(repo: Repo, notify = true) {
-    if (this.isTemporary) { this.toast('Save this temporary set before adding repositories to it', 'warn'); return; }
+  addRepo(repo: Repo, notify = true, set: RepoSet = this.set): SetItem | undefined {
+    if (this.temporary.find(set.id)) { this.toast('Save this temporary set before adding repositories to it', 'warn'); return; }
     const id = uid();
-    const folder = this.uniqueFolder(repo.name);
-    this.set.items.push({
+    const folder = uniqueFolder(repo.name, set.items, this.nativePlatform);
+    set.items.push({
       id, repoId: repo.id, url: repo.url, org: repo.org, name: repo.name, on: true,
       ref: { type: 'branch', name: repo.defaultBranch || 'master' },
       ...(folder !== repo.name ? { folder } : {}),
     });
-    if (notify) this.toast(folder === repo.name ? `${repo.name} added to ${this.set.name}` : `Another copy of ${repo.name} added as ${folder}`, 'success');
+    if (notify) this.toast(folder === repo.name ? `${repo.name} added to ${set.name}` : `Another copy of ${repo.name} added as ${folder}`, 'success');
     // Manual sources have no API, so learn the default branch from the remote.
     if (!repo.defaultBranch) {
       this.ensureRefs([repo.url]).then(() => {
         const b = this.refs[repo.url]?.branches ?? [];
-        const item = this.set.items.find(i => i.id === id);
+        const item = set.items.find(i => i.id === id);
         const best = ['main', 'master', 'develop'].find(n => b.includes(n)) ?? b[0];
         if (item && best) item.ref = { type: 'branch', name: best };
       });
     }
+    return set.items.find(i => i.id === id);
   }
 
   toggleRepo(repo: Repo) {
@@ -565,9 +565,9 @@ class AppState {
 
   async removeItem(id: string) {
     if (this.bufferGuards.size && !await this.guardBuffers()) return;
-    const setId = this.set.id;
+    const owner = this.ws.sets.find(set => set.items.some(i => i.id === id)) ?? this.set, setId = owner.id;
     for (const comparison of Object.values(this.setComparisons)) if (comparison.setId === setId && comparison.items.some(item => item.id === id)) { await comparison.cancel(); comparison.stale = true; }
-    this.set.items = this.set.items.filter(i => i.id !== id);
+    owner.items = owner.items.filter(i => i.id !== id);
     for (const tab of [...this.tabs]) {
       if (tab.setId === setId && tab.view.kind === 'item' && tab.view.itemId === id) this.closeTab(tab.id);
       if (tab.view.kind === 'compare' && [tab.view.left, tab.view.right].some(endpoint => endpoint.setId === setId && endpoint.itemId === id)) this.closeTab(tab.id);
@@ -614,7 +614,7 @@ class AppState {
     this.ws.sets = this.ws.sets.filter(s => s.id !== id);
     this.ws.activeSet = this.ws.sets[0].id;
     this.tabs = this.tabs.filter(tab => tab.setId !== id || tab.view.kind === 'settings');
-    this.openView({ kind: 'set' });
+    this.openView({ kind: 'repos' });
   }
 
   openGitDialog(kind: 'commit' | 'branch', item: SetItem) {
@@ -680,7 +680,7 @@ class AppState {
   /** Deletes a local branch after confirmation. The remote branch is never touched. */
   async deleteLocalBranch(path: string, repo: string, name: string, label = name) {
     if (this.gitBusy || this.running) return;
-    const ok = await confirm(`Delete the local branch "${label}" in ${repo}?\n\nOnly your local copy is removed. A branch with the same name on the remote, if there is one, is not touched.`,
+    const ok = await confirm(`Delete the local branch "${label}" in ${repo}?\n\nOnly your local copy is removed.\n\n${localOnlyNote([this.repositories.hostAt(path)])}`,
       { title: 'Delete local branch', kind: 'warning', okLabel: 'Delete', destructive: true });
     if (!ok) return;
     this.gitBusy = true;
@@ -778,7 +778,7 @@ class AppState {
     return !!l.sha && name.slice(0, 7) === l.sha.slice(0, 7);
   }
 
-  async startClone(items: SetItem[] = this.selected, mode: GitAction = 'clone', setId = this.set.id) {
+  async startClone(items: SetItem[] = this.selected, mode: GitAction = 'clone', setId?: string) {
     if (this.running || this.clonePreparing || !items.length) return;
     this.clonePreparing = true;
     try {
@@ -807,7 +807,7 @@ class AppState {
       }
       this.#runIds = jobs.map(j => j.id);
       this.#runItems = [...items];
-      this.#runSetId = setId;
+      this.#runSetId = setId ?? this.set.id;
       this.#runMode = mode;
       for (const j of jobs) this.jobs[j.id] = { id: j.id, phase: 'queued', pct: 0, msg: 'Waiting for a slot' };
       this.running = true;
@@ -837,7 +837,7 @@ class AppState {
     if (mode === 'fetch' || mode === 'pull') this.markMetadataStale(this.#runItems.map(item => item.url));
     if (mode === 'fetch' && !failed.length) this.lastFetch[runSet] = Date.now();
     const owner = this.ws.sets.find(set => set.id === runSet) ?? this.temporary.find(runSet) ?? this.set;
-    void this.checkExists(owner.items.map(i => this.dest(i, owner.id)));
+    void this.checkExists([...owner.items, ...this.#runItems.filter(i => !owner.items.includes(i))].map(i => this.dest(i)));
   }
 }
 

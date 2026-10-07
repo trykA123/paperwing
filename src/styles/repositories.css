@@ -1,0 +1,264 @@
+/* repositories module: filter bar, set bar, hosts tree, popovers */
+.rf-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2) var(--sp-3);
+}
+
+.rf-search {
+    width: 240px;
+    max-width: 100%;
+}
+
+.fm-dot.cloned {
+    background: var(--ok);
+}
+
+.fm-chip .car {
+    font-size: var(--fs-xs);
+}
+
+.rf-setchip.on {
+    background: var(--accs);
+    border-color: var(--acc);
+    color: var(--acc);
+    font-weight: 600;
+}
+
+.fm-namerow {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    min-width: 0;
+}
+
+.fm-table.compact .fm-namerow {
+    flex: none;
+    max-width: 60%;
+}
+
+.fm-fav {
+    flex: none;
+    display: inline-flex;
+    color: var(--warn);
+}
+
+.fm-fav .i {
+    fill: currentColor;
+}
+
+.fm-remote {
+    flex: none;
+    padding: 0 6px;
+    border: 1px dashed var(--line-ctl);
+    border-radius: 99px;
+    color: var(--dim);
+    font-size: var(--fs-xs);
+    line-height: 16px;
+}
+
+/* set bar */
+.rf-setbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2) var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    box-shadow: var(--shadow-1);
+}
+
+.rf-setinfo {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-width: 0;
+}
+
+.rf-seticon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-ctl);
+    background: var(--warn-bg);
+}
+
+.rf-setinfo b {
+    display: block;
+    font-size: var(--fs-base);
+}
+
+.rf-setinfo small {
+    display: block;
+    color: var(--dim);
+    font-size: var(--fs-sm);
+}
+
+.rf-dirty {
+    color: var(--warn-text);
+    font-weight: 600;
+}
+
+.rf-setacts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+}
+
+/* sidebar */
+.rf-hostbtn .lbl {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+}
+
+.nav.p-sub {
+    padding-left: var(--sp-5);
+}
+
+.sec h6 .rf-add-btn {
+    margin-left: auto;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    color: var(--dim);
+}
+
+.sec h6 .rf-add-btn:hover {
+    background: var(--soft);
+    color: var(--text);
+}
+
+.rf-mini {
+    display: inline-flex;
+    gap: var(--sp-1);
+    margin-left: auto;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.rf-cnt-dirty {
+    color: var(--warn-text);
+}
+
+.rf-cnt-up {
+    color: var(--err-text);
+}
+
+.rf-cnt-down {
+    color: var(--hl-text);
+}
+
+.fav .star {
+    display: inline-flex;
+}
+
+.fav .star .i {
+    fill: currentColor;
+}
+
+/* popovers and their lists */
+.popover {
+    position: fixed;
+    z-index: var(--z-popover);
+    max-height: min(420px, calc(100vh - 16px));
+    overflow: auto;
+    padding: var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    box-shadow: var(--shadow-2);
+    animation: pop-in var(--dur-fast) var(--ease-out);
+}
+
+.popover:focus {
+    outline: none;
+}
+
+.menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.menu-list hr {
+    margin: var(--sp-1) 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 32px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--r-ctl);
+    font-size: var(--fs-md);
+    text-align: left;
+}
+
+.menu-item .lbl {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.menu-item .cnt {
+    color: var(--faint-text);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+    background: var(--soft);
+}
+
+.menu-item:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+}
+
+.menu-item.on {
+    background: var(--accs);
+    color: var(--acc);
+    font-weight: 600;
+}
+
+.set-edit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.set-edit-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .popover {
+        animation: none;
+    }
+}

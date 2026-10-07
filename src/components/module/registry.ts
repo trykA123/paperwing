@@ -1,6 +1,6 @@
 import type { Component } from 'svelte';
 import type { RailSection } from '../../lib/api';
-import Sidebar from '../Sidebar.svelte';
+import RepositoriesSidebar from '../repos/RepositoriesSidebar.svelte';
 import ActivityPanel from '../panel/ActivityPanel.svelte';
 import BranchesPanel from '../panel/BranchesPanel.svelte';
 import ComparePanel from '../panel/ComparePanel.svelte';
@@ -16,7 +16,7 @@ type ModuleView = Component;
 
 /** The sidebar each module shows next to its page. */
 export const SIDEBARS: Record<RailSection, ModuleView> = {
-  sets: Sidebar, changes: PlaceholderPanel, branches: BranchesPanel, compare: ComparePanel, search: SearchPanel,
+  repos: RepositoriesSidebar, changes: PlaceholderPanel, branches: BranchesPanel, compare: ComparePanel, search: SearchPanel,
   prs: PullsPanel, actions: PlaceholderPanel, releases: PlaceholderPanel, jira: PlaceholderPanel, activity: ActivityPanel, recovery: RecoveryEntry,
 };
 

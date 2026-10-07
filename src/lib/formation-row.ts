@@ -3,13 +3,14 @@ import { isCloned, nextAction, syncView, type NextAction, type SyncView } from '
 import { pullKey } from './pull-flow.svelte';
 import type { PullKey } from './pull-support';
 import { rowFacts } from './row-actions';
+import { isRemoteItem } from './repositories';
 import { app } from './state.svelte';
 
 export type RowModel = {
   item: SetItem; folder: string; sub: string; onDisk: boolean; problem: string | null;
   refType: RefKind; refLabel: string; refBad: boolean; refTitle: string; localNote: string | null;
   local: LocalStatus | undefined; sync: SyncView; next: NextAction | null; busy: string | null; fixed: boolean;
-  selected: boolean; focused: boolean; canAct: boolean; pull: PullKey | null;
+  selected: boolean; focused: boolean; canAct: boolean; pull: PullKey | null; remote: boolean; favorite: boolean;
 };
 
 const parentOf = (path: string) => path.replace(/[\\/][^\\/]*[\\/]?$/, '');
@@ -27,7 +28,16 @@ function problemOf(item: SetItem): string | null {
   return job?.phase === 'failed' ? job.msg : null;
 }
 
+function describeRemote(item: SetItem, state: { focused: boolean; canAct: boolean }): RowModel {
+  return {
+    item, folder: item.name, sub: item.org, onDisk: false, problem: null, refType: 'branch', refLabel: item.ref.name, refBad: false, refTitle: 'Default branch on the remote', localNote: null,
+    local: undefined, sync: { kind: 'missing' }, next: { kind: 'clone', label: 'Clone', title: `Clone ${item.org}/${item.name}` }, busy: app.rowBusy(item), fixed: true,
+    selected: item.on, focused: state.focused, canAct: state.canAct, pull: null, remote: true, favorite: app.ws.stars.includes(item.repoId),
+  };
+}
+
 export function describeRow(item: SetItem, state: { focused: boolean; canAct: boolean }): RowModel {
+  if (isRemoteItem(item)) return describeRemote(item, state);
   const facts = rowFacts(item);
   const ref = refProblem(item);
   const local = facts.local;
@@ -38,6 +48,6 @@ export function describeRow(item: SetItem, state: { focused: boolean; canAct: bo
     refType: item.ref.type, refLabel: facts.refLabel, refBad: ref.bad, refTitle: ref.title,
     localNote: isCloned(local) && !facts.onRef && !item.path && localLabel ? `on ${localLabel}` : null,
     local, sync: syncView(local, app.statusFailures[app.dest(item)]), next: nextAction(facts), busy: app.rowBusy(item), fixed: !!item.path,
-    selected: item.on, focused: state.focused, canAct: state.canAct, pull: pullKey(item),
+    selected: item.on, focused: state.focused, canAct: state.canAct, pull: pullKey(item), remote: false, favorite: app.ws.stars.includes(item.repoId),
   };
 }

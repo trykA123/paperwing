@@ -8,7 +8,7 @@
   import { app } from './lib/state.svelte';
   import { commands, execute, shortcut } from './lib/commands';
   import { applyAppearance, onSystemThemeChange } from './lib/appearance';
-  import SetView from './components/SetView.svelte';
+  import RepositoriesView from './components/repos/RepositoriesView.svelte';
   import RepoList from './components/RepoList.svelte';
   import RightPanel from './components/RightPanel.svelte';
   import Settings from './components/Settings.svelte';
@@ -169,8 +169,8 @@
   <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings'}>
     {#if !app.ready}
       <div class="empty"><span class="spin"></span></div>
-    {:else if app.view.kind === 'set' || app.view.kind === 'item'}
-      {#key app.activeTabId}<SetView />{/key}
+    {:else if app.view.kind === 'repos' || app.view.kind === 'set' || app.view.kind === 'item'}
+      {#key app.activeTabId}<RepositoriesView />{/key}
     {:else if app.view.kind === 'org'}
       {#key app.activeTabId}
         <RepoList mode="org" source={app.view.source} org={app.view.org} />
