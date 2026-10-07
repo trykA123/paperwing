@@ -2,7 +2,7 @@ import { listen } from '@tauri-apps/api/event';
 import { api, events } from './api';
 import type { SearchCapabilities, SearchDone, SearchMatches, SearchRepoResult, SearchRequest, SearchSummary } from './api';
 import { buildRows, type SearchGroup } from './search-results';
-import { isSearchLimitError } from './search-request';
+import { defaultSearchForm, isSearchLimitError } from './search-request';
 
 export type SearchHandlers = { matches: (event: SearchMatches) => void; repo: (event: SearchRepoResult) => void; done: (event: SearchDone) => void };
 export type SearchTransport = {
@@ -31,6 +31,7 @@ export const tauriSearchTransport: SearchTransport = {
 };
 
 const EARLY_LIMIT = 5000;
+const RECENT_LIMIT = 8;
 const nextFrame = (run: () => void) => (typeof requestAnimationFrame === 'function' ? void requestAnimationFrame(run) : void setTimeout(run, 16));
 
 /** One code search per tab: owns its job id, listens for the three events and ignores every other job's. */
@@ -39,6 +40,9 @@ export class SearchSession {
   error = $state<string | null>(null);
   summary = $state<SearchSummary | null>(null);
   perl = $state(true);
+  form = $state(defaultSearchForm());
+  /** Patterns searched in this tab, newest first. */
+  recent = $state<string[]>([]);
   matchCount = $state(0);
   reposDone = $state(0);
   reposTotal = $state(0);
@@ -65,6 +69,7 @@ export class SearchSession {
   async start(request: SearchRequest, names: Record<string, string>): Promise<void> {
     if (this.active || this.#disposed) return;
     this.#reset(request, names);
+    this.recent = [request.pattern, ...this.recent.filter(pattern => pattern !== request.pattern)].slice(0, RECENT_LIMIT);
     this.status = 'starting';
     try {
       if (!this.#stop) {

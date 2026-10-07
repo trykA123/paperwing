@@ -40,6 +40,8 @@ export const PROVIDERS: readonly ProviderDef[] = [
   { id: 'jira', label: 'Jira', icon: 'board', kinds: ['jira'] },
 ];
 
+/** The module a fresh or unreadable workspace opens; the registry order and this constant are the only places that name it. */
+export const HOME_MODULE: RailSection = 'sets';
 export const SECTIONS: readonly RailSection[] = MODULES.filter(module => module.id !== 'settings').map(module => module.id as RailSection);
 export const isSection = (value: unknown): value is RailSection => SECTIONS.includes(value as RailSection);
 export const moduleById = (id: ModuleId): ModuleDef => MODULES.find(module => module.id === id)!;
@@ -99,21 +101,20 @@ export function moduleShortcut(key: string): ModuleId | undefined {
   return MODULES.find(module => module.shortcutKey === lower)?.id;
 }
 
-const SET_VIEWS: readonly View['kind'][] = ['set', 'item', 'org', 'search'];
+const HOME_VIEWS: readonly View['kind'][] = ['set', 'item', 'org', 'search'];
 const COMPARE_VIEWS: readonly View['kind'][] = ['compare', 'setCompare', 'fileDiff'];
 
 export function moduleOfView(view: View): RailSection | undefined {
   if (view.kind === 'module') return view.module;
   if (view.kind === 'codeSearch') return 'search';
-  if (SET_VIEWS.includes(view.kind)) return 'sets';
+  if (HOME_VIEWS.includes(view.kind)) return HOME_MODULE;
   return COMPARE_VIEWS.includes(view.kind) ? 'compare' : undefined;
 }
 
 const PAGE_MODULES: readonly ModuleId[] = ['changes', 'branches', 'prs', 'actions', 'releases', 'jira'];
+const OWN_VIEWS: Partial<Record<ModuleId, View>> = { sets: { kind: 'set' }, settings: { kind: 'settings' } };
 
 /** The main-area view a module opens; Search, Compare, Activity and Recovery open theirs through their own flows. */
 export function viewOfModule(id: ModuleId): View | undefined {
-  if (id === 'sets') return { kind: 'set' };
-  if (id === 'settings') return { kind: 'settings' };
-  return PAGE_MODULES.includes(id) ? { kind: 'module', module: id as RailSection } : undefined;
+  return OWN_VIEWS[id] ?? (PAGE_MODULES.includes(id) ? { kind: 'module', module: id as RailSection } : undefined);
 }

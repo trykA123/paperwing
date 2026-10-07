@@ -1,12 +1,9 @@
 <script lang="ts">
   import { moduleById } from '../lib/modules';
   import { app } from '../lib/state.svelte';
-  import ActivityPanel from './panel/ActivityPanel.svelte';
-  import ComparePanel from './panel/ComparePanel.svelte';
-  import PlaceholderPanel from './panel/PlaceholderPanel.svelte';
-  import RecoveryEntry from './panel/RecoveryEntry.svelte';
-  import Sidebar from './Sidebar.svelte';
+  import { SIDEBARS } from './module/registry';
 
+  const Panel = $derived(SIDEBARS[app.ws.shell.section]);
   const MIN = 190, MAX = 360;
   const clamp = (width: number) => Math.round(Math.max(MIN, Math.min(MAX, width)));
 
@@ -33,9 +30,5 @@
         app.ws.shell.sidebarWidth = clamp(app.ws.shell.sidebarWidth + (event.key === 'ArrowRight' ? 20 : -20));
       }
     }}></button>
-  {#if app.ws.shell.section === 'compare'}<ComparePanel />
-  {:else if app.ws.shell.section === 'recovery'}<RecoveryEntry />
-  {:else if app.ws.shell.section === 'activity'}<ActivityPanel />
-  {:else if app.ws.shell.section === 'sets'}<Sidebar />
-  {:else}<PlaceholderPanel module={app.ws.shell.section} />{/if}
+  <Panel />
 </aside>

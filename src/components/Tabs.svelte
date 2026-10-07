@@ -16,6 +16,11 @@
     (event.currentTarget as HTMLElement).closest('.tabstrip')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
+  $effect(() => {
+    app.activeTabId;
+    document.querySelector('.shell-tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  });
+
   const titlebar = $derived(app.platform.platform === 'windows' ? true : undefined);
 </script>
 

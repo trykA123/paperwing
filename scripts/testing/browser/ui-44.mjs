@@ -115,6 +115,76 @@ await two.waitForTimeout(200);
 check('Ctrl+, opens Settings', (await two.locator('.shell-tab.on').innerText()).includes('Settings'));
 check('no horizontal overflow on the page', await two.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
+
+const rail = (page, label) => page.click(`.activity-rail .rail-btn[aria-label="${label}"]`);
+const tableWidth = page => page.evaluate(() => Math.round(document.querySelector('.fm-table')?.getBoundingClientRect().width ?? -1));
+
+await rail(two, 'Sets');
+await two.waitForSelector('.fm-row[data-id]');
+await two.waitForTimeout(600);
+const wide = Number(width) === 1440 ? [714, 1094] : [390, 770];
+check(`Sets table today: ${wide[0]} px with the details panel`, (await tableWidth(two)) === wide[0], String(await tableWidth(two)));
+await two.click('button[aria-label="Toggle details"]');
+await two.waitForTimeout(500);
+check(`Sets table without the details panel: ${wide[1]} px`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
+check('the Sets table does not scroll sideways', await two.evaluate(() => { const box = document.querySelector('.fm-table .vbox'); return box.scrollWidth <= box.clientWidth; }));
+await two.click('button[aria-label="Toggle details"]');
+
+await two.locator('.rail-btn[data-provider="github"]').click();
+await two.locator('.rail-flyout [role="menuitem"]').first().click();
+await two.waitForSelector('.module-table .fm-row[data-id], .module-table .fm-row[role="row"]:not(.fm-head)');
+await two.waitForTimeout(1500);
+const pullRows = async () => Number(await two.locator('.module-table [role="grid"]').getAttribute('aria-rowcount')) - 1;
+const settled = async (read, expected) => { for (let tries = 0; tries < 20; tries++) { if ((await read()) === (await expected())) return true; await two.waitForTimeout(250); } return false; };
+const chipCount = async name => Number((await two.locator(`.fm-chip:has-text("${name}") b`).innerText()).trim());
+check('the pull request page lists the queue', (await pullRows()) > 0 && (await settled(pullRows, async () => Math.min(25, await chipCount('All')))), `${await pullRows()} rows`);
+check(`the pull request table is ${wide[1]} px wide`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
+check('the module page leaves no room for the details panel', (await two.locator('.shell-right [class]').count()) === 0 || (await two.evaluate(() => document.querySelector('#shell').classList.contains('noright'))));
+await shot(two, 'prs');
+await two.click('.fm-chip:has-text("Awaiting")');
+check('the Awaiting my review chip narrows the rows to its count', await settled(pullRows, async () => Math.min(25, await chipCount('Awaiting'))));
+check('the sidebar queue count matches the chip', (await two.locator('.side .nav:has-text("Awaiting my review") .cnt').innerText()).trim() === String(await chipCount('Awaiting')));
+check('queues that need author data are disabled', (await two.locator('.side .nav:has-text("Created by me")').isDisabled()) && (await two.locator('.side .nav:has-text("Assigned to me")').isDisabled()));
+await two.fill('.side .gsearch input', 'zzz-nothing');
+await two.waitForTimeout(400);
+check('the filter box empties the table', (await pullRows()) === 0 && (await two.locator('.module-table .empty-state').count()) === 1, `${await pullRows()} rows`);
+await two.fill('.side .gsearch input', '');
+await two.click('.fm-chip:has-text("All")');
+check('the Pull requests rail badge matches the awaiting count', (await two.locator('.rail-btn[data-provider="github"] .rail-badge').innerText()).includes(String(await chipCount('Awaiting'))));
+
+await rail(two, 'Branches & tags');
+await two.waitForTimeout(500);
+for (const [name, title, button] of [['Clean up branches', 'Clean up merged branches', 'Clean up'], ['Tags', 'Tags', 'Tag'], ['Stash', 'Stash', 'Stash']]) {
+  await two.click(`.side .nav:has-text("${name}")`);
+  await two.waitForTimeout(300);
+  check(`Branches & tags: ${name} page`, (await two.locator('main h1:visible').innerText()) === title && (await two.locator(`.module-table .fm-action:has-text("${button}")`).count()) > 0);
+}
+await shot(two, 'branches-stash');
+await two.locator('.module-table .fm-action:has-text("Stash")').first().click();
+await two.waitForSelector('dialog[open]');
+check('a row action opens the existing stash dialog', true);
+await two.keyboard.press('Escape');
+
+await rail(two, 'Search');
+await two.waitForSelector('.code-search');
+check('Search shows its mode and recent searches in the sidebar', (await two.locator('.side h6').allInnerTexts()).join('|').toLowerCase().includes('mode|recent searches'));
+await two.fill('.cs-pattern input', 'retry');
+await two.click('.cs-bar button[type=submit]');
+await two.waitForTimeout(500);
+check('a search lands in the recent list', (await two.locator('.side .nav:has-text("retry")').count()) === 1);
+await shot(two, 'search');
+
+for (const [label, title] of [['Changes', 'Changes']]) {
+  await rail(two, label);
+  check(`${label} shows its placeholder in the page frame`, (await two.locator('main h1:visible').innerText()) === title && (await two.locator('.module-empty').count()) === 1);
+}
+await shot(two, 'changes');
+await two.locator('.rail-btn[data-provider="github"]').click();
+await two.locator('.rail-flyout [role="menuitem"]').nth(1).click();
+await two.waitForTimeout(300);
+check('Actions shows its placeholder', (await two.locator('main h1:visible').innerText()) === 'Workflow runs');
+await shot(two, 'actions');
+
 const github = await open('github');
 check('one GitHub host shows one section', (await (async () => { await provider(github).click(); return github.locator('.rail-flyout [role="group"]').count(); })()) === 1);
 check('Jira stays off the rail without a Jira source', !(await buttons(github)).some(label => label.startsWith('Jira')));
@@ -130,6 +200,6 @@ await shot(jira, 'flyout-jira');
 await jira.keyboard.press('ArrowDown');
 await jira.keyboard.press('Enter');
 await jira.waitForTimeout(300);
-check('Jira opens its placeholder page', (await brand(jira)) === 'JIRA' && (await jira.locator('main h1').innerText()) === 'Jira issues');
+check('Jira opens its placeholder page', (await brand(jira)) === 'JIRA' && (await jira.locator('main h1:visible').innerText()) === 'Jira issues');
 
 await browser.close();

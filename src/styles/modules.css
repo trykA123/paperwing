@@ -134,3 +134,45 @@
         animation: none;
     }
 }
+
+/* module tables */
+.fm-base {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fm-table.compact .fm-base {
+    display: none;
+}
+
+.sb-note {
+    margin: 0 var(--sp-2);
+    color: var(--dim);
+    font-size: var(--fs-sm);
+}
+
+.fm-name.static:hover {
+    color: inherit;
+}
+
+.module-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: var(--sp-1);
+}
+
+.nav .cnt.acc {
+    color: var(--acc);
+    font-weight: 600;
+}
+
+.module-table .fm-row {
+    grid-template-columns: var(--mod-cols);
+    min-width: 640px;
+}

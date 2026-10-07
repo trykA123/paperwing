@@ -4,7 +4,7 @@ import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
 import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
-import { isModuleVisible, moduleById, moduleOfView, railClick, viewOfModule, type ModuleId } from './modules';
+import { HOME_MODULE, isModuleVisible, moduleById, moduleOfView, railClick, viewOfModule, type ModuleId } from './modules';
 import { doingWord, RunNotices } from './state/run-notices';
 import { TemporarySets } from './state/temporary-sets.svelte';
 import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
@@ -296,9 +296,9 @@ class AppState {
   /** Tabs are not saved, so a saved module with a page opens that page again; Search starts from Sets. */
   #restoreModule() {
     const shell = this.ws.shell;
-    if (shell.section === 'search' || !isModuleVisible(shell.section, this.sources)) shell.section = 'sets';
+    if (shell.section === 'search' || !isModuleVisible(shell.section, this.sources)) shell.section = HOME_MODULE;
     const view = viewOfModule(shell.section);
-    if (view && shell.section !== 'sets') this.openView(view);
+    if (view && shell.section !== HOME_MODULE) this.openView(view);
   }
 
   toast(msg: string, kind: NoticeKind = 'info', action?: NoticeAction, options: NoticeOptions = {}) {

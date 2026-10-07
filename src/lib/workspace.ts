@@ -1,5 +1,5 @@
 import type { CompareEndpoint, PlatformInfo, RailSection, Workspace } from './api';
-import { isSection } from './modules';
+import { HOME_MODULE, isSection } from './modules';
 
 export type View =
   | { kind: 'set' }
@@ -39,7 +39,7 @@ export function defaultWorkspace(platform: PlatformInfo['platform'] = 'windows')
     root: platform === 'windows' ? 'C:\\Dev\\repos' : '', layout: 'flat', pathTemplate: DEFAULT_TEMPLATE, cols: { ...DEFAULT_COLS },
     shallow: false, parallel: 4, onExisting: 'fetch', pageSize: 25, rightWidth: 380,
     theme: 'system', uiFont: 'geist', codeFont: 'geist-mono',
-    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: 'sets' },
+    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: HOME_MODULE },
   };
 }
 
@@ -54,7 +54,7 @@ export function migrateWorkspace(saved: Partial<Workspace> | null, platform: Pla
   }
   ws.cols = { ...defaults.cols, ...ws.cols };
   ws.shell = { ...defaults.shell, ...ws.shell };
-  if (!isSection(ws.shell.section)) ws.shell.section = 'sets';
+  if (!isSection(ws.shell.section)) ws.shell.section = HOME_MODULE;
   ws.shell.sidebarWidth = Math.round(Math.max(190, Math.min(360, ws.shell.sidebarWidth)));
   return ws;
 }
