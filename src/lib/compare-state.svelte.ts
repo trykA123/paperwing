@@ -148,7 +148,16 @@ export class CompareState {
     const revision = this.revision, request = ++this.contentRequest;
     this.content = null;
     try {
-      const content = await api.comparisonContent(snapshot.id, snapshot.generation, fileId, side);
+      let row = this.files.find(file => file.id === fileId);
+      for (let offset = 0; !row && offset < snapshot.fileCount; offset += 512) {
+        const page = await api.comparisonFiles(snapshot.id, snapshot.generation, offset, 512);
+        if (revision !== this.revision || request !== this.contentRequest) return;
+        row = page.find(file => file.id === fileId);
+        if (page.length < 512) break;
+      }
+      const kind = row?.[side]?.kind;
+      if (!kind) throw new Error('Comparison entry unavailable; refresh the comparison');
+      const content = await api.comparisonContent(snapshot.id, snapshot.generation, fileId, side, kind);
       if (revision === this.revision && request === this.contentRequest && content.generation === snapshot.generation) this.content = content;
     } catch (error) {
       if (revision === this.revision && request === this.contentRequest) this.error = problem(error);

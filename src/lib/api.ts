@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { readComparisonContent } from './content-bytes';
 import { withoutTemporaryActive } from './temporary-set';
 
 export type RefKind = 'branch' | 'tag' | 'commit';
@@ -48,7 +49,7 @@ export type PlatformInfo = { platform: 'windows' | 'linux' | 'unsupported'; sepa
 export type RootSupport = { root: string; valid: boolean; reason: string | null; identity: string | null;
   casePolicy: 'unknown' | 'sensitive' | 'insensitive'; capabilities: Capabilities };
 export type PathIdentity = { path: string; identity: string | null; exists: boolean; reason: string | null };
-export type CompareContent = { generation: number; side: 'left' | 'right'; kind: CompareEntryKind; bytes: number[]; binary: boolean };
+export type CompareContent = { generation: number; side: 'left' | 'right'; kind: CompareEntryKind; bytes: Uint8Array; binary: boolean };
 export type CompareCommit = { side: 'left' | 'right'; sha: string; subject: string; author: string; date: string };
 export type RecoveryRecord = { id: string; root: string; path: string; existed: boolean; stage: string; createdAt: number; warning?: string | null };
 export type EditFile = { ticket: string; bytes: number[]; exists: boolean };
@@ -203,15 +204,15 @@ export const api = {
   recoveryUndo: (id: string) => invoke<RecoveryRecord>('recovery_undo', { id }),
   recoveryCleanup: (ids: string[], confirmed: boolean) => invoke<number>('recovery_cleanup', { ids, confirmed }),
   recoveryResolve: (id: string, confirmed: boolean) => invoke<RecoveryRecord>('recovery_resolve', { id, confirmed }),
-  loadSettings: () => invoke<{ sources: Source[]; workspace: Partial<Workspace> | null }>('load_settings'),
+  loadSettings: () => invoke<{ sources: Source[]; workspace: Partial<Workspace> | null; restoredFromBackup?: boolean; startupError?: string | null }>('load_settings'),
   saveSettings: (settings: { sources: Source[]; workspace: Workspace }) => invoke<void>('save_settings', { settings: withoutTemporaryActive(settings) }),
   sourceRevision: (sourceId: string) => invoke<number>('source_revision', { sourceId }),
   credentialStatus: (sourceId: string) => invoke<CredentialStatus>('credential_status', { sourceId }),
-  setToken: (sourceId: string, token: string) => invoke<void>('set_token', { sourceId, token }),
+  setToken: (sourceId: string, token: string, host?: string) => invoke<void>('set_token', { sourceId, token, ...(host === undefined ? {} : { host }) }),
   hasToken: (sourceId: string) => invoke<boolean>('has_token', { sourceId }),
   deleteToken: (sourceId: string) => invoke<void>('delete_token', { sourceId }),
-  testSource: (source: Source) => invoke<string>('test_source', { source }),
-  listUserOrgs: (source: Source) => invoke<string[]>('list_user_orgs', { source }),
+  testSource: (source: Source, token?: string) => invoke<string>('test_source', { source, token: token?.trim() || null }),
+  listUserOrgs: (source: Source, token?: string) => invoke<string[]>('list_user_orgs', { source, token: token?.trim() || null }),
   listRepos: (source: Source, refresh: boolean) => invoke<RepoList>('list_repos', { source, refresh }),
   listCachedRepos: (source: Source) => invoke<RepoList | null>('list_cached_repos', { source }),
   getCommits: (source: Source, org: string, name: string, branch: string) =>
@@ -219,7 +220,6 @@ export const api = {
   pullForBranch: (path: string, branch: string) => invoke<PullRequest | null>('pull_for_branch', { path, branch }),
   openPullRequest: (path: string, request: OpenPullRequest) => invoke<CreatedPullRequest>('open_pull_request', { path, request }),
   getRefsMany: (urls: string[]) => invoke<RefsResult[]>('get_refs_many', { urls }),
-  pathsExist: (paths: string[]) => invoke<boolean[]>('paths_exist', { paths }),
   startClone: (jobs: CloneJob[], opts: CloneOpts, mode: GitAction = 'clone') => invoke<void>('start_clone', { jobs, opts, mode }),
   localStatus: (paths: string[]) => invoke<LocalStatus[]>('local_status', { paths }),
   activitySnapshot: () => invoke<Activity[]>('activity_snapshot'),
@@ -258,8 +258,8 @@ export const api = {
   cancelComparison: (id: string) => invoke<boolean>('comparison_cancel', { id }),
   comparisonFiles: (id: string, generation: number, offset = 0, limit = 512) =>
     invoke<CompareFile[]>('comparison_files', { id, generation, offset, limit }),
-  comparisonContent: (id: string, generation: number, fileId: string, side: 'left' | 'right') =>
-    invoke<CompareContent>('comparison_content', { id, generation, fileId, side }),
+  comparisonContent: (id: string, generation: number, fileId: string, side: 'left' | 'right', kind: CompareEntryKind) =>
+    readComparisonContent({ id, generation, fileId, side, kind }),
   comparisonCommits: (id: string, generation: number, offset = 0, limit = 200) =>
     invoke<CompareCommit[]>('comparison_commits', { id, generation, offset, limit }),
   openInVscode: (path: string) => invoke<void>('open_in_vscode', { path }),

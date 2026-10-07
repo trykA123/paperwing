@@ -71,6 +71,9 @@ Release notes start with the tag message, and **Save as draft** is checked by de
 Each repository shows its release link or error. The release uses the configured source and stored token
 for the repository remote, including GitHub Enterprise Server. The remote must still contain the same tag object.
 
+Saved tokens are bound to their original host. Changing a host requires saving a token for that host.
+Test connection and Load my organizations use a typed token without saving it until Save source.
+
 Skein reduces terminal juggling; Git retains its right to complain about conflicts.
 
 ## The workspace model
@@ -521,6 +524,11 @@ Use these details when organizing a workspace:
 - Prefer descriptive folder names over `final_final_really_final`. Your comparison tabs deserve a chance.
 
 ## Where things are stored
+
+Settings saves keep the last valid copy in `settings.json.bak`. If the main file is corrupt,
+Skein loads the backup and shows “Settings were restored from a backup”. If neither copy is
+valid, Skein starts with defaults and retains the broken main file as `settings.json.broken-<timestamp>`.
+
 
 | What | Where |
 |---|---|

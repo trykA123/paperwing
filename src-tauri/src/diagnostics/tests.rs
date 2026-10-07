@@ -166,6 +166,17 @@ async fn fixture_document_hides_set_repo_owner_and_path_strings() {
     std::fs::remove_dir_all(fixture).unwrap();
 }
 
+#[test]
+fn every_recorded_operation_and_phase_exports() {
+    let snapshot = serde_json::json!({
+        "aggregates": PHASES.iter().flat_map(|phase| OPERATIONS.iter().map(move |operation| (format!("{phase}/{operation}"), serde_json::json!({"count": 1, "totalMs": 1.0, "maxMs": 1.0})))).collect::<serde_json::Map<_, _>>(),
+        "commands": OPERATIONS.iter().map(|operation| (operation.to_string(), serde_json::json!(1))).collect::<serde_json::Map<_, _>>(),
+        "events": PHASES.iter().flat_map(|phase| OPERATIONS.iter().map(move |operation| serde_json::json!({"phase": phase, "operation": operation, "durationMs": 1.0}))).collect::<Vec<_>>(),
+    });
+    assert!(timings(&snapshot).is_ok());
+    assert!(OPERATIONS.contains(&"diff-tree"));
+}
+
 async fn run_git(repo: &Path, command: &[&str]) {
     let path = repo.to_string_lossy();
     let mut args = vec!["-C", path.as_ref()];

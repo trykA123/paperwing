@@ -586,7 +586,17 @@ button.fm-ref:hover {
 }
 
 .fm-action {
-    max-width: 100%;
+    max-inline-size: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.fm-action > .i {
+    flex: none;
+}
+
+.fm-action-label {
+    min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
 }

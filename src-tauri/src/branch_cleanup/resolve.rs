@@ -65,7 +65,7 @@ pub(super) fn valid_branch(name: &str) -> Result<(), String> {
 }
 
 pub(super) fn valid_oid(oid: &str) -> bool {
-    matches!(oid.len(), 40 | 64) && oid.bytes().all(|byte| byte.is_ascii_hexdigit())
+    crate::object_id::valid(oid)
 }
 
 pub(super) fn short(reference: &str) -> &str {

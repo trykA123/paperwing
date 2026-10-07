@@ -1,3 +1,6 @@
+#[path = "batch.rs"]
+mod batch;
+pub(crate) use batch::BatchReader;
 use serde::Serialize;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -21,7 +24,7 @@ type Child = linux_job::Job;
 type Child = tokio::process::Child;
 
 const OUTPUT_LIMIT: usize = 64 * 1024;
-const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
+pub(crate) const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
 pub(super) static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static ACTIVITY: OnceLock<Mutex<VecDeque<Activity>>> = OnceLock::new();
 static APPLICATION: OnceLock<AppHandle> = OnceLock::new();
@@ -191,15 +194,10 @@ pub struct Captured {
     pub stderr: Vec<u8>,
     pub code: Option<i32>,
     redaction: Redaction,
-    raw_stderr: Vec<u8>,
 }
 
 impl Captured {
     pub fn safe(&self, text: &str) -> String { self.redaction.safe(text) }
-
-    pub(crate) fn stderr_contains(&self, text: &str) -> bool {
-        String::from_utf8_lossy(&self.raw_stderr).contains(text)
-    }
 
     pub fn last_error(&self) -> String {
         if self.redaction.quiet() { return self.safe(""); }
@@ -397,7 +395,39 @@ impl Streams {
     }
 }
 
+fn write_root(args: &[&str]) -> Option<std::path::PathBuf> {
+    write_root_from(args, std::env::current_dir())
+}
+
+fn write_root_from(
+    args: &[&str],
+    cwd: std::io::Result<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
+    let mut root = cwd.unwrap_or_default();
+    let mut index = 0;
+    while let Some(arg) = args.get(index) {
+        match *arg {
+            "-C" => { root = root.join(args.get(index + 1)?); index += 2; }
+            "-c" | "--git-dir" | "--work-tree" => index += 2,
+            "fetch" | "pull" => return Some(root),
+            value if value.starts_with('-') => index += 1,
+            _ => return None,
+        }
+    }
+    None
+}
+
 async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, owner: Option<Arc<AtomicBool>>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+    if let Some(root) = write_root(request.args) { BatchReader::close_root(&root).await?; }
+    if request.args.windows(2).any(|args| args == ["worktree", "remove"]) {
+        let root = request.args.windows(2).find(|args| args[0] == "-C").map(|args| std::path::PathBuf::from(args[1]));
+        if let Some(root) = &root { BatchReader::close_root(root).await?; }
+        if let Some(path) = request.args.last().filter(|arg| !arg.starts_with('-')) {
+            let path = std::path::Path::new(path);
+            let path = if path.is_absolute() { path.to_path_buf() } else { root.unwrap_or_default().join(path) };
+            BatchReader::close_root(&path).await?;
+        }
+    }
     #[cfg(feature = "benchmark")]
     let operation = crate::benchmark::operation(request.args);
     #[cfg(feature = "benchmark")]
@@ -521,7 +551,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         }
         activity.state = if sunk_stop || status.code().is_some_and(|code| request.expected.contains(&code)) { "completed" } else { "failed" }.into();
         Ok(Captured { stdout, stderr: if quiet { Vec::new() } else { redaction.safe(&String::from_utf8_lossy(&stderr)).into_bytes() },
-            code: status.code(), redaction: redaction.clone(), raw_stderr: stderr })
+            code: status.code(), redaction: redaction.clone() })
     }.await.map_err(|error: String| if quiet { error } else { redaction.safe(&error) });
     if activity.state == "running" { activity.state = "failed".into(); }
     if let Err(error) = &result {
@@ -571,7 +601,7 @@ pub async fn buffered(args: &[&str], context: &str, expected: &[i32]) -> Result<
 
 #[cfg(all(test, target_os = "linux"))]
 pub(super) fn resources_idle() -> bool {
-    SLOTS.get().is_none_or(|slots| slots.available_permits() == 32)
+    batch::resources_idle() && SLOTS.get().is_none_or(|slots| slots.available_permits() == 32)
         && RUNNING.get().is_none_or(|jobs| jobs.lock().unwrap().is_empty())
 }
 
@@ -637,5 +667,23 @@ impl Drop for CredentialFixture {
         let ids: Vec<String> = FIXTURE_SECRETS.lock().unwrap().take().map(|secrets| secrets.into_keys().collect()).unwrap_or_default();
         bump(&ids);
         configure_sources(self.sources.clone());
+    }
+}
+
+#[cfg(test)]
+mod write_root_tests {
+    use super::*;
+
+    #[test]
+    fn absolute_fetch_and_pull_roots_survive_an_unreadable_cwd() {
+        let root = crate::test_support::tmp_root().join("write-root");
+        let path = root.to_str().unwrap();
+        for operation in ["fetch", "pull"] {
+            let cwd = Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+            assert_eq!(
+                write_root_from(&["-c", "alias.unrelated=pull", "-C", path, operation], cwd),
+                Some(root.clone())
+            );
+        }
     }
 }

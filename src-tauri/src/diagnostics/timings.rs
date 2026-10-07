@@ -3,56 +3,8 @@ use super::PREVIEW_ERROR;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-pub(super) const PHASES: &[&str] = &[
-    "git.queue",
-    "git.process",
-    "compare.queue",
-    "compare.prepare",
-    "compare.inventory",
-    "compare.metadata",
-    "compare.history",
-    "ipc.open",
-    "ipc.refresh",
-    "ipc.files",
-    "ipc.content",
-    "ui.request",
-    "ui.files-ready",
-    "ui.first-render",
-    "ui.complete",
-    "editor.import",
-    "editor.construct",
-    "editor.diff",
-];
-pub(super) const OPERATIONS: &[&str] = &[
-    "other",
-    "version",
-    "rev-parse",
-    "status",
-    "ls-files",
-    "ls-tree",
-    "cat-file",
-    "diff",
-    "log",
-    "show",
-    "fetch",
-    "clone",
-    "checkout",
-    "switch",
-    "pull",
-    "push",
-    "add",
-    "reset",
-    "commit",
-    "branch",
-    "config",
-    "for-each-ref",
-    "symbolic-ref",
-    "rev-list",
-    "remote",
-    "stash",
-    "check-ignore",
-    "check-attr",
-];
+pub(super) const PHASES: &[&str] = crate::benchmark::PHASES;
+pub(super) const OPERATIONS: &[&str] = crate::benchmark::OPERATIONS;
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Timings {

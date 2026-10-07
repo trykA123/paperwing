@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 mod cache;
+#[cfg(test)]
 mod commit_cache;
 mod http;
 mod listing;
@@ -82,7 +83,7 @@ struct GhAuthor {
     date: Option<String>,
 }
 
-fn valid_host(host: &str) -> Result<(), String> {
+pub(crate) fn valid_host(host: &str) -> Result<(), String> {
     let ok = !host.is_empty()
         && host.len() <= 253
         && !host.starts_with(['.', '-'])
@@ -215,9 +216,9 @@ pub async fn list_cached_repos(app: AppHandle, source: Source) -> Result<Option<
 }
 
 #[tauri::command]
-pub async fn test_source(source: Source) -> Result<String, String> {
+pub async fn test_source(source: Source, token: Option<String>) -> Result<String, String> {
     valid_id(&source.id)?;
-    let login = get_json::<GhLogin>(&source, "/user")
+    let login = get_json::<GhLogin>(&source, "/user", token)
         .await
         .map_err(|(_, e)| e)?
         .login;
@@ -226,9 +227,9 @@ pub async fn test_source(source: Source) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn list_user_orgs(source: Source) -> Result<Vec<String>, String> {
+pub async fn list_user_orgs(source: Source, token: Option<String>) -> Result<Vec<String>, String> {
     valid_id(&source.id)?;
-    let orgs: Vec<GhLogin> = get_json(&source, "/user/orgs?per_page=100")
+    let orgs: Vec<GhLogin> = get_json(&source, "/user/orgs?per_page=100", token)
         .await
         .map_err(|(_, e)| e)?;
     Ok(orgs.into_iter().map(|o| o.login).collect())
@@ -236,7 +237,6 @@ pub async fn list_user_orgs(source: Source) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub async fn get_commits(
-    app: AppHandle,
     source: Source,
     org: String,
     name: String,
@@ -274,16 +274,5 @@ pub async fn get_commits(
             }
         })
         .collect();
-    commit_cache::remember(
-        &app.state::<Store>(),
-        &commit_cache::Request {
-            source: &source,
-            org: &org,
-            name: &name,
-            branch: &branch,
-            revision,
-        },
-        &commits,
-    );
     Ok(commits)
 }

@@ -24,6 +24,7 @@ mod github;
 mod history;
 mod local;
 mod ordered;
+mod object_id;
 mod paths;
 mod platform;
 #[cfg(not(any(windows, target_os = "linux")))]
@@ -50,13 +51,14 @@ use std::path::Path;
 use tauri::Manager;
 
 #[tauri::command]
-fn paths_exist(paths: Vec<String>) -> Vec<bool> {
-    paths.iter().map(|p| Path::new(p).exists()).collect()
+async fn open_in_vscode(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || open_editor(&path)).await
+        .map_err(|_| "Could not open VS Code".to_string())?
 }
 
-#[tauri::command]
-fn open_in_vscode(path: String) -> Result<(), String> {
-    let dir = Path::new(&path);
+fn open_editor(path: &str) -> Result<(), String> {
+    git::valid_path(path, true)?;
+    let dir = Path::new(path);
     if !dir.is_dir() {
         return Err(format!("{path} does not exist yet"));
     }
@@ -86,6 +88,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(launch::single_instance())
         .manage(launch::Pending::from_process())
+        .manage(settings::Startup::default())
         .manage(discover_job::Service::default())
         .manage(search_service::Service::default())
         .manage(compare::Service::default());
@@ -96,7 +99,8 @@ pub fn run() {
     builder
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
-                tauri::async_runtime::block_on(webview.state::<compare::Service>().release_sessions());
+                let closing = webview.state::<compare::Service>().release_sessions();
+                tauri::async_runtime::spawn(closing);
                 #[cfg(windows)]
                 tauri::async_runtime::block_on(webview.state::<files::Service>().release_tickets());
                 #[cfg(target_os = "linux")]
@@ -118,6 +122,11 @@ pub fn run() {
                     .data_directory(webview).build()?;
             }
             app.manage(store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok()));
+            let handle = app.handle().clone();
+            if let Err(error) = tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || settings::initialize(handle)))
+                .map_err(|error| error.to_string()).and_then(|result| result) {
+                settings::initialization_failed(app.handle(), error);
+            }
             git::attach(app.handle().clone());
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
@@ -137,8 +146,8 @@ pub fn run() {
             #[cfg(feature = "benchmark")] benchmark::benchmark_snapshot,
             #[cfg(feature = "test-profile")] test_profile::benchmark_plan,
             #[cfg(feature = "test-profile")] test_profile::benchmark_finish,
-            settings::load_settings,
-            settings::save_settings,
+            settings::commands::load_settings,
+            settings::commands::save_settings,
             settings::set_token,
             settings::has_token,
             settings::delete_token,
@@ -221,7 +230,6 @@ pub fn run() {
             #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_resolve,
             clone::start_clone,
             local::local_status,
-            paths_exist,
             platform::platform_info,
             platform::probe_root,
             platform::path_identities,

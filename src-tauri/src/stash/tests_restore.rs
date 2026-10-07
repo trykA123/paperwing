@@ -110,3 +110,69 @@ async fn apply_is_refused_while_a_merge_is_in_conflict() {
     assert_eq!(stash_list(path.clone()).await.unwrap().len(), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[tokio::test]
+async fn an_existing_untracked_file_does_not_retry_a_partially_applied_stash_regression() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let dir = repo();
+    let path = text(&dir);
+    std::fs::write(dir.join("a.txt"), "staged\n").unwrap();
+    git_in(&dir, &["add", "a.txt"]);
+    std::fs::write(dir.join("untracked.txt"), "stashed untracked\n").unwrap();
+    let oid = push(&path, None, true).await.unwrap().stashed.unwrap();
+    std::fs::write(dir.join("untracked.txt"), "keep local untracked\n").unwrap();
+    let outcome = restore(&path, &oid, Restore::Pop).await.unwrap();
+    assert!(!outcome.applied && outcome.stash_kept, "{outcome:?}");
+    let attempts: Vec<_> = crate::git::activity_snapshot().into_iter()
+        .map(|entry| serde_json::to_value(entry).unwrap())
+        .filter(|entry| entry["context"] == format!("Stash pop: {path}"))
+        .collect();
+    assert_eq!(attempts.len(), 1, "unexpected retry: {attempts:?}");
+    assert_eq!(attempts[0]["exitCode"], 128);
+    assert!(outcome.index_restored, "unexpected no-index retry: {outcome:?}");
+    assert!(outcome.conflicted.is_empty());
+    assert_eq!(read(&dir, "untracked.txt"), "keep local untracked\n");
+    assert_eq!(read(&dir, "a.txt"), "staged\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn partially_restored_untracked_directory_does_not_retry_regression() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let dir = repo();
+    let path = text(&dir);
+    std::fs::create_dir(dir.join("d")).unwrap();
+    std::fs::write(dir.join("d/new1"), "stashed new file\n").unwrap();
+    std::fs::write(dir.join("d/existing"), "stashed existing file\n").unwrap();
+    let oid = push(&path, None, true).await.unwrap().stashed.unwrap();
+    std::fs::create_dir_all(dir.join("d")).unwrap();
+    std::fs::write(dir.join("d/existing"), "keep local file\n").unwrap();
+
+    let outcome = restore(&path, &oid, Restore::Apply).await.unwrap();
+    let activities: Vec<_> = crate::git::activity_snapshot()
+        .into_iter()
+        .map(|entry| serde_json::to_value(entry).unwrap())
+        .filter(|entry| entry["context"] == format!("Stash apply: {path}"))
+        .collect();
+    assert_eq!(activities.len(), 1, "unexpected retry: {activities:?}");
+    assert_eq!(activities[0]["exitCode"], 128);
+    assert!(
+        !outcome.applied && outcome.stash_kept && outcome.index_restored,
+        "{outcome:?}"
+    );
+    assert!(outcome.conflicted.is_empty());
+    assert_eq!(read(&dir, "d/new1"), "stashed new file\n");
+    assert_eq!(read(&dir, "d/existing"), "keep local file\n");
+    assert_eq!(read(&dir, "a.txt"), "one\n");
+    let snapshots: Vec<_> = crate::git::activity_snapshot()
+        .into_iter()
+        .map(|entry| serde_json::to_value(entry).unwrap())
+        .filter(|entry| entry["context"] == format!("Stash state: {path}"))
+        .collect();
+    assert!(snapshots.iter().all(|entry| entry["output"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|output| output["stream"] == "metadata")));
+    let _ = std::fs::remove_dir_all(&dir);
+}

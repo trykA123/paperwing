@@ -1,10 +1,10 @@
+#[cfg(not(target_os = "linux"))]
+use super::NEXT;
 use super::{decode, CompareRef, Job, Lines, Options, Problem, Rename, Resolved};
 use crate::git;
 use std::collections::HashMap;
 #[cfg(not(target_os = "linux"))]
 use std::path::PathBuf;
-#[cfg(not(target_os = "linux"))]
-use super::NEXT;
 #[cfg(not(target_os = "linux"))]
 use std::sync::atomic::Ordering;
 
@@ -103,16 +103,36 @@ pub(super) async fn line_counts(left: &[u8], right: &[u8], job: &Job) -> Result<
     if binary(left) || binary(right) {
         return Ok(None);
     }
+    if job.rust_counts.is_some() {
+        let (left_owned, right_owned, count_job) = (left.to_vec(), right.to_vec(), job.clone());
+        if let Some(lines) = tokio::task::spawn_blocking(move || {
+            super::line_counts::count(&left_owned, &right_owned, &count_job)
+        })
+        .await
+        .map_err(|_| Problem::new("unavailable", "Line count task failed"))??
+        {
+            return Ok(Some(lines));
+        }
+    }
     #[cfg(target_os = "linux")]
     let temporary = job.diff.as_ref().ok_or_else(|| Problem::new("unavailable", "Private diff storage is not configured"))?
         .materialize(job.roots.clone(), job.cancel.clone(), [left, right]).await
         .map_err(storage_problem)?;
-    #[cfg(target_os = "linux")]
-    let (root, left, right) = (temporary.path().to_path_buf(), temporary.path().join("left"), temporary.path().join("right"));
     #[cfg(not(target_os = "linux"))]
     let mut temporary = Temporary::new(job)?;
     #[cfg(not(target_os = "linux"))]
-    let (root, left, right) = (temporary.0.clone(), temporary.write("left", left)?, temporary.write("right", right)?);
+    let (left_path, right_path) = (
+        temporary.write("left", left)?, temporary.write("right", right)?,
+    );
+    #[cfg(target_os = "linux")]
+    let root = temporary.path().to_path_buf();
+    #[cfg(not(target_os = "linux"))]
+    let root = temporary.0.clone();
+    #[cfg(target_os = "linux")]
+    let (left, right) = (
+        temporary.path().join("left"), temporary.path().join("right"));
+    #[cfg(not(target_os = "linux"))]
+    let (left, right) = (left_path, right_path);
     let result = job.run(&root, &[
         "-c", "core.attributesFile=", "diff", "--no-index", "--no-ext-diff", "--no-textconv",
         "--no-renames", "--numstat", "-z", "--",
@@ -202,24 +222,34 @@ pub(super) async fn diff_metadata(
             Some("Working-tree rename metadata unavailable; clean filters are not executed".into());
         return Ok(metadata);
     }
+    let estimated_raw = left
+        .files
+        .iter()
+        .chain(&right.files)
+        .filter(|(_, entry)| entry.kind != super::Kind::Directory)
+        .map(|(path, _)| path.len() + 160)
+        .sum::<usize>();
+    let tree = left.object_format == right.object_format && estimated_raw < git::CAPTURE_LIMIT;
     let mut args = vec![
-        "diff",
         "--no-ext-diff",
         "--no-textconv",
         "--ignore-submodules=all",
-        "--find-renames",
+        "-M",
         "-z",
     ];
-    if working_left {
-        args.extend(["-R", &right.commit]);
+    if tree {
+        args.splice(0..0, ["diff-tree", "-r", "--no-commit-id"]);
     } else {
-        args.push(&left.commit);
-        if !working_right {
-            args.push(&right.commit);
-        }
+        args.insert(0, "diff");
     }
+    let algorithm = left.diff_config.iter().rev()
+        .find_map(|value| value.strip_prefix("diff.algorithm="))
+        .map(|value| format!("--diff-algorithm={value}"));
+    if let Some(algorithm) = &algorithm { args.push(algorithm); }
+    args.splice(0..0, left.diff_config.iter().map(String::as_str));
+    args.extend([left.commit.as_str(), right.commit.as_str()]);
     let mut names = args.clone();
-    names.extend(["--name-status", "--"]);
+    names.extend([if tree { "--raw" } else { "--name-status" }, "--"]);
     let output = job.output(&left.context.root, &names).await?;
     let fields: Vec<_> = output
         .split(|byte| *byte == 0)
@@ -227,7 +257,16 @@ pub(super) async fn diff_metadata(
         .collect();
     let mut index = 0;
     while index < fields.len() {
-        let status = decode(fields[index])?;
+        let header = decode(fields[index])?;
+        let status = if tree {
+            let fields: Vec<_> = header.split_whitespace().collect();
+            if fields.len() != 5 || !fields[0].starts_with(':') {
+                return Err(Problem::new("gitError", "Invalid raw diff record"));
+            }
+            fields[4]
+        } else {
+            header.as_str()
+        };
         index += 1;
         let path = fields
             .get(index)

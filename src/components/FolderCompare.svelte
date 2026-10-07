@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { benchmarkEnabled, benchmarkFinished } from '../lib/benchmark';
-  import { api, type Source, type Workspace, type CompareFile } from '../lib/api';
+  import type { Source, Workspace, CompareFile } from '../lib/api';
   import { app } from '../lib/state.svelte';
   import { commands, execute } from '../lib/commands';
   import { tabId } from '../lib/workspace';
@@ -63,7 +63,7 @@
   async function compare() {
     preparing = true; localError = '';
     try {
-      await api.saveSettings({ sources: $state.snapshot(app.sources) as Source[], workspace: $state.snapshot(app.ws) as Workspace });
+      await app.saveSettings({ sources: $state.snapshot(app.sources) as Source[], workspace: $state.snapshot(app.ws) as Workspace });
       if (!mounted) return;
       await comparison.open($state.snapshot(view.left), $state.snapshot(view.right), $state.snapshot(comparison.options));
       await comparison.loadAllFiles();

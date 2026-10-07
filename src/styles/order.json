@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 8276,
-  "normalizedSourceSHA256": "bd5395f49a2b2c93af80c732172ed2a307b7b31f1703f85fc52d1e8b604d3c28",
+  "originalLineCount": 8286,
+  "normalizedSourceSHA256": "b5cfc8f2789cfa199687a8db0b10c32c265604203bd05a574d701fa86f7745d7",
   "chapters": [
     {
       "path": "comparison.css",
@@ -97,37 +97,37 @@
     {
       "path": "formation.css",
       "firstLine": 6102,
-      "lastLine": 7085,
-      "normalizedSHA256": "bb84ce99f25dfd8353c1582ea38c045177b1235f692281cb50b7b4222721c6c0"
+      "lastLine": 7095,
+      "normalizedSHA256": "3b05321bd681bb3e17f060ea074b322f88e91375d129bea85c94babce140b987"
     },
     {
       "path": "cleanup-search.css",
-      "firstLine": 7086,
-      "lastLine": 7403,
+      "firstLine": 7096,
+      "lastLine": 7413,
       "normalizedSHA256": "54a5eb4c409bd5ee5aa001c33d2895accec9edd9956cf28539752be4ea3e2459"
     },
     {
       "path": "stash.css",
-      "firstLine": 7404,
-      "lastLine": 7664,
+      "firstLine": 7414,
+      "lastLine": 7674,
       "normalizedSHA256": "a3fc7ee4fae89a665bdf4816e98c6d483204008859fbe8162ef0d653af3423e8"
     },
     {
       "path": "tags.css",
-      "firstLine": 7665,
-      "lastLine": 7870,
+      "firstLine": 7675,
+      "lastLine": 7880,
       "normalizedSHA256": "34f7fca5dc6705f64b59772cca8ef774a10deb924a93ba325e68046750faff4c"
     },
     {
       "path": "pulls.css",
-      "firstLine": 7871,
-      "lastLine": 8098,
-      "normalizedSHA256": "a9d2ff0dfc8af370dc93e65043912a7bb366058fada779797e128641c9cb6682"
+      "firstLine": 7881,
+      "lastLine": 8108,
+      "normalizedSHA256": "fd6ae7b314622ebd02c5e12020bf2e573949b2a456be7e9e17f87cc44d367cbc"
     },
     {
       "path": "modules.css",
-      "firstLine": 8099,
-      "lastLine": 8276,
+      "firstLine": 8109,
+      "lastLine": 8286,
       "normalizedSHA256": "d60096b17677b134928fe7e915df0e37b0019ae1a3fe1dccc72e36eab6303d2e"
     }
   ]

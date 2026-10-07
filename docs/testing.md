@@ -107,6 +107,65 @@ the production desktop's Secret Service, exercise real GitHub credentials or rep
 Windows/owner-observed acceptance. [Credential contracts](linux-credentials.md) describe
 uncertain mutation responses and the process-local revision seam.
 
+## Cold-path contract controls
+
+Packet17 controls live in `compare::tests::cold_path`. A clean CRLF checkout still
+compares its raw bytes against the LF commit blob. Porcelain status and raw Git diff
+both omit that file. A clean-filter sentinel proves those commands execute filters
+which comparison avoids.
+
+Independent SHA-1 and SHA-256 repositories preserve raw equality, normalized equality,
+line counts and content reads. One Git object database cannot run tree diffs or batch
+read both formats, even with object alternates. Endpoint-owned batch readers keep these object databases separate. Working-tree
+inventory hashes raw bytes in each endpoint's object format without invoking filters.
+
+```sh
+cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib cold_path -- --test-threads=1
+```
+
+The frozen packet 17 oracle lives in `compare/tests/legacy`. Equivalence tests compare
+serialized rows, summaries, options and history while excluding generated file IDs.
+Fixtures cover renames, deletions, type changes, binary files, BOM/CRLF, filters, links,
+submodule entries, empty trees, unborn HEAD, content limits and independent object formats.
+Lifecycle controls verify reader release on close, cancel, refresh and owner drop.
+
+```sh
+cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib compare::tests -- --test-threads=1
+bun test src/lib/content-bytes.test.js
+```
+
+The comparison content command sends raw binary through `tauri::ipc::Response`.
+The API adapter returns a `Uint8Array` and derives content metadata from the request
+and selected row. The backend still validates the session, generation, source and bytes.
+
+Rust counts cover disjoint LF edits when a cached `git check-attr -a` probe finds no
+applicable attributes for `left` and `right` in the private storage root. The probe
+uses the same `core.attributesFile=` override as the legacy no-index diff. It also
+reads effective `core.autocrlf` once from the storage working directory. Rust counts
+preserve CR bytes under `false`; `true` and `input` convert CRLF when there is no lone
+CR or NUL in the first 8000 bytes. Other CR-bearing inputs retain Git counts.
+Eligibility and diff configuration reset on accepted open and refresh, before
+materialization. Open never waits for a fetch. Storage ancestors with `.gitattributes` keep
+the Git fallback because attributes can target generated child directories.
+Batch readers have twelve independent permits;
+same-Git-directory endpoints share one reader. Readers release after 30 seconds idle
+and restart once after a read error. They close on session release, cancellation,
+refresh, root mutation, fetch and pull. Page reload drains sessions synchronously
+before scheduling reader closes. Linked worktrees use their Git and common directories.
+Long-path inventories retain name-status metadata at the existing capture limit.
+
+The ignored `compare::tests::cold_measure::measure_cold_comparison` test provides a
+backend-only before/after harness with the `benchmark` feature. It requires
+`SKEIN_COLD_ROOT`, `SKEIN_COLD_ENGINE` (`old` or `new`),
+`SKEIN_COLD_WORKLOAD` (`refs`, `cross`, `working` or `working-crlf`) and `SKEIN_COLD_RESULT`.
+The CRLF workload uses `checkouts/crlf`, with CRLF text and `core.autocrlf=true`.
+Set `GIT_CONFIG_GLOBAL` to an isolated configuration with `core.autocrlf=true` so
+the private storage also uses automatic conversion.
+`SKEIN_COLD_NORMALIZE_EOL=false` disables EOL normalization; it defaults to `true`.
+Use fixtures with `.skein-disposable` containing `skein-disposable-fixture-v1` and output paths inside the owned worktree. Capture process-tree
+RSS only between its `MEASURE_BEGIN` and `MEASURE_END` markers. These measurements
+exclude WebView rendering and do not replace native release or Windows/Defender evidence.
+
 ## Linux Git helper cleanup
 
 Run the native Git tests serially. They fork only inside marked private fixtures and clean

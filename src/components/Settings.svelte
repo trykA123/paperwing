@@ -111,7 +111,7 @@
     const sourceId = draft.id, entered = token;
     tokenAttempted = true;
     draft.credentialManaged = true;
-    await app.credentials.mutate(sourceId, entered.trim());
+    await app.credentials.mutate(sourceId, entered.trim(), snapshot().host);
     if (draft?.id === sourceId && token === entered) token = '';
   }
 
@@ -122,15 +122,15 @@
       : '';
     if (missing) { msg = { ok: false, text: missing, where }; return; }
     busy = where;
-    try { await saveToken(); await task(); } catch (e) { msg = { ok: false, text: String(e), where }; }
+    try { await task(); } catch (e) { msg = { ok: false, text: String(e), where }; }
     busy = '';
   }
 
   const test = () => run('token', async () => {
-    msg = { ok: true, text: `Connected as ${await api.testSource(snapshot())}. The token works.`, where: 'token' };
+    msg = { ok: true, text: `Connected as ${await api.testSource(snapshot(), token)}. The token works.`, where: 'token' };
   });
   const loadOrgs = () => run('orgs', async () => {
-    myOrgs = await api.listUserOrgs(snapshot());
+    myOrgs = await api.listUserOrgs(snapshot(), token);
     msg = myOrgs.length
       ? { ok: true, text: `Found ${myOrgs.length}. Click the ones you clone from.`, where: 'orgs' }
       : { ok: true, text: 'Your account is not a member of any organization. Type names manually.', where: 'orgs' };
@@ -151,7 +151,7 @@
       s.credentialManaged = draft?.credentialManaged;
       const sources = app.sources.map(source => source.id === s.id ? s : $state.snapshot(source) as Source);
       if (!sources.some(source => source.id === s.id)) sources.push(s);
-      await api.saveSettings({ sources, workspace: $state.snapshot(app.ws) });
+      await app.saveSettings({ sources, workspace: $state.snapshot(app.ws) });
       app.credentials.invalidate(s.id);
       await app.credentials.synchronize(s.id);
       app.sources = sources;
@@ -181,7 +181,7 @@
     try {
       if (s.kind !== 'manual' || s.credentialManaged || app.platform.platform === 'windows') await app.credentials.mutate(s.id);
       const sources = app.sources.filter(source => source.id !== s.id);
-      await api.saveSettings({ sources: $state.snapshot(sources), workspace: $state.snapshot(app.ws) });
+      await app.saveSettings({ sources: $state.snapshot(sources), workspace: $state.snapshot(app.ws) });
       app.sources = sources;
       app.credentials.invalidate(s.id);
     } catch (e) { app.toast(`Source retained. ${String(e)}`, 'error'); }

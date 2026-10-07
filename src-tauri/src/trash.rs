@@ -77,7 +77,9 @@ fn recycle(path: &Path) -> Result<(), String> {
 pub async fn trash_set_folders(app: tauri::AppHandle, set_id: String) -> Result<Vec<TrashOutcome>, String> {
     if crate::clone::busy() { return Err("A clone, fetch or pull is running; try again when it finishes".into()); }
     let settings = crate::settings::load_settings(app)?;
+    for (_, root) in crate::compare::set_roots(&settings, &set_id)?.0 { crate::git::BatchReader::close_root(&root).await?; }
     let _exclusive = crate::git::filesystem_gate().write().await;
+    for (_, root) in crate::compare::set_roots(&settings, &set_id)?.0 { crate::git::BatchReader::close_root(&root).await?; }
     tauri::async_runtime::spawn_blocking(move || trash_folders(&settings, &set_id, recycle))
         .await
         .map_err(|_| "Could not move the folders".to_string())?
@@ -89,7 +91,12 @@ pub async fn trash_set_folders(
     app: tauri::AppHandle,
     set_id: String,
 ) -> Result<Vec<TrashOutcome>, String> {
+    let worker_app = app.clone();
+    let settings = tauri::async_runtime::spawn_blocking(move || crate::settings::load_settings(worker_app))
+        .await.map_err(|_| "Could not load folder settings".to_string())??;
+    for (_, root) in crate::compare::set_roots(&settings, &set_id)?.0 { crate::git::BatchReader::close_root(&root).await?; }
     let exclusive = crate::git::filesystem_gate().write().await;
+    for (_, root) in crate::compare::set_roots(&settings, &set_id)?.0 { crate::git::BatchReader::close_root(&root).await?; }
     if crate::clone::busy() {
         return Err("A clone, fetch or pull is running; try again when it finishes".into());
     }

@@ -319,3 +319,35 @@ async fn public_github_and_ordinary_enterprise_errors_do_not_retry() {
         assert_eq!(calls.get(), 1);
     }
 }
+
+#[tokio::test]
+async fn typed_draft_token_works_on_a_new_unsaved_host() {
+    let source: Source = serde_json::from_value(serde_json::json!({"id":"unsaved-draft-fixture","name":"admin","kind":"ghe","host":"new.invalid"})).unwrap();
+    let http = Http::draft(&source, Some("synthetic-typed-token".into())).await.unwrap();
+    let request = http.build_request(Method::GET, "/user", None).unwrap();
+    assert_eq!(request.headers()["authorization"], "Bearer synthetic-typed-token");
+    assert_eq!(request.url().host_str(), Some("new.invalid"));
+    assert!(Http::draft(&source, None).await.is_err());
+}
+
+#[tokio::test]
+async fn bound_token_mismatch_stops_the_counting_transport() {
+    use std::cell::Cell;
+    let source: Source = serde_json::from_value(serde_json::json!({"id":"bound-draft-fixture","name":"admin","kind":"ghe","host":"new.invalid"})).unwrap();
+    let sends = Cell::new(0);
+    let connection = Http::with_token(
+        Connection { source: &source, base: api_base(&source.host).unwrap(), host: &source.host, expected: 0 },
+        async { crate::credentials::token_fixture(r#"skein-token-v1:{"host":"saved.invalid","token":"synthetic-stored-token"}"#, &source.host) },
+        || 0,
+    ).await;
+    let error = match connection {
+        Err(error) => error,
+        Ok(http) => {
+            let request = http.build_request(Method::GET, "/user", None).unwrap();
+            http.dispatch_request(request, |_| async { sends.set(sends.get() + 1); Ok((200, ())) }).await.unwrap();
+            panic!("a bound token mismatch must fail before dispatch");
+        }
+    };
+    assert_eq!(error, (0, "This token was saved for saved.invalid. Save a token for new.invalid first.".into()));
+    assert_eq!(sends.get(), 0);
+}

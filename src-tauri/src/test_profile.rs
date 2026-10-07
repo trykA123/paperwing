@@ -57,7 +57,7 @@ pub fn ensure() -> Result<(), String> {
     Ok(())
 }
 
-pub fn validate(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn validate<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     ensure()?;
     if app.config().identifier != IDENTIFIER || app.config().app.windows.iter().any(|window| window.create) {
         return Err("Test profile requires isolated config and deferred WebView creation".into());

@@ -234,6 +234,9 @@ async fn run_job(app: &AppHandle, job: &Job, opts: &Opts) -> Result<(&'static st
             "skip" => return Ok(("skipped", "Folder exists, skipped".into())),
             "fetch" => return switch_existing(app, job).await,
             "reclone" => {
+                crate::git::BatchReader::close_root(&dest).await?;
+                let _exclusive = crate::git::filesystem_gate().write().await;
+                crate::git::BatchReader::close_root(&dest).await?;
                 let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_nanos()).unwrap_or(0);
                 let backup = PathBuf::from(format!("{d}.bak-{ts}-{}", std::process::id()));
                 if backup.exists() { return Err("Reclone backup already exists; existing clone retained".into()); }
@@ -308,9 +311,12 @@ fn validate_jobs(settings: &crate::settings::Settings, jobs: &[Job]) -> Result<(
 
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
-pub fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<String>) -> Result<(), String> {
-    let settings = crate::settings::load_settings(app.clone())?;
-    validate_jobs(&settings, &jobs)?;
+pub async fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<String>) -> Result<(), String> {
+    let (validation_app, validation_jobs) = (app.clone(), jobs.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        let settings = crate::settings::load_settings(validation_app)?;
+        validate_jobs(&settings, &validation_jobs)
+    }).await.map_err(|_| "Could not validate clone folders")??;
     let sem = Arc::new(Semaphore::new(opts.parallel.clamp(1, 16)));
     let mode = mode.unwrap_or_else(|| "clone".into());
     tauri::async_runtime::spawn(async move {
@@ -320,12 +326,16 @@ pub fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Option<Stri
                 let (app, sem, opts, mode) = (app.clone(), sem.clone(), opts.clone(), mode.clone());
                 tauri::async_runtime::spawn(async move {
                     let _permit = sem.acquire_owned().await;
+                    if let Err(error) = crate::git::BatchReader::close_root(Path::new(&job.dest)).await { emit(&app, &job.id, "failed", 0.0, error); return; }
                     let _lease = match Lease::acquire() {
                         Ok(lease) => lease,
                         Err(error) => { emit(&app, &job.id, "failed", 0.0, error); return; }
                     };
-                    let registered = crate::settings::load_settings(app.clone()).and_then(|settings|
-                        crate::compare::registered_clone_destination(&settings, &job.id, Path::new(&job.dest), &job.url));
+                    let (registration_app, registration_job) = (app.clone(), job.clone());
+                    let registered = tauri::async_runtime::spawn_blocking(move || {
+                        crate::settings::load_settings(registration_app).and_then(|settings|
+                            crate::compare::registered_clone_destination(&settings, &registration_job.id, Path::new(&registration_job.dest), &registration_job.url))
+                    }).await.map_err(|_| "Could not validate clone destination".to_string()).and_then(|result| result);
                     if let Err(error) = registered { emit(&app, &job.id, "failed", 0.0, error); return; }
                     #[cfg(windows)]
                     let _root_guard = if Path::new(&job.dest).exists() && !(mode == "clone" && opts.on_existing == "reclone") {
@@ -375,6 +385,7 @@ pub async fn start_clone(
     if !["skip", "fetch", "reclone"].contains(&opts.on_existing.as_str()) {
         return Err("Unknown 'if folder exists' option".into());
     }
+    for job in &jobs { crate::git::BatchReader::close_root(Path::new(&job.dest)).await?; }
     let lease = Lease::acquire()?;
     let worker_app = app.clone();
     let admission_mode = mode.clone();

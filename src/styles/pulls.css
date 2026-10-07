@@ -108,8 +108,8 @@
 
 @container (max-width: 1100px) {
     .fm-row {
-        --fm-cols: 40px minmax(92px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1.1fr) minmax(128px, .9fr) minmax(84px, 120px) 32px;
-        min-width: 700px;
+        --fm-cols: 40px minmax(92px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1.1fr) minmax(128px, .9fr) minmax(120px, 128px) 32px;
+        min-width: 724px;
     }
 
     .pull-text {

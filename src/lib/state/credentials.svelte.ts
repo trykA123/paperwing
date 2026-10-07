@@ -59,11 +59,11 @@ export class Credentials {
     this.invalidate(sourceId, await api.sourceRevision(sourceId));
   }
 
-  async mutate(sourceId: string, token?: string) {
+  async mutate(sourceId: string, token?: string, host?: string) {
     this.invalidate(sourceId);
     try {
       if (token === undefined) await api.deleteToken(sourceId);
-      else await api.setToken(sourceId, token);
+      else await api.setToken(sourceId, token, host);
     } finally {
       await this.refresh(sourceId);
     }

@@ -1,7 +1,10 @@
 use super::error::Error;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::Connection;
+#[cfg(test)]
+use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
 
+#[cfg(test)]
 pub const VERSION: u32 = 1;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -13,6 +16,7 @@ pub struct CommitRow {
     pub parents: Vec<String>,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommitSet {
     pub source_id: String,
@@ -24,6 +28,7 @@ pub struct CommitSet {
     pub commits: Vec<CommitRow>,
 }
 
+#[cfg(test)]
 pub fn put(connection: &mut Connection, set: &CommitSet) -> Result<(), Error> {
     let transaction = connection.transaction()?;
     let epoch = super::seconds(set.ref_epoch);
@@ -69,6 +74,7 @@ pub fn put(connection: &mut Connection, set: &CommitSet) -> Result<(), Error> {
     Ok(transaction.commit()?)
 }
 
+#[cfg(test)]
 pub struct Key<'a> {
     pub source_id: &'a str,
     pub repository: &'a str,
@@ -76,6 +82,7 @@ pub struct Key<'a> {
     pub ref_epoch: u64,
 }
 
+#[cfg(test)]
 pub fn get(connection: &Connection, key: &Key) -> Result<Option<CommitSet>, Error> {
     let header = connection
         .query_row(
