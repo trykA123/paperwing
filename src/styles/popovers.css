@@ -1,0 +1,109 @@
+/* popovers and their lists */
+.popover {
+    position: fixed;
+    z-index: var(--z-popover);
+    max-height: min(420px, calc(100vh - 16px));
+    overflow: auto;
+    padding: var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    box-shadow: var(--shadow-2);
+    animation: pop-in var(--dur-fast) var(--ease-out);
+}
+
+.popover:focus {
+    outline: none;
+}
+
+.menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.menu-list hr {
+    margin: var(--sp-1) 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 32px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--r-ctl);
+    font-size: var(--fs-md);
+    text-align: left;
+}
+
+.menu-item .lbl {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.menu-item .cnt {
+    color: var(--faint-text);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+    background: var(--soft);
+}
+
+.menu-item:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+}
+
+.menu-item.on {
+    background: var(--accs);
+    color: var(--acc);
+    font-weight: 600;
+}
+
+.set-edit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.set-edit-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .popover {
+        animation: none;
+    }
+}
+
+.popover.tall {
+    max-height: calc(100vh - 16px);
+}
+
+.popover .rsec {
+    padding: var(--sp-3);
+}
+
+.plan-more {
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+

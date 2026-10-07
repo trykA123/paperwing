@@ -1,6 +1,7 @@
 import type { SetItem } from './api';
 import type { NextActionKind, RowFacts } from './formation';
-import { historyDrawer } from './history-drawer.svelte';
+import { detailsDrawer } from './details-drawer.svelte';
+import { isRemoteItem } from './repositories';
 import { app } from './state.svelte';
 
 export const rowFacts = (item: SetItem): RowFacts => ({
@@ -18,7 +19,8 @@ export const pushTarget = (item: SetItem) => ({ path: app.dest(item), name: app.
 
 export function runNextAction(item: SetItem, kind: NextActionKind): void {
   switch (kind) {
-    case 'clone': void app.startClone([item]); break;
+    case 'clone': void (isRemoteItem(item) ? app.repositories.cloneRemote(item) : app.startClone([item])); break;
+    case 'adopt': app.repositories.adopt([item]); break;
     case 'commit': app.openGitDialog('commit', item); break;
     case 'switch': void app.startClone([item], 'switch'); break;
     case 'pull': void app.startClone([item], 'pull'); break;
@@ -28,5 +30,5 @@ export function runNextAction(item: SetItem, kind: NextActionKind): void {
 }
 
 export function openHistory(item: SetItem, opener?: Element | null): void {
-  historyDrawer.open({ path: app.dest(item), name: app.folderOf(item) }, opener);
+  detailsDrawer.openHistory(app.dest(item), app.folderOf(item), opener);
 }

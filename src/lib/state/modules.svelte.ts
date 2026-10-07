@@ -1,5 +1,6 @@
 import type { Source, Workspace } from '../api';
 import { HOME_MODULE, isModuleVisible, moduleOfView, ownsPage, railClick, sectionOnActivate, viewOfModule, type ModuleId } from '../modules';
+import { isRepoSection } from '../repo-sections';
 import type { View } from '../workspace';
 
 export type ModuleHost = {
@@ -21,7 +22,7 @@ export class ModuleNavigation {
   open(id: ModuleId) {
     const shell = this.app.ws.shell;
     const showing = id !== 'settings' && shell.sidebarVisible && shell.section === id;
-    if (showing && (!ownsPage(id) || moduleOfView(this.app.view) === id)) { Object.assign(shell, railClick(shell, id)); return; }
+    if (showing && this.app.view.kind !== 'repo' && (!ownsPage(id) || moduleOfView(this.app.view) === id)) { Object.assign(shell, railClick(shell, id)); return; }
     this.show(id);
   }
 
@@ -39,6 +40,8 @@ export class ModuleNavigation {
   /** The sidebar follows the tab that became active. */
   follow(view: View) {
     const shell = this.app.ws.shell;
+    if (view.kind === 'repo') shell.lastRepo = { repoId: view.repoId, section: view.section };
+    else if (view.kind === 'repos' || view.kind === 'set') delete shell.lastRepo;
     shell.section = sectionOnActivate(shell.section, moduleOfView(view));
   }
 
@@ -47,6 +50,8 @@ export class ModuleNavigation {
     const shell = this.app.ws.shell;
     if (shell.section === 'search' || !isModuleVisible(shell.section, this.app.sources)) shell.section = HOME_MODULE;
     const view = viewOfModule(shell.section);
-    if (view && shell.section !== HOME_MODULE) this.app.openView(view);
+    const last = shell.lastRepo;
+    if (shell.section === HOME_MODULE && last && isRepoSection(last.section)) this.app.openView({ kind: 'repo', repoId: last.repoId, section: last.section });
+    else if (view && shell.section !== HOME_MODULE) this.app.openView(view);
   }
 }

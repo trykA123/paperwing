@@ -3,7 +3,7 @@
   import type { ShellTab } from '../../lib/workspace';
   import Icon from '../Icon.svelte';
 
-  const subject = $derived(app.detailItem);
+  const subject = $derived(app.actionItems.length === 1 ? app.actionItems[0] : undefined);
   const setBlocked = $derived(app.running || !app.set.items.length || app.set.items.some(item => item.path));
   const refsBlocked = $derived(app.running || !subject || !!subject.path || !app.local[app.dest(subject)]?.repo);
   const open = $derived(app.tabs.filter(tab => tab.view.kind === 'compare' || tab.view.kind === 'setCompare'));

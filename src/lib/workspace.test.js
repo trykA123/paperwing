@@ -108,7 +108,7 @@ test('Tab shortcuts wrap in visible order, preserve set context, and respect clo
         await commands([]).find(command => command.id === 'tab-close').run();
         expect(app.tabs.map(tab => tab.id)).toEqual(['set:b']); expect(app.ws.activeSet).toBe('b');
         app.bufferGuards.clear(); await commands([]).find(command => command.id === 'tab-close').run();
-        expect(app.tabs.length).toBe(1); expect(app.view.kind).toBe('set');
+        expect(app.tabs.length).toBe(1); expect(app.view.kind).toBe('repos');
     } finally { app.ws = previous.ws; app.tabs = previous.tabs; app.activeTabId = previous.active; app.bufferGuards = previous.guards; }
 });
 

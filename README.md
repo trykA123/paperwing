@@ -443,8 +443,24 @@ The command palette and editor provide these shortcuts:
 | `F7` / `Shift+F7` | Next / previous file difference |
 | `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Copy the current difference block to the left / right buffer |
 | `Ctrl+Enter` | Commit staged changes from the commit-message field |
+| `Ctrl+1` to `Ctrl+5` | Repositories, Changes, Branches & tags, Compare, Search |
+| `Ctrl+J` / `Ctrl+,` | Activity / Settings |
+| `Alt+Left` | On a repository page: back to the list, with its filters and scroll |
 
 Shortcuts depend on context. Open dialogs keep their own input handling.
+
+In the repository table, the focused row takes these keys:
+
+| Key | Action |
+|---|---|
+| `Up` / `Down`, `PageUp` / `PageDown`, `Home` / `End` | Move between rows; with `Shift`, extend the selection |
+| `Space` | Quick look at the repository (status, next action, changes, history, pull request) |
+| `Ctrl+Space` or `X` | Tick or untick the row |
+| `Enter` | Open the repository page (in the quick look: open the page) |
+| `Ctrl+A` | Tick every row on the page |
+| `Shift+F10` or the Menu key | Row menu |
+
+On the Repositories home the ticked rows are the selection; they start empty and are not the per-set ticks. Inside a set tab, ticks belong to that set.
 The ref picker supports arrow keys, Enter, and Escape; its Commit tab accepts a commit ID.
 
 ## Build from source

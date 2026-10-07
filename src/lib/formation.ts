@@ -1,7 +1,7 @@
 import type { LocalStatus } from './api';
 
 export type FormationFilter = 'all' | 'changes' | 'behind' | 'ahead' | 'notCloned';
-export type NextActionKind = 'clone' | 'commit' | 'switch' | 'diverged' | 'pull' | 'push';
+export type NextActionKind = 'clone' | 'adopt' | 'commit' | 'switch' | 'diverged' | 'pull' | 'push';
 export type NextAction = { kind: NextActionKind; label: string; title: string; aria?: string };
 /** `fixedFolder` marks a row for a folder that was opened in place; it is never cloned, switched or pulled by Skein. */
 export type RowFacts = { local: LocalStatus | undefined; onRef: boolean; refLabel: string; fixedFolder: boolean; refMissing?: boolean };

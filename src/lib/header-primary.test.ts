@@ -2,27 +2,27 @@ const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
 import { headerPrimary, type PrimaryFacts } from './header-primary';
 
-const base: PrimaryFacts = { running: false, itemCount: 800, cloneCount: 0, rightVisible: true, fetchable: 700 };
+const base: PrimaryFacts = { running: false, itemCount: 800, cloneCount: 0, fetchable: 700 };
 
 describe('headerPrimary', () => {
-  test('nothing selected with uncloned repositories: no footer, so Fetch all is primary', () => {
-    expect(headerPrimary({ ...base })).toEqual({ fetch: true, progress: false });
+  test('everything cloned: Fetch is primary', () => {
+    expect(headerPrimary({ ...base })).toEqual({ clone: false, fetch: true, progress: false });
   });
 
-  test('selection with uncloned repositories: the footer keeps the primary', () => {
-    expect(headerPrimary({ ...base, cloneCount: 12 })).toEqual({ fetch: false, progress: false });
+  test('repositories missing from disk: Clone is primary and Fetch is not', () => {
+    expect(headerPrimary({ ...base, cloneCount: 12 })).toEqual({ clone: true, fetch: false, progress: false });
   });
 
-  test('hidden right panel gives the primary back to the header', () => {
-    expect(headerPrimary({ ...base, cloneCount: 12, rightVisible: false })).toEqual({ fetch: true, progress: false });
+  test('nothing cloned and nothing missing to fetch: no primary', () => {
+    expect(headerPrimary({ ...base, fetchable: 0 })).toEqual({ clone: false, fetch: false, progress: false });
   });
 
   test('run active: one dark button only', () => {
-    expect(headerPrimary({ ...base, running: true })).toEqual({ fetch: false, progress: true });
-    expect(headerPrimary({ ...base, running: true, cloneCount: 5 })).toEqual({ fetch: false, progress: false });
+    expect(headerPrimary({ ...base, running: true })).toEqual({ clone: false, fetch: false, progress: true });
+    expect(headerPrimary({ ...base, running: true, cloneCount: 5 })).toEqual({ clone: false, fetch: false, progress: true });
   });
 
-  test('empty set: the header has no primary, the empty state owns it', () => {
-    expect(headerPrimary({ ...base, itemCount: 0, fetchable: 0 })).toEqual({ fetch: false, progress: false });
+  test('empty set: the bar has no primary, the empty state owns it', () => {
+    expect(headerPrimary({ ...base, itemCount: 0, fetchable: 0 })).toEqual({ clone: false, fetch: false, progress: false });
   });
 });

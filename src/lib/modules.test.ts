@@ -14,7 +14,7 @@ const ids = (items: { module: { id: string } }[]) => items.map(item => item.modu
 describe('rail layout', () => {
   test('groups the modules and shows no provider without a source', () => {
     const layout = railLayout([manual], quiet);
-    expect(ids(layout.local)).toEqual(['sets', 'changes', 'branches', 'compare', 'search']);
+    expect(ids(layout.local)).toEqual(['repos', 'changes', 'branches', 'compare', 'search']);
     expect(layout.providers).toEqual([]);
     expect(ids(layout.system)).toEqual(['activity', 'recovery', 'settings']);
   });
@@ -30,7 +30,7 @@ describe('rail layout', () => {
     expect(isModuleVisible('prs', [manual])).toBe(false);
     expect(isModuleVisible('jira', [github])).toBe(false);
     expect(isModuleVisible('actions', [ghes])).toBe(true);
-    expect(isModuleVisible('sets', [])).toBe(true);
+    expect(isModuleVisible('repos', [])).toBe(true);
   });
 
   test('GitHub lists pull requests, actions and releases', () => {
@@ -85,7 +85,7 @@ describe('badges', () => {
 
 describe('shortcuts and clicks', () => {
   test('Ctrl+1 to Ctrl+5 pick the Local Git modules', () => {
-    expect(['1', '2', '3', '4', '5'].map(moduleShortcut)).toEqual(['sets', 'changes', 'branches', 'compare', 'search']);
+    expect(['1', '2', '3', '4', '5'].map(moduleShortcut)).toEqual(['repos', 'changes', 'branches', 'compare', 'search']);
     expect(moduleShortcut('6')).toBeUndefined();
   });
 
@@ -97,16 +97,17 @@ describe('shortcuts and clicks', () => {
   });
 
   test('clicking the active module folds the sidebar and any other click shows its module', () => {
-    expect(railClick({ section: 'sets', sidebarVisible: true }, 'sets')).toEqual({ section: 'sets', sidebarVisible: false });
-    expect(railClick({ section: 'sets', sidebarVisible: false }, 'sets')).toEqual({ section: 'sets', sidebarVisible: true });
-    expect(railClick({ section: 'sets', sidebarVisible: true }, 'activity')).toEqual({ section: 'activity', sidebarVisible: true });
+    expect(railClick({ section: 'repos', sidebarVisible: true }, 'repos')).toEqual({ section: 'repos', sidebarVisible: false });
+    expect(railClick({ section: 'repos', sidebarVisible: false }, 'repos')).toEqual({ section: 'repos', sidebarVisible: true });
+    expect(railClick({ section: 'repos', sidebarVisible: true }, 'activity')).toEqual({ section: 'activity', sidebarVisible: true });
   });
 });
 
 describe('views and workspaces', () => {
   test('a view belongs to one module', () => {
-    expect(moduleOfView({ kind: 'set' })).toBe('sets');
-    expect(moduleOfView({ kind: 'org', source: 's', org: 'o' })).toBe('sets');
+    expect(moduleOfView({ kind: 'repos' })).toBe('repos');
+    expect(moduleOfView({ kind: 'set' })).toBe('repos');
+    expect(moduleOfView({ kind: 'org', source: 's', org: 'o' })).toBe('repos');
     expect(moduleOfView({ kind: 'codeSearch' })).toBe('search');
     expect(moduleOfView({ kind: 'setCompare', comparisonId: 'c' })).toBe('compare');
     expect(moduleOfView({ kind: 'module', module: 'prs' })).toBe('prs');
@@ -115,21 +116,21 @@ describe('views and workspaces', () => {
 
   test('page modules open one tab each; Search, Compare, Activity and Recovery open none', () => {
     expect(viewOfModule('prs')).toEqual({ kind: 'module', module: 'prs' });
-    expect(viewOfModule('sets')).toEqual({ kind: 'set' });
+    expect(viewOfModule('repos')).toEqual({ kind: 'repos' });
     expect(viewOfModule('settings')).toEqual({ kind: 'settings' });
     for (const id of ['search', 'compare', 'activity', 'recovery'] as const) expect(viewOfModule(id)).toBeUndefined();
     expect(tabId({ kind: 'module', module: 'prs' }, 'a')).toBe(tabId({ kind: 'module', module: 'prs' }, 'b'));
   });
 
   test('opening a tab moves the sidebar only while it shows a page module', () => {
-    expect(sectionOnActivate('prs', 'sets')).toBe('sets');
-    expect(sectionOnActivate('sets', 'compare')).toBe('compare');
+    expect(sectionOnActivate('prs', 'repos')).toBe('repos');
+    expect(sectionOnActivate('repos', 'compare')).toBe('compare');
     expect(sectionOnActivate('search', 'branches')).toBe('branches');
-    expect(sectionOnActivate('activity', 'sets')).toBe('activity');
+    expect(sectionOnActivate('activity', 'repos')).toBe('activity');
     expect(sectionOnActivate('recovery', 'prs')).toBe('recovery');
-    expect(sectionOnActivate('compare', 'sets')).toBe('compare');
+    expect(sectionOnActivate('compare', 'repos')).toBe('compare');
     expect(sectionOnActivate('prs', undefined)).toBe('prs');
-    expect(['sets', 'search', 'prs'].every(id => ownsPage(id as never))).toBe(true);
+    expect(['repos', 'search', 'prs'].every(id => ownsPage(id as never))).toBe(true);
   });
 
   test('a saved section survives only when it is a module', () => {
@@ -137,6 +138,6 @@ describe('views and workspaces', () => {
     expect(isSection('settings')).toBe(false);
     const saved = (section: string) => ({ shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section } }) as unknown as Partial<Workspace>;
     expect(migrateWorkspace(saved('actions')).shell.section).toBe('actions');
-    expect(migrateWorkspace(saved('elsewhere')).shell.section).toBe('sets');
+    expect(migrateWorkspace(saved('elsewhere')).shell.section).toBe('repos');
   });
 });

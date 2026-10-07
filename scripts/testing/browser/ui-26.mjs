@@ -38,7 +38,7 @@ await page.exposeFunction('__backend', async (cmd, a) => {
     case 'stash_drop': return stash.drop(a.path, a.oid) ?? null;
     case 'stash_show': return stash.show(a.path, a.oid);
     case 'switch_with_stash': return stash.switchWithStash(a.path, a.branch);
-    case 'activity_snapshot': case 'get_refs_many': return [];
+    case 'activity_snapshot': case 'get_refs_many': case 'list_tags': return [];
     case 'list_repos': return { repos: [], fetchedAt: 0, errors: [] };
     case 'open_in_vscode': return null;
     case 'save_settings': case 'list_cached_repos': case 'plugin:window|set_theme': return null;

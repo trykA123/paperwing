@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { api, type TagInfo } from '../../lib/api';
+  import { localOnlyNote } from '../../lib/local-only';
   import { dialogOut } from '../../lib/motion';
   import { plural } from '../../lib/plural';
   import { tagFlow } from '../../lib/tag-flow.svelte';
@@ -72,7 +73,7 @@
       <input bind:this={input} bind:value={name} list="tag-known" class="mono" placeholder="v2.4.0" spellcheck="false" autocomplete="off" disabled={busy} />
       <datalist id="tag-known">{#each known as entry (entry)}<option value={entry}></option>{/each}</datalist>
     </label>
-    <p class="tag-note mut">Deleting removes only your local copy. Skein does not delete tags on a remote.</p>
+    <p class="tag-note mut">Deleting removes only your local copy. {localOnlyNote(targets.map(target => app.repositories.hostAt(target.path)))}</p>
 
     <ul class="tag-targets" aria-label="Repositories">
       {#each plan as row (row.path)}
