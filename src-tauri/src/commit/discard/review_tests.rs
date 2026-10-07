@@ -136,3 +136,114 @@ async fn hunk_discard_preserves_mixed_lf_and_crlf_line_endings_of_kept_lines() {
         .unwrap();
     assert_eq!(bytes, before);
 }
+
+#[tokio::test]
+async fn autocrlf_false_mixed_file_discarding_deleted_lf_restores_lf() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.git(&["config", "core.autocrlf", "false"]);
+    let before = b"header\r\nfoo\nfooter\r\n";
+    fixture.commit("mixed.txt", before);
+    let after = b"header\r\nfooter\r\n";
+    fixture.write("mixed.txt", after);
+
+    let snapshot = snapshot::read(&fixture.path(), "mixed.txt", None, "unstaged")
+        .await
+        .unwrap();
+    let request = stage::HunkRequest {
+        file: "mixed.txt".into(),
+        orig_path: None,
+        area: "unstaged".into(),
+        content_hash: snapshot.hash.clone(),
+        hunks: vec![crate::commit::patch::Selection {
+            hunk: 0,
+            ranges: None,
+        }],
+    };
+    let bytes = hunk_bytes(&fixture.path(), &snapshot, &request)
+        .await
+        .unwrap();
+    assert_eq!(bytes, before);
+}
+
+#[tokio::test]
+async fn autocrlf_true_discarding_deleted_line_restores_crlf() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.git(&["config", "core.autocrlf", "true"]);
+    fixture.commit("file.txt", b"foo\n");
+    fixture.write("file.txt", b"bar\r\n");
+
+    let snapshot = snapshot::read(&fixture.path(), "file.txt", None, "unstaged")
+        .await
+        .unwrap();
+    let request = stage::HunkRequest {
+        file: "file.txt".into(),
+        orig_path: None,
+        area: "unstaged".into(),
+        content_hash: snapshot.hash.clone(),
+        hunks: vec![crate::commit::patch::Selection {
+            hunk: 0,
+            ranges: None,
+        }],
+    };
+    let bytes = hunk_bytes(&fixture.path(), &snapshot, &request)
+        .await
+        .unwrap();
+    assert_eq!(bytes, b"foo\r\n");
+}
+
+#[tokio::test]
+async fn multiple_hunks_with_different_conventions_preserve_their_own_endings() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.git(&["config", "core.autocrlf", "false"]);
+    let before = b"c1\nc2\nc3\nc4\nfoo_lf\nm1\nm2\nm3\nm4\nm5\nm6\nm7\nm8\nm9\nm10\nm11\nm12\nbar_crlf\r\ne1\ne2\ne3\ne4\n";
+    fixture.commit("multi.txt", before);
+    let after =
+        b"c1\nc2\nc3\nc4\nm1\nm2\nm3\nm4\nm5\nm6\nm7\nm8\nm9\nm10\nm11\nm12\ne1\ne2\ne3\ne4\n";
+    fixture.write("multi.txt", after);
+
+    let snapshot = snapshot::read(&fixture.path(), "multi.txt", None, "unstaged")
+        .await
+        .unwrap();
+    let diff = change_hunks(fixture.path(), "multi.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(diff.hunks.len(), 2);
+
+    let req0 = stage::HunkRequest {
+        file: "multi.txt".into(),
+        orig_path: None,
+        area: "unstaged".into(),
+        content_hash: snapshot.hash.clone(),
+        hunks: vec![crate::commit::patch::Selection {
+            hunk: 0,
+            ranges: None,
+        }],
+    };
+    let bytes0 = hunk_bytes(&fixture.path(), &snapshot, &req0).await.unwrap();
+    assert!(bytes0.windows(b"foo_lf\n".len()).any(|w| w == b"foo_lf\n"));
+    assert!(
+        !bytes0
+            .windows(b"foo_lf\r\n".len())
+            .any(|w| w == b"foo_lf\r\n")
+    );
+
+    let req1 = stage::HunkRequest {
+        file: "multi.txt".into(),
+        orig_path: None,
+        area: "unstaged".into(),
+        content_hash: snapshot.hash.clone(),
+        hunks: vec![crate::commit::patch::Selection {
+            hunk: 1,
+            ranges: None,
+        }],
+    };
+    let bytes1 = hunk_bytes(&fixture.path(), &snapshot, &req1).await.unwrap();
+    assert!(
+        bytes1
+            .windows(b"bar_crlf\r\n".len())
+            .any(|w| w == b"bar_crlf\r\n")
+    );
+}

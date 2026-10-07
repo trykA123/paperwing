@@ -9,14 +9,14 @@ pub(crate) struct Fixture {
     pub root: PathBuf,
 }
 impl Fixture {
-    pub fn new() -> Self {
+    pub fn with_root_name(name: &str) -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let base = crate::test_support::tmp_root().join(format!(
             "partial-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        let root = base.join("repo with spaces");
+        let root = base.join(name);
         std::fs::create_dir_all(&root).unwrap();
         #[cfg(unix)]
         {
@@ -31,6 +31,9 @@ impl Fixture {
         fixture.git(&["config", "core.hooksPath", ""]);
         fixture.git(&["config", "commit.gpgSign", "false"]);
         fixture
+    }
+    pub fn new() -> Self {
+        Self::with_root_name("repo with spaces")
     }
     pub fn path(&self) -> String {
         self.root.to_str().unwrap().to_string()
@@ -56,6 +59,26 @@ impl Fixture {
         self.write(file, bytes);
         self.git(&["add", "--", file]);
         self.git(&["commit", "-qm", "base"]);
+    }
+
+    pub fn git_input(&self, args: &[&str], input: &[u8]) -> Vec<u8> {
+        let mut child = Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
     }
     pub fn apply(&self, patch: &[u8], reverse: bool) {
         let mut command = Command::new("git");

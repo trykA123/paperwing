@@ -1,6 +1,6 @@
 # 17b — Cold path, phase 2: gitoxide object reads
 
-Status: blocked by 17 (phase 1 landed and re-measured on Windows)
+Status: ready after packet 17 is re-measured on Windows (a diagnostics export from the owner's work PC). Optional.
 Platform: Windows first, Linux parity
 Size: M
 Role: api-builder (gpt-6.1-sol xhigh), one writer. Optional: ships only if it beats phase 1.
@@ -9,7 +9,7 @@ Role: api-builder (gpt-6.1-sol xhigh), one writer. Optional: ships only if it be
 Read blobs and trees in-process with gitoxide (`gix`) so a cold comparison spawns no Git process for object access. Adopt it only where measurements beat phase 1, especially on Windows with Defender.
 
 ## Already done
-Nothing. Phase 1 (`plans/packets/17-cold-path.md`) provides the `BatchReader` interface in `src-tauri/src/git/batch.rs` and the equivalence oracle in `src-tauri/src/compare/tests/legacy/`.
+Nothing. Packet 17 phase 1 (on main; see git history for its packet) provides the `BatchReader` interface in `src-tauri/src/git/batch.rs` and the equivalence oracle in `src-tauri/src/compare/tests/legacy/`.
 
 ## Decisions
 - `gix` is pinned to an exact version and approved as a new dependency in this packet. Install from crates.io only, with `Cargo.lock` committed.
@@ -23,7 +23,7 @@ Nothing. Phase 1 (`plans/packets/17-cold-path.md`) provides the `BatchReader` in
 - Do not: replace Git for writes, status, checkout or network; change comparison semantics.
 
 ## Read first
-- `plans/packets/17-cold-path.md` and its measurement table
+- Packet 17's measurement table (`git log --all -- plans/packets/17-cold-path.md`)
 - `src-tauri/src/git/batch.rs`, `src-tauri/src/compare/inventory.rs`, `text_diff.rs`
 - `src-tauri/Cargo.toml`
 

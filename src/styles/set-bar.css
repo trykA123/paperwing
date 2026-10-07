@@ -1,0 +1,54 @@
+/* set bar */
+.rf-setbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2) var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    box-shadow: var(--shadow-1);
+}
+
+.rf-setinfo {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-width: 0;
+}
+
+.rf-seticon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-ctl);
+    background: var(--warn-bg);
+}
+
+.rf-setinfo b {
+    display: block;
+    font-size: var(--fs-base);
+}
+
+.rf-setinfo small {
+    display: block;
+    color: var(--dim);
+    font-size: var(--fs-sm);
+}
+
+.rf-dirty {
+    color: var(--warn-text);
+    font-weight: 600;
+}
+
+.rf-setacts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+}
+

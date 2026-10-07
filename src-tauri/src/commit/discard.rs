@@ -210,8 +210,94 @@ pub async fn discard_hunk(
     })
 }
 
+async fn git_config(path: &str, key: &str) -> Option<String> {
+    let output = super::run(
+        path,
+        &["config", "--get", key],
+        "Get git config",
+        &[0, 1],
+        crate::git::OutputPolicy::Metadata,
+        None,
+        std::time::Duration::from_secs(45),
+    )
+    .await
+    .ok()?;
+    if output.code == Some(0) {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+async fn git_attrs(path: &str, file: &str) -> (String, String) {
+    let output = super::run(
+        path,
+        &["check-attr", "-z", "text", "eol", "--", file],
+        "Check text and eol attributes",
+        &[0],
+        crate::git::OutputPolicy::Metadata,
+        None,
+        std::time::Duration::from_secs(45),
+    )
+    .await;
+    let mut text = "unspecified".to_string();
+    let mut eol = "unspecified".to_string();
+    if let Ok(output) = output {
+        let fields: Vec<_> = output.stdout.split(|b| *b == 0).collect();
+        for chunk in fields.as_chunks::<3>().0 {
+            match chunk[1] {
+                b"text" => text = String::from_utf8_lossy(chunk[2]).to_string(),
+                b"eol" => eol = String::from_utf8_lossy(chunk[2]).to_string(),
+                _ => {}
+            }
+        }
+    }
+    (text, eol)
+}
+
+pub(crate) async fn resolve_checkout_eol(
+    path: &str,
+    file: &str,
+) -> Result<super::patch::CheckoutEol, String> {
+    use super::patch::CheckoutEol;
+    let (text, eol) = git_attrs(path, file).await;
+    if eol == "crlf" {
+        return Ok(CheckoutEol::Crlf);
+    }
+    if eol == "lf" {
+        return Ok(CheckoutEol::Lf);
+    }
+    if text == "unset" {
+        return Ok(CheckoutEol::None);
+    }
+
+    let autocrlf = git_config(path, "core.autocrlf").await.unwrap_or_default();
+    if autocrlf == "true" {
+        return Ok(CheckoutEol::Crlf);
+    }
+    if autocrlf == "input" {
+        return Ok(CheckoutEol::Lf);
+    }
+
+    if text == "set" || text == "true" {
+        let core_eol = git_config(path, "core.eol").await.unwrap_or_default();
+        if core_eol == "crlf" {
+            return Ok(CheckoutEol::Crlf);
+        }
+        if core_eol == "lf" {
+            return Ok(CheckoutEol::Lf);
+        }
+        #[cfg(windows)]
+        return Ok(CheckoutEol::Crlf);
+        #[cfg(not(windows))]
+        return Ok(CheckoutEol::Lf);
+    }
+
+    Ok(CheckoutEol::None)
+}
+
 pub(crate) async fn hunk_bytes(
-    _path: &str,
+    path: &str,
     snapshot: &snapshot::Snapshot,
     request: &stage::HunkRequest,
 ) -> Result<Vec<u8>, String> {
@@ -224,8 +310,9 @@ pub(crate) async fn hunk_bytes(
         .working
         .as_deref()
         .ok_or("Missing working file content")?;
+    let eol = resolve_checkout_eol(path, &request.file).await?;
     let diff = super::patch::Diff::new(before, after)?;
-    diff.rebuild_working(working, &request.hunks)
+    diff.rebuild_working(working, &request.hunks, eol)
 }
 
 #[cfg(test)]

@@ -8,9 +8,10 @@
   import { app } from './lib/state.svelte';
   import { commands, execute, shortcut } from './lib/commands';
   import { applyAppearance, onSystemThemeChange } from './lib/appearance';
-  import SetView from './components/SetView.svelte';
+  import RepositoriesView from './components/repos/RepositoriesView.svelte';
+  import RepositoryPage from './components/repos/RepositoryPage.svelte';
+  import AddToSetMenu from './components/repos/AddToSetMenu.svelte';
   import RepoList from './components/RepoList.svelte';
-  import RightPanel from './components/RightPanel.svelte';
   import Settings from './components/Settings.svelte';
   import Notifications from './components/Notifications.svelte';
   import Tooltip from './components/Tooltip.svelte';
@@ -25,8 +26,8 @@
   import CommitDialog from './components/CommitDialog.svelte';
   import BranchDialog from './components/BranchDialog.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
-  import HistoryDrawer from './components/HistoryDrawer.svelte';
-  import { historyDrawer } from './lib/history-drawer.svelte';
+  import DetailsDrawer from './components/DetailsDrawer.svelte';
+  import { detailsDrawer, targetKey } from './lib/details-drawer.svelte';
   import { confirmQueue } from './lib/confirm';
   import SetCompare from './components/SetCompare.svelte';
   import BranchCleanup from './components/BranchCleanup.svelte';
@@ -46,9 +47,9 @@
   import { moduleById, moduleShortcut } from './lib/modules';
 
   const rightVisible = $derived(app.ws.shell.rightVisible && app.detailsAvailable);
-  const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
+  const failedRuns = $derived(app.activityFailed);
   let reducedMotion = $state(false), panelsMoving = $state(false);
-  const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activity.some(entry => entry.state === 'running'));
+  const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activityRunning > 0);
   let previousPanels: string | undefined;
   $effect.pre(() => {
     const visibility = `${app.ws.shell.sidebarVisible}:${rightVisible}`;
@@ -62,11 +63,16 @@
   });
 
   function onKey(event: KeyboardEvent) {
-    if (app.copyRequest || app.recoveryOpen || historyDrawer.target || document.querySelector('dialog[open]:not(.palette)')) return;
+    if (app.copyRequest || app.recoveryOpen || detailsDrawer.target || document.querySelector('dialog[open]:not(.palette)')) return;
     if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       app.paletteOpen = !app.paletteOpen;
       event.stopPropagation();
+      return;
+    }
+    if (event.altKey && !event.ctrlKey && !event.shiftKey && event.key === 'ArrowLeft' && app.view.kind === 'repo' && !(event.target as Element).closest('input, textarea, select')) {
+      event.preventDefault();
+      app.repositories.back();
       return;
     }
     const id = shortcut(event);
@@ -89,7 +95,7 @@
     if (app.view.kind !== 'fileDiff' || app.paletteOpen) return;
     const target = event.target as HTMLElement;
     if (target.closest('[role="dialog"], .compare-menu, .row-menu')) return;
-    if (target.closest('input, textarea, select, [contenteditable="true"]') && !target.closest('.monaco-editor')) return;
+    if (target.closest('input, textarea, select, [contenteditable="true"]') && !target.closest('.cm-editor')) return;
     const command = commands().find(command => command.id === id);
     if (!command?.enabled) return;
     event.preventDefault(); event.stopPropagation(); execute(command);
@@ -126,7 +132,8 @@
   function onFocus() {
     if (!benchmarkEnabled && app.ready && !app.running) {
       app.markMetadataStale();
-      void app.checkExists(app.set.items.map(i => app.dest(i)));
+      if (app.view.kind === 'repos') app.repositories.refreshStatus(true);
+      else if (app.view.kind !== 'repo') void app.checkExists(app.set.items.map(i => app.dest(i, app.set.id)));
     }
   }
 
@@ -146,8 +153,9 @@
 
   // Keep "already on disk" markers in sync with the destination.
   $effect(() => {
-    if (benchmarkEnabled || !app.ready || !(app.rootSupport.valid || app.set.items.some(item => item.path))) return;
-    const dests = app.set.items.map(i => app.dest(i));
+    if (benchmarkEnabled || !app.ready || app.view.kind === 'repos' || app.view.kind === 'repo' || !(app.rootSupport.valid || app.set.items.some(item => item.path))) return;
+    const setId = app.set.id;
+    const dests = app.set.items.map(i => app.dest(i, setId));
     const t = setTimeout(() => {
       void app.checkExists(dests);
       void app.refreshPathIdentities(dests).catch(reason => app.toast(String(reason), 'warn'));
@@ -161,16 +169,18 @@
 <div id="shell" class:noright={!rightVisible} class:noside={!app.ws.shell.sidebarVisible} class:panels-moving={panelsMoving}
   style:--lw="{app.ws.shell.sidebarVisible ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
   <ActivityRail {gitBusy} />
-  <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{moduleById(app.ws.shell.section).label}</span></div>
+  <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{app.view.kind === 'repo' && app.ws.shell.section === 'repos' ? 'Repository' : moduleById(app.ws.shell.section).label}</span></div>
   <Tabs />
   <div class="shell-side" inert={!app.ws.shell.sidebarVisible} aria-hidden={!app.ws.shell.sidebarVisible} style:--panel-width="{app.ws.shell.sidebarWidth}px">
     {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
   </div>
-  <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings'}>
+  <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings' || app.view.kind === 'repo'}>
     {#if !app.ready}
       <div class="empty"><span class="spin"></span></div>
-    {:else if app.view.kind === 'set' || app.view.kind === 'item'}
-      {#key app.activeTabId}<SetView />{/key}
+    {:else if app.view.kind === 'repos' || app.view.kind === 'set' || app.view.kind === 'item'}
+      {#key app.activeTabId}<RepositoriesView />{/key}
+    {:else if app.view.kind === 'repo'}
+      {#key app.activeTabId}<RepositoryPage view={app.view} />{/key}
     {:else if app.view.kind === 'org'}
       {#key app.activeTabId}
         <RepoList mode="org" source={app.view.source} org={app.view.org} />
@@ -190,7 +200,7 @@
     {/each}
   </main>
   <div class="shell-right" inert={!rightVisible} aria-hidden={!rightVisible} style:--panel-width="{app.ws.rightWidth}px">
-    {#if rightVisible}<div class="shell-panel-content" transition:fly={{ x: 12, duration: reducedMotion ? 0 : 180 }}>{#if (app.view.kind === 'compare' || app.view.kind === 'fileDiff') && app.comparisons[app.view.comparisonId]}<CompareDetails comparison={app.comparisons[app.view.comparisonId]} comparisonId={app.view.comparisonId} />{:else}<RightPanel />{/if}</div>{/if}
+    {#if rightVisible}<div class="shell-panel-content" transition:fly={{ x: 12, duration: reducedMotion ? 0 : 180 }}>{#if (app.view.kind === 'compare' || app.view.kind === 'fileDiff') && app.comparisons[app.view.comparisonId]}<CompareDetails comparison={app.comparisons[app.view.comparisonId]} comparisonId={app.view.comparisonId} />{/if}</div>{/if}
   </div>
   <footer class="shell-status" class:busy={app.running}><span class="status-context"><Icon name="folder" tone="folder" />{app.set.name} · {app.set.items.length} repositories{#if app.focusedItem} · {app.folderOf(app.focusedItem)}{/if}</span>
     <span class="grow"></span>
@@ -200,13 +210,14 @@
       </span>
     {:else}<span><span class="dot d-done"></span>Ready</span>{/if}
     <button title="Toggle Git activity" aria-expanded={app.activityOpen} onclick={() => (app.activityOpen = !app.activityOpen)}><Icon name="activity" /> Activity · {app.activity.length}{#if failedRuns}<span class="badge-err">{failedRuns} failed</span>{/if}</button></footer>
-  {#if historyDrawer.target}{#key historyDrawer.target.path}<HistoryDrawer target={historyDrawer.target} />{/key}{/if}
+  {#if detailsDrawer.target}{#key targetKey(detailsDrawer.target)}<DetailsDrawer target={detailsDrawer.target} />{/key}{/if}
 </div>
 {#if app.paletteOpen}<CommandPalette />{/if}
 {#if app.copyRequest}<CopyOperations request={app.copyRequest} />{/if}
 {#if app.recoveryOpen}<RecoveryPanel />{/if}
 {#if app.gitDialog?.kind === 'commit'}<CommitDialog request={app.gitDialog} />{:else if app.gitDialog?.kind === 'branch'}<BranchDialog request={app.gitDialog} />{/if}
 {#if app.cleanupDialog}<BranchCleanup request={app.cleanupDialog} />{/if}
+{#if app.repositories.askSet}{@const ask = app.repositories.askSet}<AddToSetMenu items={ask.items} anchor={ask.anchor} clone={ask.clone} onclose={() => (app.repositories.askSet = null)} />{/if}
 {#if stashFlow.dialog?.kind === 'push'}<StashPushDialog targets={stashFlow.dialog.targets} />{:else if stashFlow.dialog?.kind === 'switch'}<StashSwitchDialog targets={stashFlow.dialog.targets} />{/if}
 {#if tagFlow.dialog?.kind === 'create'}<TagDialog targets={tagFlow.dialog.targets} />{:else if tagFlow.dialog?.kind === 'delete'}<TagDeleteDialog targets={tagFlow.dialog.targets} tag={tagFlow.dialog.tag} />{/if}
 {#if pullFlow.dialog?.kind === 'open'}<OpenPullDialog item={pullFlow.dialog.item} />{:else if pullFlow.dialog?.kind === 'bulk'}<BulkPullDialog items={pullFlow.dialog.items} />{/if}

@@ -1,6 +1,6 @@
 # 19 — Progressive comparison backend
 
-Status: blocked by 18 (accepted contract) and 17
+Status: blocked by 18 (accepted contract)
 Platform: Windows first, Linux parity
 Size: L
 Role: api-builder (gpt-6.1-sol xhigh), one writer

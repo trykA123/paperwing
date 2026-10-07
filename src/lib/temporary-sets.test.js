@@ -93,7 +93,7 @@ test('A folder that is itself a repository opens that repository directly', asyn
   const live = sets.find(set.id);
   expect(live.isRepository).toBe(true);
   expect(live.items.map(item => item.path)).toEqual(['/home/u/code/solo']);
-  expect(views.at(-1)).toEqual([{ kind: 'item', itemId: 'found:/home/u/code/solo' }, set.id]);
+  expect(views.at(-1)).toEqual([{ kind: 'repo', repoId: 'local:/home/u/code/solo', section: 'overview' }, set.id]);
   expect(closed).toEqual([`set:${set.id}`]);
 });
 
@@ -128,6 +128,14 @@ test('A clean run turns the loading notice into success', () => {
   const id = notices.begin('fetch', 1);
   notices.finish(id, { verb: 'fetch', total: 1, failed: [], retry: () => {}, viewActivity: () => {} });
   expect(store.items[0]).toMatchObject({ kind: 'success', msg: 'Fetched 1 repository' });
+});
+
+test('Saving keeps a repository page tab and moves it to the saved set', async () => {
+  const sets = new TemporarySets(host, transport);
+  const set = await openWithRepos(sets, ['/home/u/code/a']);
+  host.tabs.push({ id: 'repo:local:/home/u/code/a', setId: set.id, view: { kind: 'repo', repoId: 'local:/home/u/code/a', section: 'history' } });
+  sets.save(set.id);
+  expect(host.tabs.find(tab => tab.view.kind === 'repo')).toMatchObject({ setId: 'id-1', id: 'repo:local:/home/u/code/a', view: { section: 'history' } });
 });
 
 test('Saving gives items new ids and retargets item tabs and the settings tab', async () => {

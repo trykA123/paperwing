@@ -88,10 +88,14 @@ pub(crate) fn tmp_root() -> PathBuf {
     root
 }
 
+pub(crate) async fn git_runner() -> MutexGuard<'static, ()> {
+    crate::git::TEST_RUNNER_LOCK.lock().await
+}
+
 pub(crate) async fn serial() -> Serial {
     let budget = Shared::new();
     let serial = SERIAL.lock().await;
-    let runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let runner = git_runner().await;
     Serial {
         _budget: budget,
         _serial: serial,

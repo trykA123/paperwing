@@ -84,12 +84,12 @@ check(`initial load asks only for visible rows (${first} calls, ${mounted} rows 
 const box = await page.evaluate(() => ({ wrap: document.querySelector('.fm-wrap').clientWidth, row: document.querySelector('.fm-table .fm-row[data-id]').scrollWidth, view: document.querySelector('.fm-table .vbox').clientWidth }));
 console.log(`widths wrap=${box.wrap} view=${box.view} rowScroll=${box.row}`);
 await shot('table-top');
-for (const name of ['Toggle sidebar', 'Toggle details']) await page.click(`button[aria-label="${name}"]`);
+await page.click('button[aria-label="Toggle sidebar"]');
 await page.waitForTimeout(400);
 const wide = await page.evaluate(() => ({ wrap: document.querySelector('.fm-wrap').clientWidth, text: document.querySelectorAll('.pull-text').length && getComputedStyle(document.querySelector('.pull-text')).display }));
 console.log(`panels hidden: wrap=${wide.wrap} pull-text display=${wide.text}`);
 await shot('table-wide');
-for (const name of ['Toggle sidebar', 'Toggle details']) await page.click(`button[aria-label="${name}"]`);
+await page.click('button[aria-label="Toggle sidebar"]');
 await page.waitForTimeout(400);
 
 await scrollTo(rowH * 400);
@@ -152,10 +152,12 @@ await page.keyboard.press('Escape');
 await page.waitForTimeout(400);
 
 // Drawer.
-await row(4).locator('.fm-name').click();
+await row(4).locator('.fm-sub').click();
 await page.waitForSelector('.pull-section .pull-chip');
 check('drawer shows the pull request with base and target', (await page.locator('.pull-section').innerText()).includes('org/repo-4'));
 await shot('drawer');
+await page.keyboard.press('Escape');
+await page.waitForSelector('.history-drawer', { state: 'detached' });
 
 // Bulk open: 11 opens, 9 is unpublished and skipped until Push first, 10 fails at GitHub.
 for (const index of [11, 9, 10]) await row(index).locator('input[type=checkbox]').check();

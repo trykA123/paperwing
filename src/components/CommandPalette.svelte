@@ -9,7 +9,7 @@
   import { paletteReturn } from '../lib/focus-trap';
 
   const REPO_LIMIT = 5;
-  const repoName = (command: Command) => app.set.items.find(item => `repo:${item.id}` === command.id)?.name;
+  const repoName = (command: Command) => app.repositories.everything.find(entry => `repo:${entry.item.id}` === command.id)?.name;
   let dialog: HTMLDialogElement;
   let input: HTMLInputElement;
   let query = $state('');
@@ -17,12 +17,12 @@
 
   const repoCommands = $derived.by((): Command[] => {
     if (!query.trim()) return [];
-    return app.set.items
-      .flatMap(item => { const found = fuzzy(query, item.name) ?? fuzzy(query, `${item.org}/${item.name}`); return found ? [{ item, score: found.score + nameBonus(item.name, query) }] : []; })
+    return app.repositories.everything
+      .flatMap(entry => { const found = fuzzy(query, entry.name) ?? fuzzy(query, `${entry.org}/${entry.name}`); return found ? [{ entry, score: found.score + nameBonus(entry.name, query) }] : []; })
       .sort((a, b) => b.score - a.score).slice(0, REPO_LIMIT)
-      .map(({ item }) => ({
-        id: `repo:${item.id}`, label: `Open details: ${item.org}/${item.name}`, icon: 'folder' as const, tone: 'inspect' as const, enabled: true,
-        run: () => { app.inspectedId = item.id; app.ws.shell.rightVisible = true; },
+      .map(({ entry }) => ({
+        id: `repo:${entry.item.id}`, label: `Open repository: ${entry.org}/${entry.name}`, icon: 'repo' as const, tone: 'inspect' as const, enabled: true,
+        run: () => app.repositories.openRepository(entry.repoId),
       }));
   });
   const available = $derived.by(() => {

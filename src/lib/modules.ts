@@ -20,7 +20,7 @@ export type RailLayout = { local: RailItem[]; providers: ProviderEntry[]; system
 const count = (value: number, label: string, tone?: RailBadge['tone']): RailBadge | undefined => (value > 0 ? { count: value, tone, label } : undefined);
 
 export const MODULES: readonly ModuleDef[] = [
-  { id: 'sets', label: 'Sets', icon: 'layers', group: 'local', shortcutKey: '1' },
+  { id: 'repos', label: 'Repositories', icon: 'repo', group: 'local', shortcutKey: '1' },
   { id: 'changes', label: 'Changes', icon: 'changes', group: 'local', shortcutKey: '2' },
   { id: 'branches', label: 'Branches & tags', icon: 'branch', group: 'local', shortcutKey: '3' },
   { id: 'compare', label: 'Compare', icon: 'copy', group: 'local', shortcutKey: '4', badge: context => count(context.comparisons, 'open') },
@@ -41,7 +41,7 @@ export const PROVIDERS: readonly ProviderDef[] = [
 ];
 
 /** The module a fresh or unreadable workspace opens; the registry order and this constant are the only places that name it. */
-export const HOME_MODULE: RailSection = 'sets';
+export const HOME_MODULE: RailSection = 'repos';
 export const SECTIONS: readonly RailSection[] = MODULES.filter(module => module.id !== 'settings').map(module => module.id as RailSection);
 export const isSection = (value: unknown): value is RailSection => SECTIONS.includes(value as RailSection);
 export const moduleById = (id: ModuleId): ModuleDef => MODULES.find(module => module.id === id)!;
@@ -102,18 +102,18 @@ export function moduleShortcut(key: string): ModuleId | undefined {
   return MODULES.find(module => module.shortcutKey === lower)?.id;
 }
 
-const SET_VIEWS: readonly View['kind'][] = ['set', 'item', 'org', 'search'];
+const REPO_VIEWS: readonly View['kind'][] = ['repos', 'repo', 'set', 'item', 'org', 'search'];
 const COMPARE_VIEWS: readonly View['kind'][] = ['compare', 'setCompare', 'fileDiff'];
 
 export function moduleOfView(view: View): RailSection | undefined {
   if (view.kind === 'module') return view.module;
   if (view.kind === 'codeSearch') return 'search';
-  if (SET_VIEWS.includes(view.kind)) return 'sets';
+  if (REPO_VIEWS.includes(view.kind)) return 'repos';
   return COMPARE_VIEWS.includes(view.kind) ? 'compare' : undefined;
 }
 
 const PAGE_MODULES: readonly ModuleId[] = ['changes', 'branches', 'prs', 'actions', 'releases', 'jira'];
-const OWN_VIEWS: Partial<Record<ModuleId, View>> = { sets: { kind: 'set' }, settings: { kind: 'settings' } };
+const OWN_VIEWS: Partial<Record<ModuleId, View>> = { repos: { kind: 'repos' }, settings: { kind: 'settings' } };
 
 /** The main-area view a module opens; Search, Compare, Activity and Recovery open theirs through their own flows. */
 export function viewOfModule(id: ModuleId): View | undefined {

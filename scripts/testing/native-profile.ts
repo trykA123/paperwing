@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { markedRoot, newRoot, noSymlinks, replay, createFixtures, restoreDrill } from './fixtures';
 
-export const profileMarker = 'paperwing-disposable-profile-v1\n';
-export const identifier = 'dev.paperwing.testing';
+export const profileMarker = 'skein-disposable-profile-v1\n';
+export const identifier = 'dev.skein.testing';
 const required = ['config/' + identifier, 'data/' + identifier, 'cache/' + identifier, 'data/' + identifier + '/logs', 'webview'];
 
 export function prepareProfile(profile: string, fixtures: string) {
@@ -88,11 +88,11 @@ export async function launch(profile: string, binary: string, sample = 1) {
   const environment = profileEnvironment(profile, sample);
   const artifact = noSymlinks(resolve(binary));
   if (!statSync(artifact).isFile()) throw new Error('Native release binary missing');
-  if (!readFileSync(artifact).includes(Buffer.from('paperwing-test-profile-build-v1'))) throw new Error('Refusing artifact without test-profile build marker');
-  const inspection = spawnSync(artifact, ['--paperwing-test-profile-info'], { env: environment, encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'] });
+  if (!readFileSync(artifact).includes(Buffer.from('skein-test-profile-build-v1'))) throw new Error('Refusing artifact without test-profile build marker');
+  const inspection = spawnSync(artifact, ['--skein-test-profile-info'], { env: environment, encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'] });
   if (inspection.error || inspection.status !== 0) throw new Error('Test-profile artifact inspection failed');
   const capabilities = JSON.parse(inspection.stdout);
-  if (capabilities.profileBuild !== 'paperwing-test-profile-build-v1' || capabilities.identifier !== identifier || capabilities.benchmark !== true) throw new Error('Artifact identifier/features do not match isolated profile');
+  if (capabilities.profileBuild !== 'skein-test-profile-build-v1' || capabilities.identifier !== identifier || capabilities.benchmark !== true) throw new Error('Artifact identifier/features do not match isolated profile');
   const trace = join(profile, 'data', identifier, 'logs', `sample-${sample}.jsonl`);
   if (existsSync(trace)) throw new Error('Refusing existing sample trace');
   const webview = noSymlinks(join(profile, 'webview', `sample-${sample}`));

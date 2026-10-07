@@ -13,6 +13,13 @@ pub(crate) enum Kind {
     Remove,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CheckoutEol {
+    None,
+    Crlf,
+    Lf,
+}
+
 #[derive(Clone)]
 struct Edit<'a> {
     kind: Kind,
@@ -255,41 +262,14 @@ impl<'a> Diff<'a> {
         &self,
         working: &[u8],
         selections: &[Selection],
+        eol: CheckoutEol,
     ) -> Result<Vec<u8>, String> {
         let selected = self.selected(selections)?;
         let raw_working_lines: Vec<&[u8]> =
             working.split_inclusive(|byte| *byte == b'\n').collect();
 
-        let mut target_crlf = None;
-        let mut working_line_idx = 0;
-        for (edit_idx, edit) in self.edits.iter().enumerate() {
-            if edit.kind != Kind::Remove {
-                if selected.contains(&edit_idx) && edit.kind == Kind::Add {
-                    if let Some(line) = raw_working_lines.get(working_line_idx) {
-                        if line.ends_with(b"\r\n") {
-                            target_crlf = Some(true);
-                        } else if line.ends_with(b"\n") {
-                            target_crlf = Some(false);
-                        }
-                    }
-                }
-                working_line_idx += 1;
-            }
-        }
-
-        let target_crlf = target_crlf.unwrap_or_else(|| {
-            for &edit_idx in &selected {
-                if self.edits[edit_idx].kind == Kind::Remove
-                    && self.edits[edit_idx].bytes.ends_with(b"\r\n")
-                {
-                    return true;
-                }
-            }
-            working.windows(2).any(|w| w == b"\r\n")
-        });
-
         let mut rebuilt = Vec::with_capacity(working.len());
-        working_line_idx = 0;
+        let mut working_line_idx = 0;
 
         for (edit_idx, edit) in self.edits.iter().enumerate() {
             if selected.contains(&edit_idx) {
@@ -304,7 +284,11 @@ impl<'a> Diff<'a> {
                         working_line_idx += 1;
                     }
                     Kind::Remove => {
-                        let restored = adjust_eol(edit.bytes, target_crlf);
+                        let restored = match eol {
+                            CheckoutEol::None => edit.bytes.to_vec(),
+                            CheckoutEol::Crlf => adjust_eol(edit.bytes, true),
+                            CheckoutEol::Lf => adjust_eol(edit.bytes, false),
+                        };
                         rebuilt.extend_from_slice(&restored);
                     }
                 }

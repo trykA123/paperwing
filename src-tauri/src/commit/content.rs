@@ -6,7 +6,15 @@ use std::time::Duration;
 pub(super) async fn refuse_filters(path: &str, file: &str) -> Result<(), String> {
     let output = run(
         path,
-        &["check-attr", "-z", "filter", "--", file],
+        &[
+            "check-attr",
+            "-z",
+            "filter",
+            "ident",
+            "working-tree-encoding",
+            "--",
+            file,
+        ],
         "Check partial staging filters",
         &[0],
         OutputPolicy::Metadata,
@@ -15,13 +23,16 @@ pub(super) async fn refuse_filters(path: &str, file: &str) -> Result<(), String>
     )
     .await?;
     let fields: Vec<_> = output.stdout.split(|byte| *byte == 0).collect();
-    match fields.as_slice() {
-        [_, b"filter", b"unspecified" | b"unset", b""] => Ok(()),
-        [_, b"filter", _, b""] => {
-            Err("Files with a filter attribute do not support hunk staging or discard".into())
+    for chunk in fields.as_chunks::<3>().0 {
+        let (name, value) = (chunk[1], chunk[2]);
+        if value != b"unspecified" && value != b"unset" {
+            let name_str = String::from_utf8_lossy(name);
+            return Err(format!(
+                "Files with a {name_str} attribute do not support hunk staging or discard"
+            ));
         }
-        _ => Err("Could not read the file's filter attribute".into()),
     }
+    Ok(())
 }
 
 async fn text_attribute(path: &str, file: &str) -> Result<String, String> {
@@ -65,11 +76,40 @@ async fn repo_objects_dir(path: &str) -> Result<PathBuf, String> {
     Ok(absolute)
 }
 
+#[cfg(not(test))]
+static TEMP_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+#[cfg(not(test))]
+pub(crate) fn configure_temp_root(path: PathBuf) {
+    let _ = TEMP_ROOT.set(path);
+}
+
 fn temp_root() -> PathBuf {
-    std::env::var_os("SKEIN_TEST_TMP")
-        .or_else(|| std::env::var_os("PAPERWING_TEST_TMP"))
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
+    #[cfg(test)]
+    {
+        crate::test_support::tmp_root()
+    }
+    #[cfg(not(test))]
+    {
+        TEMP_ROOT
+            .get()
+            .cloned()
+            .expect("App data temp root not configured")
+    }
+}
+
+fn quote_alternate(path: &str) -> String {
+    let mut quoted = String::with_capacity(path.len() + 2);
+    quoted.push('"');
+    for ch in path.chars() {
+        match ch {
+            '\\' => quoted.push_str("\\\\"),
+            '"' => quoted.push_str("\\\""),
+            c => quoted.push(c),
+        }
+    }
+    quoted.push('"');
+    quoted
 }
 
 struct TempObjectDir {
@@ -108,6 +148,7 @@ pub(super) async fn clean(
     let repo_objects_str = repo_objects
         .to_str()
         .ok_or("Invalid repository objects path")?;
+    let quoted_repo_objects = quote_alternate(repo_objects_str);
     let temp_dir = TempObjectDir::new()?;
     let temp_dir_str = temp_dir
         .path
@@ -116,10 +157,10 @@ pub(super) async fn clean(
 
     let envs = [
         ("GIT_OBJECT_DIRECTORY", temp_dir_str),
-        ("GIT_ALTERNATE_OBJECT_DIRECTORIES", repo_objects_str),
+        ("GIT_ALTERNATE_OBJECT_DIRECTORIES", &quoted_repo_objects),
     ];
 
-    let no_autocrlf = if let Some(index) = index_bytes {
+    let use_no_filters = if let Some(index) = index_bytes {
         if index.contains(&b'\r') {
             let attr = text_attribute(path, file)
                 .await
@@ -133,12 +174,12 @@ pub(super) async fn clean(
     };
 
     let file_arg = format!("--path={file}");
-    let mut args = Vec::new();
-    if no_autocrlf {
-        args.push("-c");
-        args.push("core.autocrlf=false");
+    let mut args = vec!["hash-object", "-w", "--stdin"];
+    if use_no_filters {
+        args.push("--no-filters");
+    } else {
+        args.push(&file_arg);
     }
-    args.extend_from_slice(&["hash-object", "-w", "--stdin", &file_arg]);
 
     let output = run_with_env(
         path,

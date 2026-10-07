@@ -8,6 +8,8 @@ mod cache;
 mod commit_cache;
 mod http;
 mod listing;
+pub(crate) mod provider;
+use crate::kernel::capabilities::{RepositoryProvider, RepositoryRevision};
 pub mod pulls;
 pub mod releases;
 use http::{get_json, GithubApi};
@@ -178,41 +180,21 @@ fn parse_manual(source: &Source, url: &str) -> Option<Repo> {
 #[tauri::command]
 pub async fn list_repos(app: AppHandle, source: Source, refresh: bool) -> Result<RepoList, String> {
     valid_id(&source.id)?;
-    let fetched_at = cache::now();
-    if source.kind == "manual" {
-        let repos = source
-            .urls
-            .iter()
-            .filter_map(|u| parse_manual(&source, u))
-            .collect();
-        return Ok(RepoList {
-            repos,
-            fetched_at,
-            ..Default::default()
-        });
+    if !crate::providers::is_enabled(&source)? {
+        return Ok(RepoList { fetched_at: cache::now(), ..Default::default() });
     }
-    let request = cache::ListingRequest::new(&source, refresh)?;
-    let http = http::Http::connect_at(&source, request.revision())
-        .await
-        .map_err(|(_, reason)| reason)?;
-    listing::revalidate(
-        &source,
-        &request,
-        app.state::<Store>().inner().clone(),
-        &http,
-    )
-    .await
+    let lease = crate::providers::acquire(&source, &source.host, Some(app.state::<Store>().inner().clone()))?;
+    lease.run(lease.provider.list(&source, refresh)).await.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
 pub async fn list_cached_repos(app: AppHandle, source: Source) -> Result<Option<RepoList>, String> {
     valid_id(&source.id)?;
-    if source.kind == "manual" {
+    if !crate::providers::is_enabled(&source)? {
         return Ok(None);
     }
-    cache::ListingRequest::new(&source, false)?
-        .read_stale(app.state::<Store>().inner().clone())
-        .await
+    let lease = crate::providers::acquire(&source, &source.host, Some(app.state::<Store>().inner().clone()))?;
+    lease.run(lease.provider.cached(&source)).await.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -242,15 +224,21 @@ pub async fn get_commits(
     name: String,
     branch: String,
 ) -> Result<Vec<Commit>, String> {
+    let lease = crate::providers::acquire(&source, &source.host, None)?;
+    let revision = RepositoryRevision { owner: &org, name: &name, branch: &branch };
+    lease.run(lease.provider.commits(&source, revision)).await.map_err(|error| error.to_string())?
+}
+
+async fn fetch_commits(source: &Source, org: &str, name: &str, branch: &str) -> Result<Vec<Commit>, String> {
     valid_id(&source.id)?;
-    valid_name(&org)?;
-    valid_name(&name)?;
+    valid_name(org)?;
+    valid_name(name)?;
     let mut path = format!("/repos/{org}/{name}/commits?per_page=60");
     if !branch.is_empty() {
-        path.push_str(&format!("&sha={}", enc(&branch)));
+        path.push_str(&format!("&sha={}", enc(branch)));
     }
-    let revision = crate::credentials::metadata_revision(&source)?;
-    let list: Vec<GhCommit> = http::Http::connect_at(&source, revision)
+    let revision = crate::credentials::metadata_revision(source)?;
+    let list: Vec<GhCommit> = http::Http::connect_at(source, revision)
         .await
         .map_err(|(_, reason)| reason)?
         .get(&path)

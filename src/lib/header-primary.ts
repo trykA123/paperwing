@@ -1,8 +1,9 @@
-export type PrimaryFacts = { running: boolean; itemCount: number; cloneCount: number; rightVisible: boolean; fetchable: number };
+export type PrimaryFacts = { running: boolean; itemCount: number; cloneCount: number; fetchable: number };
 
-/** The clone footer owns the primary while it is on screen; the header takes it only when the footer is absent. */
-export function headerPrimary(facts: PrimaryFacts): { fetch: boolean; progress: boolean } {
-  const footer = facts.rightVisible && facts.cloneCount > 0;
-  if (footer || facts.itemCount === 0) return { fetch: false, progress: false };
-  return { fetch: !facts.running && facts.fetchable > 0, progress: facts.running };
+/** One dark button in the set bar: the run's progress while it runs, else Clone when something is missing, else Fetch. */
+export function headerPrimary(facts: PrimaryFacts): { clone: boolean; fetch: boolean; progress: boolean } {
+  if (facts.itemCount === 0) return { clone: false, fetch: false, progress: false };
+  if (facts.running) return { clone: false, fetch: false, progress: true };
+  if (facts.cloneCount > 0) return { clone: true, fetch: false, progress: false };
+  return { clone: false, fetch: facts.fetchable > 0, progress: false };
 }

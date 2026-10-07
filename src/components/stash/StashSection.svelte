@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { detailsDrawer } from '../../lib/details-drawer.svelte';
   import { api, type StashDiff, type StashEntry } from '../../lib/api';
   import { describeError } from '../../lib/errors';
   import { formatCommitDate } from '../../lib/branch-cleanup';
@@ -12,7 +13,7 @@
   import RestoreNote from './RestoreNote.svelte';
 
   const LINE_CAP = 1500;
-  let { path, name }: { path: string; name: string } = $props();
+  let { path, name, only, drawer = false }: { path: string; name: string; only?: string; drawer?: boolean } = $props();
   let entries = $state<StashEntry[] | null>(null);
   let loadError = $state('');
   let open = $state<string | null>(null);
@@ -20,6 +21,7 @@
   let notes = $state<Record<string, RestoreState>>({});
   let busy = $state<string | null>(null);
 
+  const shown = $derived(only ? entries?.filter(entry => entry.oid === only) : entries);
   const facts = $derived(pathFacts(path));
   const stashReason = $derived(disabledReason(['cloned', 'dirty'], facts));
   const idleReason = $derived(disabledReason(['cloned'], facts));
@@ -33,7 +35,8 @@
   }
   $effect(() => { void stashFlow.revision; void path; void load(); });
 
-  async function preview(entry: StashEntry) {
+  async function preview(entry: StashEntry, event: MouseEvent) {
+    if (drawer) { detailsDrawer.open({ kind: 'stash', path, name, oid: entry.oid }, event.currentTarget as Element); return; }
     if (open === entry.oid) { open = null; return; }
     open = entry.oid;
     if (diffs[entry.oid]?.status === 'ready') return;
@@ -81,10 +84,10 @@
     <p class="mut stash-empty">No stashes in this repository.</p>
   {:else}
     <ul class="stash-list">
-      {#each entries as entry (entry.oid)}
+      {#each shown ?? [] as entry (entry.oid)}
         <li class="stash-entry" class:open={open === entry.oid}>
           <div class="stash-row">
-            <button class="stash-title" aria-expanded={open === entry.oid} title="Preview the changes in this stash" onclick={() => preview(entry)}>
+            <button class="stash-title" aria-expanded={open === entry.oid} title="Preview the changes in this stash" onclick={event => preview(entry, event)}>
               <Icon name="disclosure" size={12} /><span class="stash-msg">{title(entry)}</span>
             </button>
             <span class="stash-meta mut">{#if entry.branch}<span class="mono">{entry.branch}</span> · {/if}{formatCommitDate(entry.createdAt)}</span>

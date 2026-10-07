@@ -195,36 +195,36 @@
     box-shadow: inset 0 0 0 1px var(--line-ctl);
 }
 
-.history-drawer .dot {
+.history-panel .dot {
     transform-box: fill-box;
     transform-origin: center;
     transition: transform var(--dur-fast) var(--ease-out);
 }
 
-.history-drawer .dot.active {
+.history-panel .dot.active {
     transform: scale(1.3);
 }
 
-.history-drawer .dot[data-kind="local"] {
+.history-panel .dot[data-kind="local"] {
     fill: var(--acc);
 }
 
-.history-drawer .dot[data-kind="origin"] {
+.history-panel .dot[data-kind="origin"] {
     fill: var(--panel);
     stroke: var(--hl);
     stroke-width: 2;
 }
 
-.history-drawer .dot[data-kind="base"] {
+.history-panel .dot[data-kind="base"] {
     fill: var(--text);
 }
 
-.history-drawer .dot[data-kind="below"],
-.history-drawer .dot[data-kind="more"] {
+.history-panel .dot[data-kind="below"],
+.history-panel .dot[data-kind="more"] {
     fill: var(--faint-text);
 }
 
-.history-drawer .dot[data-kind="uncommitted"] {
+.history-panel .dot[data-kind="uncommitted"] {
     fill: var(--panel);
     stroke: var(--dim);
     stroke-dasharray: 3 3;
@@ -275,7 +275,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .history-drawer .dot {
+    .history-panel .dot {
         transition: none;
     }
 }

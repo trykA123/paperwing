@@ -95,7 +95,7 @@ impl Fixture {
     #[cfg(target_os = "linux")]
     fn diff_data(&self) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
-            .join(".skillify/evidence/paperwing/14/quota-repair/compare-native")
+            .join(".skillify/evidence/skein/14/quota-repair/compare-native")
             .join(crate::test_support::tmp_root().file_name().unwrap()).join(self.0.file_name().unwrap())
     }
     fn job(&self) -> Job {
@@ -283,7 +283,7 @@ fn tagged_layout_vectors_preserve_windows_policy_and_native_linux_tokens() {
         if windows != cfg!(windows) { continue; }
         let fixture = crate::platform::Fixture::new("tagged-layout");
         let settings = crate::settings::Settings {
-            sources: vec![crate::settings::Source { id: "source".into(), name: text("source").into(), kind: "manual".into(), host: String::new(), orgs: vec![], urls: vec![], credential_managed: false }],
+            sources: vec![crate::settings::Source { id: "source".into(), name: text("source").into(), kind: "manual".into(), host: String::new(), orgs: vec![], urls: vec![], enabled: true, credential_managed: false }],
             workspace: serde_json::json!({
                 "root": fixture.0, "layout": text("layout"), "pathTemplate": text("pathTemplate"),
                 "sets": [{"id": "set", "name": text("set"), "items": [{"id":"item", "repoId":"source:repo", "name":text("repo"), "folder":text("folder"), "org":text("org"), "ref":{"type":"branch", "name":text("ref")}}]}]

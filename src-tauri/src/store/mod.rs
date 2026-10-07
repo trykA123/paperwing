@@ -5,6 +5,7 @@ pub mod listings;
 mod migrations;
 mod open;
 mod readers;
+pub(crate) mod providers;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod refs;
 #[cfg_attr(not(test), allow(dead_code))]
@@ -71,6 +72,7 @@ impl Drop for Inner {
 
 #[derive(Clone)]
 pub struct Store {
+    disabled_sources: Arc<Mutex<std::collections::HashSet<String>>>,
     slot: Arc<OnceLock<Option<Arc<Inner>>>>,
     opening: Arc<(Mutex<()>, Condvar)>,
 }
@@ -101,6 +103,7 @@ impl Store {
 
     pub fn pending() -> Self {
         Self {
+            disabled_sources: Arc::new(Mutex::new(std::collections::HashSet::new())),
             slot: Arc::new(OnceLock::new()),
             opening: Arc::new((Mutex::new(()), Condvar::new())),
         }

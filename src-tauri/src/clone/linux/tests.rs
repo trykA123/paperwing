@@ -458,6 +458,7 @@ async fn fresh_clone_with_instead_of_rewrite_verifies_and_publishes() {
 
 #[tokio::test]
 async fn verification_cleanup_refuses_a_substituted_staging_directory() {
+    let _runner = crate::test_support::git_runner().await;
     let fixture = Fixture::new("clone-cleanup-substitution-");
     let job = job(&fixture, "new");
     let admission = admit(&settings(&fixture, &job), &job, "clone").unwrap();

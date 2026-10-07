@@ -1,3 +1,4 @@
+use crate::kernel::events::CoreEvent;
 #[cfg(not(target_os = "linux"))]
 use crate::git::{buffered, valid_root};
 use crate::git::{execute, safe, valid_path, valid_ref, valid_url, OutputPolicy, Request};
@@ -10,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(target_os = "linux")]
 mod linux;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle};
 use tokio::sync::Semaphore;
 
 static ACTIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -55,7 +56,7 @@ fn emit(app: &AppHandle, id: &str, phase: &str, pct: f32, msg: impl Into<String>
 }
 
 fn emit_clean(app: &AppHandle, id: &str, phase: &str, pct: f32, msg: impl Into<String>) {
-    let _ = app.emit("clone-progress", Progress { id, phase, pct, msg: msg.into() });
+    let _ = crate::events::publish_payload(app, CoreEvent::CloneProgress, &Progress { id, phase, pct, msg: msg.into() });
 }
 
 fn validate(job: &Job) -> Result<(), String> {
@@ -106,7 +107,8 @@ async fn run(app: &AppHandle, job: &Job, phase: &str, args: &[&str]) -> Result<(
     let (app, job, phase) = (app.clone(), job.clone(), phase.to_string());
     let last = Arc::new(std::sync::Mutex::new(-1));
     let context = format!("{}: {} ({})", job.id, phase, job.dest);
-    let output = execute(Request { args, context: &context, timeout: Duration::from_secs(600), expected: &[0], policy: OutputPolicy::Text },
+    let argv = crate::git::repo_command::harden(args);
+    let output = execute(Request { args: &argv, context: &context, timeout: Duration::from_secs(600), expected: &[0], policy: OutputPolicy::Text },
         Some(Arc::new(move |stream, text| {
             if stream != "stderr" { return; }
             if let Some(pct) = progress_pct(text) {
@@ -245,7 +247,7 @@ async fn run_job(app: &AppHandle, job: &Job, opts: &Opts) -> Result<(&'static st
                     use std::os::windows::ffi::OsStrExt;
                     let original_identity = crate::files::identity(&dest)?;
                     let mut parent = crate::file_guard::PinnedPath::existing_directory(dest.parent().ok_or("Missing clone parent")?)?;
-                    let keeper_path = parent.path.join(format!(".paperwing-reclone-{ts}.lock"));
+                    let keeper_path = parent.path.join(format!(".skein-reclone-{ts}.lock"));
                     use std::os::windows::fs::OpenOptionsExt;
                     let keeper = std::fs::OpenOptions::new().write(true).create_new(true).share_mode(1)
                         .custom_flags(0x04000000).open(keeper_path).map_err(|error| error.to_string())?;
@@ -365,7 +367,7 @@ pub async fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Optio
         for h in handles {
             let _ = h.await;
         }
-        let _ = app.emit("clone-finished", ());
+        let _ = crate::events::publish(&app, CoreEvent::CloneFinished);
     });
     Ok(())
 }
@@ -434,7 +436,7 @@ pub async fn start_clone(
         for handle in handles {
             let _ = handle.await;
         }
-        let _ = app.emit("clone-finished", ());
+        let _ = crate::events::publish(&app, CoreEvent::CloneFinished);
     });
     Ok(())
 }
@@ -461,3 +463,6 @@ mod tests {
         assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 3);
     }
 }
+
+#[cfg(all(test, not(windows)))]
+mod event_tests;

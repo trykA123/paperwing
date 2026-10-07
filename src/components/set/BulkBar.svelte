@@ -1,7 +1,7 @@
 <script lang="ts" module>
   export type BulkHandlers = {
     fetch: () => void; pull: () => void; push: () => void; switch: () => void; ref: (anchor: HTMLElement) => void;
-    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; stash: () => void; switchStash: () => void; tag: () => void; deleteTag: () => void; pulls: () => void; clear: () => void;
+    clone: () => void; addToSet: () => void; check: () => void; branch: () => void; cleanup: () => void; commit: () => void; stash: () => void; switchStash: () => void; tag: () => void; deleteTag: () => void; pulls: () => void; clear: () => void;
   };
 </script>
 
@@ -10,8 +10,9 @@
   import type { SetItem } from '../../lib/api';
   import Icon from '../Icon.svelte';
 
-  let { count, targets, dirty, busy, checking, refEligible, stashSwitch, pullable, handlers }: {
-    count: number; refEligible: number; stashSwitch: number; pullable: number; targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
+  let { count, targets, dirty, busy, checking, refEligible, stashSwitch, pullable, cloneable, extend = null, handlers }: {
+    count: number; refEligible: number; stashSwitch: number; pullable: number; cloneable: number; extend?: { count: number; run: () => void } | null;
+    targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
   } = $props();
 
   let open = $state(false);
@@ -45,6 +46,7 @@
 
 <div class="fm-bar" class:on={count > 0} role="toolbar" aria-label="Selected repositories" inert={count === 0}>
   <span class="count" aria-live="polite">{count}<span class="t">&nbsp;selected</span></span>
+  {#if extend}<button onclick={extend.run} title="Select every repository the filters show"><span class="t">Select all {extend.count}</span></button>{/if}
   <button disabled={busy || !targets.fetchable.length} title={targets.fetchable.length ? `Fetch ${targets.fetchable.length} selected` : reason('None of the selected repositories can be fetched')} onclick={handlers.fetch}>
     <Icon name="refresh" /><span class="t">Fetch</span>{#if targets.fetchable.length}<small>{targets.fetchable.length}</small>{/if}
   </button>
@@ -54,6 +56,9 @@
   <button disabled={busy || !targets.pushable.length} title={targets.pushable.length ? `Push ${targets.pushable.length} selected` : reason('Nothing to push in the selected repositories')} onclick={handlers.push}>
     <Icon name="upload" /><span class="t">Push</span>{#if targets.pushable.length}<small>{targets.pushable.length}</small>{/if}
   </button>
+  <button disabled={busy || !cloneable} title={cloneable ? `Clone ${cloneable} selected` : reason('Every selected repository is already cloned')} onclick={handlers.clone}>
+    <Icon name="plus" /><span class="t">Clone</span>{#if cloneable}<small>{cloneable}</small>{/if}
+  </button>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="bulk-more-wrap" onkeydown={onKey}>
     <button bind:this={more} class="more" aria-haspopup="menu" aria-expanded={open} title="More actions for the selection" onclick={() => (open = !open)}>
@@ -61,6 +66,7 @@
     </button>
     {#if open}
       <div class="bulk-more" role="menu" bind:this={menu}>
+        <button role="menuitem" onclick={() => run(handlers.addToSet)}><Icon name="folder" />Add to set…</button>
         <button role="menuitem" disabled={busy || !targets.offRef.length} title={targets.offRef.length ? undefined : reason('Every selected repository is already on its branch')} onclick={() => run(handlers.switch)}>
           <Icon name="branch" />Switch to the set’s branch{#if targets.offRef.length}<small>{targets.offRef.length}</small>{/if}
         </button>

@@ -6,6 +6,10 @@ mod diagnostics;
 mod test_profile;
 #[cfg(any(test, feature = "test-profile"))]
 mod env_names;
+mod commands;
+pub mod kernel;
+mod events;
+mod providers;
 mod clone;
 mod branch_cleanup;
 mod commit;
@@ -121,7 +125,16 @@ pub fn run() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
                     .data_directory(webview).build()?;
             }
-            app.manage(store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok()));
+            #[cfg(not(test))]
+            {
+                let temp_root = app.path().app_data_dir()?.join("temp");
+                let _ = std::fs::create_dir_all(&temp_root);
+                commit::configure_temp_root(temp_root);
+            }
+            events::install(app.handle());
+            let store = store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok());
+            providers::install(app.handle(), store.clone());
+            app.manage(store);
             let handle = app.handle().clone();
             if let Err(error) = tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || settings::initialize(handle)))
                 .map_err(|error| error.to_string()).and_then(|result| result) {
@@ -137,115 +150,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![
-            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_status,
-            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_preview,
-            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_cancel,
-            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_export,
-            #[cfg(feature = "benchmark")] benchmark::benchmark_record,
-            #[cfg(feature = "benchmark")] benchmark::benchmark_snapshot,
-            #[cfg(feature = "test-profile")] test_profile::benchmark_plan,
-            #[cfg(feature = "test-profile")] test_profile::benchmark_finish,
-            settings::commands::load_settings,
-            settings::commands::save_settings,
-            settings::set_token,
-            settings::has_token,
-            settings::delete_token,
-            credentials::credential_status,
-            credentials::source_revision,
-            github::test_source,
-            github::list_user_orgs,
-            github::list_repos,
-            github::list_cached_repos,
-            github::get_commits,
-            github::pulls::pull_for_branch,
-            github::pulls::open_pull_request,
-            github::releases::create_github_release,
-            git::get_refs_many,
-            git::activity_snapshot,
-            git::clear_activity,
-            git::cancel_activity,
-            git::repository_tree,
-            history::repository_history,
-            commit::repo_changes,
-            commit::change_content,
-            commit::change_hunks,
-            commit::stage_hunks,
-            commit::unstage_hunks,
-            commit::discard_files,
-            commit::discard_hunk,
-            commit::stage_paths,
-            commit::unstage_paths,
-            commit::commit_staged,
-            commit::create_branch,
-            commit::push_branch,
-            commit::delete_branch,
-            tags::list_tags,
-            tags::create_tag,
-            tags::push_tag,
-            tags::delete_tag,
-            stash::stash_list,
-            stash::stash_push,
-            stash::stash_apply,
-            stash::stash_pop,
-            stash::stash_drop,
-            stash::stash_show,
-            stash::switch_with_stash,
-            branch_cleanup::merged_branches,
-            branch_cleanup::delete_merged_branches,
-            trash::trash_set_folders,
-            compare::comparison_open,
-            compare::comparison_refresh,
-            compare::comparison_close,
-            compare::comparison_cancel,
-            compare::comparison_files,
-            compare::comparison_content,
-            compare::comparison_commits,
-            #[cfg(windows)] files::file_edit_open,
-            #[cfg(target_os = "linux")] linux_files::file_edit_open,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::file_edit_open,
-            #[cfg(windows)] files::file_edit_close,
-            #[cfg(target_os = "linux")] linux_files::file_edit_close,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::file_edit_close,
-            #[cfg(windows)] files::file_save,
-            #[cfg(target_os = "linux")] linux_files::file_save,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::file_save,
-            #[cfg(windows)] files::copy_preview,
-            #[cfg(target_os = "linux")] linux_files::copy_preview,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::copy_preview,
-            #[cfg(windows)] files::copy_apply,
-            #[cfg(target_os = "linux")] linux_files::copy_apply,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::copy_apply,
-            #[cfg(windows)] files::copy_cancel,
-            #[cfg(target_os = "linux")] linux_files::copy_cancel,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::copy_cancel,
-            #[cfg(windows)] files::recovery_list,
-            #[cfg(target_os = "linux")] linux_files::recovery_list,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_list,
-            #[cfg(windows)] files::recovery_undo,
-            #[cfg(target_os = "linux")] linux_files::recovery_undo,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_undo,
-            #[cfg(windows)] files::recovery_cleanup,
-            #[cfg(target_os = "linux")] linux_files::recovery_cleanup,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_cleanup,
-            #[cfg(windows)] files::recovery_resolve,
-            #[cfg(target_os = "linux")] linux_files::recovery_resolve,
-            #[cfg(not(any(windows, target_os = "linux")))] unsupported_files::recovery_resolve,
-            clone::start_clone,
-            local::local_status,
-            platform::platform_info,
-            platform::probe_root,
-            platform::path_identities,
-            open_in_vscode,
-            launch::launch_request,
-            discover_job::discover_start,
-            discover_job::discover_cancel,
-            discover_job::discover_cancel_all,
-            search_service::search_start,
-            search_service::search_cancel,
-            search_service::search_cancel_all,
-            search_service::search_capabilities,
-        ])
+        .invoke_handler(commands::compose())
         .build(context)
         .expect("error while building Skein")
         .run(|app, event| {

@@ -21,7 +21,10 @@ pub(crate) async fn trash_untracked(
 }
 
 #[cfg(any(windows, target_os = "linux"))]
-async fn recycle(app: tauri::AppHandle, write: DiscardWrite) -> Result<String, String> {
+pub(crate) async fn recycle<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    write: DiscardWrite,
+) -> Result<String, String> {
     let DiscardWrite {
         root,
         file,
@@ -58,16 +61,30 @@ async fn recycle(app: tauri::AppHandle, write: DiscardWrite) -> Result<String, S
         super::linux::recycle_file(&linux_root, &file, &expected, &super::linux::data_home()?)?;
         if index_state.intent_to_add() {
             let root_str = root.to_str().ok_or("Unsupported repository path")?;
-            crate::commit::run(
+            let mut command = crate::git::hygienic_git();
+            command.args([
+                "-C",
                 root_str,
-                &["rm", "--cached", "--quiet", "--", &file],
-                "Remove intent-to-add index entry",
-                &[0],
-                crate::git::OutputPolicy::Metadata,
-                None,
-                std::time::Duration::from_secs(45),
-            )
-            .await?;
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "core.quotepath=false",
+                "--literal-pathspecs",
+                "rm",
+                "--cached",
+                "--quiet",
+                "--",
+                &file,
+            ]);
+            let output = tokio::time::timeout(std::time::Duration::from_secs(45), command.output())
+                .await
+                .map_err(|_| {
+                    "Could not remove intent-to-add index entry in time; retry".to_string()
+                })?
+                .map_err(|error| format!("Could not remove intent-to-add index entry: {error}"))?;
+            if !output.status.success() {
+                return Err("Could not remove intent-to-add index entry".into());
+            }
         }
         Ok("Moved to the desktop Trash; restore it from Trash".into())
     }

@@ -6,7 +6,6 @@
 
 **A desktop workspace for Git repository sets, local comparison, and reviewed changes.**
 
-<img src="docs/paperwing-tour.svg" alt="Animated tour with sample repositories: browse an organization, build a set, pick a branch, tag or commit per repository, clone in parallel, use the right-click menu, review and commit changes side by side, branch into a new folder, compare folders, and confirm destructive actions" width="100%" />
 
 </div>
 
@@ -18,10 +17,8 @@ Use the same repository in several folders when you need separate checkouts.
 Skein remembers each folder and reference, so tomorrow starts with a workspace,
 not another round of "which terminal was that?"
 
-Skein was previously named PaperWing, and before that Flock. When the new settings file is absent, the app
-attempts to copy settings from `%APPDATA%\dev.flock.app\`. Token lookup also supports
-the old Credential Manager service `flock`. The published v0.1.0 installers retain
-their original Flock branding; new builds use Skein.
+Skein uses its own app identifier and credential service. Configure settings and
+re-enter tokens; settings and credentials from earlier names are not imported.
 
 ---
 
@@ -54,7 +51,7 @@ The main capabilities are:
 | Repeatable workspaces | Named sets, duplicate checkouts, shared reference selection, custom destination paths, and parallel cloning. |
 | Local Git visibility | Current branch or commit, ahead/behind counts, changed-file counts, and a tree of branches, tags, remotes, stashes, and submodules. |
 | Folder comparison | Local working trees or read-only Git snapshots, file filters, content-based differences, and commit-history comparisons where available. |
-| File comparison | Monaco side-by-side or inline diffs, difference navigation, editable working-tree files, and directional block copying. |
+| File comparison | CodeMirror side-by-side or inline diffs, difference navigation, editable working-tree files, and directional block copying. Files over 5 MB open in a read-only viewer. |
 | Reviewed changes | New branches, staged/unstaged file previews, commit messages, and a separate Push action. |
 | Recoverable copies | Confirmed file/folder copy previews, per-file outcomes, saved-operation undo, and persisted recovery records. |
 | Desktop workflow | Tabs, a command palette, Git Activity, resizable panels, light/dark/system themes, bundled fonts, and VS Code integration. |
@@ -177,10 +174,11 @@ The details panel provides whitespace, line-ending, and exclusion rules.
 Ordinary comparisons start with exclusions for `*.orig`, `build/`, and `.vs/`.
 Commit-history counts and lists appear when the repositories provide usable history.
 
-Double-click a file to open its Monaco diff. Choose side-by-side or inline view,
+Double-click a file to open its diff. Choose side-by-side or inline view,
 hide unchanged regions, and navigate differences. Git snapshots remain read-only.
 Supported working-tree panes allow editing and saving, including either side of a local-folder comparison.
 Unsaved buffers prompt for Save, Discard, or Keep editing when an operation needs to close them.
+Files with mixed line endings stay read-only, and either side over 5 MB opens in a read-only large-file view. Saving keeps each file's BOM and line endings.
 
 ### Copy left and copy right
 
@@ -305,7 +303,7 @@ repository listings, Git operations, comparison snapshots, and authorized filesy
 Repository discovery uses the GitHub API or GitHub Enterprise API. Manual URLs bypass API listing.
 Git operations use your installed `git` and its SSH or HTTPS authentication setup.
 The source's API token does not replace your Git credentials.
-Monaco supplies the text editor and diff views; Git objects supply read-only snapshot content.
+CodeMirror supplies the text editor and diff views, with a read-only renderer for large files; Git objects supply read-only snapshot content.
 The platform file service supplies a recovery journal outside your repositories.
 
 The implementation is organized around these areas:
@@ -318,7 +316,7 @@ The implementation is organized around these areas:
 | Git execution, synchronization, status, and trees | [git.rs](src-tauri/src/git.rs), [clone.rs](src-tauri/src/clone.rs), [local.rs](src-tauri/src/local.rs), [Sidebar.svelte](src/components/Sidebar.svelte) |
 | Git commands, activity, and shortcuts | [commands.ts](src/lib/commands.ts), [ActivityPanel.svelte](src/components/panel/ActivityPanel.svelte) |
 | Folder and whole-set comparison | [compare.rs](src-tauri/src/compare.rs), [compare.svelte.ts](src/lib/compare.svelte.ts), [FolderCompare.svelte](src/components/FolderCompare.svelte), [SetCompare.svelte](src/components/SetCompare.svelte) |
-| Text editing and diff rules | [FileCompare.svelte](src/components/FileCompare.svelte), [CompareDetails.svelte](src/components/CompareDetails.svelte), [editor.ts](src/lib/editor.ts), [monaco.ts](src/lib/monaco.ts) |
+| Text editing and diff rules | [FileCompare.svelte](src/components/FileCompare.svelte), [CompareDetails.svelte](src/components/CompareDetails.svelte), [editor.ts](src/lib/editor.ts), [editors/](src/lib/editors), [text-format.ts](src/lib/text-format.ts), [languages.ts](src/lib/languages.ts) |
 | Branch creation and staged commits | [BranchDialog.svelte](src/components/BranchDialog.svelte), [CommitDialog.svelte](src/components/CommitDialog.svelte), [commit.rs](src-tauri/src/commit.rs) |
 | Copy, recovery, and path safety | [CopyOperations.svelte](src/components/CopyOperations.svelte), [RecoveryPanel.svelte](src/components/RecoveryPanel.svelte), [files.rs](src-tauri/src/files.rs), [file_guard.rs](src-tauri/src/file_guard.rs), [paths.rs](src-tauri/src/paths.rs) |
 
@@ -442,8 +440,24 @@ The command palette and editor provide these shortcuts:
 | `F7` / `Shift+F7` | Next / previous file difference |
 | `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Copy the current difference block to the left / right buffer |
 | `Ctrl+Enter` | Commit staged changes from the commit-message field |
+| `Ctrl+1` to `Ctrl+5` | Repositories, Changes, Branches & tags, Compare, Search |
+| `Ctrl+J` / `Ctrl+,` | Activity / Settings |
+| `Alt+Left` | On a repository page: back to the list, with its filters and scroll |
 
 Shortcuts depend on context. Open dialogs keep their own input handling.
+
+In the repository table, the focused row takes these keys:
+
+| Key | Action |
+|---|---|
+| `Up` / `Down`, `PageUp` / `PageDown`, `Home` / `End` | Move between rows; with `Shift`, extend the selection |
+| `Space` | Quick look at the repository (status, next action, changes, history, pull request) |
+| `Ctrl+Space` or `X` | Tick or untick the row |
+| `Enter` | Open the repository page (in the quick look: open the page) |
+| `Ctrl+A` | Tick every row on the page |
+| `Shift+F10` or the Menu key | Row menu |
+
+On the Repositories home the ticked rows are the selection; they start empty and are not the per-set ticks. Inside a set tab, ticks belong to that set.
 The ref picker supports arrow keys, Enter, and Escape; its Commit tab accepts a commit ID.
 
 ## Build from source
@@ -496,7 +510,7 @@ before releasing runner resources. Detached helpers are outside that boundary; s
 [durable Linux recovery](docs/linux-recovery.md) supply the Linux file service. Folder
 workflows still need packet15. The accepted
 [Linux write contract](docs/linux-write-contract.md) records concurrent-writer race limits.
-See [implementation status](docs/implementation-status.md) and [isolated testing](docs/testing.md).
+See [isolated testing](docs/testing.md) and the [plans](plans/README.md).
 
 ### Check a source change
 
@@ -532,16 +546,14 @@ valid, Skein starts with defaults and retains the broken main file as `settings.
 
 | What | Where |
 |---|---|
-| Sets, favorites, options | `%APPDATA%\dev.paperwing.app\settings.json` |
-| Cached repo lists | App cache directory, normally `%LOCALAPPDATA%\dev.paperwing.app\repos-<source-id>.json` |
-| Filesystem recovery records and backup bytes | `%APPDATA%\dev.paperwing.app\recovery-v2\` |
-| Tokens | Windows Credential Manager or Linux Secret Service, service `paperwing`, keyed by source ID |
+| Sets, favorites, options | `%APPDATA%\dev.skein.app\settings.json` |
+| Cached repo lists | App cache directory, normally `%LOCALAPPDATA%\dev.skein.app\repos-<source-id>.json` |
+| Filesystem recovery records and backup bytes | `%APPDATA%\dev.skein.app\recovery-v2\` |
+| Tokens | Windows Credential Manager or Linux Secret Service, service `skein`, keyed by source ID |
 | Cloned repositories | Your configured destination root and path layout |
 
 Settings save automatically after changes. Theme and font choices belong to workspace settings;
 some dialog preferences also use WebView local storage. Comparison results and Activity are transient.
-The Flock migration copies legacy settings only when the new settings file is absent.
-Windows token lookup also supports the legacy `flock` service and attempts to copy tokens into `paperwing`.
 Builds with a different Tauri identifier use different app storage locations.
 
 ---

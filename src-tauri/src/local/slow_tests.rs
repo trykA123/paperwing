@@ -54,6 +54,7 @@ fn shim(root: &Path, millis: u64) -> std::path::PathBuf {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore]
 async fn measure_slow_git_local_status_and_refs() {
+    let _runner = crate::test_support::git_runner().await;
     let root =
         crate::test_support::tmp_root().join("slow-fixture");
     let _ = std::fs::remove_dir_all(&root);
@@ -64,10 +65,7 @@ async fn measure_slow_git_local_status_and_refs() {
         .unwrap_or(60);
     let paths = fixture(&root, count);
     let bin = shim(&root, 150);
-    std::env::set_var(
-        "PATH",
-        format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
-    );
+    let _git = crate::git::BinaryOverride::new(bin.join("git"));
     let log = root.join("spawns.log");
     let spawns = || {
         std::fs::read_to_string(&log)

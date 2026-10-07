@@ -9,11 +9,13 @@ mod discard;
 pub use snapshot::*;
 pub use stage::*;
 pub use discard::*;
+#[cfg(not(test))]
+pub(crate) use content::configure_temp_root;
 
-use crate::git::{valid_ref, valid_root, Captured, OutputPolicy, Request};
+use crate::git::repo_command::RepoGit;
+use crate::git::{execute_input_env, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
 
 const MAX_FILES: usize = 2000;
@@ -75,9 +77,8 @@ pub(crate) async fn run(path: &str, args: &[&str], context: &str, expected: &[i3
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_with_env(path: &str, args: &[&str], context: &str, expected: &[i32], policy: OutputPolicy, input: Option<&[u8]>, timeout: Duration, envs: &[(&str, &str)]) -> Result<Captured, String> {
-    let mut argv = vec!["-C", path, "-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "--literal-pathspecs"];
-    argv.extend_from_slice(args);
-    let output = crate::git::execute_cancellable_input_env(Request { args: &argv, context, expected, policy, timeout }, Arc::new(AtomicBool::new(false)), input, envs).await?;
+    let argv = RepoGit::at(path).literal_pathspecs().argv(args);
+    let output = execute_input_env(Request { args: &argv, context, expected, policy, timeout }, input, envs).await?;
     if !output.code.is_some_and(|code| expected.contains(&code)) {
         return Err(output.last_error());
     }

@@ -22,7 +22,7 @@
     stars: [repos[1].id, repos[5].id], activeSet: 'a', root: platform === 'windows' ? 'C:\\Dev\\repos' : '/home/dev/repos', layout: 'flat',
     pathTemplate: '{org}\\{folder}', cols: { repo: 210, checkout: 190, local: 220, status: 170 }, shallow: false, parallel: 4, onExisting: 'fetch', pageSize: 25, rightWidth: 380,
     theme: cfg.theme || 'system', uiFont: 'geist', codeFont: 'geist-mono',
-    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: cfg.section || 'sets' },
+    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: cfg.section || 'repos', ...(cfg.lastRepo ? { lastRepo: cfg.lastRepo } : {}) },
   };
   const cap = { supported: true, reason: null };
   const caps = { readCompare: cap, edit: cap, copy: cap, recovery: cap, trash: cap };
@@ -40,13 +40,13 @@
     probe_root: ({ root }) => ({ root, valid: true, reason: null, identity: 'id1', casePolicy: 'insensitive', capabilities: caps }),
     path_identities: ({ paths }) => paths.map(path => ({ path, identity: null, exists: true, reason: null })),
     load_settings: () => ({ sources, workspace }),
-    save_settings: () => null,
+    save_settings: args => { window.__saved = args; return null; },
     source_revision: () => 1, has_token: () => true, credential_status: ({ sourceId }) => ({ sourceId, backend: 'windowsCredentialManager', state: cfg.credMissing ? 'missing' : 'saved', revision: 1, reason: null }),
     list_cached_repos: () => null,
     list_repos: async ({ source }) => { await sleep(cfg.listDelay ?? 300); if (cfg.listError) throw 'HTTP 401 Unauthorized: token rejected by git.acme.example'; return source.id === 's1' ? { repos, fetchedAt: Date.now(), errors: [], warnings: [] } : { repos: ossRepos, fetchedAt: Date.now(), errors: [] }; },
     list_user_orgs: () => orgs, test_source: () => 'Connected as admin',
     paths_exist: ({ paths }) => paths.map(() => true),
-    local_status: ({ paths }) => paths.map(path => { const h = hash(path), k = h % 10; return { path, exists: k !== 0, repo: k !== 0, branch: k === 1 ? null : 'main', tag: null, sha: h.toString(16).padStart(40, '0').slice(0, 40), upstream: 'origin/main', ahead: k === 2 || k === 3 ? (h >> 4) % 4 + 1 : 0, behind: k === 3 || k === 4 || k === 5 ? (h >> 6) % 9 + 1 : 0, dirty: k === 6 || k === 3 ? (h >> 3) % 12 + 1 : 0, error: k === 7 && cfg.rowErrors ? 'fatal: unable to access remote' : null }; }),
+    local_status: ({ paths }) => (window.__statusPaths ||= []).push(...paths) && paths.map(path => { const h = hash(path), k = h % 10; const held = new Set([...workspace.sets, ...(window.__saved?.settings?.workspace?.sets ?? [])].flatMap(set => set.items.map(entry => entry.folder || entry.name)).concat((cfg.strayOnDisk || []).map(i => repos[i].name))); const here = held.has(path.split(/[\\/]/).pop()); return { path, exists: here && k !== 0, repo: here && k !== 0, branch: k === 1 ? null : 'main', tag: null, sha: h.toString(16).padStart(40, '0').slice(0, 40), upstream: 'origin/main', ahead: k === 2 || k === 3 ? (h >> 4) % 4 + 1 : 0, behind: k === 3 || k === 4 || k === 5 ? (h >> 6) % 9 + 1 : 0, dirty: k === 6 || k === 3 ? (h >> 3) % 12 + 1 : 0, error: k === 7 && cfg.rowErrors ? 'fatal: unable to access remote' : null }; }),
     get_refs_many: ({ urls }) => urls.map(url => ({ url, branches: ['main', 'develop', 'release/2.4'], tags: ['v2.3.0', 'v2.4.0'], branchShas: [commit(0,'x').sha, commit(1,'x').sha, commit(2,'x').sha], tagShas: [commit(3,'x').sha, commit(4,'x').sha], branchLabels: ['main','develop','release/2.4'], tagLabels: ['v2.3.0','v2.4.0'], error: null })),
     activity_snapshot: () => cfg.activity ? [
       { id: 'x1', context: 'platform/api-gateway', argv: ['git','fetch','--prune','origin'], sequence: 1, startedAt: Date.now() - 9000, elapsedMs: 1840, state: 'completed', exitCode: 0, output: [], truncated: false, stdoutBytes: 0, stderrBytes: 120 },
@@ -56,6 +56,8 @@
     repository_tree: () => ({ branches: [{ name: 'main', sha: 'a'.repeat(40), current: true, symbolic: '' }, { name: 'develop', sha: 'b'.repeat(40), current: false, symbolic: '' }], tags: [{ name: 'v2.4.0', sha: 'd'.repeat(40), current: false, symbolic: '' }], remotes: [{ name: 'origin', urls: ['https://git.acme.example/platform/api.git'], refs: [{ name: 'origin/main', sha: 'a'.repeat(40), current: false, symbolic: '' }] }], stashes: [{ name: 'stash@{0}', sha: 'f'.repeat(40), subject: 'WIP on main' }], submodules: [] }),
     repository_history: ({ path }) => ({ kind: 'tracking', branch: 'main', upstream: 'origin/main', uncommitted: 4, local: [0,1].map(i => commit(i, path)), localTotal: 2, origin: [2,3,4].map(i => commit(i, path)), originTotal: 3, base: commit(5, path), below: [6,7,8].map(i => commit(i, path)) }),
     repo_changes: () => ({ branch: 'main', detached: false, unborn: false, head: 'a'.repeat(40), files: [{ path: 'src/main.rs', origPath: null, index: 'M', worktree: '.', kind: 'ordinary', stagedAdded: 4, stagedRemoved: 1 }, { path: 'src/new.ts', origPath: null, index: '?', worktree: '?', kind: 'untracked', stagedAdded: null, stagedRemoved: null }, { path: 'README.md', origPath: null, index: '.', worktree: 'M', kind: 'ordinary', stagedAdded: null, stagedRemoved: null }], truncated: false, skipped: 0, author: 'admin', authorError: null, stagedFiles: 1, stagedAdded: 4, stagedRemoved: 1 }),
+    stash_list: () => [{ index: 0, reference: 'stash@{0}', oid: 'f'.repeat(40), message: 'WIP on main: pagination spike', branch: 'main', createdAt: Math.floor(Date.now() / 1000) - 86400 }],
+    stash_show: () => ({ patch: 'diff --git a/src/page.ts b/src/page.ts\n@@ -1 +1 @@\n-old\n+new\n', truncated: false, hasUntracked: false, notice: null }),
     list_tags: () => [], pull_for_branch: ({ path }) => {
       const h = hash(path), k = h % 10;
       if (k > 6) return null;

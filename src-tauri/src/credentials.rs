@@ -1,16 +1,17 @@
+use crate::kernel::events::CoreEvent;
 mod host;
 pub(crate) use host::{bind_before_host_edits, check_saved_host};
 
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 #[cfg(not(feature = "test-profile"))]
-const SERVICE: &str = "paperwing";
+const SERVICE: &str = "skein";
 #[cfg(feature = "test-profile")]
-const SERVICE: &str = "paperwing-testing-fixtures-v1";
+const SERVICE: &str = "skein-testing-fixtures-v1";
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,9 +97,15 @@ fn revisions() -> &'static Mutex<HashMap<String, Revision>> {
     REVISIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+#[cfg(test)]
 fn admit() -> Result<OwnedSemaphorePermit, String> {
     SLOTS.get_or_init(|| Arc::new(Semaphore::new(1))).clone().try_acquire_owned()
         .map_err(|_| "The credential store is busy. Retry when the current operation finishes.".into())
+}
+
+#[cfg(test)]
+pub(crate) fn hold_slot() -> OwnedSemaphorePermit {
+    admit().expect("credential slot is free")
 }
 
 async fn admit_async() -> Result<OwnedSemaphorePermit, String> {
@@ -133,7 +140,7 @@ pub fn if_current<T>(source_id: &str, expected: u64, action: impl FnOnce() -> T)
 }
 
 fn source_configuration(source: &crate::settings::Source) -> String {
-    serde_json::json!([source.kind, source.host, source.orgs, source.urls, source.credential_managed]).to_string()
+    serde_json::json!([source.kind, source.host, source.orgs, source.urls, source.credential_managed, source.enabled]).to_string()
 }
 
 fn check_configuration(source: &crate::settings::Source, configured: Option<&HashMap<String, String>>) -> Result<(), String> {
@@ -155,7 +162,7 @@ fn invalidate_blocking<R: tauri::Runtime>(app: &AppHandle<R>, source_id: &str) {
             store.remove_source(source_id);
         }
     });
-    let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+    let _ = crate::events::publish_payload(app, CoreEvent::CredentialChanged, &serde_json::json!({ "sourceId": source_id, "revision": revision }));
 }
 
 async fn invalidate_with(source_id: String, clear: impl FnOnce() + Send + 'static) -> Result<u64, String> {
@@ -169,7 +176,7 @@ async fn invalidate(app: &AppHandle, source_id: &str) -> Result<(), String> {
     let revision = invalidate_with(id.clone(), move || {
         if let Some(store) = store { store.remove_source(&id); }
     }).await?;
-    let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+    let _ = crate::events::publish_payload(app, CoreEvent::CredentialChanged, &serde_json::json!({ "sourceId": source_id, "revision": revision }));
     Ok(())
 }
 
@@ -206,6 +213,7 @@ fn read_raw(source_id: &str) -> Result<Option<String>, Failure> {
     native::read(source_id)
 }
 
+#[cfg(test)]
 pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
     validate(source_id)?;
     let _permit = admit()?;
@@ -264,6 +272,7 @@ async fn mutate(app: AppHandle, source_id: String, token: Option<String>, host: 
     validate(&source_id)?;
     if token.as_ref().is_some_and(|token| token.trim().is_empty()) { return Err("Token is empty".into()); }
     let permit = admit_async().await?;
+    let secret = token.as_ref().map(|token| token.trim().to_string());
     let token = token.map(|token| {
         let host = host.map(Ok).unwrap_or_else(|| host::saved_host(&source_id))?;
         crate::github::valid_host(&host)?;
@@ -272,10 +281,21 @@ async fn mutate(app: AppHandle, source_id: String, token: Option<String>, host: 
     invalidate(&app, &source_id).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
-        complete_mutation(&source_id, || match token {
+        finish_mutation(&source_id, secret.as_deref(), || match token {
             Some(token) => native::write(&source_id, token.trim()), None => native::delete(&source_id)
         })
     }).await.map_err(|_| "Credential task failed".to_string())?
+}
+
+fn finish_mutation(source_id: &str, secret: Option<&str>, operation: impl FnOnce() -> Result<(), Failure>) -> Result<(), String> {
+    complete_mutation(source_id, operation)?;
+    if let Some(secret) = secret { crate::git::remember_secret(secret); }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn finish_for_test(source_id: &str, secret: Option<&str>) {
+    finish_mutation(source_id, secret, || Ok(())).unwrap();
 }
 
 fn complete_mutation(source_id: &str, operation: impl FnOnce() -> Result<(), Failure>) -> Result<(), String> {
@@ -415,7 +435,7 @@ mod native {
 
 #[cfg(feature = "test-profile")]
 pub fn drill() {
-    if !std::env::args().any(|arg| arg == "--paperwing-credential-drill") { return; }
+    if !std::env::args().any(|arg| arg == "--skein-credential-drill") { return; }
     use std::io::Read;
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -456,7 +476,7 @@ pub fn drill() {
             "api" => {
                 crate::test_profile::github_endpoint()?.ok_or("Isolated API endpoint required by credential drill")?;
                 let source = crate::settings::Source { id: request.source_id, name: "Credential fixture".into(),
-                    kind: "github".into(), host: "github.com".into(), orgs: Vec::new(), urls: Vec::new(), credential_managed: true };
+                    kind: "github".into(), host: "github.com".into(), orgs: Vec::new(), urls: Vec::new(), enabled: true, credential_managed: true };
                 *SOURCES.get_or_init(|| Mutex::new(None)).lock().map_err(|_| "Fixture source configuration unavailable")? =
                     Some(HashMap::from([(source.id.clone(), source_configuration(&source))]));
                 let login = tauri::async_runtime::block_on(crate::github::test_source(source, None))?;
@@ -566,17 +586,7 @@ mod native {
     pub fn read(source_id: &str) -> Result<Option<String>, Failure> {
         match entry(source_id)?.get_password() {
             Ok(token) => Ok(Some(token)),
-            Err(keyring::Error::NoEntry) => {
-                #[cfg(not(feature = "test-profile"))]
-                if let Ok(legacy) = keyring::Entry::new("flock", source_id) {
-                    match legacy.get_password() {
-                        Ok(token) => { let _ = entry(source_id)?.set_password(&token); return Ok(Some(token)); }
-                        Err(keyring::Error::NoEntry) => (),
-                        Err(error) => return Err(failure(error)),
-                    }
-                }
-                Ok(None)
-            }
+            Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(failure(error)),
         }
     }
@@ -590,8 +600,6 @@ mod native {
     }
 
     pub fn delete(source_id: &str) -> Result<(), Failure> {
-        #[cfg(not(feature = "test-profile"))]
-        if let Ok(legacy) = keyring::Entry::new("flock", source_id) { let _ = legacy.delete_credential(); }
         match entry(source_id)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(error) => Err(failure(error)),

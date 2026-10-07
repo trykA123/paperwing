@@ -326,3 +326,26 @@ async fn discarded_working_deletion_restores_index_and_undo_restores_missing_fil
     assert!(!fixture.root.join("with spaces.txt").exists());
     assert_eq!(fixture.git(&["show", ":with spaces.txt"]), b"index\r\nlast");
 }
+
+#[tokio::test]
+async fn linux_discard_holding_gate_completes_within_timeout_without_deadlock() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    let index = b"index\r\nlast";
+    let previous = b"discard\r\nlast";
+    fixture.commit("with spaces.txt", index);
+    fixture.write("with spaces.txt", previous);
+    let environment = environment(&fixture);
+    let staged_write = write(&fixture, index).await;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        replace(&environment, staged_write),
+    )
+    .await
+    .expect("replace deadlocked while holding filesystem gate")
+    .unwrap();
+    assert_eq!(
+        std::fs::read(fixture.root.join("with spaces.txt")).unwrap(),
+        index
+    );
+}

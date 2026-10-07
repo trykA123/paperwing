@@ -1,0 +1,313 @@
+/* repository page */
+.rf-back {
+    color: var(--acc);
+    font-weight: 600;
+}
+
+.rf-back-i {
+    display: inline-grid;
+    transform: rotate(180deg);
+}
+
+.rf-sidehead {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-1);
+    padding: 0 var(--sp-2);
+}
+
+.rf-sidehead b {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: var(--fs-lg);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rf-sidehead small {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    color: var(--dim);
+    font-size: var(--fs-sm);
+}
+
+.nav:disabled {
+    color: var(--faint-text);
+    cursor: default;
+}
+
+.nav:disabled:hover {
+    background: none;
+}
+
+.rf-crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1);
+    color: var(--faint-text);
+    font-size: var(--fs-sm);
+}
+
+.rf-crumbs button {
+    color: var(--acc);
+    font-weight: 500;
+}
+
+.rf-crumbs button:hover {
+    text-decoration: underline;
+}
+
+.rf-head h1 {
+    gap: var(--sp-2);
+}
+
+.rf-star {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-ctl);
+    color: var(--faint-text);
+}
+
+.rf-star:hover {
+    background: var(--soft);
+}
+
+.rf-star.on {
+    color: var(--warn);
+}
+
+.rf-star.on .i {
+    fill: currentColor;
+}
+
+.rf-tag {
+    padding: 0 8px;
+    border: 1px solid var(--ok-line);
+    border-radius: 99px;
+    background: var(--ok-bg);
+    color: var(--ok-text);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.rf-tag.remote {
+    border: 1px dashed var(--line-ctl);
+    background: none;
+    color: var(--dim);
+}
+
+.rf-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+    color: var(--dim);
+    font-size: var(--fs-sm);
+}
+
+.rf-meta-i {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+}
+
+.rf-path {
+    max-width: 40ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rf-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    min-width: 0;
+    padding-bottom: var(--sp-4);
+}
+
+.rf-card {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    box-shadow: var(--shadow-1);
+}
+
+.rf-card-h {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4) 0;
+}
+
+.rf-card-h h2 {
+    margin: 0;
+    font-size: var(--fs-base);
+}
+
+.rf-card-h small {
+    color: var(--dim);
+    font-size: var(--fs-sm);
+}
+
+.rf-card-b {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4) var(--sp-4);
+}
+
+.rf-card-b>* {
+    max-width: 100%;
+}
+
+.rf-card-b.embed {
+    align-items: stretch;
+}
+
+.rf-card-b.embed :is(.stash-section, .tag-section) {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.rf-card-b.embed .history-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.rf-link {
+    color: var(--acc);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+}
+
+.rf-none {
+    margin: 0;
+}
+
+.rf-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--sp-3);
+}
+
+.rf-tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    text-align: left;
+}
+
+.rf-tile:hover {
+    border-color: var(--line-ctl);
+    background: var(--soft);
+}
+
+.rf-tile small {
+    color: var(--dim);
+    font-size: var(--fs-xs);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.rf-tile b {
+    font-size: var(--fs-lg);
+}
+
+.rf-tile b.ok {
+    color: var(--ok-text);
+}
+
+.rf-tile b.warn {
+    color: var(--warn-text);
+}
+
+.rf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: var(--sp-3);
+    align-items: start;
+}
+
+.rf-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    min-width: 0;
+}
+
+.rf-files,
+.rf-refs,
+.rf-commits,
+.rf-actions-list {
+    align-self: stretch;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rf-files .cf {
+    padding-inline: 0;
+}
+
+.rf-refs li,
+.rf-commits li,
+.rf-actions-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 36px;
+    border-top: 1px solid var(--line);
+}
+
+.rf-refs li:first-child,
+.rf-commits li:first-child,
+.rf-actions-list li:first-child {
+    border-top: 0;
+}
+
+.rf-commit-s {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rf-actions-list li {
+    justify-content: space-between;
+    padding-block: var(--sp-2);
+}
+
+.rf-actions-list p {
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+
+.rf-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-4);
+    text-align: center;
+}
+
+.rf-empty p {
+    margin: 0;
+}
+

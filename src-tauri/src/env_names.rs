@@ -1,12 +1,8 @@
 use std::env::VarError;
 use std::ffi::OsString;
 
-fn legacy(name: &str) -> String {
-    format!("PAPERWING_{}", name.strip_prefix("SKEIN_").unwrap_or(name))
-}
-
 fn resolve(name: &str, lookup: impl Fn(&str) -> Option<OsString>) -> Option<OsString> {
-    lookup(name).or_else(|| lookup(&legacy(name)))
+    lookup(name)
 }
 
 pub(crate) fn var_os(name: &str) -> Option<OsString> {
@@ -27,15 +23,15 @@ mod tests {
     }
 
     #[test]
-    fn skein_name_wins_over_legacy_name() {
-        let found = resolve("SKEIN_TEST_TMP", lookup(&[("SKEIN_TEST_TMP", "new"), ("PAPERWING_TEST_TMP", "old")]));
-        assert_eq!(found, Some("new".into()));
+    fn skein_name_is_read() {
+        let found = resolve("SKEIN_TEST_TMP", lookup(&[("SKEIN_TEST_TMP", "value")]));
+        assert_eq!(found, Some("value".into()));
     }
 
     #[test]
-    fn legacy_name_is_read_when_skein_name_is_absent() {
-        let found = resolve("SKEIN_TEST_TMP", lookup(&[("PAPERWING_TEST_TMP", "old")]));
-        assert_eq!(found, Some("old".into()));
+    fn unrelated_names_are_ignored() {
+        let found = resolve("SKEIN_TEST_TMP", lookup(&[("OTHER_TEST_TMP", "value")]));
+        assert_eq!(found, None);
     }
 
     #[test]

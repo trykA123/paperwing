@@ -4,9 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-#[cfg(not(feature = "test-profile"))]
-const LEGACY_IDENTIFIER: &str = "dev.flock.app";
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Source {
@@ -22,7 +19,12 @@ pub struct Source {
     pub urls: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub credential_managed: bool,
+    #[serde(default = "enabled_by_default", skip_serializing_if = "is_true")]
+    pub enabled: bool,
 }
+
+fn enabled_by_default() -> bool { true }
+fn is_true(value: &bool) -> bool { *value }
 
 fn is_false(value: &bool) -> bool { !value }
 
@@ -134,6 +136,9 @@ fn save_settings<R: tauri::Runtime>(app: AppHandle<R>, settings: Settings) -> Re
 fn configure_sources<R: tauri::Runtime>(app: &AppHandle<R>, sources: &[Source], notify: bool) {
     crate::credentials::configure_sources(app, sources, notify);
     crate::git::configure_sources(redaction_sources(sources));
+    if let Some(runtime) = app.try_state::<crate::providers::Runtime>() {
+        if let Err(error) = runtime.configure(sources) { eprintln!("Provider configuration failed: {error}"); }
+    }
 }
 
 #[derive(Default)]
@@ -178,14 +183,7 @@ fn initialize_with(
 }
 
 fn prepare_initial_settings<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Settings, String> {
-    let file = prepare_settings(app)?;
-    #[cfg(not(feature = "test-profile"))]
-    if !file.exists() && !file.with_extension("json.bak").exists() {
-        if let Some(legacy) = file.parent().and_then(|dir| dir.parent()).map(|parent| parent.join(LEGACY_IDENTIFIER).join("settings.json")) {
-            if legacy.is_file() { let _ = std::fs::copy(&legacy, &file); }
-        }
-    }
-    let _ = file;
+    prepare_settings(app)?;
     load_persisted(app).map(|loaded| loaded.settings)
 }
 
@@ -230,10 +228,6 @@ pub mod commands {
     }
 }
 
-pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
-    crate::credentials::get_token(source_id)
-}
-
 #[tauri::command]
 pub async fn set_token(app: AppHandle, source_id: String, token: String, host: Option<String>) -> Result<(), String> {
     crate::credentials::set_token(app, source_id, token, host).await
@@ -274,3 +268,6 @@ mod startup_tests;
 #[cfg(all(test, not(feature = "test-profile")))]
 #[cfg(not(windows))]
 mod retry_tests;
+
+#[cfg(all(test, not(windows), not(feature = "test-profile")))]
+mod provider_tests;

@@ -59,7 +59,7 @@ export type SourceKind = 'github' | 'ghe' | 'manual';
 export type OnExisting = 'fetch' | 'skip' | 'reclone';
 export type PageSize = 10 | 25 | 50 | 'all';
 
-export type Source = { id: string; name: string; kind: SourceKind; host: string; orgs: string[]; urls: string[]; credentialManaged?: boolean };
+export type Source = { id: string; name: string; kind: SourceKind; host: string; orgs: string[]; urls: string[]; credentialManaged?: boolean; enabled?: boolean };
 export type Repo = {
   id: string; source: string; org: string; name: string; description: string;
   url: string; defaultBranch: string; pushedAt: string; archived: boolean;
@@ -93,6 +93,7 @@ export type Activity = {
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'timedOut'; exitCode: number | null;
   output: { sequence: number; stream: string; text: string }[]; truncated: boolean; stdoutBytes: number; stderrBytes: number;
 };
+export type ActivityDelta = Omit<Activity, 'output'> & { from: number; lines: Activity['output'] };
 export type TreeRef = { name: string; label?: string; sha: string; current: boolean; symbolic: string };
 export type RepositoryTree = {
   identity?: string;
@@ -141,8 +142,8 @@ export type SetItem = {
 };
 export type RepoSet = { id: string; name: string; items: SetItem[] };
 export type ColWidths = { repo: number; checkout: number; local: number; status: number };
-export type RailSection = 'sets' | 'changes' | 'branches' | 'compare' | 'search' | 'prs' | 'actions' | 'releases' | 'jira' | 'activity' | 'recovery';
-export type ShellLayout = { version: 1; sidebarWidth: number; sidebarVisible: boolean; rightVisible: boolean; section: RailSection };
+export type RailSection = 'repos' | 'changes' | 'branches' | 'compare' | 'search' | 'prs' | 'actions' | 'releases' | 'jira' | 'activity' | 'recovery';
+export type ShellLayout = { version: 1; sidebarWidth: number; sidebarVisible: boolean; rightVisible: boolean; section: RailSection; lastRepo?: { repoId: string; section: string } };
 export type RowDensity = 'comfortable' | 'compact';
 export type Workspace = {
   sets: RepoSet[]; stars: string[]; activeSet: string; root: string; layout: 'flat' | 'custom'; pathTemplate: string;

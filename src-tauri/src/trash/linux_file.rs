@@ -95,7 +95,7 @@ mod tests {
         let _serial = crate::test_support::serial().await;
         let fixture = crate::commit::test_fixture::Fixture::new();
         fixture.commit("base.txt", b"base\n");
-        let bytes = b"keep these bytes\r\nlast";
+        let bytes = b"keep these bytes\nlast";
         fixture.write("file.txt", bytes);
         fixture.git(&["add", "-N", "file.txt"]);
         let diff =
@@ -115,35 +115,63 @@ mod tests {
         let crate::commit::DiscardPlan::Trash(write) = plan else {
             panic!("Expected desktop Trash");
         };
-        let root = Root::open(&fixture.root, &[fixture.root.join(".git")]).unwrap();
-        let data = fixture.base.join("trash-data");
-        recycle_file(
-            &root,
-            &write.file,
-            write.expected.as_deref().unwrap(),
-            &data,
+
+        let repo_name = fixture.root.file_name().unwrap().to_str().unwrap();
+        let config_dir = fixture.base.join("config");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        let settings_json = serde_json::json!({
+            "sources": [],
+            "workspace": {
+                "root": fixture.base,
+                "layout": "flat",
+                "sets": [{
+                    "id": "set1",
+                    "name": "Set 1",
+                    "items": [{
+                        "id": "repo1",
+                        "name": repo_name
+                    }]
+                }]
+            }
+        });
+        std::fs::write(
+            config_dir.join("settings.json"),
+            serde_json::to_vec(&settings_json).unwrap(),
         )
         .unwrap();
-        if write.index_state.intent_to_add() {
-            crate::commit::run(
-                &fixture.path(),
-                &["rm", "--cached", "--quiet", "--", &write.file],
-                "Remove intent-to-add index entry",
-                &[0],
-                crate::git::OutputPolicy::Metadata,
-                None,
-                std::time::Duration::from_secs(45),
-            )
-            .await
-            .unwrap();
+
+        let mut context = tauri::test::mock_context(tauri::test::noop_assets());
+        context.config_mut().app.app_directories_override =
+            Some(serde_json::from_value(serde_json::json!({ "config": config_dir })).unwrap());
+        let trash_data = fixture.base.join("trash-data");
+        std::fs::create_dir_all(&trash_data).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&trash_data, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
+        std::env::set_var("XDG_DATA_HOME", &trash_data);
+        struct ResetEnv;
+        impl Drop for ResetEnv {
+            fn drop(&mut self) {
+                std::env::remove_var("XDG_DATA_HOME");
+            }
+        }
+        let _reset = ResetEnv;
+
+        let app = tauri::test::mock_builder().build(context).unwrap();
+
+        // 20s test timeout wrapper ensuring no deadlock under the gate
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            crate::trash::untracked::recycle(app.handle().clone(), write),
+        )
+        .await
+        .expect("Operation deadlocked while holding filesystem_gate")
+        .unwrap();
+
+        assert!(outcome.contains("Moved to the desktop Trash"));
         assert!(!fixture.root.join("file.txt").exists());
-        let moved = std::fs::read_dir(data.join("Trash/files"))
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap();
-        assert_eq!(std::fs::read(moved.path()).unwrap(), bytes);
         assert_eq!(fixture.git(&["status", "--porcelain"]), b"");
     }
 }

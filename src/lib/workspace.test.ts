@@ -27,7 +27,7 @@ describe('P1 saved workspace', () => {
   test('defaults are complete and pane preferences survive reload', () => {
     const defaults = defaultWorkspace();
     expect(defaults.root).toBe('C:\\Dev\\repos');
-    expect(defaults.shell).toEqual({ version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: 'sets' });
+    expect(defaults.shell).toEqual({ version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: 'repos' });
     defaults.shell = { version: 1, sidebarWidth: 300, sidebarVisible: false, rightVisible: false, section: 'activity' };
     expect(migrateWorkspace(JSON.parse(JSON.stringify(defaults)))).toEqual(defaults);
   });
@@ -49,6 +49,8 @@ describe('code search tab', () => {
 
   test('a saved workspace from before the tab existed still loads', () => {
     const saved = { activeSet: 's', sets: [{ id: 's', name: 'S', items: [] }], shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: 'sets' } };
-    expect(migrateWorkspace(saved as unknown as Partial<Workspace>).activeSet).toBe('s');
+    const loaded = migrateWorkspace(saved as unknown as Partial<Workspace>);
+    expect(loaded.activeSet).toBe('s');
+    expect(loaded.shell.section).toBe('repos');
   });
 });

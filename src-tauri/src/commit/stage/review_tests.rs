@@ -359,3 +359,154 @@ async fn clean_and_diff_do_not_grow_repository_objects_and_work_on_read_only_obj
         "object count grew in repo objects dir"
     );
 }
+
+#[tokio::test]
+async fn text_auto_crlf_index_one_edited_line_is_one_hunk_and_stage_discard_preserve_bytes() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.commit(".gitattributes", b"* text=auto\n");
+    let before = b"line 1\r\nline 2\r\nline 3\r\n";
+    let oid = fixture.git_input(&["hash-object", "-w", "--stdin", "--no-filters"], before);
+    let oid_str = std::str::from_utf8(&oid).unwrap().trim();
+    fixture.git(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        "100644",
+        oid_str,
+        "file.txt",
+    ]);
+    fixture.git(&["commit", "-m", "init-crlf-auto"]);
+    assert_eq!(fixture.git(&["show", ":file.txt"]), before);
+
+    let edited = b"line 1\r\nLINE 2\r\nline 3\r\n";
+    fixture.write("file.txt", edited);
+
+    let diff = change_hunks(fixture.path(), "file.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        diff.hunks.len(),
+        1,
+        "Expected exactly 1 hunk for 1 edited line"
+    );
+
+    let request = tests::request(&fixture, "file.txt", "unstaged", 0).await;
+    stage_hunks(fixture.path(), request).await.unwrap();
+    assert_eq!(fixture.git(&["show", ":file.txt"]), edited);
+
+    let unstage_req = tests::request(&fixture, "file.txt", "staged", 0).await;
+    unstage_hunks(fixture.path(), unstage_req).await.unwrap();
+    assert_eq!(fixture.git(&["show", ":file.txt"]), before);
+
+    let snapshot = snapshot::read(&fixture.path(), "file.txt", None, "unstaged")
+        .await
+        .unwrap();
+    let discard_request = HunkRequest {
+        file: "file.txt".into(),
+        orig_path: None,
+        area: "unstaged".into(),
+        content_hash: snapshot.hash.clone(),
+        hunks: vec![crate::commit::patch::Selection {
+            hunk: 0,
+            ranges: None,
+        }],
+    };
+    let restored = crate::commit::discard::hunk_bytes(&fixture.path(), &snapshot, &discard_request)
+        .await
+        .unwrap();
+    assert_eq!(restored, before);
+}
+
+#[tokio::test]
+async fn working_tree_encoding_and_ident_refuse_hunk_actions_and_fall_back_in_diff() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.commit("utf16.txt", b"before\n");
+    fixture.write("utf16.txt", b"after\n");
+    fixture.commit("ident.txt", b"before $\n");
+    fixture.write("ident.txt", b"after $\n");
+    fixture.commit(
+        ".gitattributes",
+        b"utf16.txt working-tree-encoding=UTF-16\nident.txt ident\n",
+    );
+
+    let utf16_content = change_content(fixture.path(), "utf16.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(utf16_content.modified, "after\n");
+
+    let ident_content = change_content(fixture.path(), "ident.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(ident_content.modified, "after $\n");
+
+    let err_stage_utf16 = stage_hunks(
+        fixture.path(),
+        HunkRequest {
+            file: "utf16.txt".into(),
+            orig_path: None,
+            area: "unstaged".into(),
+            content_hash: "dummy".into(),
+            hunks: vec![],
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        err_stage_utf16.contains("working-tree-encoding"),
+        "{err_stage_utf16}"
+    );
+
+    let err_stage_ident = stage_hunks(
+        fixture.path(),
+        HunkRequest {
+            file: "ident.txt".into(),
+            orig_path: None,
+            area: "unstaged".into(),
+            content_hash: "dummy".into(),
+            hunks: vec![],
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(err_stage_ident.contains("ident"), "{err_stage_ident}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn colon_in_repo_path_works_with_alternate_object_dir() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::with_root_name("colon:repo:test");
+    fixture.commit("file.txt", b"first line\n");
+    fixture.write("file.txt", b"modified in colon path\n");
+
+    let diff = change_hunks(fixture.path(), "file.txt".into(), None, "unstaged".into())
+        .await
+        .unwrap();
+    assert_eq!(diff.hunks.len(), 1);
+
+    let request = tests::request(&fixture, "file.txt", "unstaged", 0).await;
+    stage_hunks(fixture.path(), request).await.unwrap();
+    assert_eq!(
+        fixture.git(&["show", ":file.txt"]),
+        b"modified in colon path\n"
+    );
+}
+
+#[tokio::test]
+async fn stage_holding_path_completes_within_timeout_without_deadlock() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.commit("file.txt", b"before\n");
+    fixture.write("file.txt", b"after\n");
+
+    let request = tests::request(&fixture, "file.txt", "unstaged", 0).await;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        stage_hunks(fixture.path(), request),
+    )
+    .await
+    .expect("stage_hunks deadlocked")
+    .unwrap();
+}

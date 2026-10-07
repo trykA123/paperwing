@@ -82,7 +82,7 @@ export class TemporarySets {
   private showRepository(set: TempSet): void {
     const item = set.items[0];
     if (!item) return;
-    this.host.openView({ kind: 'item', itemId: item.id }, set.id);
+    this.host.openView({ kind: 'repo', repoId: item.repoId, section: 'overview' }, set.id);
     void this.host.closeTab(tabId({ kind: 'set' }, set.id));
   }
 
@@ -90,6 +90,6 @@ export class TemporarySets {
     const live = this.find(set.id);
     if (!live) return;
     const item = live.isRepository ? live.items[0] : undefined;
-    this.host.openView(item ? { kind: 'item', itemId: item.id } : { kind: 'set' }, live.id);
+    this.host.openView(item ? { kind: 'repo', repoId: item.repoId, section: 'overview' } : { kind: 'set' }, live.id);
   }
 }

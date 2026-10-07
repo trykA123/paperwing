@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { nextRowIndex, ringLabel, ringRadius, ROW_HEIGHT, type GraphLayout } from '../lib/history-graph';
+  import { nextRowIndex, ringLabel, ringRadius, ROW_HEIGHT, type GraphLayout, type GraphRow } from '../lib/history-graph';
   import Icon from './Icon.svelte';
 
   const TAGS_SHOWN = 2;
-  let { layout, shownId, activeId = $bindable(null) }: { layout: GraphLayout; shownId: string | null; activeId?: string | null } = $props();
+  let { layout, shownId, activeId = $bindable(null), onpick }: { layout: GraphLayout; shownId: string | null; activeId?: string | null; onpick?: (row: GraphRow, opener: Element) => void } = $props();
 
   let list: HTMLUListElement;
   let focusedId = $state<string | null>(null);
@@ -38,7 +38,7 @@
         <button class="history-row" data-kind={row.kind} class:on={row.id === shownId} tabindex={row.id === stopId ? 0 : -1}
           onfocus={() => { focusedId = row.id; activeId = row.id; }} onblur={() => { if (focusedId === row.id) focusedId = null; }}
           onpointerenter={() => (activeId = row.id)} onpointerleave={() => { if (activeId === row.id) activeId = focusedId; }}
-          onkeydown={event => move(event, index)}>
+          onkeydown={event => move(event, index)} onclick={event => { if (row.commit) onpick?.(row, event.currentTarget); }}>
           {#if row.commit}<span class="history-sha">{row.commit.short}</span>{/if}
           <span class="history-label">{row.label}</span>
           {#each row.tags.slice(0, TAGS_SHOWN) as tag (tag)}<span class="history-tagref" title="Tag {tag}"><Icon name="tag" size={10} tone="tag" />{tag}</span>{/each}

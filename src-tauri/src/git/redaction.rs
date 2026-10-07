@@ -1,4 +1,45 @@
-use super::configured_secrets;
+use super::configured_sources;
+use std::sync::Mutex;
+
+const QUIET_TEXT: &str = "Git output omitted because the credential store is inaccessible.";
+
+pub(super) type SecretKey = Vec<(String, u64)>;
+
+static SECRET_CACHE: Mutex<Option<(SecretKey, Vec<String>)>> = Mutex::new(None);
+
+pub(super) fn secret_key(ids: &[String]) -> SecretKey {
+    ids.iter().map(|id| (id.clone(), crate::credentials::revision(id))).collect()
+}
+
+pub(super) fn cached_secrets(key: &SecretKey) -> Option<Vec<String>> {
+    SECRET_CACHE.lock().unwrap().as_ref().filter(|(cached, _)| cached == key).map(|(_, secrets)| secrets.clone())
+}
+
+pub(super) fn remember_secrets(key: SecretKey, secrets: &[String]) {
+    let ids: Vec<String> = key.iter().map(|(id, _)| id.clone()).collect();
+    let mut cache = SECRET_CACHE.lock().unwrap();
+    if secret_key(&ids) == key {
+        *cache = Some((key, secrets.to_vec()));
+        return;
+    }
+    let (cached_key, merged) = cache.get_or_insert_with(|| (Vec::new(), Vec::new()));
+    *cached_key = key;
+    for secret in secrets {
+        if !merged.contains(secret) { merged.push(secret.clone()); }
+    }
+}
+
+pub(crate) fn remember_secret(secret: &str) {
+    if secret.is_empty() { return; }
+    let mut cache = SECRET_CACHE.lock().unwrap();
+    let (_, secrets) = cache.get_or_insert_with(|| (Vec::new(), Vec::new()));
+    if !secrets.iter().any(|known| known == secret) { secrets.push(secret.into()); }
+}
+
+fn last_good_secrets() -> Option<Vec<String>> {
+    let cached = SECRET_CACHE.lock().unwrap().as_ref().map(|(_, secrets)| secrets.clone());
+    cached.or_else(|| configured_sources().is_empty().then(Vec::new))
+}
 
 #[derive(Clone)]
 pub(super) enum Redaction {
@@ -10,7 +51,7 @@ impl Redaction {
     pub(super) fn safe(&self, text: &str) -> String {
         match self {
             Self::Ready(secrets) => redact(text, secrets),
-            Self::Quiet => "Git output omitted because the credential store is inaccessible.".into(),
+            Self::Quiet => QUIET_TEXT.into(),
         }
     }
 
@@ -99,9 +140,9 @@ pub fn redact(text: &str, secrets: &[String]) -> String {
 }
 
 pub fn safe(text: &str) -> String {
-    match configured_secrets() {
-        Ok(secrets) => redact(text, &secrets),
-        Err(_) => "Git output omitted because the credential store is inaccessible.".into(),
+    match last_good_secrets() {
+        Some(secrets) => redact(text, &secrets),
+        None => QUIET_TEXT.into(),
     }
 }
 

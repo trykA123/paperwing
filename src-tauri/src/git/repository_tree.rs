@@ -1,6 +1,8 @@
 #[path = "tree_identity.rs"]
 mod identity;
 
+use super::remote_list::{parse_remote_verbose, pushurl_remotes};
+use super::repo_command::RepoGit;
 use super::{execute, valid_path, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::time::Duration;
@@ -56,8 +58,7 @@ async fn tree_output(
     expected: &[i32],
     policy: OutputPolicy,
 ) -> Result<Captured, String> {
-    let mut argv = vec!["-C", path];
-    argv.extend_from_slice(args);
+    let argv = RepoGit::at(path).argv(args);
     let output = execute(
         Request {
             args: &argv,
@@ -126,16 +127,23 @@ async fn read_tree(path: &str) -> Result<RepositoryTree, String> {
             remote_refs.push((name.to_string(), make_ref(name)));
         }
     }
-    let output = tree_output(path, &["remote"], &[0], OutputPolicy::Text).await?;
-    for name in String::from_utf8_lossy(&output.stdout).lines() {
+    let output = tree_output(path, &["remote", "-v"], &[0], OutputPolicy::Metadata).await?;
+    let listed_remotes = parse_remote_verbose(&String::from_utf8_lossy(&output.stdout));
+    let pushed = if listed_remotes.iter().any(|listed| listed.complete) {
+        let config = tree_output(path, &["config", "--get-regexp", r"^remote\..*\.pushurl$"], &[0, 1], OutputPolicy::Metadata).await?;
+        pushurl_remotes(&String::from_utf8_lossy(&config.stdout))
+    } else {
+        Default::default()
+    };
+    for listed in listed_remotes {
+        let name = listed.name.as_str();
         valid_ref(name)?;
-        let urls = tree_output(
-            path,
-            &["remote", "get-url", "--all", name],
-            &[0],
-            OutputPolicy::Text,
-        )
-        .await?;
+        let urls = if listed.complete && !pushed.contains(name) {
+            listed.urls.iter().map(|url| output.safe(url)).collect()
+        } else {
+            let all = tree_output(path, &["remote", "get-url", "--all", name], &[0], OutputPolicy::Metadata).await?;
+            all.safe(&String::from_utf8_lossy(&all.stdout)).lines().map(str::to_string).collect()
+        };
         let refs = remote_refs
             .iter()
             .filter(|(reference, _)| reference.starts_with(&format!("{name}/")))
@@ -149,11 +157,7 @@ async fn read_tree(path: &str) -> Result<RepositoryTree, String> {
             .collect();
         tree.remotes.push(TreeRemote {
             name: output.safe(name),
-            urls: urls
-                .safe(&String::from_utf8_lossy(&urls.stdout))
-                .lines()
-                .map(str::to_string)
-                .collect(),
+            urls,
             refs,
         });
     }

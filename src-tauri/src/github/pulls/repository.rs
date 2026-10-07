@@ -1,10 +1,11 @@
 use super::super::{enc, http::Error, parse_manual_path, valid_name};
+use crate::git::repo_command::RepoGit;
 use crate::git::{execute, Captured, OutputPolicy, Request};
 use std::path::Path;
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(in crate::github) struct Repository {
+pub(crate) struct Repository {
     pub owner: String,
     pub name: String,
     pub host: String,
@@ -36,7 +37,7 @@ fn invalid_remote() -> Error {
     )
 }
 
-pub(in crate::github) fn remote_host(url: &str) -> Result<String, Error> {
+pub(crate) fn remote_host(url: &str) -> Result<String, Error> {
     crate::git::valid_url(url).map_err(|_| invalid_remote())?;
     if url.starts_with("https://") || url.starts_with("ssh://") {
         let parsed = reqwest::Url::parse(url).map_err(|_| invalid_remote())?;
@@ -72,7 +73,7 @@ pub(in crate::github) fn parse_remote(url: &str, host: &str) -> Result<Repositor
     })
 }
 
-pub(super) struct Branch {
+pub(crate) struct Branch {
     pub repo: Repository,
     pub head: String,
     pub sha: String,
@@ -96,8 +97,7 @@ pub(super) async fn validate(path: &str, branch: &str) -> Result<(), String> {
 }
 
 async fn git(path: &str, args: &[&str], expected: &[i32]) -> Result<Captured, Error> {
-    let mut argv = vec!["--no-optional-locks", "-C", path];
-    argv.extend_from_slice(args);
+    let argv = RepoGit::at(path).no_optional_locks().argv(args);
     execute(
         Request {
             args: &argv,
@@ -292,6 +292,9 @@ mod tests {
         assert_eq!(branch.repo.owner, "admin");
         assert_eq!(branch.repo.name, "repo");
         assert_eq!(branch.head, "feature/remote");
+        let argv = crate::git::repo_command::argv_of("Pull request remote");
+        crate::git::repo_command::assert_hardened(&argv, path);
+        assert_eq!(argv[0], "--no-optional-locks");
         let sha = run_git(&fixture.0, &["rev-parse", "feature/local"]).await;
         assert_eq!(branch.sha, String::from_utf8(sha).unwrap().trim());
         run_git(

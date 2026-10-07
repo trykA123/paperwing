@@ -1,3 +1,4 @@
+use crate::kernel::events::CoreEvent;
 use crate::discover::{scan, Event, FoundRepo, Limits, Summary};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -5,14 +6,12 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 const BATCH_LEN: usize = 25;
 const BATCH_AGE: Duration = Duration::from_millis(50);
 const MAX_RUNNING: usize = 4;
 const MAX_DEPTH: u32 = 8;
-pub const BATCH_EVENT: &str = "discover-batch";
-pub const DONE_EVENT: &str = "discover-done";
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -150,6 +149,29 @@ pub fn chosen_folder(path: &str) -> Result<std::path::PathBuf, String> {
     Ok(canonical)
 }
 
+fn emit_outbound<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    id: u64,
+    cancel: &AtomicBool,
+    outbound: Outbound,
+) {
+    let sent = match outbound {
+        Outbound::Batch(repos) => crate::events::publish_payload(
+            app,
+            CoreEvent::DiscoverBatch,
+            &BatchPayload { id, repos },
+        ),
+        Outbound::Done(summary) => crate::events::publish_payload(
+            app,
+            CoreEvent::DiscoverDone,
+            &DonePayload { id, summary },
+        ),
+    };
+    if sent.is_err() {
+        cancel.store(true, Ordering::Relaxed);
+    }
+}
+
 #[tauri::command]
 pub async fn discover_start(
     app: AppHandle,
@@ -172,13 +194,7 @@ pub async fn discover_start(
     tauri::async_runtime::spawn_blocking(move || {
         let _slot = slot;
         let send = |outbound: Outbound| {
-            let sent = match outbound {
-                Outbound::Batch(repos) => app.emit(BATCH_EVENT, BatchPayload { id, repos }),
-                Outbound::Done(summary) => app.emit(DONE_EVENT, DonePayload { id, summary }),
-            };
-            if sent.is_err() {
-                cancel.store(true, Ordering::Relaxed);
-            }
+            emit_outbound(&app, id, &cancel, outbound);
         };
         run_job(&root, limits, &cancel, &send);
     });
@@ -200,6 +216,27 @@ mod tests {
     use super::*;
     use crate::platform::Fixture;
     use std::cell::RefCell;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_frontend_emit_failure_cancels_the_discovery() {
+        use tauri::test::{mock_builder, mock_context, noop_assets};
+        let app = mock_builder()
+            .manage(crate::events::EmitFailure)
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let bus = crate::kernel::events::EventBus::default();
+        let _subscriber = bus.subscribe();
+        tauri::Manager::manage(&app, bus);
+        let cancel = AtomicBool::new(false);
+        emit_outbound(
+            app.handle(),
+            1,
+            &cancel,
+            Outbound::Batch(vec![repo("admin")]),
+        );
+        assert!(cancel.load(Ordering::Relaxed));
+    }
 
     fn repo(name: &str) -> FoundRepo {
         FoundRepo {
@@ -308,7 +345,7 @@ mod tests {
         let fixture = Fixture::new("job-chosen");
         assert!(chosen_folder(fixture.0.to_str().unwrap()).is_ok());
         assert!(chosen_folder(fixture.0.join("missing").to_str().unwrap()).is_err());
-        assert!(chosen_folder(fixture.0.join(".paperwing-test-root").to_str().unwrap()).is_err());
+        assert!(chosen_folder(fixture.0.join(".skein-test-root").to_str().unwrap()).is_err());
         assert!(chosen_folder("relative/path").is_err());
     }
 }

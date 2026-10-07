@@ -50,7 +50,7 @@ fn an_empty_directory_migrates_to_the_latest_schema() {
     let fixture = Fixture::new("store-empty");
     let store = open(&fixture);
     assert!(store.recovered_from().is_none());
-    assert_eq!(pragma(&store, "user_version"), "1");
+    assert_eq!(pragma(&store, "user_version"), "3");
     assert_eq!(pragma(&store, "journal_mode"), "wal");
     assert_eq!(pragma(&store, "foreign_keys"), "1");
     assert_eq!(pragma(&store, "auto_vacuum"), "2");

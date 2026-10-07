@@ -90,4 +90,19 @@ mod tests {
         drop(journal);
         fs::remove_dir_all(base).unwrap();
     }
+
+    #[tokio::test]
+    async fn discard_validation_under_filesystem_gate_does_not_deadlock() {
+        let _serial = crate::test_support::serial().await;
+        let fixture = crate::commit::test_fixture::Fixture::new();
+        fixture.commit("file.txt", b"tracked\n");
+        let state = crate::commit::IndexState::read(&fixture.path(), "file.txt")
+            .await
+            .unwrap();
+        let _filesystem = crate::git::filesystem_gate().try_write().unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(20), state.validate())
+            .await
+            .expect("validate deadlocked while holding filesystem_gate")
+            .unwrap();
+    }
 }

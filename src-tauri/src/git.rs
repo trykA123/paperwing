@@ -2,17 +2,21 @@ pub(crate) use runner::CAPTURE_LIMIT;
 pub(crate) mod batch_repository;
 pub(crate) use runner::BatchReader;
 mod runner;
-pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_cancellable_input_env, execute_streaming, filesystem_gate, StdoutSink};
+pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_input_env, execute_streaming, filesystem_gate, StdoutSink};
 pub type ActivityOutput = runner::ActivityOutput;
-use runner::configured_secrets;
+use runner::configured_sources;
 #[cfg(test)]
 pub(crate) use runner::TEST_RUNNER_LOCK;
 // Runs Git under the runner's environment without taking the filesystem gate.
 pub(crate) use runner::git as hygienic_git;
 #[cfg(test)]
+pub(crate) use runner::binary::BinaryOverride;
+#[cfg(test)]
+pub(crate) use runner::locale::CTYPE_OVERRIDE;
+#[cfg(test)]
 use runner::{ExitObserver, NEXT_ID, Observer, drain, execute_inner};
 
-mod remote_refs;
+pub(crate) mod remote_refs;
 pub use remote_refs::RefsResult;
 #[cfg(test)]
 use remote_refs::{ls_remote, natural_cmp};
@@ -24,9 +28,12 @@ pub type TreeRemote = repository_tree::TreeRemote;
 pub type TreeStash = repository_tree::TreeStash;
 pub type TreeSubmodule = repository_tree::TreeSubmodule;
 
+pub(crate) mod repo_command;
 mod redaction;
+mod remote_list;
 mod validation;
-pub use redaction::{last_error, redact, safe};
+pub use redaction::{last_error, redact, safe};
+pub(crate) use redaction::remember_secret;
 #[cfg(test)]
 pub(crate) use runner::CredentialFixture;
 pub use validation::{valid_path, valid_ref, valid_root, valid_url};
@@ -46,7 +53,7 @@ pub async fn repository_tree(path: String) -> Result<RepositoryTree, String> {
 
 #[tauri::command]
 pub async fn get_refs_many(urls: Vec<String>) -> Vec<RefsResult> {
-    remote_refs::get_refs_many(urls).await
+    crate::providers::refs(urls).await
 }
 
 #[tauri::command]
