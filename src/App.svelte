@@ -35,7 +35,10 @@
   import SidePanel from './components/SidePanel.svelte';
   import StashPushDialog from './components/stash/StashPushDialog.svelte';
   import StashSwitchDialog from './components/stash/StashSwitchDialog.svelte';
+  import TagDeleteDialog from './components/tags/TagDeleteDialog.svelte';
+  import TagDialog from './components/tags/TagDialog.svelte';
   import { stashFlow } from './lib/stash-flow.svelte';
+  import { tagFlow } from './lib/tag-flow.svelte';
   import { RAIL_SECTIONS, railShortcut } from './lib/rail';
 
   const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings' && app.view.kind !== 'codeSearch');
@@ -198,6 +201,7 @@
 {#if app.gitDialog?.kind === 'commit'}<CommitDialog request={app.gitDialog} />{:else if app.gitDialog?.kind === 'branch'}<BranchDialog request={app.gitDialog} />{/if}
 {#if app.cleanupDialog}<BranchCleanup request={app.cleanupDialog} />{/if}
 {#if stashFlow.dialog?.kind === 'push'}<StashPushDialog targets={stashFlow.dialog.targets} />{:else if stashFlow.dialog?.kind === 'switch'}<StashSwitchDialog targets={stashFlow.dialog.targets} />{/if}
+{#if tagFlow.dialog?.kind === 'create'}<TagDialog targets={tagFlow.dialog.targets} />{:else if tagFlow.dialog?.kind === 'delete'}<TagDeleteDialog targets={tagFlow.dialog.targets} tag={tagFlow.dialog.tag} />{/if}
 {#if $confirmQueue.length}{#key $confirmQueue[0]}<ConfirmDialog request={$confirmQueue[0]} />{/key}{/if}
 <Notifications />
 <Tooltip />

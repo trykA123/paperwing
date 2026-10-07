@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 7663,
-  "normalizedSourceSHA256": "60ee7fb5743cdb302992828cebe4d17a9af4910f93a3ec33eb1ad8a7ee9ad407",
+  "originalLineCount": 7865,
+  "normalizedSourceSHA256": "dcdbc16fe1ea20293cc1b250873ce23fb537b5cf96f19cbfa5b4cb7792436173",
   "chapters": [
     {
       "path": "comparison.css",
@@ -111,6 +111,12 @@
       "firstLine": 7403,
       "lastLine": 7663,
       "normalizedSHA256": "a3fc7ee4fae89a665bdf4816e98c6d483204008859fbe8162ef0d653af3423e8"
+    },
+    {
+      "path": "tags.css",
+      "firstLine": 7664,
+      "lastLine": 7865,
+      "normalizedSHA256": "f1a19bc1437b32ccbe0d9ce799fde4617996516cd6f4c0af9541b210f6086801"
     }
   ]
 }

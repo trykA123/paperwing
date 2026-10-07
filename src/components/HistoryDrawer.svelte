@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { api, type RepositoryHistory } from '../lib/api';
+  import { api, type RepositoryHistory, type TagInfo } from '../lib/api';
   import { app } from '../lib/state.svelte';
   import { motionMs } from '../lib/appearance';
   import { containFocus, trapTab } from '../lib/focus-trap';
@@ -15,6 +15,7 @@
   import Icon from './Icon.svelte';
   import Skeleton from './Skeleton.svelte';
   import StashSection from './stash/StashSection.svelte';
+  import TagSection from './tags/TagSection.svelte';
 
   const NOTE = {
     detached: 'HEAD is not on a branch, so there is no origin to compare with. Showing commits that are not on any remote.',
@@ -31,10 +32,11 @@
   let limit = $state(FIRST_PAGE);
   let activeId = $state<string | null>(null);
   let busy = $state(false);
+  let tags = $state<TagInfo[]>([]);
   let alive = true;
 
   const history = $derived(load.status === 'ready' ? load.history : null);
-  const layout = $derived(history ? layoutHistory(history) : null);
+  const layout = $derived(history ? layoutHistory(history, tags) : null);
   const defaultId = $derived((layout?.rows.find(row => row.commit) ?? layout?.rows[0])?.id ?? null);
   const shownId = $derived(layout?.rows.some(row => row.id === activeId) ? activeId : defaultId);
   const active = $derived(layout?.rows.find(row => row.id === shownId) ?? null);
@@ -109,6 +111,7 @@
       {:else if !hasSharedBase(history)}
         <Alert kind="warn" role="status">Local and origin share no history, so the rails do not join.</Alert>
       {/if}
+      <TagSection path={target.path} name={target.name} bind:tags />
       <StashSection path={target.path} name={target.name} />
       {#if layout.rows.length}
         <HistoryGraph {layout} {shownId} bind:activeId />

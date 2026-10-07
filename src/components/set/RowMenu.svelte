@@ -4,6 +4,7 @@
   import { commands, execute } from '../../lib/commands';
   import { needsClone, openHistory } from '../../lib/row-actions';
   import { stashFlow } from '../../lib/stash-flow.svelte';
+  import { tagFlow } from '../../lib/tag-flow.svelte';
   import { app } from '../../lib/state.svelte';
   import { disabledReason, type MenuFacts, type Need } from '../../lib/menu-reason';
   import Icon from '../Icon.svelte';
@@ -33,6 +34,7 @@
   });
   const stashWhy = $derived(disabledReason(['cloned', 'dirty'], facts));
   const switchWhy = $derived(disabledReason(['managed', 'cloned', 'offRef'], facts) ?? (item.ref.type === 'branch' ? null : 'Only a branch can be switched to with a stash'));
+  const tagWhy = $derived(disabledReason(['cloned'], facts));
   const why = (needs: Need[], fallback?: string | null) => disabledReason(needs, facts) ?? fallback ?? 'Not available right now';
   let menu: HTMLDivElement;
 
@@ -71,6 +73,8 @@
   {/each}
   <button role="menuitem" disabled={!!stashWhy} title={stashWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openPush([item], opener), true)}><Icon name="stash" tone="record" />Stash changes…</button>
   <button role="menuitem" disabled={!!switchWhy} title={switchWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openSwitch([item], opener), true)}><Icon name="stash" tone="record" />Switch with stash…</button>
+  <button role="menuitem" disabled={!!tagWhy} title={tagWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => tagFlow.openCreate([item], opener), true)}><Icon name="tag" tone="tag" />New tag…</button>
+  <button role="menuitem" disabled={!!tagWhy} title={tagWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => tagFlow.openDelete([item], opener), true)}><Icon name="tag" tone="tag" />Delete tag…</button>
   <hr />
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => onrename(item.id), true)}>Rename folder</button>
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => app.duplicateItem(item.id))}><Icon name="copy" />Duplicate into another folder</button>

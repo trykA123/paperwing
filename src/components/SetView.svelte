@@ -8,6 +8,7 @@
   import { plural } from '../lib/plural';
   import { pushTarget, rowFacts, runNextAction } from '../lib/row-actions';
   import { stashFlow, switchable } from '../lib/stash-flow.svelte';
+  import { tagFlow } from '../lib/tag-flow.svelte';
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
   import RefPicker from './RefPicker.svelte';
@@ -203,6 +204,8 @@
     commit: () => { if (dirty[0]) app.openGitDialog('commit', dirty[0]); },
     stash: () => stashFlow.openPush(dirty, moreButton()),
     switchStash: () => stashFlow.openSwitch(selected, moreButton()),
+    tag: () => tagFlow.openCreate(targets.cloned, moreButton()),
+    deleteTag: () => tagFlow.openDelete(targets.cloned, moreButton()),
     clear: () => app.setAllOn(false),
   };
 </script>

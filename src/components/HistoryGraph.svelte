@@ -1,6 +1,8 @@
 <script lang="ts">
   import { nextRowIndex, ringLabel, ringRadius, ROW_HEIGHT, type GraphLayout } from '../lib/history-graph';
+  import Icon from './Icon.svelte';
 
+  const TAGS_SHOWN = 2;
   let { layout, shownId, activeId = $bindable(null) }: { layout: GraphLayout; shownId: string | null; activeId?: string | null } = $props();
 
   let list: HTMLUListElement;
@@ -39,6 +41,8 @@
           onkeydown={event => move(event, index)}>
           {#if row.commit}<span class="history-sha">{row.commit.short}</span>{/if}
           <span class="history-label">{row.label}</span>
+          {#each row.tags.slice(0, TAGS_SHOWN) as tag (tag)}<span class="history-tagref" title="Tag {tag}"><Icon name="tag" size={10} tone="tag" />{tag}</span>{/each}
+          {#if row.tags.length > TAGS_SHOWN}<span class="history-tagref" title={row.tags.slice(TAGS_SHOWN).join(', ')}>+{row.tags.length - TAGS_SHOWN}</span>{/if}
           {#if row.tag}<span class="history-tag" data-kind={row.kind}>{row.tag}</span>{/if}
         </button>
       </li>
