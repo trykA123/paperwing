@@ -111,14 +111,16 @@ impl BatchReader {
             .filter_map(Weak::upgrade)
             .collect();
         let readers: Vec<_> = tokio::task::spawn_blocking(move || {
-            let root = root.canonicalize().unwrap_or(root);
+            let root = crate::paths::plain(root.canonicalize().unwrap_or(root));
             owners
                 .into_iter()
                 .filter(|owner| {
-                    let path = owner
-                        .root
-                        .canonicalize()
-                        .unwrap_or_else(|_| owner.root.clone());
+                    let path = crate::paths::plain(
+                        owner
+                            .root
+                            .canonicalize()
+                            .unwrap_or_else(|_| owner.root.clone()),
+                    );
                     path.starts_with(&root)
                         || root.starts_with(&path)
                         || owner.handle.lock().is_ok_and(|handle| {
