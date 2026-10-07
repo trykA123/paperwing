@@ -89,6 +89,7 @@ impl RepoStatus {
     }
 }
 
+#[derive(Clone)]
 pub struct Plan {
     pub pattern: String,
     pub flags: Vec<&'static str>,

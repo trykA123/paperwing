@@ -67,3 +67,31 @@ impl SearchEngine for GitGrep {
         ))
     }
 }
+
+#[derive(Clone, Copy, Default)]
+pub enum Engine {
+    #[default]
+    BuiltIn,
+    GitGrep,
+}
+
+impl SearchEngine for Engine {
+    fn search<'a>(
+        &'a self,
+        search: RepoSearch<'a>,
+    ) -> Pin<Box<dyn Future<Output = RepoResult> + Send + 'a>> {
+        let engine = if search.target.git_ref.is_some()
+            || search.plan.untracked
+            || search.plan.flags.contains(&"-P")
+            || crate::search_pattern::needs_git(search.plan)
+        {
+            Self::GitGrep
+        } else {
+            *self
+        };
+        match engine {
+            Self::GitGrep => GitGrep.search(search),
+            Self::BuiltIn => crate::search_builtin::BuiltIn.search(search),
+        }
+    }
+}

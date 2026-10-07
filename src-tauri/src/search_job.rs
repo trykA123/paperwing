@@ -1,7 +1,7 @@
 use crate::search::{
     dedupe, plan, validate_target, Match, Plan, RepoStatus, RepoTarget, SearchRequest, State,
 };
-use crate::search_engine::{Budget, GitGrep, RepoSearch, SearchEngine};
+use crate::search_engine::{Budget, Engine, RepoSearch, SearchEngine};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -69,6 +69,7 @@ pub struct Capabilities {
 }
 
 struct Shared {
+    engine: Engine,
     id: u64,
     plan: Plan,
     cancel: Arc<AtomicBool>,
@@ -131,7 +132,8 @@ async fn search_one(shared: Arc<Shared>, gate: Arc<Semaphore>, target: RepoTarge
     let (status, matches) = match checked(&shared, &target).await {
         Err(status) => (status, Vec::new()),
         Ok(()) => {
-            let found = GitGrep
+            let found = shared
+                .engine
                 .search(RepoSearch {
                     target: &target,
                     plan: &shared.plan,
@@ -204,6 +206,14 @@ impl Drop for DoneGuard {
 }
 
 pub async fn run_job(request: SearchRequest, job: Job) -> Result<Summary, String> {
+    run_with_engine(request, job, Engine::default()).await
+}
+
+pub async fn run_with_engine(
+    request: SearchRequest,
+    job: Job,
+    engine: Engine,
+) -> Result<Summary, String> {
     let plan = plan(&request)?;
     let mut done = DoneGuard {
         id: job.id,
@@ -214,6 +224,7 @@ pub async fn run_job(request: SearchRequest, job: Job) -> Result<Summary, String
     let repos = repos.map_err(|_| "Could not read repository paths".to_string())?;
     let budget = Arc::new(Budget::new(plan.overall));
     let shared = Arc::new(Shared {
+        engine,
         id: job.id,
         plan,
         cancel: job.cancel.clone(),
@@ -248,3 +259,7 @@ pub async fn run_job(request: SearchRequest, job: Job) -> Result<Summary, String
 #[cfg(test)]
 #[path = "search_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "search_builtin_tests.rs"]
+mod builtin_tests;
