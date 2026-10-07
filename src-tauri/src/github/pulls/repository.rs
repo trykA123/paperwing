@@ -79,7 +79,7 @@ pub(crate) struct Branch {
     pub sha: String,
 }
 
-pub(super) async fn validate(path: &str, branch: &str) -> Result<(), String> {
+pub(in crate::github) async fn validate(path: &str, branch: &str) -> Result<(), String> {
     crate::git::valid_ref(branch)?;
     if branch.len() > 1024 {
         return Err("Branch name is too long".into());
@@ -143,7 +143,7 @@ async fn select_remote(path: &str, branch: &str) -> Result<String, Error> {
     }
 }
 
-pub(super) async fn resolve(path: &str, branch: &str) -> Result<Branch, Error> {
+pub(in crate::github) async fn resolve(path: &str, branch: &str) -> Result<Branch, Error> {
     let remote = select_remote(path, branch).await?;
     if remote == "." {
         return Err(Error::Message(

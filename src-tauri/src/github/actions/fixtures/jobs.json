@@ -1,0 +1,8 @@
+[
+  {"kind":"metadata","path":"/repos/admin/repo/actions/runs/31/jobs?filter=latest&per_page=100&page=1","status":200,"body":{"jobs":[{"id":32,"run_id":31,"name":"build (Windows)","status":"completed","conclusion":"failure","html_url":"https://enterprise.invalid/admin/repo/actions/runs/31/job/32","started_at":"2026-10-07T15:00:00Z","completed_at":"2026-10-07T15:01:00Z","steps":[{"number":1,"name":"Build","status":"completed","conclusion":"failure","started_at":"2026-10-07T15:00:01Z","completed_at":"2026-10-07T15:00:59Z"}]}]}},
+  {"kind":"metadata","path":"/repos/admin/repo/actions/jobs/32","status":200,"body":{"status":"completed"}},
+  {"kind":"download","path":"/repos/admin/repo/actions/jobs/32/logs","status":200,"raw":"2026-10-07T15:00:00Z ##[group]Build\n\u001b[31merror: fixture\u001b[0m\n##[endgroup]\n"},
+  {"kind":"metadata","path":"/repos/admin/repo/actions/runs/31/artifacts?per_page=100&page=1","status":200,"body":{"artifacts":[{"id":33,"name":"results","size_in_bytes":4,"expired":false,"created_at":"2026-10-07T15:01:00Z","expires_at":"2026-11-07T15:01:00Z"}]}},
+  {"kind":"download","path":"/repos/admin/repo/actions/artifacts/33/zip","status":200,"raw":"PKfixture"},
+  {"kind":"download","path":"/repos/admin/repo/actions/runs/31/logs","status":200,"raw":"PKlogs"}
+]

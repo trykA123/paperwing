@@ -3,6 +3,7 @@ use crate::store::Store;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+pub(crate) mod actions;
 mod cache;
 #[cfg(test)]
 mod commit_cache;

@@ -274,7 +274,38 @@ export const api = {
   diagnosticsPreview: () => invoke<string>('diagnostics_preview'),
   diagnosticsCancel: () => invoke<boolean>('diagnostics_cancel'),
   diagnosticsExport: () => invoke<boolean>('diagnostics_export'),
+  ciRuns: (target: CiRepositoryRequest, query: CiQuery = {}) => invoke<CiPage<CiRun>>('ci_runs', { target, query }),
+  ciJobs: (target: CiRepositoryRequest, runId: string, query: CiQuery = {}) => invoke<CiPage<CiJob>>('ci_jobs', { target, runId, query }),
+  ciJobLog: (target: CiRepositoryRequest, jobId: string) => invoke<CiLog>('ci_job_log', { target, jobId }),
+  ciArtifacts: (target: CiRepositoryRequest, runId: string, query: CiQuery = {}) => invoke<CiPage<CiArtifact>>('ci_artifacts', { target, runId, query }),
+  ciDownloadArtifact: (target: CiRepositoryRequest, artifactId: string) => invoke<CiDownload>('ci_download_artifact', { target, artifactId }),
+  ciDownloadRunLogs: (target: CiRepositoryRequest, runId: string) => invoke<CiDownload>('ci_download_run_logs', { target, runId }),
+  ciRerun: (target: CiRepositoryRequest, request: { runId: string; failedOnly: boolean; confirmed: boolean }) => invoke<CiActionResult>('ci_rerun', { target, request }),
+  ciCancel: (target: CiRepositoryRequest, request: { runId: string; confirmed: boolean }) => invoke<CiActionResult>('ci_cancel', { target, request }),
+  ciDispatchInputs: (target: CiRepositoryRequest, request: CiDispatch) => invoke<CiDispatchForm>('ci_dispatch_inputs', { target, request }),
+  ciDispatch: (target: CiRepositoryRequest, request: { dispatch: CiDispatch; confirmed: boolean }) => invoke<CiActionResult>('ci_dispatch', { target, request }),
   createGithubRelease: (path: string, tag: string, notes: string, draft = true, remote: string | null = null) => invoke<CreatedGithubRelease>('create_github_release', { path, tag, notes, draft, remote }),
 };
 
 export type CreatedGithubRelease = { id: number; url: string; draft: boolean };
+
+export type CiRepositoryRequest = { path: string; branch: string } | { sourceId: string; url: string };
+export type CiQuery = { page?: number; etag?: string; branch?: string };
+export type CiStatus = 'queued' | 'running' | 'waiting' | 'succeeded' | 'failed' | 'cancelled' | 'skipped' | 'unknown';
+export type CiCapabilities = { canDispatch: boolean; canRerunFailed: boolean };
+export type CiRun = {
+  provider: string; host: string; id: string; pipelineId: string; name: string; number: number; attempt: number;
+  branch: string | null; commit: string; trigger: string; status: CiStatus; url: string;
+  startedAt: string | null; completedAt: string | null; durationSeconds: number | null; capabilities: CiCapabilities;
+};
+export type CiStep = { provider: string; host: string; number: number; name: string; status: CiStatus; startedAt: string | null; completedAt: string | null };
+export type CiJob = { provider: string; host: string; id: string; runId: string; name: string; status: CiStatus; url: string; startedAt: string | null; completedAt: string | null; durationSeconds: number | null; steps: CiStep[] };
+export type CiLog = { provider: string; host: string; jobId: string; text: string };
+export type CiArtifact = { provider: string; host: string; id: string; name: string; sizeBytes: number; expired: boolean; createdAt: string; expiresAt: string | null };
+export type CiDownload = { provider: string; host: string; filename: string; mediaType: string; bytes: number[] };
+export type CiPage<T> = { state: 'updated'; items: T[]; etag: string | null; nextPage: number | null } | { state: 'notModified'; etag: string | null };
+export type CiDispatch = { pipelineId: string; reference: string; inputs: Record<string, string | number | boolean> };
+export type CiInput = { name: string; description: string; kind: 'string' | 'boolean' | 'number' | 'choice'; required: boolean; default: string | number | boolean | null; options: string[] };
+export type CiDispatchForm = { provider: string; host: string; pipelineId: string; reference: string; capabilities: CiCapabilities; inputs: CiInput[] };
+export type CiActionResult = { provider: string; host: string; runId: string | null; accepted: boolean };
+export type CiError = { kind: 'rateLimited'; resetAt: string; message: string } | { kind: 'message'; message: string };

@@ -20,7 +20,7 @@ flowchart LR
 
 - `lib.rs` hosts setup and composes the handlers exported by `commands/` domains.
   The registration macro derives routing names and Tauri handlers from one list.
-  There are 74 default command names, 82 with optional features, and 102 raw
+  There are 84 default command names, 92 with optional features, and 112 raw
   registrations including platform alternatives. Names, arguments and results
   remain compatible.
 - `kernel/` owns serializable events, typed capability traits and provider lifecycle.
@@ -42,10 +42,30 @@ flowchart LR
 ## Capabilities and lifecycle
 
 `RepositoryProvider` offers listing, cached listing, commits and remote refs.
-`PullRequestProvider` offers lookup and creation. `CiProvider` offers start and
-cancel; `IssueProvider` offers issue lookup. A provider implements its supported
+`PullRequestProvider` offers lookup and creation. `CiProvider` preserves start and
+cancel and adds neutral runs, jobs, logs, artifacts, dispatch forms and rerun/cancel
+actions with compatible unsupported defaults. `IssueProvider` offers issue lookup. A provider implements its supported
 traits. Actions and Jira can implement these contracts and use `Registry<P>`
 without changing `kernel/`.
+
+`kernel/ci.rs` owns CI records and typed errors. `github/actions/` adapts GitHub
+Actions and Enterprise JSON through the existing host-aware HTTP client. Its
+foreground adapter runs within the configured source's existing registry lease;
+admission precedes credentials, HTTP-client construction and every operation.
+Targets can be a local checkout or a source ID plus a repository URL registered
+in a set or manual source. Remote-only targets require no checkout or Git process.
+Every CI record includes its provider and host. Pipeline IDs are opaque; workflow
+paths and dispatch events stay inside the GitHub adapter.
+
+CI page commands return an ETag and next page, or a distinct not-modified result.
+They add no polling task. Rate limits include their reset time. Write commands
+require an explicit confirmation flag. Dispatch loads and validates the pipeline's
+inputs at the chosen ref before posting; an accepted dispatch may have no run ID.
+Completed-job logs and explicit archive downloads are memory-only and bounded to
+64 MiB. Downloads follow at most five HTTPS redirects; credentials only accompany
+requests to the configured API origin. No CI logs, artifacts or metadata persist
+in SQLite. UI polling, event observation and native acceptance belong to later
+Packet 31 steps.
 
 The registry keys instances by source ID and normalized host. An unchanged source
 keeps its instance. Disabled sources are checked before construction and request
