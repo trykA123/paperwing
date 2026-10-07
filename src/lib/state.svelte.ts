@@ -257,6 +257,7 @@ class AppState {
     this.sources = saved.sources ?? [];
     this.ws = ws;
     if (saved.restoredFromBackup) this.toast('Settings were restored from a backup', 'info');
+    if (saved.startupError) this.toast(`Could not load settings: ${saved.startupError}`, 'error');
     await this.probeRoot();
     this.openView({ kind: 'set' });
     await listen<Progress>('clone-progress', e => { this.jobs[e.payload.id] = e.payload; });

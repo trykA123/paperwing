@@ -20,8 +20,17 @@ pub(super) fn load(file: &Path) -> Result<(Settings, bool), String> {
     let _guard = WRITES
         .lock()
         .map_err(|_| "Settings persistence is unavailable")?;
-    load_with(file, |path| std::fs::read(path), |from, to| std::fs::rename(from, to))
+    load_with(file, read_file, |from, to| std::fs::rename(from, to))
 }
+
+fn read_file(path: &Path) -> std::io::Result<Vec<u8>> {
+    #[cfg(test)]
+    faults::check_read(path)?;
+    std::fs::read(path)
+}
+
+#[cfg(test)]
+pub(super) mod faults;
 
 pub(super) fn load_with(
     file: &Path,
@@ -66,7 +75,7 @@ fn keep_broken_with(file: &Path, rename: impl Fn(&Path, &Path) -> std::io::Resul
     sync_directory(file)
 }
 
-pub(super) fn save(file: &Path, settings: &Settings) -> Result<(), String> {
+pub(super) fn save(file: &Path, settings: &Settings, preserve_valid: bool) -> Result<(), String> {
     let _guard = WRITES
         .lock()
         .map_err(|_| "Settings persistence is unavailable")?;
@@ -74,6 +83,9 @@ pub(super) fn save(file: &Path, settings: &Settings) -> Result<(), String> {
     match std::fs::read(file) {
         Ok(previous) => {
             if parse(&previous).is_ok() {
+                if preserve_valid {
+                    return Err("Refusing to overwrite existing settings after a startup load error. Retry loading settings or restart the app.".into());
+                }
                 durable_replace(&file.with_extension("json.bak"), &previous)?;
             } else {
                 keep_broken(file)?;
@@ -158,8 +170,8 @@ mod tests {
             sources: vec![],
             workspace: serde_json::json!({"generation":generation}),
         };
-        save(&file, &settings(1)).unwrap();
-        save(&file, &settings(2)).unwrap();
+        save(&file, &settings(1), false).unwrap();
+        save(&file, &settings(2), false).unwrap();
         std::fs::write(&file, b"{torn").unwrap();
         let (loaded, restored) = load(&file).unwrap();
         assert_eq!(loaded.workspace["generation"], 1);
@@ -208,10 +220,10 @@ mod recovery_tests {
             sources: vec![],
             workspace: serde_json::json!({"root":"saved"}),
         };
-        save(&file, &settings).unwrap();
-        save(&file, &Settings::default()).unwrap();
+        save(&file, &settings, false).unwrap();
+        save(&file, &Settings::default(), false).unwrap();
         std::fs::write(&file, b"torn").unwrap();
-        save(&file, &Settings::default()).unwrap();
+        save(&file, &Settings::default(), false).unwrap();
         assert_eq!(
             parse(&std::fs::read(file.with_extension("json.bak")).unwrap())
                 .unwrap()

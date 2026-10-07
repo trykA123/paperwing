@@ -1,4 +1,5 @@
 use super::git::{conflicted_paths, is_dirty, list_entries, locate, quick, run, top_oid};
+use super::snapshot::snapshot;
 use super::{lock_repository, ApplyOutcome, PushOutcome, Restore, StashDiff};
 use crate::git::{Captured, OutputPolicy};
 use std::time::Duration;
@@ -82,13 +83,6 @@ async fn attempt(
         Duration::from_secs(120),
     )
     .await
-}
-
-async fn snapshot(path: &str) -> Result<(Vec<u8>, Vec<u8>), String> {
-    let context = format!("Stash state: {path}");
-    let index = quick(path, &["write-tree"], &context, &[0]).await?;
-    let worktree = quick(path, &["status", "--porcelain=v2", "-z"], &context, &[0]).await?;
-    Ok((index.stdout, worktree.stdout))
 }
 
 pub(crate) async fn restore(path: &str, oid: &str, mode: Restore) -> Result<ApplyOutcome, String> {
@@ -238,3 +232,7 @@ pub(crate) async fn show(path: &str, oid: &str) -> Result<StashDiff, String> {
         notice: truncated.then(|| TOO_LARGE.into()),
     })
 }
+
+#[cfg(test)]
+#[path = "snapshot_tests.rs"]
+mod snapshot_tests;

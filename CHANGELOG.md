@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Retry settings after startup read errors, show defaults with a notice, protect valid settings from auto-save, and avoid retrying partially applied untracked stashes.
 - Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
 - Bind saved tokens to their hosts, recover settings from durable backups, move disk IPC work off the main thread, remove locale-dependent Git decisions, wait up to five seconds for the local store, and share full object-id validation. Stop writing the unused commit cache.
 

@@ -46,6 +46,11 @@ fn unreadable_settings_file_does_not_abort_initialization_regression() {
     let file = fixture.0.join("settings.json");
     std::fs::write(&file, b"{}").unwrap();
     std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&file).is_ok() {
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        eprintln!("Skipping chmod unreadability test: settings remain readable");
+        return;
+    }
     let state = Startup::default();
     let mut configured = false;
     let result = initialize_with(

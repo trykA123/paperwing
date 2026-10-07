@@ -50,7 +50,7 @@ pub fn valid_id(id: &str) -> Result<(), String> {
     }
 }
 
-fn settings_file(app: &AppHandle) -> Result<PathBuf, String> {
+fn settings_file<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     #[cfg(feature = "test-profile")]
     crate::test_profile::validate(app)?;
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
@@ -60,18 +60,41 @@ fn settings_file(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(file)
 }
 
-fn prepare_settings(app: &AppHandle) -> Result<PathBuf, String> {
+fn prepare_settings<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     let file = settings_file(app)?;
     std::fs::create_dir_all(file.parent().ok_or("Settings directory is missing")?).map_err(|e| e.to_string())?;
     Ok(file)
 }
 
-pub fn load_settings(app: AppHandle) -> Result<Settings, String> {
+pub fn load_settings<R: tauri::Runtime>(app: AppHandle<R>) -> Result<Settings, String> {
     Ok(load_with_status(&app)?.settings)
 }
 
-fn load_with_status(app: &AppHandle) -> Result<Loaded, String> {
-    if let Some(state) = app.try_state::<Startup>() { state.check()?; }
+fn load_with_status<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Loaded, String> {
+    let Some(state) = app.try_state::<Startup>() else {
+        return load_persisted(app);
+    };
+    if state.check().is_ok() {
+        return load_persisted(app);
+    }
+    match load_persisted(app) {
+        Ok(loaded) => {
+            configure_sources(app, &loaded.settings.sources, false);
+            state.clear()?;
+            Ok(loaded)
+        }
+        Err(error) => {
+            state.record(error.clone());
+            Ok(Loaded {
+                settings: Settings::default(),
+                restored_from_backup: false,
+                startup_error: Some(error),
+            })
+        }
+    }
+}
+
+fn load_persisted<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Loaded, String> {
     let file = settings_file(app)?;
     #[cfg(feature = "test-profile")]
     if !file.exists() {
@@ -81,10 +104,10 @@ fn load_with_status(app: &AppHandle) -> Result<Loaded, String> {
     #[cfg(feature = "test-profile")]
     crate::test_profile::settings(&settings)?;
     for source in &settings.sources { valid_id(&source.id)?; }
-    Ok(Loaded { settings, restored_from_backup })
+    Ok(Loaded { settings, restored_from_backup, startup_error: None })
 }
 
-fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+fn save_settings<R: tauri::Runtime>(app: AppHandle<R>, settings: Settings) -> Result<(), String> {
     static SAVES: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _save = SAVES.lock().map_err(|_| "Settings persistence is unavailable")?;
     let _filesystem = crate::git::filesystem_gate().try_read().map_err(|_| "A recoverable write is in progress; retry saving settings")?;
@@ -93,13 +116,19 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     for source in &settings.sources { valid_id(&source.id)?; }
     let file = prepare_settings(&app)?;
     crate::credentials::bind_before_host_edits(&settings.sources)?;
-    persistence::save(&file, &settings)?;
-    if let Some(state) = app.try_state::<Startup>() {
-        *state.0.lock().map_err(|_| "Settings initialization is unavailable")? = None;
+    let state = app.try_state::<Startup>();
+    let preserve_valid = state.as_ref().is_some_and(|state| state.check().is_err());
+    persistence::save(&file, &settings, preserve_valid)?;
+    if let Some(state) = state {
+        state.clear()?;
     }
-    crate::credentials::configure_sources(&app, &settings.sources, true);
-    crate::git::configure_sources(redaction_sources(&settings.sources));
+    configure_sources(&app, &settings.sources, true);
     Ok(())
+}
+
+fn configure_sources<R: tauri::Runtime>(app: &AppHandle<R>, sources: &[Source], notify: bool) {
+    crate::credentials::configure_sources(app, sources, notify);
+    crate::git::configure_sources(redaction_sources(sources));
 }
 
 #[derive(Default)]
@@ -109,6 +138,14 @@ impl Startup {
     fn record(&self, error: String) {
         eprintln!("Settings initialization failed; starting with defaults: {error}");
         *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(error);
+    }
+
+    fn clear(&self) -> Result<(), String> {
+        *self
+            .0
+            .lock()
+            .map_err(|_| "Settings initialization is unavailable")? = None;
+        Ok(())
     }
 
     fn check(&self) -> Result<(), String> {
@@ -135,7 +172,7 @@ fn initialize_with(
     Ok(())
 }
 
-fn prepare_initial_settings(app: &AppHandle) -> Result<Settings, String> {
+fn prepare_initial_settings<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Settings, String> {
     let file = prepare_settings(app)?;
     #[cfg(not(feature = "test-profile"))]
     if !file.exists() && !file.with_extension("json.bak").exists() {
@@ -147,10 +184,9 @@ fn prepare_initial_settings(app: &AppHandle) -> Result<Settings, String> {
     load_settings(app.clone())
 }
 
-pub(crate) fn initialize(app: AppHandle) -> Result<(), String> {
+pub(crate) fn initialize<R: tauri::Runtime>(app: AppHandle<R>) -> Result<(), String> {
     initialize_with(&app.state::<Startup>(), || prepare_initial_settings(&app), |sources| {
-        crate::credentials::configure_sources(&app, sources, false);
-        crate::git::configure_sources(redaction_sources(sources));
+        configure_sources(&app, sources, false);
     })
 }
 
@@ -166,19 +202,24 @@ pub struct Loaded {
     #[serde(flatten)]
     settings: Settings,
     restored_from_backup: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    startup_error: Option<String>,
 }
 
 pub mod commands {
     use super::*;
 
     #[tauri::command]
-    pub async fn load_settings(app: AppHandle) -> Result<Loaded, String> {
+    pub async fn load_settings<R: tauri::Runtime>(app: AppHandle<R>) -> Result<Loaded, String> {
         tauri::async_runtime::spawn_blocking(move || load_with_status(&app)).await
             .map_err(|_| "Could not load settings".to_string())?
     }
 
     #[tauri::command]
-    pub async fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+    pub async fn save_settings<R: tauri::Runtime>(
+        app: AppHandle<R>,
+        settings: Settings,
+    ) -> Result<(), String> {
         tauri::async_runtime::spawn_blocking(move || super::save_settings(app, settings)).await
             .map_err(|_| "Could not save settings".to_string())?
     }
@@ -224,3 +265,6 @@ mod tests {
 
 #[cfg(test)]
 mod startup_tests;
+
+#[cfg(all(test, not(feature = "test-profile")))]
+mod retry_tests;

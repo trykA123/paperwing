@@ -149,7 +149,7 @@ pub fn metadata_revision(source: &crate::settings::Source) -> Result<u64, String
     Ok(revision(&source.id))
 }
 
-fn invalidate_blocking(app: &AppHandle, source_id: &str) {
+fn invalidate_blocking<R: tauri::Runtime>(app: &AppHandle<R>, source_id: &str) {
     let revision = advance_revision(source_id, || {
         if let Some(store) = app.try_state::<crate::store::Store>() {
             store.remove_source(source_id);
@@ -181,7 +181,7 @@ pub(crate) fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
     entry.value
 }
 
-pub fn configure_sources(app: &AppHandle, sources: &[crate::settings::Source], notify: bool) {
+pub fn configure_sources<R: tauri::Runtime>(app: &AppHandle<R>, sources: &[crate::settings::Source], notify: bool) {
     let next: HashMap<_, _> = sources.iter().map(|source| (source.id.clone(),
         source_configuration(source))).collect();
     let mut previous = SOURCES.get_or_init(|| Mutex::new(None)).lock().unwrap();
@@ -193,6 +193,17 @@ pub fn configure_sources(app: &AppHandle, sources: &[crate::settings::Source], n
         }
     }
     *previous = Some(next);
+}
+
+#[cfg(test)]
+mod test_support;
+
+fn read_raw(source_id: &str) -> Result<Option<String>, Failure> {
+    #[cfg(test)]
+    if let Some(raw) = test_support::read(source_id) {
+        return Ok(Some(raw));
+    }
+    native::read(source_id)
 }
 
 pub fn get_token(source_id: &str) -> Result<Option<String>, String> {

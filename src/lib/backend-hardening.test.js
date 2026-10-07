@@ -72,3 +72,21 @@ test('settings initialization shows the backup restoration toast', async () => {
     });
 });
 
+
+test('settings initialization becomes ready and reports a startup error', async () => {
+    const startupError = 'Settings could not be read: sharing violation';
+    await withIpc(command => {
+        if (command === 'load_settings') return { sources: [], workspace: null, startupError };
+        if (command === 'platform_info') return linuxPlatform;
+        if (command === 'plugin:event|listen') return 1;
+        if (command === 'activity_snapshot') return [];
+        throw Error(command);
+    }, async () => {
+        const state = new app.constructor();
+        const notices = [];
+        state.toast = (message, kind) => notices.push({ message, kind });
+        await state.init();
+        expect(state.ready).toBe(true);
+        expect(notices).toContainEqual({ message: `Could not load settings: ${startupError}`, kind: 'error' });
+    });
+});

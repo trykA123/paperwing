@@ -92,7 +92,7 @@ pub(super) fn read_token(
 }
 
 pub(super) fn read_for_request(source_id: &str, request_host: Option<&str>) -> Result<Option<String>, String> {
-    let Some(raw) = native::read(source_id).map_err(Failure::message)? else {
+    let Some(raw) = super::read_raw(source_id).map_err(Failure::message)? else {
         return Ok(None);
     };
     read_token(raw, &saved_host(source_id).unwrap_or_default(), request_host, |encoded| {
@@ -101,7 +101,7 @@ pub(super) fn read_for_request(source_id: &str, request_host: Option<&str>) -> R
 }
 
 pub(super) fn read_bound(source_id: &str) -> Result<Option<SavedToken>, String> {
-    let Some(raw) = native::read(source_id).map_err(Failure::message)? else {
+    let Some(raw) = super::read_raw(source_id).map_err(Failure::message)? else {
         return Ok(None);
     };
     let saved = saved_host(source_id).unwrap_or_default();
@@ -324,8 +324,9 @@ mod regression_tests {
         }).unwrap(), "synthetic-token");
     }
 
-    #[test]
-    fn saving_a_host_edit_waits_for_a_concurrent_credential_read_regression() {
+    #[tokio::test]
+    async fn saving_a_host_edit_waits_for_a_concurrent_credential_read_regression() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
         let permit = super::super::admit().unwrap();
         let (started, starting) = std::sync::mpsc::sync_channel(0);
         let (done, result) = std::sync::mpsc::channel();
@@ -339,5 +340,32 @@ mod regression_tests {
         save.join().unwrap();
         assert!(matches!(early, Err(std::sync::mpsc::RecvTimeoutError::Timeout)), "save did not wait: {early:?}");
         result.recv_timeout(std::time::Duration::from_secs(3)).unwrap().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod direct_redaction_tests {
+    #[tokio::test]
+    async fn hostless_manual_legacy_token_redacts_git_output_through_credentials_regression() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+        let source: crate::settings::Source = serde_json::from_value(serde_json::json!({
+            "id": "direct-manual-legacy", "name": "admin", "kind": "manual", "credentialManaged": true
+        })).unwrap();
+        let _raw =
+            super::super::test_support::RawToken::new(&source.id, "synthetic-direct-legacy-secret");
+        assert!(source.host.is_empty());
+        crate::git::configure_sources(vec![source.id.clone()]);
+        let token = crate::credentials::get_token(&source.id);
+        let output = crate::git::safe("fatal: rejected synthetic-direct-legacy-secret");
+        crate::git::configure_sources(Vec::new());
+        assert_eq!(
+            token.unwrap().as_deref(),
+            Some("synthetic-direct-legacy-secret")
+        );
+        assert_eq!(output, "fatal: rejected [redacted]");
+        assert_eq!(
+            super::super::test_support::read(&source.id).as_deref(),
+            Some("synthetic-direct-legacy-secret")
+        );
     }
 }

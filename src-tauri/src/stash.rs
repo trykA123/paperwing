@@ -2,6 +2,7 @@ mod commands;
 mod git;
 mod ops;
 mod parse;
+mod snapshot;
 mod switch;
 #[cfg(test)]
 mod tests;
