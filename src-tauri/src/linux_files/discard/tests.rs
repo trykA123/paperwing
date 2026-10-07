@@ -89,9 +89,8 @@ async fn discarded_hunk_undo_restores_both_hunks_byte_for_byte() {
             ranges: None,
         }],
     };
-    let discarded = stage::build(&snapshot, &request, true)
-        .unwrap()
-        .content
+    let discarded = crate::commit::hunk_bytes(&fixture.path(), &snapshot, &request)
+        .await
         .unwrap();
     let environment = environment(&fixture);
     let recovery = replace(&environment, write(&fixture, &discarded).await)
@@ -109,6 +108,135 @@ async fn discarded_hunk_undo_restores_both_hunks_byte_for_byte() {
     assert_eq!(
         std::fs::read(fixture.root.join("with spaces.txt")).unwrap(),
         after
+    );
+}
+
+#[tokio::test]
+async fn git_line_ending_conversions_restore_crlf_and_recovery_undo_exact_bytes() {
+    let _serial = crate::test_support::serial().await;
+    for attributes in [false, true] {
+        let fixture = Fixture::new();
+        if attributes {
+            fixture.commit(".gitattributes", b"* text eol=crlf\n");
+        } else {
+            fixture.git(&["config", "core.autocrlf", "true"]);
+        }
+        let (before, after) = two_hunks();
+        fixture.commit("with spaces.txt", &before);
+        fixture.write("with spaces.txt", &after);
+        let diff = change_hunks(
+            fixture.path(),
+            "with spaces.txt".into(),
+            None,
+            "unstaged".into(),
+        )
+        .await
+        .unwrap();
+        let plan = crate::commit::prepare_file(
+            &fixture.path(),
+            &crate::commit::DiscardFile {
+                file: "with spaces.txt".into(),
+                orig_path: None,
+                content_hash: diff.content_hash,
+            },
+        )
+        .await
+        .unwrap();
+        let crate::commit::DiscardPlan::Restore(write) = plan else {
+            panic!("Expected tracked restore");
+        };
+        let environment = environment(&fixture);
+        let recovery = replace(&environment, write).await.unwrap();
+        assert_eq!(
+            std::fs::read(fixture.root.join("with spaces.txt")).unwrap(),
+            before
+        );
+        super::super::Service::default()
+            .undo(&environment, &recovery.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read(fixture.root.join("with spaces.txt")).unwrap(),
+            after
+        );
+
+        let snapshot = snapshot::read(&fixture.path(), "with spaces.txt", None, "unstaged")
+            .await
+            .unwrap();
+        let request = stage::HunkRequest {
+            file: "with spaces.txt".into(),
+            orig_path: None,
+            area: "unstaged".into(),
+            content_hash: snapshot.hash.clone(),
+            hunks: vec![crate::commit::patch::Selection {
+                hunk: 0,
+                ranges: None,
+            }],
+        };
+        let bytes = crate::commit::hunk_bytes(&fixture.path(), &snapshot, &request)
+            .await
+            .unwrap();
+        let expected = String::from_utf8(before.clone())
+            .unwrap()
+            .replace("line 20\r\n", "second change\r\n");
+        assert_eq!(bytes, expected.as_bytes());
+        let recovery = replace(
+            &environment,
+            DiscardWrite {
+                root: fixture.root.clone(),
+                file: "with spaces.txt".into(),
+                expected: snapshot.working,
+                bytes,
+                index_state: snapshot.index_state,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read(fixture.root.join("with spaces.txt")).unwrap(),
+            expected.as_bytes()
+        );
+        super::super::Service::default()
+            .undo(&environment, &recovery.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read(fixture.root.join("with spaces.txt")).unwrap(),
+            after
+        );
+        assert_eq!(
+            fixture.git(&["show", ":with spaces.txt"]),
+            String::from_utf8(before)
+                .unwrap()
+                .replace("\r\n", "\n")
+                .into_bytes()
+        );
+    }
+}
+
+#[tokio::test]
+async fn external_status_refresh_does_not_block_recoverable_discard() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    fixture.commit("other.txt", b"other\n");
+    fixture.commit("with spaces.txt", b"before\n");
+    fixture.write("with spaces.txt", b"after\n");
+    let pending = write(&fixture, b"before\n").await;
+    let raw_index = std::fs::read(fixture.root.join(".git/index")).unwrap();
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    std::fs::File::open(fixture.root.join("other.txt"))
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+    fixture.git(&["status", "--porcelain"]);
+    assert_ne!(
+        std::fs::read(fixture.root.join(".git/index")).unwrap(),
+        raw_index
+    );
+    replace(&environment(&fixture), pending).await.unwrap();
+    assert_eq!(
+        std::fs::read(fixture.root.join("with spaces.txt")).unwrap(),
+        b"before\n"
     );
 }
 

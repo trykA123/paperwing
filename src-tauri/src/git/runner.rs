@@ -278,7 +278,8 @@ pub async fn execute_cancellable(request: Request<'_>, cancellation: Arc<AtomicB
 }
 
 pub async fn execute_cancellable_input(request: Request<'_>, cancellation: Arc<AtomicBool>, input: Option<&[u8]>) -> Result<Captured, String> {
-    if input.is_some_and(|bytes| bytes.len() > 256 * 1024) { return Err("Git input exceeded the limit".into()); }
+    let limit = if request.args.windows(3).any(|args| args == ["hash-object", "-w", "--stdin"]) { crate::paths::CONTENT_LIMIT } else { 256 * 1024 };
+    if input.is_some_and(|bytes| bytes.len() > limit) { return Err("Git input exceeded the limit".into()); }
     #[cfg(test)]
     { execute_inner(request, None, Some(cancellation), input, None).await }
     #[cfg(not(test))]

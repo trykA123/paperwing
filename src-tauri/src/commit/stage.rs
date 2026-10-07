@@ -103,4 +103,6 @@ pub async fn unstage_hunks(path: String, request: HunkRequest) -> Result<(), Str
 }
 
 #[cfg(test)]
+mod review_tests;
+#[cfg(test)]
 mod tests;

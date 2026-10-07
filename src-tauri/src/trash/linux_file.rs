@@ -89,4 +89,48 @@ mod tests {
         assert!(recycle_file(&root, "file.txt", b"current", &data).is_err());
         assert_eq!(std::fs::read(repo.join("file.txt")).unwrap(), b"current");
     }
+
+    #[tokio::test]
+    async fn intent_to_add_discard_moves_exact_file_bytes_to_desktop_trash() {
+        let _serial = crate::test_support::serial().await;
+        let fixture = crate::commit::test_fixture::Fixture::new();
+        fixture.commit("base.txt", b"base\n");
+        let bytes = b"keep these bytes\r\nlast";
+        fixture.write("file.txt", bytes);
+        fixture.git(&["add", "-N", "file.txt"]);
+        let diff =
+            crate::commit::change_hunks(fixture.path(), "file.txt".into(), None, "unstaged".into())
+                .await
+                .unwrap();
+        let plan = crate::commit::prepare_file(
+            &fixture.path(),
+            &crate::commit::DiscardFile {
+                file: "file.txt".into(),
+                orig_path: None,
+                content_hash: diff.content_hash,
+            },
+        )
+        .await
+        .unwrap();
+        let crate::commit::DiscardPlan::Trash(write) = plan else {
+            panic!("Expected desktop Trash");
+        };
+        let root = Root::open(&fixture.root, &[fixture.root.join(".git")]).unwrap();
+        let data = fixture.base.join("trash-data");
+        recycle_file(
+            &root,
+            &write.file,
+            write.expected.as_deref().unwrap(),
+            &data,
+        )
+        .unwrap();
+        assert!(!fixture.root.join("file.txt").exists());
+        let moved = std::fs::read_dir(data.join("Trash/files"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(std::fs::read(moved.path()).unwrap(), bytes);
+        assert_eq!(fixture.git(&["show", ":file.txt"]), b"");
+    }
 }

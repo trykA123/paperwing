@@ -1,57 +1,16 @@
-use super::{patch, run};
+pub(crate) use super::index::IndexState;
+use super::{content, patch, run};
 use crate::git::{valid_root, OutputPolicy};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
-
-pub(crate) struct IndexState {
-    path: std::path::PathBuf,
-    hash: Option<String>,
-}
-
-impl IndexState {
-    fn current(&self) -> Result<Option<String>, String> {
-        match std::fs::read(&self.path) {
-            Ok(bytes) => Ok(Some(format!("{:x}", Sha256::digest(bytes)))),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(format!("Could not verify the index: {error}")),
-        }
-    }
-    pub(crate) fn validate(&self) -> Result<(), String> {
-        if self.current()? != self.hash {
-            return Err("Index changed since the diff was read; refresh before discarding".into());
-        }
-        Ok(())
-    }
-}
-
-async fn read_index(path: &str) -> Result<IndexState, String> {
-    let output = super::quick(
-        path,
-        &["rev-parse", "--path-format=absolute", "--git-path", "index"],
-        "Locate partial staging index",
-        &[0],
-    )
-    .await?;
-    let bytes = output.stdout.strip_suffix(b"\n").unwrap_or(&output.stdout);
-    let name = std::str::from_utf8(bytes).map_err(|_| "Unsupported index path encoding")?;
-    let index = IndexState {
-        path: name.into(),
-        hash: None,
-    };
-    tauri::async_runtime::spawn_blocking(move || {
-        let hash = index.current()?;
-        Ok(IndexState { hash, ..index })
-    })
-    .await
-    .map_err(|_| "Could not verify the index")?
-}
 
 pub(crate) struct Snapshot {
     pub before: Option<Vec<u8>>,
     pub after: Option<Vec<u8>>,
     pub working: Option<Vec<u8>>,
     pub index: Option<Vec<u8>>,
+    pub intent_to_add: bool,
     pub hash: String,
     pub mode: String,
     pub old_path: String,
@@ -77,8 +36,10 @@ pub(crate) async fn read(
     if !matches!(area, "staged" | "unstaged" | "untracked") {
         return Err("Unknown diff area".into());
     }
+    content::refuse_filters(path, file).await?;
     if let Some(original) = original {
         crate::paths::relative(original)?;
+        content::refuse_filters(path, original).await?;
         let changes = super::repo_changes(path.into()).await?;
         if !changes.files.iter().any(|entry| {
             entry.path == file
@@ -88,20 +49,11 @@ pub(crate) async fn read(
             return Err("Rename changed; refresh the diff".into());
         }
     }
-    let index_state = read_index(path).await?;
-    let stage = run(
-        path,
-        &["ls-files", "--stage", "-z", "--", file],
-        "Read partial staging index",
-        &[0],
-        OutputPolicy::Metadata,
-        None,
-        Duration::from_secs(45),
-    )
-    .await?;
+    let index_state = IndexState::read(path, file).await?;
+    let intent_to_add = index_state.intent_to_add();
     let mut mode = "100644".to_string();
-    for entry in stage
-        .stdout
+    for entry in index_state
+        .stages()
         .split(|byte| *byte == 0)
         .filter(|entry| !entry.is_empty())
     {
@@ -116,7 +68,11 @@ pub(crate) async fn read(
         }
         mode = fields[0].into();
     }
-    let index = super::blob(path, &format!(":0:{file}")).await?;
+    let index = if intent_to_add {
+        None
+    } else {
+        super::blob(path, &format!(":0:{file}")).await?
+    };
     let head_path = original.unwrap_or(file);
     let head = super::blob(path, &format!("HEAD:{head_path}")).await?;
     if head.is_some() {
@@ -166,10 +122,14 @@ pub(crate) async fn read(
     let (before, after, old_path) = if area == "staged" {
         (head.clone(), index.clone(), head_path.to_string())
     } else {
-        (index.clone(), working.clone(), file.to_string())
+        let cleaned = match &working {
+            Some(bytes) => Some(content::clean(path, file, bytes).await?),
+            None => None,
+        };
+        (index.clone(), cleaned, file.to_string())
     };
     let mut hash = Sha256::new();
-    hash.update(index_state.hash.as_deref().unwrap_or("missing").as_bytes());
+    hash.update([u8::from(intent_to_add)]);
     for bytes in [
         Some(path.as_bytes()),
         Some(file.as_bytes()),
@@ -179,10 +139,12 @@ pub(crate) async fn read(
         } else {
             b"working".as_slice()
         }),
-        Some(stage.stdout.as_slice()),
+        Some(index_state.stages()),
         head.as_deref(),
         index.as_deref(),
         working.as_deref(),
+        before.as_deref(),
+        after.as_deref(),
     ] {
         hash.update([u8::from(bytes.is_some())]);
         if let Some(bytes) = bytes {
@@ -197,6 +159,7 @@ pub(crate) async fn read(
             after,
             working,
             index,
+            intent_to_add,
             hash: format!("{:x}", hash.finalize()),
             mode,
             old_path,

@@ -25,21 +25,29 @@ Stage uses `unstaged` or `untracked`; unstage uses `staged`.
 Discard hunk accepts one whole `unstaged` hunk.
 `DiscardFile` contains `file, contentHash` and optional `origPath`, from a working-tree diff.
 Pass the same `origPath` used to read a renamed file's diff.
-Re-read the diff after each mutation. Changed working bytes, HEAD or index refuse stale actions.
+Re-read the diff after each mutation. Changed working bytes, HEAD or this path's index entry refuse stale actions.
+Unrelated index entries and index stat refreshes do not invalidate the content hash.
 Binary content has no selectable hunks, but whole tracked files support recoverable discard.
 Partial staging refuses overly complex diffs; whole-file staging remains available.
 
-Selected patches preserve raw bytes and run through `git apply --cached`, with
+Working content passes through Git's clean conversion before hunk listing or staging,
+so `core.autocrlf` and text/eol attributes match normal Git staging.
+Selected patches use three context lines and run through `git apply --cached`, with
 `--reverse` for unstage. Existing commit commands and whole-file staging keep their semantics.
-Hunk unstage on a rename also reverses the path rename in the index.
+Partial unstage retains a staged rename; selecting every change also reverses the rename.
+Selections that place a missing-newline line before another line are refused with
+"Select the last line's change too: the file has no final newline".
+Files with an active `filter` attribute, including Git LFS, refuse hunk and discard actions.
 Neither staging command changes working-tree bytes.
 
-Tracked discard restores index content through Windows `files` or Linux `linux_files`.
+Tracked discard restores Git's smudged worktree form through Windows `files` or Linux `linux_files`.
+This preserves the configured checkout line endings. Hunk discard smudges the selected result too.
 Their existing journal persists verified before-bytes before replacing the file.
 `recoveryId` identifies the normal record; existing `recovery_undo` restores it and refuses
 later conflicting edits. The recovery format is unchanged.
 An existing file without an index version is refused unless Git identifies it as untracked.
 
+Intent-to-add entries (`git add -N`) use the untracked discard path and never restore an empty blob.
 Linux untracked discard uses the same Trash service as Delete set, with file support
 added to its move path. It returns `state: 'trashed'` and no Recovery record.
 Restore those files from desktop Trash. Unavailable Trash refuses the move and retains the file.

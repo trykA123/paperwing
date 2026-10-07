@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add backend hunk and line staging, tracked discard with Recovery undo, and Linux untracked discard through desktop Trash. Refuse Windows untracked discard until its shared recycler guarantees recoverable deletion.
+- Match Git line-ending conversions for partial staging and discard, retain partially unstaged renames, refuse unsafe missing-newline selections, trash intent-to-add files, and accept large hunks and unrelated index refreshes.
 
 - Keep close and clone available during settings recovery, add Retry to the startup notice, protect valid or unreadable backups, and allow two minutes for stash status snapshots.
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.

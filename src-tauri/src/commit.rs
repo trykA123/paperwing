@@ -2,6 +2,8 @@
 pub(crate) mod test_fixture;
 pub(crate) mod patch;
 pub(crate) mod snapshot;
+mod content;
+mod index;
 pub(crate) mod stage;
 mod discard;
 pub use snapshot::*;
@@ -245,7 +247,10 @@ pub async fn change_content(path: String, file: String, orig_path: Option<String
         let read = tauri::async_runtime::spawn_blocking(move || {
             crate::paths::ReadRoot::new(std::path::Path::new(&root), Vec::new())?.read(&relative)
         }).await.map_err(|_| "Could not read the file".to_string())??;
-        Ok::<_, String>(read.map(|bytes| bytes.bytes))
+        match read {
+            Some(bytes) => Ok::<_, String>(Some(content::clean(&path, &file, &bytes.bytes).await?)),
+            None => Ok(None),
+        }
     };
     let (original, modified, original_label, modified_label) = match area.as_str() {
         "staged" => (blob(&path, &format!("HEAD:{before}")).await?, blob(&path, &format!(":0:{file}")).await?, "HEAD", "Staged"),

@@ -140,7 +140,7 @@ fn renames_with_spaces_keep_other_changes_and_reverse_selected_changes() {
         .unwrap();
     fixture.apply(&reverse.patch, true);
     assert_eq!(
-        fixture.git(&["show", ":old name.txt"]),
+        fixture.git(&["show", ":new name.txt"]),
         reverse.content.unwrap()
     );
 }

@@ -1,4 +1,4 @@
-use super::{snapshot, stage};
+use super::{content, snapshot, stage};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -46,64 +46,70 @@ async fn restore(app: tauri::AppHandle, write: DiscardWrite) -> Result<DiscardRe
     }
 }
 
+pub(crate) enum DiscardPlan {
+    Restore(DiscardWrite),
+    Trash(DiscardWrite),
+}
+
+pub(crate) async fn prepare_file(path: &str, request: &DiscardFile) -> Result<DiscardPlan, String> {
+    let snapshot = read_file(path, request).await?;
+    let mut write = DiscardWrite {
+        root: path.into(),
+        file: request.file.clone(),
+        expected: snapshot.working,
+        bytes: Vec::new(),
+        index_state: snapshot.index_state,
+    };
+    if snapshot.index.is_some() {
+        write.bytes = content::smudge(path, &request.file, &format!(":0:{}", request.file)).await?;
+        if write.expected.as_deref() == Some(&write.bytes) {
+            return Err("File has no working changes to discard".into());
+        }
+        return Ok(DiscardPlan::Restore(write));
+    }
+    if !snapshot.intent_to_add {
+        let changes = super::repo_changes(path.into()).await?;
+        if !changes
+            .files
+            .iter()
+            .any(|file| file.path == request.file && file.kind == "untracked")
+        {
+            return Err("File has no index version to restore; refresh the diff".into());
+        }
+    }
+    if write.expected.is_none() {
+        return Err("Untracked file is missing".into());
+    }
+    Ok(DiscardPlan::Trash(write))
+}
+
 async fn discard_file(
     app: tauri::AppHandle,
     path: &str,
     request: &DiscardFile,
 ) -> Result<DiscardOutcome, String> {
-    let snapshot = read_file(path, request).await?;
-    if let Some(bytes) = snapshot.index {
-        if snapshot.working.as_deref() == Some(&bytes) {
-            return Err("File has no working changes to discard".into());
-        }
-        let recovery = restore(
-            app,
-            DiscardWrite {
-                root: path.into(),
+    match prepare_file(path, request).await? {
+        DiscardPlan::Restore(write) => {
+            let recovery = restore(app, write).await?;
+            Ok(DiscardOutcome {
                 file: request.file.clone(),
-                expected: snapshot.working,
-                bytes,
-                index_state: snapshot.index_state,
-            },
-        )
-        .await?;
-        return Ok(DiscardOutcome {
-            file: request.file.clone(),
-            state: "discarded",
-            recovery_id: Some(recovery.id),
-            message: "Changes discarded; undo in Recovery".into(),
-            warning: recovery.warning,
-        });
+                state: "discarded",
+                recovery_id: Some(recovery.id),
+                message: "Changes discarded; undo in Recovery".into(),
+                warning: recovery.warning,
+            })
+        }
+        DiscardPlan::Trash(write) => {
+            let message = crate::trash::trash_untracked(app, write).await?;
+            Ok(DiscardOutcome {
+                file: request.file.clone(),
+                state: "trashed",
+                recovery_id: None,
+                message,
+                warning: None,
+            })
+        }
     }
-    let changes = super::repo_changes(path.into()).await?;
-    if !changes
-        .files
-        .iter()
-        .any(|file| file.path == request.file && file.kind == "untracked")
-    {
-        return Err("File has no index version to restore; refresh the diff".into());
-    }
-    if snapshot.working.is_none() {
-        return Err("Untracked file is missing".into());
-    }
-    let message = crate::trash::trash_untracked(
-        app,
-        DiscardWrite {
-            root: path.into(),
-            file: request.file.clone(),
-            expected: snapshot.working,
-            bytes: Vec::new(),
-            index_state: snapshot.index_state,
-        },
-    )
-    .await?;
-    Ok(DiscardOutcome {
-        file: request.file.clone(),
-        state: "trashed",
-        recovery_id: None,
-        message,
-        warning: None,
-    })
 }
 
 async fn read_file(path: &str, request: &DiscardFile) -> Result<snapshot::Snapshot, String> {
@@ -183,9 +189,7 @@ pub async fn discard_hunk(
     if snapshot.index.is_none() {
         return Err("Untracked files must be moved whole to the Recycle Bin or Trash".into());
     }
-    let bytes = stage::build(&snapshot, &request, true)?
-        .content
-        .ok_or("Hunk discard must retain the file")?;
+    let bytes = hunk_bytes(&path, &snapshot, &request).await?;
     let recovery = restore(
         app,
         DiscardWrite {
@@ -206,5 +210,18 @@ pub async fn discard_hunk(
     })
 }
 
+pub(crate) async fn hunk_bytes(
+    path: &str,
+    snapshot: &snapshot::Snapshot,
+    request: &stage::HunkRequest,
+) -> Result<Vec<u8>, String> {
+    let bytes = stage::build(snapshot, request, true)?
+        .content
+        .ok_or("Hunk discard must retain the file")?;
+    content::smudge_bytes(path, &request.file, &bytes).await
+}
+
+#[cfg(test)]
+mod review_tests;
 #[cfg(test)]
 mod tests;

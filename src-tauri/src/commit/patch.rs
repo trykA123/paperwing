@@ -1,5 +1,7 @@
 mod lines;
+mod render;
 use lines::diff_lines;
+use render::render;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -70,6 +72,40 @@ pub(crate) fn binary(bytes: &[u8]) -> bool {
     bytes.contains(&0) || std::str::from_utf8(bytes).is_err()
 }
 
+fn spans(edits: &[Edit<'_>]) -> Vec<std::ops::Range<usize>> {
+    let mut spans: Vec<std::ops::Range<usize>> = Vec::new();
+    for (index, edit) in edits.iter().enumerate() {
+        if edit.kind == Kind::Context {
+            continue;
+        }
+        let span = index.saturating_sub(3)..(index + 4).min(edits.len());
+        if let Some(previous) = spans
+            .last_mut()
+            .filter(|previous| previous.end >= span.start)
+        {
+            previous.end = span.end;
+        } else {
+            spans.push(span);
+        }
+    }
+    spans
+}
+
+fn validate_newlines(lines: &[Edit<'_>]) -> Result<(), String> {
+    for excluded in [Kind::Add, Kind::Remove] {
+        let mut missing_newline = false;
+        for line in lines.iter().filter(|line| line.kind != excluded) {
+            if missing_newline {
+                return Err(
+                    "Select the last line's change too: the file has no final newline".into(),
+                );
+            }
+            missing_newline = !line.bytes.ends_with(b"\n");
+        }
+    }
+    Ok(())
+}
+
 impl<'a> Diff<'a> {
     pub fn new(before: &'a [u8], after: &'a [u8]) -> Result<Self, String> {
         if binary(before) || binary(after) {
@@ -78,21 +114,7 @@ impl<'a> Diff<'a> {
         let old: Vec<_> = before.split_inclusive(|byte| *byte == b'\n').collect();
         let new: Vec<_> = after.split_inclusive(|byte| *byte == b'\n').collect();
         let edits = diff_lines(&old, &new)?;
-        let mut spans: Vec<std::ops::Range<usize>> = Vec::new();
-        for (index, edit) in edits.iter().enumerate() {
-            if edit.kind == Kind::Context {
-                continue;
-            }
-            let span = index.saturating_sub(3)..(index + 4).min(edits.len());
-            if let Some(previous) = spans
-                .last_mut()
-                .filter(|previous| previous.end >= span.start)
-            {
-                previous.end = span.end;
-            } else {
-                spans.push(span);
-            }
-        }
+        let spans = spans(&edits);
         Ok(Self { edits, spans })
     }
 
@@ -200,6 +222,7 @@ impl<'a> Diff<'a> {
                 bytes: edit.bytes,
             });
         }
+        validate_newlines(&lines)?;
         let all = self
             .edits
             .iter()
@@ -212,6 +235,14 @@ impl<'a> Diff<'a> {
         } else {
             (paths.before, exists)
         };
+        let paths = Paths {
+            old: if reverse && !all {
+                paths.new
+            } else {
+                paths.old
+            },
+            ..paths
+        };
         let patch = render(&paths, before, after, &lines);
         Ok(Built {
             patch,
@@ -220,71 +251,7 @@ impl<'a> Diff<'a> {
     }
 }
 
-fn quote(path: &str) -> String {
-    let mut result = String::from("\"");
-    for byte in path.bytes() {
-        match byte {
-            b'"' => result.push_str("\\\""),
-            b'\\' => result.push_str("\\\\"),
-            b'\n' => result.push_str("\\n"),
-            b'\r' => result.push_str("\\r"),
-            b'\t' => result.push_str("\\t"),
-            32..=126 => result.push(byte as char),
-            _ => result.push_str(&format!("\\{byte:03o}")),
-        }
-    }
-    result.push('"');
-    result
-}
-
-fn render(paths: &Paths<'_>, before: bool, after: bool, lines: &[Edit<'_>]) -> Vec<u8> {
-    let old = quote(&format!("a/{}", paths.old));
-    let new = quote(&format!("b/{}", paths.new));
-    let mut patch = format!("diff --git {old} {new}\n");
-    if !before {
-        patch.push_str(&format!("new file mode {}\n", paths.mode));
-    }
-    if !after {
-        patch.push_str(&format!("deleted file mode {}\n", paths.mode));
-    }
-    if before && after && paths.old != paths.new {
-        patch.push_str(&format!(
-            "rename from {}\nrename to {}\n",
-            quote(paths.old),
-            quote(paths.new)
-        ));
-    }
-    patch.push_str(&format!(
-        "--- {}\n+++ {}\n",
-        if before { &old } else { "/dev/null" },
-        if after { &new } else { "/dev/null" }
-    ));
-    let old_count = lines.iter().filter(|line| line.kind != Kind::Add).count();
-    let new_count = lines
-        .iter()
-        .filter(|line| line.kind != Kind::Remove)
-        .count();
-    if !lines.is_empty() {
-        patch.push_str(&format!(
-            "@@ -{},{old_count} +{},{new_count} @@\n",
-            usize::from(old_count != 0),
-            usize::from(new_count != 0)
-        ));
-    }
-    let mut patch = patch.into_bytes();
-    for line in lines {
-        patch.push(match line.kind {
-            Kind::Context => b' ',
-            Kind::Add => b'+',
-            Kind::Remove => b'-',
-        });
-        patch.extend_from_slice(line.bytes);
-        if !line.bytes.ends_with(b"\n") {
-            patch.extend_from_slice(b"\n\\ No newline at end of file\n");
-        }
-    }
-    patch
-}
-
+#[cfg(test)]
+mod review_tests;
 #[cfg(test)]
 mod tests;
