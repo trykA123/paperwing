@@ -174,15 +174,16 @@ class AppState {
   }
   /** A rail click: fold the sidebar when its module is already showing, otherwise show the module and open its page. */
   openModule(id: ModuleId) {
-    if (id === 'settings') { this.openView({ kind: 'settings' }); return; }
     const shell = this.ws.shell;
     const hasPage = id === 'search' || !!viewOfModule(id);
-    if (shell.sidebarVisible && shell.section === id && (!hasPage || moduleOfView(this.view) === id)) { Object.assign(shell, railClick(shell, id)); return; }
-    shell.section = id;
-    shell.sidebarVisible = true;
-    this.#showModulePage(id);
+    if (id !== 'settings' && shell.sidebarVisible && shell.section === id && (!hasPage || moduleOfView(this.view) === id)) { Object.assign(shell, railClick(shell, id)); return; }
+    this.showModule(id);
   }
-  #showModulePage(id: ModuleId) {
+  /** Shows a module's sidebar and page; unlike a rail click it never folds the sidebar. */
+  showModule(id: ModuleId) {
+    if (id === 'settings') { this.openView({ kind: 'settings' }); return; }
+    this.ws.shell.section = id;
+    this.ws.shell.sidebarVisible = true;
     if (id === 'search') { this.openCodeSearch(); return; }
     const view = viewOfModule(id);
     if (view) this.openView(view);
