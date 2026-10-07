@@ -43,6 +43,7 @@ mod discover;
 mod discover_job;
 mod launch;
 mod search;
+mod search_engine;
 mod search_grep;
 mod search_job;
 mod search_rows;

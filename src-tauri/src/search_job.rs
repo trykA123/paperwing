@@ -1,7 +1,7 @@
 use crate::search::{
     dedupe, plan, validate_target, Match, Plan, RepoStatus, RepoTarget, SearchRequest, State,
 };
-use crate::search_grep::{search_repo, Budget};
+use crate::search_engine::{Budget, GitGrep, RepoSearch, SearchEngine};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -131,13 +131,14 @@ async fn search_one(shared: Arc<Shared>, gate: Arc<Semaphore>, target: RepoTarge
     let (status, matches) = match checked(&shared, &target).await {
         Err(status) => (status, Vec::new()),
         Ok(()) => {
-            let found = search_repo(
-                &target,
-                &shared.plan,
-                shared.budget.clone(),
-                shared.cancel.clone(),
-            )
-            .await;
+            let found = GitGrep
+                .search(RepoSearch {
+                    target: &target,
+                    plan: &shared.plan,
+                    budget: shared.budget.clone(),
+                    cancel: shared.cancel.clone(),
+                })
+                .await;
             (found.status, found.matches)
         }
     };

@@ -1,7 +1,8 @@
 use crate::git::{execute_cancellable, execute_streaming, OutputPolicy, Request, StdoutSink};
-use crate::search::{Match, Plan, RepoStatus, RepoTarget, State};
+use crate::search::{Plan, RepoStatus, RepoTarget, State};
+use crate::search_engine::{Budget, RepoResult};
 use crate::search_rows::{build_matches, parse_row, Row};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::OnceCell;
@@ -11,39 +12,6 @@ const MAX_ROW: usize = 2 * 1024 * 1024;
 
 static PERL: OnceCell<bool> = OnceCell::const_new();
 static HINT: OnceCell<bool> = OnceCell::const_new();
-
-pub struct Budget {
-    claimed: AtomicUsize,
-    capped: AtomicBool,
-    overall: usize,
-}
-
-impl Budget {
-    pub fn new(overall: usize) -> Self {
-        Self {
-            claimed: AtomicUsize::new(0),
-            capped: AtomicBool::new(false),
-            overall,
-        }
-    }
-
-    pub fn is_capped(&self) -> bool {
-        self.capped.load(Ordering::SeqCst)
-    }
-
-    fn claim(&self) -> bool {
-        let fits = self.claimed.fetch_add(1, Ordering::SeqCst) < self.overall;
-        if !fits {
-            self.capped.store(true, Ordering::SeqCst);
-        }
-        fits
-    }
-}
-
-pub struct RepoResult {
-    pub status: RepoStatus,
-    pub matches: Vec<Match>,
-}
 
 #[derive(Default)]
 struct Parse {
