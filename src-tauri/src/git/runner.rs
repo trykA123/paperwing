@@ -191,15 +191,10 @@ pub struct Captured {
     pub stderr: Vec<u8>,
     pub code: Option<i32>,
     redaction: Redaction,
-    raw_stderr: Vec<u8>,
 }
 
 impl Captured {
     pub fn safe(&self, text: &str) -> String { self.redaction.safe(text) }
-
-    pub(crate) fn stderr_contains(&self, text: &str) -> bool {
-        String::from_utf8_lossy(&self.raw_stderr).contains(text)
-    }
 
     pub fn last_error(&self) -> String {
         if self.redaction.quiet() { return self.safe(""); }
@@ -521,7 +516,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         }
         activity.state = if sunk_stop || status.code().is_some_and(|code| request.expected.contains(&code)) { "completed" } else { "failed" }.into();
         Ok(Captured { stdout, stderr: if quiet { Vec::new() } else { redaction.safe(&String::from_utf8_lossy(&stderr)).into_bytes() },
-            code: status.code(), redaction: redaction.clone(), raw_stderr: stderr })
+            code: status.code(), redaction: redaction.clone() })
     }.await.map_err(|error: String| if quiet { error } else { redaction.safe(&error) });
     if activity.state == "running" { activity.state = "failed".into(); }
     if let Err(error) = &result {

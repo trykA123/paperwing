@@ -1,3 +1,6 @@
+mod host;
+pub(crate) use host::{bind_before_host_edits, check_saved_host};
+
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -146,13 +149,28 @@ pub fn metadata_revision(source: &crate::settings::Source) -> Result<u64, String
     Ok(revision(&source.id))
 }
 
-pub fn invalidate(app: &AppHandle, source_id: &str) {
+fn invalidate_blocking<R: tauri::Runtime>(app: &AppHandle<R>, source_id: &str) {
     let revision = advance_revision(source_id, || {
         if let Some(store) = app.try_state::<crate::store::Store>() {
             store.remove_source(source_id);
         }
     });
     let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+}
+
+async fn invalidate_with(source_id: String, clear: impl FnOnce() + Send + 'static) -> Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(move || advance_revision(&source_id, clear)).await
+        .map_err(|_| "Credential invalidation task failed".to_string())
+}
+
+async fn invalidate(app: &AppHandle, source_id: &str) -> Result<(), String> {
+    let store = app.try_state::<crate::store::Store>().map(|store| store.inner().clone());
+    let id = source_id.to_string();
+    let revision = invalidate_with(id.clone(), move || {
+        if let Some(store) = store { store.remove_source(&id); }
+    }).await?;
+    let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+    Ok(())
 }
 
 pub(crate) fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
@@ -163,7 +181,7 @@ pub(crate) fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
     entry.value
 }
 
-pub fn configure_sources(app: &AppHandle, sources: &[crate::settings::Source], notify: bool) {
+pub fn configure_sources<R: tauri::Runtime>(app: &AppHandle<R>, sources: &[crate::settings::Source], notify: bool) {
     let next: HashMap<_, _> = sources.iter().map(|source| (source.id.clone(),
         source_configuration(source))).collect();
     let mut previous = SOURCES.get_or_init(|| Mutex::new(None)).lock().unwrap();
@@ -171,10 +189,21 @@ pub fn configure_sources(app: &AppHandle, sources: &[crate::settings::Source], n
         let empty = HashMap::new();
         let previous = previous.as_ref().unwrap_or(&empty);
         for id in previous.keys().chain(next.keys()).collect::<std::collections::HashSet<_>>() {
-            if previous.get(id) != next.get(id) { invalidate(app, id); }
+            if previous.get(id) != next.get(id) { invalidate_blocking(app, id); }
         }
     }
     *previous = Some(next);
+}
+
+#[cfg(test)]
+mod test_support;
+
+fn read_raw(source_id: &str) -> Result<Option<String>, Failure> {
+    #[cfg(test)]
+    if let Some(raw) = test_support::read(source_id) {
+        return Ok(Some(raw));
+    }
+    native::read(source_id)
 }
 
 pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
@@ -183,10 +212,14 @@ pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
     if revisions().lock().unwrap().get(source_id).is_some_and(|entry| entry.uncertain) {
         return Err(reason(CredentialState::Uncertain).into());
     }
-    native::read(source_id).map_err(Failure::message)
+    host::read_for_request(source_id, None)
 }
 
 pub async fn read(source_id: String) -> Result<Option<String>, String> {
+    read_for_host(source_id, None).await
+}
+
+pub(crate) async fn read_for_host(source_id: String, request_host: Option<String>) -> Result<Option<String>, String> {
     validate(&source_id)?;
     let permit = admit_async().await?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -194,7 +227,7 @@ pub async fn read(source_id: String) -> Result<Option<String>, String> {
         if revisions().lock().unwrap().get(&source_id).is_some_and(|entry| entry.uncertain) {
             return Err(reason(CredentialState::Uncertain).into());
         }
-        native::read(&source_id).map_err(Failure::message)
+        host::read_for_request(&source_id, request_host.as_deref())
     }).await
         .map_err(|_| "Credential task failed".to_string())?
 }
@@ -227,13 +260,18 @@ pub async fn credential_status(source_id: String) -> Result<Status, String> {
     }).await.map_err(|_| "Credential task failed".to_string())?
 }
 
-async fn mutate(app: AppHandle, source_id: String, token: Option<String>) -> Result<(), String> {
+async fn mutate(app: AppHandle, source_id: String, token: Option<String>, host: Option<String>) -> Result<(), String> {
     validate(&source_id)?;
     if token.as_ref().is_some_and(|token| token.trim().is_empty()) { return Err("Token is empty".into()); }
     let permit = admit_async().await?;
+    let token = token.map(|token| {
+        let host = host.map(Ok).unwrap_or_else(|| host::saved_host(&source_id))?;
+        crate::github::valid_host(&host)?;
+        host::encode(&host, token.trim())
+    }).transpose()?;
+    invalidate(&app, &source_id).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
-        invalidate(&app, &source_id);
         complete_mutation(&source_id, || match token {
             Some(token) => native::write(&source_id, token.trim()), None => native::delete(&source_id)
         })
@@ -260,12 +298,12 @@ fn complete_mutation(source_id: &str, operation: impl FnOnce() -> Result<(), Fai
     }
 }
 
-pub async fn set_token(app: AppHandle, source_id: String, token: String) -> Result<(), String> {
-    mutate(app, source_id, Some(token)).await
+pub async fn set_token(app: AppHandle, source_id: String, token: String, host: Option<String>) -> Result<(), String> {
+    mutate(app, source_id, Some(token), host).await
 }
 
 pub async fn delete_token(app: AppHandle, source_id: String) -> Result<(), String> {
-    mutate(app, source_id, None).await
+    mutate(app, source_id, None, None).await
 }
 
 #[cfg(target_os = "linux")]
@@ -401,12 +439,14 @@ pub fn drill() {
             "set" => {
                 let token = request.token.ok_or("Fixture token missing")?;
                 if token.is_empty() { return Err("Fixture token empty".into()); }
-                native::write(&request.source_id, &token).map_err(Failure::message)?;
+                native::write(&request.source_id, &host::encode("github.com", &token)?).map_err(Failure::message)?;
                 Ok(serde_json::json!({ "saved": true }))
             }
             "verify" => {
                 let expected = request.expected.ok_or("Fixture expectation missing")?;
-                let matches = native::read(&request.source_id).map_err(Failure::message)?.as_deref() == Some(expected.as_str());
+                let stored = native::read(&request.source_id).map_err(Failure::message)?
+                    .map(|raw| host::read(raw, "github.com", |encoded| native::write(&request.source_id, encoded).map_err(Failure::message))).transpose()?;
+                let matches = stored.as_ref().map(|token| token.token.as_str()) == Some(expected.as_str());
                 Ok(serde_json::json!({ "matches": matches }))
             }
             "delete" => {
@@ -417,7 +457,9 @@ pub fn drill() {
                 crate::test_profile::github_endpoint()?.ok_or("Isolated API endpoint required by credential drill")?;
                 let source = crate::settings::Source { id: request.source_id, name: "Credential fixture".into(),
                     kind: "github".into(), host: "github.com".into(), orgs: Vec::new(), urls: Vec::new(), credential_managed: true };
-                let login = tauri::async_runtime::block_on(crate::github::test_source(source))?;
+                *SOURCES.get_or_init(|| Mutex::new(None)).lock().map_err(|_| "Fixture source configuration unavailable")? =
+                    Some(HashMap::from([(source.id.clone(), source_configuration(&source))]));
+                let login = tauri::async_runtime::block_on(crate::github::test_source(source, None))?;
                 Ok(serde_json::json!({ "login": login }))
             }
             _ => Err("Fixture operation invalid".into()),
@@ -570,3 +612,9 @@ mod native {
 #[cfg(test)]
 #[path = "credentials_metadata_tests.rs"]
 mod metadata_tests;
+
+#[cfg(test)]
+pub(crate) fn token_fixture(raw: &str, request_host: &str) -> Result<Option<String>, String> {
+    host::read(raw.into(), "", |_| Err("Fixture metadata must already be bound".into()))?
+        .for_host(request_host).map(Some)
+}

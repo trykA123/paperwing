@@ -35,7 +35,15 @@ struct Connection<'a> {
 }
 
 impl<'a> Http<'a> {
-    pub async fn connect(source: &'a Source) -> Result<Self, (u16, String)> {
+    pub async fn draft(source: &'a Source, token: Option<String>) -> Result<Self, (u16, String)> {
+        if let Some(token) = token.filter(|token| !token.trim().is_empty()) {
+            return Self::with_token(
+                Connection { source, base: api_base(&source.host).map_err(|reason| (0, reason))?, host: &source.host, expected: crate::credentials::revision(&source.id) },
+                async { Ok(Some(token.trim().into())) },
+                || crate::credentials::revision(&source.id),
+            ).await;
+        }
+        crate::credentials::check_saved_host(&source.id, &source.host).map_err(|reason| (0, reason))?;
         Self::connect_at(source, crate::credentials::revision(&source.id)).await
     }
 
@@ -56,7 +64,7 @@ impl<'a> Http<'a> {
                 host,
                 expected,
             },
-            crate::credentials::read(source.id.clone()),
+            crate::credentials::read_for_host(source.id.clone(), Some(host.into())),
             || crate::credentials::revision(&source.id),
         )
         .await
@@ -340,8 +348,9 @@ fn same_endpoint(current: &str, target: &str) -> bool {
 pub(super) async fn get_json<T: DeserializeOwned>(
     source: &Source,
     path: &str,
+    token: Option<String>,
 ) -> Result<T, (u16, String)> {
-    Ok(Http::connect(source).await?.get(path).await?.data)
+    Ok(Http::draft(source, token).await?.get(path).await?.data)
 }
 
 #[cfg(test)]

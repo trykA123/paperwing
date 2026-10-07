@@ -207,13 +207,12 @@ pub async fn repo_changes(path: String) -> Result<RepoChanges, String> {
 
 /// Reads one blob from the object database; `None` when the revision has no such file.
 async fn blob(path: &str, spec: &str) -> Result<Option<Vec<u8>>, String> {
-    let output = run(path, &["cat-file", "blob", spec], &format!("Read {spec}"), &[0, 128], OutputPolicy::Metadata, None, Duration::from_secs(45)).await?;
+    let probe = run(path, &["rev-parse", "--verify", "--quiet", spec], &format!("Probe {spec}"), &[0, 1], OutputPolicy::Metadata, None, Duration::from_secs(45)).await?;
+    if probe.code == Some(1) { return Ok(None); }
+    let output = run(path, &["cat-file", "blob", spec], &format!("Read {spec}"), &[0], OutputPolicy::Metadata, None, Duration::from_secs(45)).await?;
     if output.code == Some(0) {
         if output.stdout.len() > crate::paths::CONTENT_LIMIT { return Err("The file is too large to preview".into()); }
         return Ok(Some(output.stdout));
-    }
-    if ["does not exist", "exists on disk, but not in", "Not a valid object name", "invalid object name"].iter().any(|text| output.stderr_contains(text)) {
-        return Ok(None);
     }
     Err(output.last_error())
 }
@@ -365,16 +364,48 @@ pub async fn push_branch(path: String) -> Result<PushResult, String> {
     Ok(PushResult { remote, branch, upstream_set: true })
 }
 
+#[derive(Debug, Serialize)]
+pub struct BranchError {
+    kind: &'static str,
+    message: String,
+}
+
+impl From<String> for BranchError {
+    fn from(message: String) -> Self { Self { kind: "failed", message } }
+}
+
+impl std::fmt::Display for BranchError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.message.fmt(formatter) }
+}
+
+async fn deletion_base(path: &str, name: &str) -> Result<String, String> {
+    let upstream = quick(path, &["rev-parse", "--verify", "--quiet", &format!("{name}@{{upstream}}")], &format!("Branch upstream: {path}"), &[0, 1, 128]).await?;
+    Ok(if upstream.code == Some(0) { String::from_utf8_lossy(&upstream.stdout).trim().into() } else { "HEAD".into() })
+}
+
+async fn branch_checked_out(path: &str, reference: &str) -> Result<bool, String> {
+    let worktrees = run(path, &["worktree", "list", "--porcelain", "-z"], &format!("Branch worktree probe: {path}"), &[0], OutputPolicy::Metadata, None, Duration::from_secs(45)).await?;
+    let branch = format!("branch {reference}");
+    Ok(worktrees.stdout.split(|byte| *byte == 0).any(|field| field == branch.as_bytes()))
+}
+
 /// Deletes a local branch only; remotes are never touched. `force` allows unmerged branches.
 #[tauri::command]
-pub async fn delete_branch(path: String, name: String, force: bool) -> Result<DeletedBranch, String> {
+pub async fn delete_branch(path: String, name: String, force: bool) -> Result<DeletedBranch, BranchError> {
     valid_root(&path)?;
     idle_check()?;
     valid_ref(&name).map_err(|_| "Invalid branch name".to_string())?;
     let reference = format!("refs/heads/{name}");
     let exists = quick(&path, &["show-ref", "--verify", "--quiet", &reference], &format!("Branch probe: {path}"), &[0, 1]).await?;
-    if exists.code != Some(0) { return Err(exists.safe(&format!("There is no local branch named {name}"))); }
+    if exists.code != Some(0) { return Err(exists.safe(&format!("There is no local branch named {name}")).into()); }
     let tip = quick(&path, &["rev-parse", "--short", &reference], &format!("Branch tip: {path}"), &[0]).await?;
+    if !force && !branch_checked_out(&path, &reference).await? {
+        let base = deletion_base(&path, &name).await?;
+        let merged = quick(&path, &["merge-base", "--is-ancestor", &reference, &base], &format!("Branch merge probe: {path}"), &[0, 1]).await?;
+        if merged.code == Some(1) {
+            return Err(BranchError { kind: "notMerged", message: merged.safe(&format!("The branch {name} is not fully merged")) });
+        }
+    }
     let flag = if force { "-D" } else { "-d" };
     run(&path, &["branch", flag, &name], &format!("Delete local branch: {path}"), &[0], OutputPolicy::Text, None, Duration::from_secs(45)).await?;
     Ok(DeletedBranch { sha: String::from_utf8_lossy(&tip.stdout).trim().to_string() })
@@ -384,12 +415,12 @@ pub async fn delete_branch(path: String, name: String, force: bool) -> Result<De
 mod tests {
     use super::*;
 
-    fn git_in(dir: &std::path::Path, args: &[&str]) {
+    pub(super) fn git_in(dir: &std::path::Path, args: &[&str]) {
         let status = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().unwrap();
         assert!(status.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&status.stderr));
     }
 
-    fn repo() -> std::path::PathBuf {
+    pub(super) fn repo() -> std::path::PathBuf {
         let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let dir = std::env::temp_dir().join(format!("skein-commit-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -533,7 +564,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
         assert!(push_branch(path.clone()).await.unwrap().upstream_set);
         assert!(delete_branch(path.clone(), "topic".into(), false).await.is_err());
         git_in(&dir, &["switch", "-q", "main"]);
-        assert!(delete_branch(path.clone(), "missing".into(), false).await.unwrap_err().contains("no local branch"));
+        assert!(delete_branch(path.clone(), "missing".into(), false).await.unwrap_err().message.contains("no local branch"));
         let deleted = delete_branch(path.clone(), "topic".into(), false).await.unwrap();
         assert!(!deleted.sha.is_empty());
         let heads = std::process::Command::new("git").arg("-C").arg(&dir).args(["branch", "--list", "topic"]).output().unwrap();
@@ -547,7 +578,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
         git_in(&dir, &["commit", "-qm", "only here"]);
         git_in(&dir, &["switch", "-q", "main"]);
         let refused = delete_branch(path.clone(), "unmerged".into(), false).await.unwrap_err();
-        assert!(refused.contains("not fully merged"), "{refused}");
+        assert_eq!(refused.kind, "notMerged", "{refused}");
         delete_branch(path.clone(), "unmerged".into(), true).await.unwrap();
         assert!(delete_branch(path.clone(), "main".into(), true).await.is_err());
 
@@ -555,5 +586,59 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
         assert!(push_branch(path.clone()).await.unwrap_err().contains("detached"));
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&remote);
+    }
+}
+
+#[cfg(test)]
+mod hardening_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn missing_blobs_use_plumbing_for_added_deleted_and_unborn_files() {
+        let _serial = crate::test_support::serial().await;
+        let dir = super::tests::repo();
+        let path = dir.to_str().unwrap();
+        assert_eq!(blob(path, "HEAD:missing.txt").await.unwrap(), None);
+        std::fs::write(dir.join("added.txt"), "added\n").unwrap();
+        super::tests::git_in(&dir, &["add", "added.txt"]);
+        assert_eq!(blob(path, ":0:missing.txt").await.unwrap(), None);
+        assert_eq!(blob(path, ":0:added.txt").await.unwrap(), Some(b"added\n".to_vec()));
+        let added = change_content(path.into(), "added.txt".into(), None, "staged".into()).await.unwrap();
+        assert_eq!((added.original.as_str(), added.modified.as_str()), ("", "added\n"));
+        super::tests::git_in(&dir, &["commit", "-qm", "added"]);
+        super::tests::git_in(&dir, &["rm", "-q", "added.txt"]);
+        let deleted = change_content(path.into(), "added.txt".into(), None, "staged".into()).await.unwrap();
+        assert_eq!((deleted.original.as_str(), deleted.modified.as_str()), ("added\n", ""));
+        assert!(blob(dir.join("missing-repo").to_str().unwrap(), "HEAD:missing.txt").await.is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn blob_probes_keep_newlines_in_linux_filenames() {
+        if cfg!(windows) { return; }
+        let _serial = crate::test_support::serial().await;
+        let dir = super::tests::repo();
+        std::fs::write(dir.join("line\nname.txt"), "value\n").unwrap();
+        super::tests::git_in(&dir, &["add", "line\nname.txt"]);
+        assert_eq!(blob(dir.to_str().unwrap(), ":0:line\nname.txt").await.unwrap(), Some(b"value\n".to_vec()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn checked_out_branch_refusal_does_not_offer_force_for_an_unmerged_upstream() {
+        let _serial = crate::test_support::serial().await;
+        let dir = super::tests::repo();
+        super::tests::git_in(&dir, &["commit", "-qm", "base", "--allow-empty"]);
+        super::tests::git_in(&dir, &["switch", "-qc", "topic"]);
+        super::tests::git_in(&dir, &["branch", "--set-upstream-to=main", "topic"]);
+        super::tests::git_in(&dir, &["commit", "-qm", "unmerged", "--allow-empty"]);
+        let error = delete_branch(dir.to_str().unwrap().into(), "topic".into(), false).await.unwrap_err();
+        assert_eq!(error.kind, "failed");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

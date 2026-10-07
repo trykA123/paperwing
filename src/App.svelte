@@ -110,8 +110,10 @@
       closing = true;
       try {
         if (!await app.guardBuffers()) return;
-        if (app.ready) await api.saveSettings({ sources: $state.snapshot(app.sources), workspace: $state.snapshot(app.ws) });
-        await getCurrentWindow().destroy();
+        try {
+          if (app.ready && !app.startupError) await api.saveSettings({ sources: $state.snapshot(app.sources), workspace: $state.snapshot(app.ws) });
+        } catch (reason) { app.toast(String(reason), 'error'); }
+        finally { await getCurrentWindow().destroy(); }
       } catch (reason) { app.toast(String(reason), 'error'); } finally { closing = false; }
     }).then(stop => { if (disposed) stop(); else unlisten = stop; }).catch(reason => app.toast(String(reason), 'error'));
     return () => { disposed = true; unlisten?.(); app.temporary.stop(); window.removeEventListener('keydown', onKey, true); motion.removeEventListener('change', updateMotion); };
@@ -130,7 +132,7 @@
 
   // Persist sources + workspace shortly after any change.
   $effect(() => {
-    if (!app.ready) return;
+    if (!app.ready || app.startupError) return;
     const data = { sources: $state.snapshot(app.sources) as Source[], workspace: $state.snapshot(app.ws) as Workspace };
     const t = setTimeout(() => api.saveSettings(data).catch(e => app.toast(`Could not save settings: ${e}`, 'error')), 400);
     return () => clearTimeout(t);

@@ -1,4 +1,5 @@
 use super::git::{conflicted_paths, is_dirty, list_entries, locate, quick, run, top_oid};
+use super::snapshot::snapshot;
 use super::{lock_repository, ApplyOutcome, PushOutcome, Restore, StashDiff};
 use crate::git::{Captured, OutputPolicy};
 use std::time::Duration;
@@ -94,11 +95,12 @@ pub(crate) async fn restore(path: &str, oid: &str, mode: Restore) -> Result<Appl
         Restore::Pop => ("pop", reference.as_str()),
         Restore::Apply => ("apply", oid),
     };
+    let before = snapshot(path).await?;
     let mut output = attempt(path, verb, target, true).await?;
     let mut index_restored = true;
     let retry = output.code != Some(0)
-        && output.stderr_contains("Try without --index")
-        && conflicted_paths(path).await?.is_empty();
+        && conflicted_paths(path).await?.is_empty()
+        && snapshot(path).await? == before;
     if retry {
         index_restored = false;
         output = attempt(path, verb, target, false).await?;
@@ -230,3 +232,7 @@ pub(crate) async fn show(path: &str, oid: &str) -> Result<StashDiff, String> {
         notice: truncated.then(|| TOO_LARGE.into()),
     })
 }
+
+#[cfg(test)]
+#[path = "snapshot_tests.rs"]
+mod snapshot_tests;

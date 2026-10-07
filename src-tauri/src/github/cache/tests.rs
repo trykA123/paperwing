@@ -360,3 +360,17 @@ async fn partial_listings_are_stored_marked_and_never_replace_a_fuller_one() {
     assert!(!stored.partial);
     assert_eq!(stored.repos.len(), 2);
 }
+
+#[tokio::test]
+async fn finishing_a_listing_does_not_block_the_async_runtime_while_the_store_opens_regression() {
+    let source = source("cache-finish-pending-regression");
+    let request = ListingRequest::new(&source, false).unwrap();
+    let started = std::time::Instant::now();
+    let list = RepoList::default();
+    let (finished, responsive) = tokio::join!(request.finish(Store::pending(), None, &list), async {
+        tokio::task::yield_now().await;
+        started.elapsed() < std::time::Duration::from_millis(250)
+    });
+    finished.unwrap();
+    assert!(responsive, "store opening blocked the async runtime");
+}

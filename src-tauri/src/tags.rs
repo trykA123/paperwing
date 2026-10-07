@@ -80,7 +80,7 @@ fn parse_tags(text: &str) -> Vec<TagInfo> {
 }
 
 fn valid_object_id(value: &str) -> bool {
-    matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    crate::object_id::valid(value)
 }
 
 pub(crate) async fn validate_name(path: &str, name: &str) -> Result<(), String> {

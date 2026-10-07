@@ -120,8 +120,8 @@ fn a_failed_sidecar_rename_rolls_everything_back() {
 }
 
 #[test]
-fn a_pending_store_answers_every_call_as_unavailable() {
-    let store = Store::pending();
+fn a_disabled_store_answers_every_call_as_unavailable() {
+    let store = Store::disabled();
     assert!(!store.is_ready());
     assert!(matches!(
         store.read_blocking(|_| Ok(())),
@@ -228,4 +228,57 @@ fn close_releases_every_file_so_the_database_can_move_and_go() {
     let moved = fixture.0.join("moved.sqlite3");
     std::fs::rename(&path, &moved).unwrap();
     std::fs::remove_file(&moved).unwrap();
+}
+
+#[test]
+fn calls_before_open_wait_for_the_cached_listing_and_keep_writes() {
+    let fixture = Fixture::new("store-wait-open");
+    let store = Store::pending();
+    let reader = store.clone();
+    let (started, starting) = std::sync::mpsc::sync_channel(0);
+    let (done, result) = std::sync::mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        started.send(()).unwrap();
+        done.send(reader.read_blocking(|connection| listings::get(connection, "cached"))).unwrap();
+    });
+    starting.recv().unwrap();
+    let early = result.recv_timeout(Duration::from_millis(100));
+    let inner = Store::build(&database(&fixture), &crate::store::Options::default()).unwrap();
+    inner.writer.submit(|connection| listings::put(connection, &listing("cached", 2, 0, 5))).blocking_recv().unwrap().unwrap();
+    store.fill(Ok(inner));
+    assert!(matches!(early, Err(std::sync::mpsc::RecvTimeoutError::Timeout)), "read returned before open");
+    let listing = result.recv_timeout(Duration::from_secs(5)).unwrap().unwrap().unwrap();
+    assert_eq!(listing.repos.len(), 2);
+    thread.join().unwrap();
+}
+
+#[test]
+fn posts_before_open_wait_and_persist_instead_of_disappearing() {
+    let fixture = Fixture::new("store-post-wait");
+    let store = Store::pending();
+    let writer = store.clone();
+    let (started, starting) = std::sync::mpsc::sync_channel(0);
+    let (done, result) = std::sync::mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        started.send(()).unwrap();
+        writer.post(|connection| listings::put(connection, &listing("queued", 2, 0, 5)));
+        done.send(()).unwrap();
+    });
+    starting.recv().unwrap();
+    let early = result.recv_timeout(Duration::from_millis(100));
+    store.fill(Store::build(&database(&fixture), &crate::store::Options::default()));
+    assert!(matches!(early, Err(std::sync::mpsc::RecvTimeoutError::Timeout)), "post returned before open");
+    result.recv_timeout(Duration::from_secs(5)).unwrap();
+    barrier(&store);
+    assert_eq!(store.read_blocking(|connection| listings::get(connection, "queued")).unwrap().unwrap().repos.len(), 2);
+    thread.join().unwrap();
+}
+
+#[test]
+fn unopened_store_waits_at_most_five_seconds() {
+    let store = Store::pending();
+    let start = Instant::now();
+    assert!(matches!(store.read_blocking(|_| Ok(())), Err(Error::Unavailable)));
+    assert!(start.elapsed() >= Duration::from_secs(5));
+    assert!(start.elapsed() < Duration::from_secs(10));
 }

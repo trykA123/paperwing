@@ -140,6 +140,8 @@ class AppState {
     return true;
   }
   ready = $state(false);
+  startupError = $state<string | null>(null);
+  #startupNotice: number | null = null;
   sources = $state<Source[]>([]);
   ws = $state<Workspace>(defaultWorkspace('unsupported'));
   private repositoryMetadata = new RepositoryMetadata(() => this.sources, () => this.ws.sets.flatMap(set => set.items),
@@ -253,9 +255,8 @@ class AppState {
   async init() {
     const [saved, platform] = await Promise.all([api.loadSettings(), api.platformInfo()]);
     this.platform = platform;
-    const ws = migrateWorkspace(saved.workspace, platform.platform);
-    this.sources = saved.sources ?? [];
-    this.ws = ws;
+    this.#applySettings(saved);
+    if (saved.startupError) this.#settingsLoadFailed(saved.startupError);
     await this.probeRoot();
     this.openView({ kind: 'set' });
     await listen<Progress>('clone-progress', e => { this.jobs[e.payload.id] = e.payload; });
@@ -273,6 +274,45 @@ class AppState {
       this.comparisons[comparisonId] = new CompareState();
       this.openView({ kind: 'compare', comparisonId, left: plan.left, right: plan.right });
     }
+  }
+
+  #applySettings(saved: Awaited<ReturnType<typeof api.loadSettings>>) {
+    this.sources = saved.sources ?? [];
+    this.ws = migrateWorkspace(saved.workspace, this.platform.platform);
+    if (saved.restoredFromBackup) this.toast('Settings were restored from a backup', 'info');
+  }
+
+  #settingsLoadFailed(error: string) {
+    this.startupError = error;
+    const msg = `Could not load settings: ${error}`;
+    const action = { label: 'Retry', run: () => { void this.retrySettings(); } };
+    const id = this.#startupNotice;
+    if (id !== null && this.notices.items.some(notice => notice.id === id)) {
+      this.notices.update(id, { msg, actions: [action] });
+    } else this.#startupNotice = this.toast(msg, 'error', action);
+  }
+
+  async retrySettings() {
+    let saved: Awaited<ReturnType<typeof api.loadSettings>>;
+    try { saved = await api.loadSettings(); }
+    catch (error) { this.#settingsLoadFailed(String(error)); return; }
+    if (saved.startupError) { this.#settingsLoadFailed(saved.startupError); return; }
+    this.#applySettings(saved);
+    this.startupError = null;
+    if (this.#startupNotice !== null) this.notices.dismiss(this.#startupNotice);
+    this.#startupNotice = null;
+    try {
+      await this.probeRoot();
+      await Promise.all(this.sources.map(source => this.loadRepos(source, false)));
+    } catch (error) { this.toast(describeError(error, 'refresh the loaded settings'), 'error'); }
+  }
+
+  async saveSettings(settings = { sources: this.sources, workspace: this.ws }) {
+    await api.saveSettings(settings);
+    if (!this.startupError) return;
+    this.startupError = null;
+    if (this.#startupNotice !== null) this.notices.dismiss(this.#startupNotice);
+    this.#startupNotice = null;
   }
 
   toast(msg: string, kind: NoticeKind = 'info', action?: NoticeAction, options: NoticeOptions = {}) {
@@ -548,7 +588,7 @@ class AppState {
     if (trashFolders) {
       this.gitBusy = true;
       try {
-        await api.saveSettings({ sources: this.sources, workspace: this.ws });
+        await this.saveSettings();
         const outcomes = await api.trashSetFolders(id);
         const moved = outcomes.filter(outcome => outcome.state === 'trashed').length;
         const kept = outcomes.filter(outcome => outcome.state === 'skipped' || outcome.state === 'failed');
@@ -643,8 +683,9 @@ class AppState {
           this.toast(`Deleted ${label} (was ${result.sha}). The remote branch is untouched.`, 'success');
           break;
         } catch (reason) {
-          const text = String(reason);
-          if (force || !text.includes('not fully merged')) { this.toast(text, 'error'); return; }
+          const structured = typeof reason === 'object' && reason !== null && 'kind' in reason && 'message' in reason;
+          const text = structured ? String(reason.message) : String(reason);
+          if (force || !structured || reason.kind !== 'notMerged') { this.toast(text, 'error'); return; }
           const again = await confirm(`"${label}" has commits that are not merged into the branch you are on, and no other branch contains them.\n\nDelete it anyway? Git keeps the commits for a while, so a mistake can still be undone from the reflog.`,
             { title: 'Unmerged branch', kind: 'warning', okLabel: 'Delete anyway', destructive: true });
           if (!again) return;
@@ -763,7 +804,7 @@ class AppState {
       this.running = true;
       this.#runNotice = this.runNotices.begin(mode, jobs.length);
       try {
-        await api.saveSettings({ sources: this.sources, workspace: this.ws });
+        if (!this.startupError) await this.saveSettings();
         await api.startClone(jobs, { parallel: this.ws.parallel, shallow: this.ws.shallow, onExisting: this.ws.onExisting }, mode);
       } catch (e) {
         this.running = false;
