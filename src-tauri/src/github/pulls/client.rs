@@ -34,7 +34,7 @@ impl Transport for Http<'_> {
     }
 }
 
-pub(super) async fn pull_for_branch(
+pub(in crate::github) async fn pull_for_branch(
     transport: &impl Transport,
     branch: &Branch,
 ) -> Result<Option<PullRequest>, Error> {
@@ -195,7 +195,7 @@ async fn has_unpushed_commits(transport: &impl Transport, branch: &Branch) -> Re
     Ok(remote.commit.sha != branch.sha)
 }
 
-pub(super) async fn open_pull_request(
+pub(in crate::github) async fn open_pull_request(
     transport: &impl Transport,
     branch: &Branch,
     request: &OpenPullRequest,

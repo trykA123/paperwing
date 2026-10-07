@@ -1,8 +1,9 @@
+use crate::core::events::CoreEvent;
 use crate::discover_job::chosen_folder;
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
 pub const LAUNCH_EVENT: &str = "launch-request";
 
@@ -126,7 +127,7 @@ pub fn single_instance<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri_plugin_single_instance::init(|app, argv, cwd| {
         let request = parse_args(argv.get(1..).unwrap_or_default(), Path::new(&cwd));
         if app.state::<Pending>().push(request) {
-            let _ = app.emit(LAUNCH_EVENT, ());
+            let _ = crate::events::publish(app, CoreEvent::LaunchRequest);
         }
         focus_main(app);
     })

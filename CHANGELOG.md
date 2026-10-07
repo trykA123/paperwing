@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add core boundaries inside the app crate: domain command registration, a CoreEvent bus with one frontend forwarder, per-host RepositoryProvider and PullRequestProvider instances, and a per-source provider switch in Settings (packet 38).
 - Keep close and clone available during settings recovery, add Retry to the startup notice, protect valid or unreadable backups, and allow two minutes for stash status snapshots.
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
 - Retry settings after startup read errors, show defaults with a notice, protect valid settings from auto-save, and avoid retrying partially applied untracked stashes.

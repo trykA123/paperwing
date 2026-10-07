@@ -1,12 +1,13 @@
+use crate::core::events::CoreEvent;
 use crate::search::{plan, Mode, SearchRequest};
 use crate::search_grep::perl_supported;
 use crate::search_job::{
-    run_job, Capabilities, Emit, Job, Outbound, DONE_EVENT, MATCHES_EVENT, REPO_EVENT,
+    run_job, Capabilities, Emit, Job, Outbound,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, State as TauriState};
+use tauri::{AppHandle, State as TauriState};
 
 const CONCURRENCY: usize = 4;
 const MAX_RUNNING: usize = 4;
@@ -96,9 +97,9 @@ pub async fn search_start(
     let stop = cancel.clone();
     let send: Emit = Arc::new(move |outbound| {
         let sent = match outbound {
-            Outbound::Matches(payload) => app.emit(MATCHES_EVENT, payload),
-            Outbound::Repo(payload) => app.emit(REPO_EVENT, payload),
-            Outbound::Done(payload) => app.emit(DONE_EVENT, payload),
+            Outbound::Matches(payload) => crate::events::publish_payload(&app, CoreEvent::SearchMatches, &payload),
+            Outbound::Repo(payload) => crate::events::publish_payload(&app, CoreEvent::SearchRepo, &payload),
+            Outbound::Done(payload) => crate::events::publish_payload(&app, CoreEvent::SearchDone, &payload),
         };
         if sent.is_err() {
             stop.store(true, Ordering::Relaxed);

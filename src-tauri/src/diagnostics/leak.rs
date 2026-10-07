@@ -266,7 +266,7 @@ mod tests {
                 host: "github.example".into(),
                 orgs: vec!["account-secret".into()],
                 urls: vec!["https://remote.example/UrlOwner/private-repo.git".into()],
-                credential_managed: false,
+                enabled: true, credential_managed: false,
             }],
             workspace: json!({
                 "sets": [{"name":"ClientCorp", "items":[{
@@ -319,7 +319,7 @@ mod tests {
                 host: "github.example".into(),
                 orgs: Vec::new(),
                 urls: Vec::new(),
-                credential_managed: false,
+                enabled: true, credential_managed: false,
             }],
             workspace: json!({"sets": []}),
         };

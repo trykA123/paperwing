@@ -1,3 +1,4 @@
+use crate::core::events::CoreEvent;
 use crate::discover::{scan, Event, FoundRepo, Limits, Summary};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -5,14 +6,12 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 const BATCH_LEN: usize = 25;
 const BATCH_AGE: Duration = Duration::from_millis(50);
 const MAX_RUNNING: usize = 4;
 const MAX_DEPTH: u32 = 8;
-pub const BATCH_EVENT: &str = "discover-batch";
-pub const DONE_EVENT: &str = "discover-done";
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -173,8 +172,8 @@ pub async fn discover_start(
         let _slot = slot;
         let send = |outbound: Outbound| {
             let sent = match outbound {
-                Outbound::Batch(repos) => app.emit(BATCH_EVENT, BatchPayload { id, repos }),
-                Outbound::Done(summary) => app.emit(DONE_EVENT, DonePayload { id, summary }),
+                Outbound::Batch(repos) => crate::events::publish_payload(&app, CoreEvent::DiscoverBatch, &BatchPayload { id, repos }),
+                Outbound::Done(summary) => crate::events::publish_payload(&app, CoreEvent::DiscoverDone, &DonePayload { id, summary }),
             };
             if sent.is_err() {
                 cancel.store(true, Ordering::Relaxed);

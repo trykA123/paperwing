@@ -151,6 +151,7 @@ impl ListingRequest {
             repos: list.repos,
         };
         store.enqueue(move |connection| {
+            if !crate::store::providers::enabled(connection, &listing.source_id)? { return Ok(()); }
             if partial && has_fuller_listing(connection, &listing, &configuration) {
                 return Ok(());
             }

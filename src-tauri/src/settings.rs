@@ -22,7 +22,12 @@ pub struct Source {
     pub urls: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub credential_managed: bool,
+    #[serde(default = "enabled_by_default", skip_serializing_if = "is_true")]
+    pub enabled: bool,
 }
+
+fn enabled_by_default() -> bool { true }
+fn is_true(value: &bool) -> bool { *value }
 
 fn is_false(value: &bool) -> bool { !value }
 
@@ -105,7 +110,10 @@ fn load_persisted<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Loaded, Strin
     if !file.exists() {
         return Err("Test profile settings must be prepared before launch".into());
     }
-    let (settings, restored_from_backup) = persistence::load(&file)?;
+    let (mut settings, restored_from_backup) = persistence::load(&file)?;
+    if let Some(runtime) = app.try_state::<crate::providers::Runtime>() {
+        runtime.restore(&mut settings.sources)?;
+    }
     #[cfg(feature = "test-profile")]
     crate::test_profile::settings(&settings)?;
     for source in &settings.sources { valid_id(&source.id)?; }
@@ -124,6 +132,9 @@ fn save_settings<R: tauri::Runtime>(app: AppHandle<R>, settings: Settings) -> Re
     let state = app.try_state::<Startup>();
     let preserve_valid = state.as_ref().is_some_and(|state| state.check().is_err());
     persistence::save(&file, &settings, preserve_valid)?;
+    if let Some(runtime) = app.try_state::<crate::providers::Runtime>() {
+        runtime.save(&settings.sources)?;
+    }
     if let Some(state) = state {
         state.clear()?;
     }
@@ -134,6 +145,9 @@ fn save_settings<R: tauri::Runtime>(app: AppHandle<R>, settings: Settings) -> Re
 fn configure_sources<R: tauri::Runtime>(app: &AppHandle<R>, sources: &[Source], notify: bool) {
     crate::credentials::configure_sources(app, sources, notify);
     crate::git::configure_sources(redaction_sources(sources));
+    if let Some(runtime) = app.try_state::<crate::providers::Runtime>() {
+        if let Err(error) = runtime.configure(sources) { eprintln!("Provider configuration failed: {error}"); }
+    }
 }
 
 #[derive(Default)]
@@ -274,3 +288,6 @@ mod startup_tests;
 #[cfg(all(test, not(feature = "test-profile")))]
 #[cfg(not(windows))]
 mod retry_tests;
+
+#[cfg(all(test, not(windows), not(feature = "test-profile")))]
+mod provider_tests;

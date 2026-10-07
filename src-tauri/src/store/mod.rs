@@ -5,6 +5,7 @@ pub mod listings;
 mod migrations;
 mod open;
 mod readers;
+pub(crate) mod providers;
 #[cfg_attr(not(test), allow(dead_code))]
 pub mod refs;
 #[cfg_attr(not(test), allow(dead_code))]

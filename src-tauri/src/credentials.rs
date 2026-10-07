@@ -1,10 +1,11 @@
+use crate::core::events::CoreEvent;
 mod host;
 pub(crate) use host::{bind_before_host_edits, check_saved_host};
 
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 #[cfg(not(feature = "test-profile"))]
@@ -133,7 +134,7 @@ pub fn if_current<T>(source_id: &str, expected: u64, action: impl FnOnce() -> T)
 }
 
 fn source_configuration(source: &crate::settings::Source) -> String {
-    serde_json::json!([source.kind, source.host, source.orgs, source.urls, source.credential_managed]).to_string()
+    serde_json::json!([source.kind, source.host, source.orgs, source.urls, source.credential_managed, source.enabled]).to_string()
 }
 
 fn check_configuration(source: &crate::settings::Source, configured: Option<&HashMap<String, String>>) -> Result<(), String> {
@@ -155,7 +156,7 @@ fn invalidate_blocking<R: tauri::Runtime>(app: &AppHandle<R>, source_id: &str) {
             store.remove_source(source_id);
         }
     });
-    let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+    let _ = crate::events::publish_payload(app, CoreEvent::CredentialChanged, &serde_json::json!({ "sourceId": source_id, "revision": revision }));
 }
 
 async fn invalidate_with(source_id: String, clear: impl FnOnce() + Send + 'static) -> Result<u64, String> {
@@ -169,7 +170,7 @@ async fn invalidate(app: &AppHandle, source_id: &str) -> Result<(), String> {
     let revision = invalidate_with(id.clone(), move || {
         if let Some(store) = store { store.remove_source(&id); }
     }).await?;
-    let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+    let _ = crate::events::publish_payload(app, CoreEvent::CredentialChanged, &serde_json::json!({ "sourceId": source_id, "revision": revision }));
     Ok(())
 }
 
@@ -456,7 +457,7 @@ pub fn drill() {
             "api" => {
                 crate::test_profile::github_endpoint()?.ok_or("Isolated API endpoint required by credential drill")?;
                 let source = crate::settings::Source { id: request.source_id, name: "Credential fixture".into(),
-                    kind: "github".into(), host: "github.com".into(), orgs: Vec::new(), urls: Vec::new(), credential_managed: true };
+                    kind: "github".into(), host: "github.com".into(), orgs: Vec::new(), urls: Vec::new(), enabled: true, credential_managed: true };
                 *SOURCES.get_or_init(|| Mutex::new(None)).lock().map_err(|_| "Fixture source configuration unavailable")? =
                     Some(HashMap::from([(source.id.clone(), source_configuration(&source))]));
                 let login = tauri::async_runtime::block_on(crate::github::test_source(source, None))?;

@@ -1,3 +1,4 @@
+use crate::core::events::CoreEvent;
 #[cfg(not(target_os = "linux"))]
 use crate::git::{buffered, valid_root};
 use crate::git::{execute, safe, valid_path, valid_ref, valid_url, OutputPolicy, Request};
@@ -10,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(target_os = "linux")]
 mod linux;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle};
 use tokio::sync::Semaphore;
 
 static ACTIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -55,7 +56,7 @@ fn emit(app: &AppHandle, id: &str, phase: &str, pct: f32, msg: impl Into<String>
 }
 
 fn emit_clean(app: &AppHandle, id: &str, phase: &str, pct: f32, msg: impl Into<String>) {
-    let _ = app.emit("clone-progress", Progress { id, phase, pct, msg: msg.into() });
+    let _ = crate::events::publish_payload(app, CoreEvent::CloneProgress, &Progress { id, phase, pct, msg: msg.into() });
 }
 
 fn validate(job: &Job) -> Result<(), String> {
@@ -365,7 +366,7 @@ pub async fn start_clone(app: AppHandle, jobs: Vec<Job>, opts: Opts, mode: Optio
         for h in handles {
             let _ = h.await;
         }
-        let _ = app.emit("clone-finished", ());
+        let _ = crate::events::publish(&app, CoreEvent::CloneFinished);
     });
     Ok(())
 }
@@ -434,7 +435,7 @@ pub async fn start_clone(
         for handle in handles {
             let _ = handle.await;
         }
-        let _ = app.emit("clone-finished", ());
+        let _ = crate::events::publish(&app, CoreEvent::CloneFinished);
     });
     Ok(())
 }
