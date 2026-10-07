@@ -22,9 +22,11 @@ pub(crate) fn resolve(root: &Path) -> Result<Repository, String> {
     } else {
         return Err("Unsupported Git metadata".into());
     };
-    let directory = directory
-        .canonicalize()
-        .map_err(|_| "Git directory is unavailable")?;
+    let directory = crate::paths::plain(
+        directory
+            .canonicalize()
+            .map_err(|_| "Git directory is unavailable")?,
+    );
     let marker = directory.join("commondir");
     if std::fs::symlink_metadata(&marker)
         .is_ok_and(|metadata| !metadata.is_file() || metadata.len() > 4096)
@@ -32,10 +34,12 @@ pub(crate) fn resolve(root: &Path) -> Result<Repository, String> {
         return Err("Unsupported Git common directory marker".into());
     }
     let common = match std::fs::read_to_string(marker) {
-        Ok(path) => directory
-            .join(path.trim())
-            .canonicalize()
-            .map_err(|_| "Git common directory is unavailable")?,
+        Ok(path) => crate::paths::plain(
+            directory
+                .join(path.trim())
+                .canonicalize()
+                .map_err(|_| "Git common directory is unavailable")?,
+        ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => directory.clone(),
         Err(_) => return Err("Git common directory is unavailable".into()),
     };

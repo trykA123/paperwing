@@ -474,3 +474,16 @@ mod tests {
     }
 
 }
+
+pub(crate) fn plain(path: std::path::PathBuf) -> std::path::PathBuf {
+    use std::path::{Component, PathBuf, Prefix};
+    let Some(Component::Prefix(prefix)) = path.components().next() else { return path };
+    let base = match prefix.kind() {
+        Prefix::VerbatimDisk(drive) => format!("{}:\\", drive as char),
+        Prefix::VerbatimUNC(server, share) => format!("\\\\{}\\{}\\", server.to_string_lossy(), share.to_string_lossy()),
+        _ => return path,
+    };
+    let mut plain = PathBuf::from(base);
+    plain.extend(path.components().filter(|component| matches!(component, Component::Normal(_))));
+    plain
+}
