@@ -13,7 +13,7 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 ## Ready now
 | Packet | What | Size |
 |---|---|---|
-| [43](packets/43-runner-hardening.md) | Git runner hardening; one process per Git call on Windows | M |
+| [47](packets/47-search-engines.md) | Search engines and fuzzy file finder, chosen in Settings | L |
 | [46](packets/46-languages.md) | Colouring for automotive and embedded files (after 37 step 1) | M |
 | [18](packets/18-progressive-contract.md) | Progressive results contract (design only) | S |
 | [06](packets/06-windows-write-boundaries.md) | Split `files.rs` on Windows, no behaviour change | M |
