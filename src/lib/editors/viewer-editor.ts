@@ -1,4 +1,4 @@
-import type { CompareEditor, CompareEditorInit, EditorChange, EditorEvent, EditorSettings, Side } from '../editor';
+import type { CompareEditor, CompareEditorInit, EditorChange, EditorEvent, EditorSettings, Side, SideSnapshot } from '../editor';
 import { contentBytes, type SideContent, type TextFormat } from '../text-format';
 import { diffLines, type LineHunk } from './line-diff';
 import { Listeners, stepIndex } from './shared';
@@ -163,6 +163,7 @@ class ViewerEditor implements CompareEditor {
   format(side: Side): TextFormat { return this.contents[side].format; }
   isReadOnly(): boolean { return true; }
   isDirty(): boolean { return false; }
+  snapshot(side: Side): SideSnapshot { return { bytes: this.getBytes(side), token: null }; }
   markSaved() {}
   revert() {}
   changes(): readonly EditorChange[] { return this.changeList; }

@@ -1,9 +1,8 @@
 import { api, type CompareEndpoint, type CompareFile, type EditFile } from './api';
 import { engineFor, type EngineKind } from './editor';
 import { app } from './state.svelte';
+import { MIXED_EOL_REASON } from './side-tickets';
 import { readContent, type SideContent } from './text-format';
-
-export const MIXED_EOL_REASON = 'Mixed line endings: editing would change them.';
 
 export type SideRequest = { sessionId: string; generation: number; fileId: string; file: CompareFile; endpoints: CompareEndpoint[]; alive: () => boolean; opened: Set<string> };
 export type OpenedSides = { kind: EngineKind; contents: SideContent[]; tickets: (EditFile | null)[]; reasons: (string | null)[] };

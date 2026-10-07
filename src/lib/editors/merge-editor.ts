@@ -2,7 +2,7 @@ import type { Chunk } from '@codemirror/merge';
 import { openSearchPanel } from '@codemirror/search';
 import { Text, type Extension, type StateEffect } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { currentTheme, type CompareEditor, type CompareEditorInit, type EditorChange, type EditorEvent, type EditorSettings, type Side } from '../editor';
+import { currentTheme, type CompareEditor, type CompareEditorInit, type EditorChange, type EditorEvent, type EditorSettings, type Side, type SideSnapshot } from '../editor';
 import { findLanguage } from '../languages';
 import { contentBytes, type SideContent, type TextFormat } from '../text-format';
 import { mountInline } from './inline-surface';
@@ -87,7 +87,8 @@ class MergeEditor implements CompareEditor {
   }
 
   private reconfigure(effect: (side: Side) => StateEffect<unknown>) {
-    for (const side of SIDES) this.surface.viewOf(side).dispatch({ effects: effect(side) });
+    const sides = this.settings.layout === 'inline' ? [this.primarySide()] : SIDES;
+    for (const side of sides) this.surface.viewOf(side).dispatch({ effects: effect(side) });
   }
 
   async configure(patch: Partial<EditorSettings>): Promise<void> {
@@ -116,7 +117,14 @@ class MergeEditor implements CompareEditor {
   format(side: Side): TextFormat { return this.contents[side].format; }
   isReadOnly(side: Side): boolean { return this.settings.locked || this.settings.readOnly[side] || !this.contents[side].format.editable; }
   isDirty(side: Side): boolean { return !this.surface.doc(side).eq(this.baseline[side]); }
-  markSaved(side: Side) { this.baseline[side] = this.surface.doc(side); }
+  snapshot(side: Side): SideSnapshot {
+    const doc = this.surface.doc(side);
+    return { bytes: contentBytes(this.contents[side], doc.toString()), token: doc };
+  }
+
+  markSaved(side: Side, snapshot?: SideSnapshot) {
+    this.baseline[side] = snapshot?.token instanceof Text ? snapshot.token : this.surface.doc(side);
+  }
 
   revert(side: Side) {
     const docs = { left: this.surface.doc('left'), right: this.surface.doc('right') };

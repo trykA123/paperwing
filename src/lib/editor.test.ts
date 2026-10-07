@@ -1,8 +1,8 @@
 const testModule = 'bun:test';
 const { expect, test } = await import(testModule);
-import { engineFor, LARGE_FILE_BYTES } from './editor';
+import { engineFor, engineForText, LARGE_FILE_BYTES } from './editor';
 import { findLanguage, languageId, LANGUAGES } from './languages';
-import { contentBytes, contentFromText, readContent } from './text-format';
+import { contentBytes, contentFromText, readContent, utf8Length } from './text-format';
 
 const encode = (text: string) => Array.from(new TextEncoder().encode(text));
 
@@ -11,6 +11,20 @@ test('files above the limit on either side use the read-only viewer', () => {
   expect(engineFor([10, LARGE_FILE_BYTES + 1])).toBe('viewer');
   expect(engineFor([LARGE_FILE_BYTES + 1, LARGE_FILE_BYTES + 1])).toBe('viewer');
   expect(LARGE_FILE_BYTES).toBe(5 * 1024 * 1024);
+});
+
+test('text sizes are measured in UTF-8 bytes, not UTF-16 units', () => {
+  expect(utf8Length('a\u20AC')).toBe(4);
+  const euros = '\u20AC'.repeat(2_000_000);
+  expect(euros.length).toBeLessThan(LARGE_FILE_BYTES);
+  expect(engineForText('', euros)).toBe('viewer');
+  expect(engineForText('a'.repeat(1000), 'b')).toBe('merge');
+});
+
+test('a doubled BOM keeps both marks', () => {
+  const bytes = encode('\uFEFF\uFEFFone');
+  const content = readContent(bytes);
+  expect(contentBytes(content, content.format.text)).toEqual(bytes);
 });
 
 test('the language registry keeps the extension mapping the Monaco view used', () => {
@@ -22,7 +36,7 @@ test('the language registry keeps the extension mapping the Monaco view used', (
 });
 
 test('mixed line endings keep their original bytes and refuse changed text', () => {
-  const bytes = encode('﻿one\r\ntwo\nthree');
+  const bytes = encode('\uFEFFone\r\ntwo\nthree');
   const content = readContent(bytes);
   expect(content.format.editable).toBe(false);
   expect(contentBytes(content, content.format.text)).toEqual(bytes);
@@ -30,7 +44,7 @@ test('mixed line endings keep their original bytes and refuse changed text', () 
 });
 
 test('single-style files restore their BOM and line endings from normalised text', () => {
-  for (const text of ['a\r\nb\r\n', '﻿a\nb', 'a\rb\r', '']) {
+  for (const text of ['a\r\nb\r\n', '\uFEFFa\nb', 'a\rb\r', '']) {
     const content = readContent(encode(text));
     expect(content.original).toBeNull();
     expect(contentBytes(content, content.format.text)).toEqual(encode(text));

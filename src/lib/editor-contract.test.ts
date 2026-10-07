@@ -11,10 +11,10 @@ const settings = (overrides: Partial<EditorSettings> = {}): EditorSettings => ({
 });
 const encode = (text: string) => Array.from(new TextEncoder().encode(text));
 const FILES = {
-  lf: 'one\ntwo\nthree\n', crlf: 'one\r\ntwo\r\nthree\r\n', cr: 'one\rtwo\rthree\r', bom: '﻿one\ntwo\nthree\n', bomCrlf: '﻿one\r\ntwo\r\nthree\r\n',
+  lf: 'one\ntwo\nthree\n', crlf: 'one\r\ntwo\r\nthree\r\n', cr: 'one\rtwo\rthree\r', bom: '\uFEFFone\ntwo\nthree\n', doubleBom: '\uFEFF\uFEFFone\ntwo\nthree\n', bomCrlf: '\uFEFFone\r\ntwo\r\nthree\r\n',
   noFinalNewline: 'one\ntwo\nthree', noFinalNewlineCrlf: 'one\r\ntwo\r\nthree', empty: '', single: 'only line',
 };
-const MIXED = { mixed: 'one\r\ntwo\nthree\r\n', mixedBom: '﻿one\ntwo\r\nthree\n' };
+const MIXED = { mixed: 'one\r\ntwo\nthree\r\n', mixedBom: '\uFEFFone\ntwo\r\nthree\n' };
 const hosts: HTMLElement[] = [];
 const editors: CompareEditor[] = [];
 
@@ -138,6 +138,43 @@ for (const { kind, editable } of ENGINES) {
       expect(editor.getText('right')).toBe('a\nb\nc');
       expect(editor.redo()).toBe(true);
       expect(editor.getText('right')).toBe('a\nB\nc');
+    });
+
+    test('a hunk copy keeps a doubled BOM and one text change only', async () => {
+      const text = FILES.doubleBom;
+      const editor = await open(kind, text, text.replace('two', 'TWO'));
+      expect(editor.copyChange('right', 'left', 0)).toBe(true);
+      expect(editor.getBytes('left')).toEqual(encode(text.replace('two', 'TWO')));
+      expect(editor.getBytes('left').slice(0, 6)).toEqual([239, 187, 191, 239, 187, 191]);
+    });
+
+    test('an edit made after the snapshot stays unsaved when the snapshot is marked saved', async () => {
+      const editor = await open(kind, 'a\nb\nc\nd\ne', 'a\nX\nc\nY\ne');
+      editor.copyChange('right', 'left', 0);
+      const snapshot = editor.snapshot('left');
+      expect(snapshot.bytes).toEqual(encode('a\nX\nc\nd\ne'));
+      editor.copyChange('right', 'left', 0);
+      editor.markSaved('left', snapshot);
+      expect(editor.isDirty('left')).toBe(true);
+      expect(editor.getText('left')).toBe('a\nX\nc\nY\ne');
+      editor.markSaved('left');
+      expect(editor.isDirty('left')).toBe(false);
+    });
+
+    test('inline layout keeps a writable left side writable after the editor is locked and unlocked', async () => {
+      const editor = await open(kind, 'a\nb', 'a\nB', { layout: 'inline', readOnly: { left: false, right: true } });
+      const content = hosts.at(-1)!.querySelector('.cm-content')!;
+      const enter = () => content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
+      await editor.configure({ locked: true });
+      expect(content.getAttribute('aria-readonly')).toBe('true');
+      enter();
+      expect(editor.getText('left')).toBe('a\nb');
+      await editor.configure({ locked: false });
+      expect(editor.isReadOnly('left')).toBe(false);
+      expect(content.getAttribute('aria-readonly')).toBeNull();
+      enter();
+      expect(editor.getText('left')).not.toBe('a\nb');
+      expect(editor.isDirty('left')).toBe(true);
     });
 
     test('copying into a read-only side is refused', async () => {

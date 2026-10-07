@@ -1,5 +1,8 @@
 const identity = (line: string) => line;
 
+/** Edit steps Myers explores in one gap. Each step keeps 2d + 1 entries, so memory stays near 4 * limit^2 bytes (16 MB at 2000); past it the gap becomes one coarse hunk. */
+const STEP_LIMIT = 2000;
+
 export type LineHunk = readonly [aFrom: number, aTo: number, bFrom: number, bTo: number];
 type MutableHunk = [number, number, number, number];
 
@@ -24,6 +27,7 @@ function myers(a: Int32Array, b: Int32Array, range: MutableHunk, hunks: MutableH
   const [aLo, aHi, bLo, bHi] = range;
   const n = aHi - aLo, m = bHi - bLo, max = Math.min(n + m, limit), off = max + 1;
   const v = new Int32Array(2 * max + 3), trace: Int32Array[] = [];
+  const column = (step: number, k: number) => k + step;
   let found = -1;
   for (let d = 0; d <= max && found < 0; d++) {
     for (let k = -d; k <= d; k += 2) {
@@ -33,15 +37,15 @@ function myers(a: Int32Array, b: Int32Array, range: MutableHunk, hunks: MutableH
       v[off + k] = x;
       if (x >= n && y >= m) { found = d; break; }
     }
-    trace.push(v.slice());
+    trace.push(v.slice(off - d, off + d + 1));
   }
   if (found < 0) { hunks.push([aLo, aHi, bLo, bHi]); return; }
   const edits: MutableHunk[] = [];
   let x = n, y = m;
   for (let d = found; d > 0; d--) {
     const vv = trace[d - 1], k = x - y;
-    const down = k === -d || (k !== d && vv[off + k - 1] < vv[off + k + 1]);
-    const pk = down ? k + 1 : k - 1, px = vv[off + pk], py = px - pk;
+    const down = k === -d || (k !== d && vv[column(d - 1, k - 1)] < vv[column(d - 1, k + 1)]);
+    const pk = down ? k + 1 : k - 1, px = vv[column(d - 1, pk)], py = px - pk;
     edits.push(down ? [px, py, px, py + 1] : [px, py, px + 1, py]);
     x = px; y = py;
   }
@@ -86,7 +90,7 @@ function mergeAdjacent(hunks: MutableHunk[]): LineHunk[] {
 }
 
 /** Line diff: unique-line anchors first, Myers between them. `key` maps a line to its comparison form. */
-export function diffLines(aLines: readonly string[], bLines: readonly string[], key: (line: string) => string = identity, limit = 4000): LineHunk[] {
+export function diffLines(aLines: readonly string[], bLines: readonly string[], key: (line: string) => string = identity, limit = STEP_LIMIT): LineHunk[] {
   const table = new Map<string, number>();
   const a = intern(key === identity ? aLines : aLines.map(key), table), b = intern(key === identity ? bLines : bLines.map(key), table);
   const hunks: MutableHunk[] = [];

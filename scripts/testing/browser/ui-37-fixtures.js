@@ -42,6 +42,7 @@
   window.__bytes = sides;
   window.__TAURI_INTERNALS__.invoke = async (command, args = {}) => {
     if (command === 'comparison_open' && window.__FX.bothWorking) return base(command, { ...args, left: args.right });
+    if (command === 'comparison_open' && window.__FX.leftOnly) return base(command, { ...args, left: args.right, right: args.left });
     if (command === 'comparison_files') return args.offset ? [] : files;
     if (command === 'comparison_content') return sides[args.side].buffer.slice(0);
     if (command === 'file_edit_open') return { ticket: `ticket-${args.side}`, bytes: Array.from(sides[args.side]), exists: true };

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { createCompareEditor, currentTheme, engineFor, LARGE_FILE_NOTICE, type CompareEditor } from '../lib/editor';
+  import { createCompareEditor, currentTheme, engineForText, LARGE_FILE_NOTICE, type CompareEditor } from '../lib/editor';
   import { languageId } from '../lib/languages';
   import { contentFromText } from '../lib/text-format';
 
@@ -8,10 +8,10 @@
   let host: HTMLDivElement;
   let instance = $state.raw<CompareEditor | null>(null);
   let failed = $state('');
-  const large = $derived(engineFor([original.length, modified.length]) === 'viewer');
+  const large = $derived(engineForText(original, modified) === 'viewer');
 
   $effect(() => {
-    const left = contentFromText(original), right = contentFromText(modified), language = languageId(path), kind = engineFor([original.length, modified.length]);
+    const left = contentFromText(original), right = contentFromText(modified), language = languageId(path), kind = engineForText(original, modified);
     const layout = untrack(() => (inline ? 'inline' : 'sideBySide'));
     let disposed = false, created: CompareEditor | undefined;
     createCompareEditor({ host, kind, left, right, settings: { layout, theme: currentTheme(), language, hideUnchanged: false, ignoreWhitespace: false, readOnly: { left: true, right: true }, locked: true } })

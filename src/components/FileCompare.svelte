@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { benchmarkEnabled, benchmarkTimer } from '../lib/benchmark';
   import { ask, confirm } from '../lib/confirm';
   import { api, type EditFile } from '../lib/api';
@@ -8,9 +9,11 @@
   import { commands, execute } from '../lib/commands';
   import { createCompareEditor, currentTheme, LARGE_FILE_NOTICE, loadEngine, type CompareEditor, type EngineKind, type Side } from '../lib/editor';
   import { openSides } from '../lib/compare-sides';
+  import { fileSignature } from '../lib/file-signature';
+  import { reopenSide } from '../lib/side-tickets';
   import { languageId } from '../lib/languages';
   import { verifyReadonly } from '../lib/readonly-benchmark';
-  import { readContent, type TextFormat } from '../lib/text-format';
+  import type { TextFormat } from '../lib/text-format';
   import Toolbar from './file-compare/Toolbar.svelte';
   import Endpoints from './file-compare/Endpoints.svelte';
   import Footer from './file-compare/Footer.svelte';
@@ -32,6 +35,7 @@
   const snapshot = $derived(comparison.snapshot);
   const stale = $derived(!snapshot || snapshot.id !== view.sessionId || snapshot.generation !== view.generation);
   const file = $derived(comparison.files.find(file => file.id === view.fileId));
+  const fileKey = $derived(fileSignature(file));
   const identity = $derived(tabId(view, ''));
   const writable = $derived([snapshot?.left.endpoint, snapshot?.right.endpoint].map(endpoint => app.platform.platform !== 'linux' || !!endpoint && app.endpointCapability(endpoint, 'edit').supported));
   const canCopyLeft = $derived(!stale && !busy && !computing && !!tickets[0] && writable[0] && !!file?.right && changeCount > 0);
@@ -59,8 +63,9 @@
       for (const index of side === undefined ? [0, 1] : [side]) {
         if (!dirty[index] || !tickets[index]) continue;
         if (!writable[index]) throw new Error(app.endpointCapability(index === 0 ? snapshot!.left.endpoint : snapshot!.right.endpoint, 'edit').reason ?? 'Editing is unavailable for this root.');
-        const record = await api.fileSave(tickets[index]!.ticket, editor.getBytes(sides[index]!));
-        editor.markSaved(sides[index]!);
+        const saved = editor.snapshot(sides[index]!);
+        const record = await api.fileSave(tickets[index]!.ticket, saved.bytes);
+        editor.markSaved(sides[index]!, saved);
         undoIds.push(record.id); undoIds = undoIds.slice(-32);
         if (record.warning) app.toast(record.warning, 'warn');
       }
@@ -97,12 +102,13 @@
     try {
       await api.recoveryUndo(id); undoIds = undoIds.filter(record => record !== id);
       for (const index of [0, 1]) {
-        if (!tickets[index]) continue;
-        await api.editClose(tickets[index]!.ticket);
-        ownedTickets.delete(tickets[index]!.ticket);
-        tickets[index] = await api.editOpen(view.sessionId, view.generation, view.fileId, sides[index]!);
-        ownedTickets.add(tickets[index]!.ticket);
-        editor.setContent(sides[index]!, readContent(tickets[index]!.bytes));
+        const previous = tickets[index];
+        if (!previous) continue;
+        ownedTickets.delete(previous.ticket);
+        const reopened = await reopenSide(view, sides[index]!, previous);
+        tickets[index] = reopened.ticket; readOnlyReasons[index] = reopened.reason;
+        if (reopened.ticket) ownedTickets.add(reopened.ticket.ticket);
+        editor.setContent(sides[index]!, reopened.content);
         formats[index] = editor.format(sides[index]!);
       }
       dirty = [false, false]; app.toast('Filesystem operation undone', 'success');
@@ -112,13 +118,14 @@
   $effect(() => {
     const sessionId = view.sessionId, generation = view.generation, fileId = view.fileId, path = view.path;
     const tabIdentity = identity;
-    if (!host || stale || !file) return;
+    if (!host || stale || !fileKey) return;
+    const target = untrack(() => ({ file: file!, endpoints: [snapshot!.left.endpoint, snapshot!.right.endpoint] }));
     const current = ++revision; let disposed = false;
     const handles: { dispose: () => void }[] = [];
     const opened = new Set<string>(); ownedTickets = opened;
     loading = true; fallback = ''; error = ''; notice = ''; computing = true;
     (async () => {
-      const result = await openSides({ sessionId, generation, fileId, file: file!, endpoints: [snapshot!.left.endpoint, snapshot!.right.endpoint], opened, alive: () => !disposed && current === revision });
+      const result = await openSides({ sessionId, generation, fileId, file: target.file, endpoints: target.endpoints, opened, alive: () => !disposed && current === revision });
       if (result.status === 'cancelled') return;
       if (result.status === 'unsupported') { fallback = result.message; return; }
       const { sides: opening } = result;

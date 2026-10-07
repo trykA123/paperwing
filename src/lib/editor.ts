@@ -1,4 +1,4 @@
-import type { SideContent, TextFormat } from './text-format';
+import { utf8Length, type SideContent, type TextFormat } from './text-format';
 
 export const LARGE_FILE_BYTES = 5 * 1024 * 1024;
 export const LARGE_FILE_NOTICE = 'Large file: read-only view';
@@ -23,6 +23,8 @@ export type EditorSettings = {
   locked: boolean;
 };
 
+/** Bytes to send to the write path plus an opaque token for the exact document they came from. */
+export type SideSnapshot = { readonly bytes: number[]; readonly token: unknown };
 export type EditorCapabilities = { edit: boolean; search: boolean; highlight: boolean };
 
 export interface CompareEditor {
@@ -35,7 +37,8 @@ export interface CompareEditor {
   format(side: Side): TextFormat;
   isReadOnly(side: Side): boolean;
   isDirty(side: Side): boolean;
-  markSaved(side: Side): void;
+  snapshot(side: Side): SideSnapshot;
+  markSaved(side: Side, snapshot?: SideSnapshot): void;
   revert(side: Side): void;
   changes(): readonly EditorChange[];
   currentChange(): number;
@@ -60,6 +63,10 @@ export type CompareEditorInit = {
 
 export function engineFor(sizes: readonly number[]): EngineKind {
   return sizes.some(size => size > LARGE_FILE_BYTES) ? 'viewer' : 'merge';
+}
+
+export function engineForText(...texts: readonly string[]): EngineKind {
+  return engineFor(texts.map(utf8Length));
 }
 
 export async function createCompareEditor(init: CompareEditorInit): Promise<CompareEditor> {

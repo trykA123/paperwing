@@ -102,6 +102,31 @@ await c.waitForFunction(() => window.__saved.length > 0);
 const saved = await c.evaluate(() => ({ count: window.__saved.length, ticket: window.__saved[0].ticket, equal: window.__saved[0].bytes.length > 0 }));
 check('Ctrl+S saves the left file through the write path', saved.count === 1 && saved.ticket === 'ticket-left' && saved.equal, JSON.stringify(saved));
 
+const left = await open('c', { leftOnly: true });
+await left.click('.seg button:has-text("Inline")');
+await left.waitForSelector('.editor-host .cm-deletedChunk');
+const saveTwice = async text => {
+  await left.locator('.editor-host .cm-content').click();
+  await left.keyboard.press('Control+Home');
+  await left.keyboard.type(text);
+  await left.keyboard.press('Control+s');
+};
+await saveTwice('Z');
+await left.waitForFunction(() => window.__saved.length === 1);
+await left.waitForFunction(() => !document.querySelector('.editor-endpoints').innerText.includes('Unsaved'));
+await saveTwice('Y');
+await left.waitForFunction(() => window.__saved.length === 2, null, { timeout: 5000 }).catch(() => {});
+const inlineSaves = await left.evaluate(() => ({ count: window.__saved.length, tickets: window.__saved.map(save => save.ticket), second: String.fromCharCode(...window.__saved.at(-1)?.bytes.slice(0, 2) ?? []) }));
+check('inline layout saves a working-tree left side twice, still writable after the first save', inlineSaves.count === 2 && inlineSaves.tickets.every(ticket => ticket === 'ticket-left') && inlineSaves.second === 'YZ', JSON.stringify(inlineSaves));
+await shot(left, 'inline-left-writable');
+await left.locator('.editor-host .cm-content').click();
+await left.keyboard.type('Q');
+await left.getByRole('button', { name: 'Apply rules' }).click();
+await left.getByRole('button', { name: 'Other options' }).click();
+await left.getByRole('button', { name: 'Keep editing' }).click();
+await left.waitForTimeout(400);
+check('refreshing the comparison with unsaved edits asks first and keeps them', (await left.locator('.editor-endpoints').innerText()).includes('Unsaved') && (await left.locator('.editor-host .cm-content').innerText()).includes('Q'));
+
 const crlf = await open('crlf');
 check('CRLF label is shown', (await crlf.locator('.editor-endpoints').innerText()).includes('UTF-8 · CRLF'));
 await crlf.locator('.cm-merge-b .cm-content').click();
