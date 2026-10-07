@@ -624,9 +624,125 @@ button.fm-ref:hover {
     background: var(--line);
 }
 
+/* table keyboard: roving row focus and a 32 px checkbox hit area */
+.fm-hit {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+}
+
+.fm-hit input {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.fm-row:not(.fm-head):focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+.fm-row.sel:not(.fm-head):focus-visible {
+    box-shadow: inset 0 0 0 2px var(--focus), inset 4px 0 var(--acc);
+}
+
+.fm-row.fm-head .fm-hit {
+    margin-left: 0;
+}
+
+.mh .mut .link {
+    font-size: inherit;
+}
+
+.crumb .link {
+    font-size: inherit;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* progress and press feedback */
+.btn.progress {
+    position: relative;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.btn.progress .bar {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in oklch, var(--acc) 22%, transparent);
+    transform-origin: left center;
+    transition: transform 200ms var(--ease-out);
+}
+
+.btn.dark.progress .bar {
+    background: color-mix(in oklch, var(--acc-fg) 22%, transparent);
+}
+
+.fm-table .vbox:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+}
+
+.btn.progress .lbl {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.btn:active:not(:disabled),
+.fm-chip:active,
+.fm-action:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: 100ms;
+}
+
+/* command palette */
+.palette-group {
+    padding: var(--sp-2) 10px var(--sp-1);
+    color: var(--dim);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.palette-command .pc-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.palette-command .pc-reason {
+    color: var(--dim);
+    font-size: var(--fs-xs);
+}
+
+.palette-command.off {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.palette-command.off:hover {
+    background: none;
+    color: inherit;
+}
+
+.pc-keys {
+    display: inline-flex;
+    gap: 3px;
+    flex: none;
+}
+
 /* floating bulk bar; the list gets room under it so the last rows stay reachable */
+/* 40 px bar + 12 px gap + pager */
 .fm-wrap:has(.fm-bar.on) .vbox {
-    padding-bottom: 104px;
+    padding-bottom: 96px;
 }
 
 .fm-bar {
@@ -642,21 +758,23 @@ button.fm-ref:hover {
     width: fit-content;
     max-width: calc(100% - 24px);
     margin-inline: auto;
-    padding: 6px;
+    min-height: 40px;
+    padding: 4px;
     border-radius: var(--r-card);
     background: var(--bar-bg);
-    box-shadow: 0 0 0 1px var(--bar-line), 0 16px 40px oklch(0% 0 0 / 0.28);
+    box-shadow: 0 0 0 1px var(--bar-line), var(--shadow-2);
     color: var(--bar-fg);
     opacity: 0;
     pointer-events: none;
-    transform: translateY(16px);
-    transition: transform 200ms var(--ease-out), opacity 160ms var(--ease-out);
+    transform: translateY(8px);
+    transition: transform 120ms var(--ease-in), opacity 120ms var(--ease-in);
 }
 
 .fm-bar.on {
     opacity: 1;
     pointer-events: auto;
     transform: none;
+    transition: transform 160ms var(--ease-out), opacity 160ms var(--ease-out);
 }
 
 .fm-bar .count {
@@ -701,10 +819,42 @@ button.fm-ref:hover {
     border-top-color: var(--bar-fg);
 }
 
-@container (max-width: 820px) {
+@container (max-width: 560px) {
     .fm-bar .t {
         display: none;
     }
+}
+
+.bulk-more-wrap {
+    position: relative;
+}
+
+.bulk-more {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 12px);
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    width: max-content;
+    min-width: 240px;
+    padding: 4px;
+    border-radius: var(--r-ctl);
+    background: var(--bar-bg);
+    box-shadow: 0 0 0 1px var(--bar-line), var(--shadow-2);
+}
+
+.bulk-more button {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.bulk-more button:disabled {
+    opacity: 0.55;
+}
+
+.bulk-more small {
+    margin-left: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -712,6 +862,16 @@ button.fm-ref:hover {
     .fm-bar.on {
         transform: none;
         transition: opacity 120ms linear;
+    }
+
+    .fm-action:active:not(:disabled),
+    .fm-chip:active,
+    .btn:active:not(:disabled) {
+        transform: none;
+    }
+
+    .btn.progress .bar {
+        transition: none;
     }
 
     .rail-btn,
@@ -816,4 +976,8 @@ button.fm-ref:hover {
 .set-summary dd.zero {
     color: var(--faint-text);
     font-weight: 400;
+}
+
+.err-line {
+    display: block;
 }
