@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { localStatus } from './backend.mjs';
 import { git } from './fixture.mjs';
 import * as tags from './tag-backend.mjs';
+import { clearNarrow } from './shell-nav.mjs';
 import { addCommit, makeTagSet } from './tag-fixture.mjs';
 
 const [url, shots, theme = 'light', width = '1440'] = process.argv.slice(2);
@@ -48,6 +49,7 @@ await page.exposeFunction('__backend', async (cmd, a) => {
       if (releaseGate) await releaseGate;
       if (allowReleaseRetry && a.path === repos.gamma) return { id: 34, url: 'https://gitint.company.com/admin/gamma/releases/34', draft: a.draft };
       return tags.createRelease(a.path, a.tag, a.notes, a.draft, a.remote);
+    case 'pull_for_branch': return null;
     case 'repository_history': return tags.history(a.path);
     case 'get_refs_many': refCalls.push(a.urls); return a.urls.map(refUrl => ({ url: refUrl, branches: ['main'], tags: [], branchShas: [], tagShas: [], error: null }));
     case 'repository_tree': refCalls.push(['tree', a.path]); return { branches: [], tags: tags.list(a.path).map(tag => ({ name: tag.name, sha: tag.commit })), remotes: [], stashes: [], submodules: [] };
@@ -89,6 +91,7 @@ const dialogText = () => page.locator('.tag-dialog').innerText();
 await page.goto(url);
 await page.waitForTimeout(5500);
 await page.waitForSelector('.fm-row[data-id="alpha"]');
+await clearNarrow(page, width);
 await page.waitForTimeout(800);
 
 // Row menu entry on one repository.
