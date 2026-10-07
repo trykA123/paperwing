@@ -252,7 +252,7 @@
             {#if app.repoErrors[s.id]?.length}<div class="err" style="font-size:var(--fs-sm);margin-top:4px">{app.repoErrors[s.id].join(' · ')}</div>{/if}
           </div>
           <label class="btn">Enabled
-            <input type="checkbox" role="switch" aria-checked={s.enabled !== false} checked={s.enabled !== false}
+            <input type="checkbox" role="switch" aria-label={`${s.name} enabled`} checked={s.enabled !== false}
               disabled={!!busy} onclick={(event) => toggleProvider(s, event)} />
           </label>
           {#if s.kind !== 'manual'}

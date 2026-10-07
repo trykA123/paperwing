@@ -21,9 +21,9 @@ test('each source exposes an Enabled switch with the current checked state', () 
         expect(switches).toHaveLength(2);
         switches.forEach(([label, content], index) => {
             expect(content).toContain('Enabled');
-            expect(content).toContain(`aria-checked="${index === 0}"`);
+            expect(content).not.toContain('aria-checked');
             expect(content.includes(' checked')).toBe(index === 0);
-            expect(label).not.toContain('aria-label=');
+            expect(label).toContain('aria-label="admin enabled"');
         });
     } finally { app.sources = previous; }
 });
