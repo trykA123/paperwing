@@ -98,7 +98,10 @@ async fn real_startup_returns_defaults_with_error_and_refuses_to_overwrite_valid
     assert!(!file.with_extension("json.bak").exists());
     assert!(app.state::<Startup>().check().is_err());
 
-    let recovered = load_settings(app.handle().clone()).unwrap();
+    let recovered = commands::load_settings(app.handle().clone())
+        .await
+        .unwrap()
+        .settings;
     assert_eq!(recovered.workspace["root"], "saved-root");
     assert!(app.state::<Startup>().check().is_ok());
     save_settings(app.handle().clone(), recovered).unwrap();
@@ -271,4 +274,42 @@ async fn internal_load_failures_leave_startup_clean_and_saves_working_regression
     assert!(String::from_utf8(std::fs::read(&file).unwrap())
         .unwrap()
         .contains("edited-root"));
+}
+
+#[tokio::test]
+async fn internal_load_success_keeps_recovery_until_the_ui_reloads_regression() {
+    if !run_isolated("settings::retry_tests::internal_load_success_keeps_recovery_until_the_ui_reloads_regression") {
+        return;
+    }
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("settings-internal-recovery");
+    let app = app_for(&fixture);
+    let file = settings_file(app.handle()).unwrap();
+    let source = saved_settings(&file);
+    let original = std::fs::read(&file).unwrap();
+    initialize(app.handle().clone()).unwrap();
+    app.state::<Startup>()
+        .record("injected startup failure".into());
+
+    assert_eq!(
+        load_settings(app.handle().clone()).unwrap().sources.len(),
+        1
+    );
+    assert!(app.state::<Startup>().check().is_err());
+    let error = commands::save_settings(
+        app.handle().clone(),
+        Settings {
+            sources: vec![source],
+            workspace: serde_json::Value::Null,
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        error.contains("Refusing to overwrite existing settings"),
+        "{error}"
+    );
+    assert_eq!(std::fs::read(&file).unwrap(), original);
+    crate::credentials::configure_sources(app.handle(), &[], false);
+    crate::git::configure_sources(Vec::new());
 }

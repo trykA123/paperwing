@@ -74,10 +74,12 @@ fn load_with_status<R: tauri::Runtime>(app: &AppHandle<R>, record: bool) -> Resu
     let Some(state) = app.try_state::<Startup>() else {
         return load_persisted(app);
     };
+    if !record {
+        return load_persisted(app).or_else(|_| load_persisted(app));
+    }
     if state.check().is_ok() {
-        let loaded = load_persisted(app);
-        if loaded.is_ok() || !record {
-            return loaded.or_else(|_| load_persisted(app));
+        if let Ok(loaded) = load_persisted(app) {
+            return Ok(loaded);
         }
     }
     match load_persisted(app) {
@@ -86,7 +88,6 @@ fn load_with_status<R: tauri::Runtime>(app: &AppHandle<R>, record: bool) -> Resu
             state.clear()?;
             Ok(loaded)
         }
-        Err(error) if !record => Err(error),
         Err(error) => {
             state.record(error.clone());
             Ok(Loaded {
