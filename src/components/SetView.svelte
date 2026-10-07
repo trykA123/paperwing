@@ -21,7 +21,6 @@
   import BulkBar from './set/BulkBar.svelte';
   import RowMenu from './set/RowMenu.svelte';
 
-  const COMPACT_ABOVE = 100;
   const tab = untrack(() => app.activeTab);
   const isFilter = (value: string | undefined): value is FormationFilter => FILTERS.some(filter => filter.id === value);
   let page = $state(tab?.page ?? 0);
@@ -44,8 +43,7 @@
   const pages = $derived(size === 'all' ? 1 : Math.max(1, Math.ceil(shown.length / size)));
   const cur = $derived(Math.min(page, pages - 1));
   const rows = $derived(size === 'all' ? shown : shown.slice(cur * size, cur * size + size));
-  const autoDensity = $derived.by(() => { void set.id; return untrack(() => items.length) > COMPACT_ABOVE ? 'compact' : 'comfortable'; });
-  const density = $derived(app.ws.density ?? autoDensity);
+  const density = $derived(app.ws.density ?? 'comfortable');
   const activeRow = $derived(rows.find(item => item.id === activeId) ?? rows[0]);
   const selected = $derived(app.selected);
   const allOn = $derived(rows.length > 0 && rows.every(item => item.on));
