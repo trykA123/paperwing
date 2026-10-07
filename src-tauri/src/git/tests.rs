@@ -212,7 +212,7 @@ async fn real_git_tracks_failure_clone_progress_timeout_and_clear() {
     let result = execute(Request { args: &["clone", "--no-local", "--progress", "--", source, clone], context: "runner-clone", expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text }, Some(callback)).await.unwrap();
     assert_eq!(activity_snapshot().iter().filter(|entry| entry.context == "runner-clone").count(), 1);
     assert_eq!(result.code, Some(0));
-    assert!(lines.lock().unwrap().iter().any(|(stream, text)| stream == "stderr" && text.contains("Receiving objects:")));
+    assert!(lines.lock().unwrap().iter().any(|(stream, text)| stream == "stderr" && text.contains("100%")));
     let status = buffered(&["-C", clone, "status", "--branch"], "runner-status", &[0]).await.unwrap();
     assert!(String::from_utf8_lossy(&status.stdout).contains("main"));
     let failure = buffered(&["-C", clone, "not-a-command"], "runner-failure", &[0]).await.unwrap();
