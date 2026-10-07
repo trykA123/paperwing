@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { readComparisonContent } from './content-bytes';
 import { withoutTemporaryActive } from './temporary-set';
 
 export type RefKind = 'branch' | 'tag' | 'commit';
@@ -48,7 +49,7 @@ export type PlatformInfo = { platform: 'windows' | 'linux' | 'unsupported'; sepa
 export type RootSupport = { root: string; valid: boolean; reason: string | null; identity: string | null;
   casePolicy: 'unknown' | 'sensitive' | 'insensitive'; capabilities: Capabilities };
 export type PathIdentity = { path: string; identity: string | null; exists: boolean; reason: string | null };
-export type CompareContent = { generation: number; side: 'left' | 'right'; kind: CompareEntryKind; bytes: number[]; binary: boolean };
+export type CompareContent = { generation: number; side: 'left' | 'right'; kind: CompareEntryKind; bytes: Uint8Array; binary: boolean };
 export type CompareCommit = { side: 'left' | 'right'; sha: string; subject: string; author: string; date: string };
 export type RecoveryRecord = { id: string; root: string; path: string; existed: boolean; stage: string; createdAt: number; warning?: string | null };
 export type EditFile = { ticket: string; bytes: number[]; exists: boolean };
@@ -257,8 +258,8 @@ export const api = {
   cancelComparison: (id: string) => invoke<boolean>('comparison_cancel', { id }),
   comparisonFiles: (id: string, generation: number, offset = 0, limit = 512) =>
     invoke<CompareFile[]>('comparison_files', { id, generation, offset, limit }),
-  comparisonContent: (id: string, generation: number, fileId: string, side: 'left' | 'right') =>
-    invoke<CompareContent>('comparison_content', { id, generation, fileId, side }),
+  comparisonContent: (id: string, generation: number, fileId: string, side: 'left' | 'right', kind: CompareEntryKind) =>
+    readComparisonContent({ id, generation, fileId, side, kind }),
   comparisonCommits: (id: string, generation: number, offset = 0, limit = 200) =>
     invoke<CompareCommit[]>('comparison_commits', { id, generation, offset, limit }),
   openInVscode: (path: string) => invoke<void>('open_in_vscode', { path }),

@@ -57,37 +57,37 @@ impl Temporary {
         .map_err(|error| Problem::new("unsafePath", &error))?;
         #[cfg(not(target_os = "linux"))]
         {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let path = parent.join(format!(
-            "skein-diff-{}-{nonce}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir(&path).map_err(|_| {
-            Problem::new(
-                "unavailable",
-                "Could not create private diff materialization",
-            )
-        })?;
-        Ok(Self(path))
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let path = parent.join(format!(
+                "skein-diff-{}-{nonce}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).map_err(|_| {
+                Problem::new(
+                    "unavailable",
+                    "Could not create private diff materialization",
+                )
+            })?;
+            Ok(Self(path))
         }
     }
     fn write(&mut self, name: &str, bytes: &[u8]) -> Result<PathBuf, Problem> {
         #[cfg(not(target_os = "linux"))]
         {
-        use std::io::Write;
-        let path = self.0.join(name);
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(|_| Problem::new("unavailable", "Could not materialize diff content"))?;
-        file.write_all(bytes)
-            .map_err(|_| Problem::new("unavailable", "Could not materialize diff content"))?;
-        Ok(path)
+            use std::io::Write;
+            let path = self.0.join(name);
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .map_err(|_| Problem::new("unavailable", "Could not materialize diff content"))?;
+            file.write_all(bytes)
+                .map_err(|_| Problem::new("unavailable", "Could not materialize diff content"))?;
+            Ok(path)
         }
     }
 }
@@ -99,46 +99,59 @@ impl Drop for Temporary {
     }
 }
 
-pub(super) async fn line_counts(left: &[u8], right: &[u8], job: &Job) -> Result<Option<Lines>, Problem> {
+pub(super) async fn line_counts(
+    left: &[u8],
+    right: &[u8],
+    job: &Job,
+) -> Result<Option<Lines>, Problem> {
     if binary(left) || binary(right) {
         return Ok(None);
     }
-    if job.rust_counts.is_some() {
-        let (left_owned, right_owned, count_job) = (left.to_vec(), right.to_vec(), job.clone());
-        if let Some(lines) = tokio::task::spawn_blocking(move || {
-            super::line_counts::count(&left_owned, &right_owned, &count_job)
-        })
-        .await
-        .map_err(|_| Problem::new("unavailable", "Line count task failed"))??
-        {
-            return Ok(Some(lines));
-        }
-    }
     #[cfg(target_os = "linux")]
-    let temporary = job.diff.as_ref().ok_or_else(|| Problem::new("unavailable", "Private diff storage is not configured"))?
-        .materialize(job.roots.clone(), job.cancel.clone(), [left, right]).await
+    let temporary = job
+        .diff
+        .as_ref()
+        .ok_or_else(|| Problem::new("unavailable", "Private diff storage is not configured"))?
+        .materialize(job.roots.clone(), job.cancel.clone(), [left, right])
+        .await
         .map_err(storage_problem)?;
+    #[cfg(target_os = "linux")]
+    let (root, left, right) = (
+        temporary.path().to_path_buf(),
+        temporary.path().join("left"),
+        temporary.path().join("right"),
+    );
     #[cfg(not(target_os = "linux"))]
     let mut temporary = Temporary::new(job)?;
     #[cfg(not(target_os = "linux"))]
-    let (left_path, right_path) = (
-        temporary.write("left", left)?, temporary.write("right", right)?,
+    let (root, left, right) = (
+        temporary.0.clone(),
+        temporary.write("left", left)?,
+        temporary.write("right", right)?,
     );
-    #[cfg(target_os = "linux")]
-    let root = temporary.path().to_path_buf();
-    #[cfg(not(target_os = "linux"))]
-    let root = temporary.0.clone();
-    #[cfg(target_os = "linux")]
-    let (left, right) = (
-        temporary.path().join("left"), temporary.path().join("right"));
-    #[cfg(not(target_os = "linux"))]
-    let (left, right) = (left_path, right_path);
-    let result = job.run(&root, &[
-        "-c", "core.attributesFile=", "diff", "--no-index", "--no-ext-diff", "--no-textconv",
-        "--no-renames", "--numstat", "-z", "--",
-        left.to_str().ok_or_else(|| Problem::new("unsafePath", "Unsupported diff path"))?,
-        right.to_str().ok_or_else(|| Problem::new("unsafePath", "Unsupported diff path"))?,
-    ], &[0, 1]).await;
+    let result = job
+        .run(
+            &root,
+            &[
+                "-c",
+                "core.attributesFile=",
+                "diff",
+                "--no-index",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--no-renames",
+                "--numstat",
+                "-z",
+                "--",
+                left.to_str()
+                    .ok_or_else(|| Problem::new("unsafePath", "Unsupported diff path"))?,
+                right
+                    .to_str()
+                    .ok_or_else(|| Problem::new("unsafePath", "Unsupported diff path"))?,
+            ],
+            &[0, 1],
+        )
+        .await;
     #[cfg(target_os = "linux")]
     let cleanup = temporary.finish().await.map_err(storage_problem);
     let result = result?;
@@ -148,7 +161,14 @@ pub(super) async fn line_counts(left: &[u8], right: &[u8], job: &Job) -> Result<
 }
 #[cfg(target_os = "linux")]
 fn storage_problem(error: crate::linux_diff::Error) -> Problem {
-    Problem::new(if error.cancelled { "cancelled" } else { "unavailable" }, error.message)
+    Problem::new(
+        if error.cancelled {
+            "cancelled"
+        } else {
+            "unavailable"
+        },
+        error.message,
+    )
 }
 fn numstat(result: git::Captured) -> Result<Option<Lines>, Problem> {
     if !matches!(result.code, Some(0 | 1)) {
@@ -222,34 +242,24 @@ pub(super) async fn diff_metadata(
             Some("Working-tree rename metadata unavailable; clean filters are not executed".into());
         return Ok(metadata);
     }
-    let estimated_raw = left
-        .files
-        .iter()
-        .chain(&right.files)
-        .filter(|(_, entry)| entry.kind != super::Kind::Directory)
-        .map(|(path, _)| path.len() + 160)
-        .sum::<usize>();
-    let tree = left.object_format == right.object_format && estimated_raw < git::CAPTURE_LIMIT;
     let mut args = vec![
+        "diff",
         "--no-ext-diff",
         "--no-textconv",
         "--ignore-submodules=all",
-        "-M",
+        "--find-renames",
         "-z",
     ];
-    if tree {
-        args.splice(0..0, ["diff-tree", "-r", "--no-commit-id"]);
+    if working_left {
+        args.extend(["-R", &right.commit]);
     } else {
-        args.insert(0, "diff");
+        args.push(&left.commit);
+        if !working_right {
+            args.push(&right.commit);
+        }
     }
-    let algorithm = left.diff_config.iter().rev()
-        .find_map(|value| value.strip_prefix("diff.algorithm="))
-        .map(|value| format!("--diff-algorithm={value}"));
-    if let Some(algorithm) = &algorithm { args.push(algorithm); }
-    args.splice(0..0, left.diff_config.iter().map(String::as_str));
-    args.extend([left.commit.as_str(), right.commit.as_str()]);
     let mut names = args.clone();
-    names.extend([if tree { "--raw" } else { "--name-status" }, "--"]);
+    names.extend(["--name-status", "--"]);
     let output = job.output(&left.context.root, &names).await?;
     let fields: Vec<_> = output
         .split(|byte| *byte == 0)
@@ -257,16 +267,7 @@ pub(super) async fn diff_metadata(
         .collect();
     let mut index = 0;
     while index < fields.len() {
-        let header = decode(fields[index])?;
-        let status = if tree {
-            let fields: Vec<_> = header.split_whitespace().collect();
-            if fields.len() != 5 || !fields[0].starts_with(':') {
-                return Err(Problem::new("gitError", "Invalid raw diff record"));
-            }
-            fields[4]
-        } else {
-            header.as_str()
-        };
+        let status = decode(fields[index])?;
         index += 1;
         let path = fields
             .get(index)

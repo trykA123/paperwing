@@ -230,6 +230,9 @@ async fn preserve_existing(app: &AppHandle, admission: &mut Admission) -> Result
         .ok_or("Missing clone name")?;
     let name = crate::linux_guard::storage::unique_name(&format!("{leaf}.bak-"))
         .map_err(|e| e.to_string())?;
+    crate::git::BatchReader::close_root(Path::new(&admission.job.dest)).await?;
+    let _exclusive = crate::git::filesystem_gate().write().await;
+    crate::git::BatchReader::close_root(Path::new(&admission.job.dest)).await?;
     admission.rebind(app)?;
     let preserved = admission.preserve(&directory, &name)?;
     emit(

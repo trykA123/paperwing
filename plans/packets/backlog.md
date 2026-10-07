@@ -10,6 +10,7 @@
 - Other hosting providers (Azure DevOps, GitLab, Bitbucket) as providers on 38, if needed at work.
 - Jenkins as a second `CiProvider` after 31.
 - Squash-merge detection for branch cleanup (39 states the gap).
+- Compare: revoke-and-restart batch readers after fetch instead of permanent close (packet 17 round 2 review)
 
 Moved out: branch cleanup and set search are in 39.
 

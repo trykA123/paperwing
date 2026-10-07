@@ -175,7 +175,7 @@
       const finishImport = benchmarkTimer('editor.import');
       const { monaco, language, applyEditorTheme } = await import('../lib/monaco');
       finishImport();
-      const contents = await Promise.all((['left', 'right'] as const).map(side => file![side] ? api.comparisonContent(sessionId, generation, fileId, side) : null));
+      const contents = await Promise.all((['left', 'right'] as const).map(side => file![side] ? api.comparisonContent(sessionId, generation, fileId, side, file![side]!.kind) : null));
       if (disposed || current !== revision) return;
       if (contents.some(content => content && (content.binary || content.kind !== 'file'))) { fallback = 'Binary, linked, or repository content is read-only. Use whole-file copy where supported.'; return; }
       formats = contents.map(content => decodeText(content?.bytes ?? []));
