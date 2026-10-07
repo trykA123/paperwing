@@ -54,7 +54,7 @@ The main capabilities are:
 | Repeatable workspaces | Named sets, duplicate checkouts, shared reference selection, custom destination paths, and parallel cloning. |
 | Local Git visibility | Current branch or commit, ahead/behind counts, changed-file counts, and a tree of branches, tags, remotes, stashes, and submodules. |
 | Folder comparison | Local working trees or read-only Git snapshots, file filters, content-based differences, and commit-history comparisons where available. |
-| File comparison | Monaco side-by-side or inline diffs, difference navigation, editable working-tree files, and directional block copying. |
+| File comparison | CodeMirror side-by-side or inline diffs, difference navigation, editable working-tree files, and directional block copying. Files over 5 MB open in a read-only viewer. |
 | Reviewed changes | New branches, staged/unstaged file previews, commit messages, and a separate Push action. |
 | Recoverable copies | Confirmed file/folder copy previews, per-file outcomes, saved-operation undo, and persisted recovery records. |
 | Desktop workflow | Tabs, a command palette, Git Activity, resizable panels, light/dark/system themes, bundled fonts, and VS Code integration. |
@@ -177,10 +177,11 @@ The details panel provides whitespace, line-ending, and exclusion rules.
 Ordinary comparisons start with exclusions for `*.orig`, `build/`, and `.vs/`.
 Commit-history counts and lists appear when the repositories provide usable history.
 
-Double-click a file to open its Monaco diff. Choose side-by-side or inline view,
+Double-click a file to open its diff. Choose side-by-side or inline view,
 hide unchanged regions, and navigate differences. Git snapshots remain read-only.
 Supported working-tree panes allow editing and saving, including either side of a local-folder comparison.
 Unsaved buffers prompt for Save, Discard, or Keep editing when an operation needs to close them.
+Files with mixed line endings stay read-only, and either side over 5 MB opens in a read-only large-file view. Saving keeps each file's BOM and line endings.
 
 ### Copy left and copy right
 
@@ -305,7 +306,7 @@ repository listings, Git operations, comparison snapshots, and authorized filesy
 Repository discovery uses the GitHub API or GitHub Enterprise API. Manual URLs bypass API listing.
 Git operations use your installed `git` and its SSH or HTTPS authentication setup.
 The source's API token does not replace your Git credentials.
-Monaco supplies the text editor and diff views; Git objects supply read-only snapshot content.
+CodeMirror supplies the text editor and diff views, with a read-only renderer for large files; Git objects supply read-only snapshot content.
 The platform file service supplies a recovery journal outside your repositories.
 
 The implementation is organized around these areas:
@@ -318,7 +319,7 @@ The implementation is organized around these areas:
 | Git execution, synchronization, status, and trees | [git.rs](src-tauri/src/git.rs), [clone.rs](src-tauri/src/clone.rs), [local.rs](src-tauri/src/local.rs), [Sidebar.svelte](src/components/Sidebar.svelte) |
 | Git commands, activity, and shortcuts | [commands.ts](src/lib/commands.ts), [ActivityPanel.svelte](src/components/panel/ActivityPanel.svelte) |
 | Folder and whole-set comparison | [compare.rs](src-tauri/src/compare.rs), [compare.svelte.ts](src/lib/compare.svelte.ts), [FolderCompare.svelte](src/components/FolderCompare.svelte), [SetCompare.svelte](src/components/SetCompare.svelte) |
-| Text editing and diff rules | [FileCompare.svelte](src/components/FileCompare.svelte), [CompareDetails.svelte](src/components/CompareDetails.svelte), [editor.ts](src/lib/editor.ts), [monaco.ts](src/lib/monaco.ts) |
+| Text editing and diff rules | [FileCompare.svelte](src/components/FileCompare.svelte), [CompareDetails.svelte](src/components/CompareDetails.svelte), [editor.ts](src/lib/editor.ts), [editors/](src/lib/editors), [text-format.ts](src/lib/text-format.ts), [languages.ts](src/lib/languages.ts) |
 | Branch creation and staged commits | [BranchDialog.svelte](src/components/BranchDialog.svelte), [CommitDialog.svelte](src/components/CommitDialog.svelte), [commit.rs](src-tauri/src/commit.rs) |
 | Copy, recovery, and path safety | [CopyOperations.svelte](src/components/CopyOperations.svelte), [RecoveryPanel.svelte](src/components/RecoveryPanel.svelte), [files.rs](src-tauri/src/files.rs), [file_guard.rs](src-tauri/src/file_guard.rs), [paths.rs](src-tauri/src/paths.rs) |
 
