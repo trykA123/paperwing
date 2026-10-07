@@ -13,7 +13,7 @@ pub(super) struct CopyPlan {
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CopyPreview { id: String, files: Vec<CopyPreviewFile>, retained: usize }
+pub struct CopyPreview { id: String, files: Vec<super::CopyPreviewFile>, retained: usize }
 #[derive(Serialize)]
 pub struct CopyPreviewFile { path: String, action: String, bytes: usize }
 #[derive(Serialize)]
