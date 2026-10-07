@@ -575,9 +575,7 @@ async fn sweep_stale_temp_dirs_removes_directories_older_than_one_hour() {
     std::fs::create_dir_all(&other_dir).unwrap();
 
     let times = std::fs::FileTimes::new().set_modified(two_hours_ago);
-    if let Ok(file) = std::fs::File::open(&stale_dir) {
-        let _ = file.set_times(times);
-    }
+    open_dir_for_times(&stale_dir).set_times(times).unwrap();
 
     crate::commit::sweep_stale_temp_dirs(&base);
 
@@ -586,4 +584,19 @@ async fn sweep_stale_temp_dirs_removes_directories_older_than_one_hour() {
     assert!(other_dir.exists(), "Unrelated directory should be retained");
 
     let _ = std::fs::remove_dir_all(&base);
+}
+
+fn open_dir_for_times(dir: &std::path::Path) -> std::fs::File {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_WRITE_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS (needed to open a directory)
+        std::fs::OpenOptions::new()
+            .access_mode(0x100)
+            .custom_flags(0x0200_0000)
+            .open(dir)
+            .unwrap()
+    }
+    #[cfg(not(windows))]
+    std::fs::File::open(dir).unwrap()
 }

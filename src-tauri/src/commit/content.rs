@@ -263,23 +263,10 @@ pub(crate) fn sweep_stale_temp_dirs(temp_root: &Path) {
 
         let is_stale = entry
             .metadata()
+            .and_then(|meta| meta.modified())
             .ok()
-            .and_then(|meta| meta.modified().ok())
             .and_then(|mtime| now.duration_since(mtime).ok())
-            .map(|elapsed| elapsed >= cutoff)
-            .unwrap_or_else(|| {
-                let parts: Vec<&str> = name_str.split('-').collect();
-                if parts.len() >= 4 {
-                    if let Ok(nanos) = parts[2].parse::<u128>() {
-                        let dir_time =
-                            std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos as u64);
-                        if let Ok(elapsed) = now.duration_since(dir_time) {
-                            return elapsed >= cutoff;
-                        }
-                    }
-                }
-                false
-            });
+            .is_some_and(|elapsed| elapsed >= cutoff);
 
         if is_stale {
             let _ = std::fs::remove_dir_all(entry.path());

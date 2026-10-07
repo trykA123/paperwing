@@ -261,6 +261,17 @@ impl<'a> Diff<'a> {
         let raw_working_lines: Vec<&[u8]> =
             working.split_inclusive(|byte| *byte == b'\n').collect();
         let smudged_lines: Vec<&[u8]> = smudged.split_inclusive(|byte| *byte == b'\n').collect();
+        if smudged_lines.len()
+            != self
+                .edits
+                .iter()
+                .filter(|edit| edit.kind != Kind::Add)
+                .count()
+        {
+            return Err(
+                "The checked-out index file has a different line count; refresh and retry".into(),
+            );
+        }
 
         let mut rebuilt = Vec::with_capacity(working.len());
         let mut working_line_idx = 0;
