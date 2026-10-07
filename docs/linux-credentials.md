@@ -7,7 +7,7 @@ entropy and runtime repairs. Native Windows and owner-observed acceptance remain
 ## Backend and readiness
 
 Linux uses the persistent desktop Secret Service with RustCrypto. Windows retains keyring
-3.6.3, Windows Credential Manager and the existing `paperwing`/legacy `flock` namespaces.
+3.6.3 and Windows Credential Manager. Both platforms use only the `skein` namespace.
 There is no plaintext fallback, token cache, homemade encryption or broad migration.
 
 ```toml
@@ -68,9 +68,8 @@ arguments and successful payloads remain compatible. Inaccessible storage reject
 `has_token` rather than reporting an absent token.
 
 Linux retains keyring attributes `service`, `username` and `target=default`. Test-profile
-builds use only `paperwing-testing-fixtures-v1` and validated fixture UUIDs. Windows legacy
-fallback occurs only when the current entry is absent. Provider errors do not trigger a
-fallback or expose raw SDK messages.
+builds use only `skein-testing-fixtures-v1` and validated fixture UUIDs. Older credential
+namespaces are not read or migrated. Provider errors do not expose raw SDK messages.
 
 Token mutation advances a source revision before dispatch, clears that source's backend
 cache and emits `credential-changed`. Source kind, host, organizations or URLs also advance
@@ -117,7 +116,7 @@ The original `10/n4/credential-acceptance.json` and fresh combined-source
 - Settings restoration and generated-secret absence across settings, caches, reports and
   encrypted wallet bytes. Only the generated test identity is deleted.
 
-Reports and sacrificial profiles remain under ignored `.skillify/evidence/paperwing/10/`.
+Reports and sacrificial profiles remain under ignored `.skillify/evidence/skein/10/`.
 The offscreen wallet experiment failed to expose an accessible dialog; native Wayland
 succeeded. Neither mocked IPC nor this private test establishes a configured production
 wallet or native Windows acceptance.

@@ -95,7 +95,7 @@ impl Fixture {
     #[cfg(target_os = "linux")]
     fn diff_data(&self) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
-            .join(".skillify/evidence/paperwing/14/quota-repair/compare-native")
+            .join(".skillify/evidence/skein/14/quota-repair/compare-native")
             .join(crate::test_support::tmp_root().file_name().unwrap()).join(self.0.file_name().unwrap())
     }
     fn job(&self) -> Job {

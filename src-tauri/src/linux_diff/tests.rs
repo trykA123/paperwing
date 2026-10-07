@@ -12,7 +12,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../.skillify/evidence/paperwing/14/resume/native");
+            .join("../.skillify/evidence/skein/14/resume/native");
         std::fs::create_dir_all(&parent).unwrap();
         let path = parent.join(format!(
             "fixture-{}-{}",
@@ -22,8 +22,8 @@ impl Fixture {
         std::fs::create_dir(&path).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
         std::fs::write(
-            path.join(".paperwing-diff-fixture"),
-            b"paperwing-diff-fixture-v1\n",
+            path.join(".skein-diff-fixture"),
+            b"skein-diff-fixture-v1\n",
         )
         .unwrap();
         for name in [
@@ -195,7 +195,7 @@ fn whole_and_nested_bind_aliases_refuse_storage_before_creation() {
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
 assert root.is_absolute() and root.resolve()==root
-assert (root/'.paperwing-diff-fixture').read_bytes()==b'paperwing-diff-fixture-v1\n'
+assert (root/'.skein-diff-fixture').read_bytes()==b'skein-diff-fixture-v1\n'
 assert os.readlink('/proc/self/ns/mnt')!=original
 for source in ['left','left/nested']:
  subprocess.run(['mount','--bind',str(root/source),str(root/'alias')],check=True,timeout=10)
@@ -229,8 +229,8 @@ fn native_child() {
     assert!(path.is_absolute());
     assert_eq!(path.canonicalize().unwrap(), path);
     assert_eq!(
-        std::fs::read(path.join(".paperwing-diff-fixture")).unwrap(),
-        b"paperwing-diff-fixture-v1\n"
+        std::fs::read(path.join(".skein-diff-fixture")).unwrap(),
+        b"skein-diff-fixture-v1\n"
     );
     let fixture = Fixture { path, _budget: crate::test_support::Shared::new() };
     let before = fixture.snapshot();
@@ -1324,7 +1324,7 @@ fn foreign_file_ownership_refuses_cleanup_and_admission_in_an_owned_user_namespa
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2]
 assert root.is_absolute() and root.resolve()==root
-assert (root/'.paperwing-diff-fixture').read_bytes()==b'paperwing-diff-fixture-v1\n'
+assert (root/'.skein-diff-fixture').read_bytes()==b'skein-diff-fixture-v1\n'
 assert os.geteuid()==0
 env=os.environ.copy();env['SKEIN_DIFF_FIXTURE']=str(root);env['SKEIN_DIFF_MODE']='foreign-owner'
 subprocess.run([exe,'--exact','linux_diff::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,check=True,timeout=20)

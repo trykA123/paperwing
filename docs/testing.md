@@ -202,7 +202,7 @@ cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib linux_d
 cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib compare -- --test-threads=1
 ```
 
-Fixtures live under `.skillify/evidence/paperwing/14/resume/native`, carry an ownership
+Fixtures live under `.skillify/evidence/skein/14/resume/native`, carry an ownership
 marker, prove restoration before mutation and retain before/after source and sentinel
 checks. Tests cover guarded missing suffixes and create races, direct/external metadata
 and bind overlap, durable quota/restart/partial accounting, malformed artifacts, two

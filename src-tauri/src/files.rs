@@ -255,11 +255,11 @@ impl Journal {
         }
         let attempt = (|| -> Result<(), String> {
         self.checkpoint("backedUp", &record.id)?;
-        let keeper_path = parent.path.join(format!(".paperwing-{}.lock", record.id));
+        let keeper_path = parent.path.join(format!(".skein-{}.lock", record.id));
         let keeper = OpenOptions::new().read(true).write(true).create_new(true).access_mode(0xc001_0000).share_mode(FILE_SHARE_READ)
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | 0x04000000).open(&keeper_path).map_err(io)?;
         parent.permit_entry_update()?;
-        let staged = parent.path.join(format!(".paperwing-{}.tmp", record.id));
+        let staged = parent.path.join(format!(".skein-{}.tmp", record.id));
         let mut staged_file = transaction.open(&staged, true)?.ok_or("Missing staged file")?;
         if let Some(old_file) = &old_file { preserve_security(old_file, &staged_file)?; preserve_attributes(old_file, &staged_file)?; }
         staged_file.write_all(bytes).map_err(io)?; staged_file.sync_all().map_err(io)?;
@@ -449,7 +449,7 @@ mod tests {
             assert_eq!(fs::read(root.join("file")).unwrap(), if phase == "committed" { &b"after"[..] } else { &b"before"[..] });
             let record = journal.list().unwrap().pop().unwrap();
             assert_eq!(fs::read(journal.record_dir(&record.id).unwrap().join("before.bytes")).unwrap(), b"before");
-            assert!(!fs::read_dir(&root).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().starts_with(".paperwing-")));
+            assert!(!fs::read_dir(&root).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().starts_with(".skein-")));
             journal.fault = None;
             if phase == "committed" { journal.undo(&record.id).unwrap(); assert_eq!(fs::read(root.join("file")).unwrap(), b"before"); }
             else { journal.replace(&root, "file", Some(b"before"), b"retry").unwrap(); }
@@ -527,7 +527,7 @@ mod tests {
         let mut journal = Journal::open(&backup).unwrap();
         let mut record = journal.replace(&root, "file.txt", Some(b"original"), b"edited").unwrap();
         let directory = journal.record_dir(&record.id).unwrap();
-        fs::write(root.join(format!(".paperwing-{}.previous", record.id)), b"original").unwrap();
+        fs::write(root.join(format!(".skein-{}.previous", record.id)), b"original").unwrap();
         record.stage = "replacing".into(); journal.store(&directory, &record).unwrap();
         drop(journal); let mut journal = Journal::open(&backup).unwrap();
         assert_eq!(journal.undo(&record.id).unwrap().stage, "undone");

@@ -1,4 +1,4 @@
-# Skein handoff from the main session (paperwing-53), started 2026-10-06 22:20 Europe/Bucharest
+# Skein handoff from the main session (skein-53), started 2026-10-06 22:20 Europe/Bucharest
 
 To the alt session: the main session took over your "Next steps" from `handoff-1954.md` while you were offline. Read this before acting; claims are also in `parallel-claims.md`.
 
@@ -8,7 +8,7 @@ To the alt session: the main session took over your "Next steps" from `handoff-1
 - New packet 41: anonymous diagnostics export for Windows test builds (`11cb3c8`, `048e16a`). Backend running as Codex `crew/api-builder-1ci2m`. Owner asked for it today.
 
 ## Still yours to pick if you come online
-- Nothing claimed yet beyond the above. Message `paperwing-53` before taking anything from step 3 onward.
+- Nothing claimed yet beyond the above. Message `skein-53` before taking anything from step 3 onward.
 
 ## Log
 - 22:20 handoff created.
@@ -23,13 +23,13 @@ To the alt session: the main session took over your "Next steps" from `handoff-1
 - 23:55 packet 39 built: ui/39-cleanup-search b656981 (check 0, bun 223, build, css-order ok; browser-checked with a Node mock of the backend). Reviewer running. Follow-ups: backend search job failure emits no `search-done` (view can hang on "Searching") — small backend fix; highlight matched text in results; search view cramped at 1100 px with the right panel open; Vite 403 on Geist fonts via symlinked node_modules in dev (server.fs.allow).
 - 00:05 architecture audit saved to plans/2026-10-06/audits/architecture.md. Packet 42 (backend hardening: token bound to host, durable settings with .bak, async commands, locale-independent errors, store start race, shared oid validator) written b404c44 and running as sol crew/api-builder-385q5. Post-17 audit items noted in packet 17.
 - 00:15 packet 39 review: approve-with-nits (remote delete used local base; dispose race; harness ignored caps; aria-live flood; double-click; stale banners). Fixes plus polish (match highlight, full-width search at 1100, Vite fs.allow for fonts) sent back to the same ui-builder.
-- 00:20 packet 42 first run stopped on a wrong path in the packet (fixed c5dca17); rerun as sol crew/api-builder-3b438. Empty worktree .crew/paperwing-api-builder-385q5 can be removed.
+- 00:20 packet 42 first run stopped on a wrong path in the packet (fixed c5dca17); rerun as sol crew/api-builder-3b438. Empty worktree .crew/skein-api-builder-385q5 can be removed.
 - 00:30 Owner request: organise the app around modules in the rail (GitHub, Actions, Jira, Search, ...) with a main area designed per module. Designer is building 3–4 shell directions behind a picker (.alt/shell-design/index.html); main publishes it as an Artifact for the owner's pick. Until the pick: no new rail sections, no shell restructuring; 03b and the 39 follow-ups (file-name search, multi-ref search, history search) wait for it.
 - 00:40 UX audit saved (plans/2026-10-06/audits/ux.md, 25 items). Shell items UX-01/13/24/25 sent to the shell designer. Polish batch A (UX-02,03,05,06,07,08-activity,14,20,21,22) running: ui-builder in .alt/ui-polish-a, branch ui/polish-a. Batch B (UX-04,09,10,11,15,19) after 39 merges; Settings items (UX-08 appearance,16,23) with packet 41 UI; UX-12,17,18 after the shell pick.
 - 00:50 Resumed after usage reset. crew 24d6y finish notice was stale: its fixes are 54d9d74, already on main (worktree clean, removable). Still running: Codex 1ci2m (41), 368uj (17 fixes), 3b438 (42); Claude ui-39 fixes, ui-polish-a, shell designer.
-- 00:55 Session paperwing-c9: Claude agents from paperwing-53 died at the limit. Relaunched: ui-builder for 39 fixes (keeps partial diff in .alt/ui-39), ui-builder for polish batch A (.alt/ui-polish-a; avoids P39 files, Settings), designer for module shell (.alt/shell-design). Codex 1ci2m, 368uj, 3b438 still running.
+- 00:55 Session skein-c9: Claude agents from skein-53 died at the limit. Relaunched: ui-builder for 39 fixes (keeps partial diff in .alt/ui-39), ui-builder for polish batch A (.alt/ui-polish-a; avoids P39 files, Settings), designer for module shell (.alt/shell-design). Codex 1ci2m, 368uj, 3b438 still running.
 - 23:00 Duplicates stopped (see parallel-claims 22:57). Packet 41 belongs to 01V6jn (it committed 7af8df2); alt posted review: leak-check false refusals on common path words, inexact rounding.
-- 01:00 alt session (paperwing-c9) is active and talks via parallel-claims.md. It reviewed packet 41 backend (changes needed: leak check false positives on common Windows paths, inexact rounding) -> fixes as sol crew/api-builder-3whm7. It ran duplicate builders briefly in ui-39 and ui-polish-a (stopped).
+- 01:00 alt session (skein-c9) is active and talks via parallel-claims.md. It reviewed packet 41 backend (changes needed: leak check false positives on common Windows paths, inexact rounding) -> fixes as sol crew/api-builder-3whm7. It ran duplicate builders briefly in ui-39 and ui-polish-a (stopped).
 - 01:15 packet 39 merged to main ae99ff6 (not pushed); packet file removed, search follow-ups in backlog.
 - 01:15 SHELL DIRECTIONS for the owner: https://claude.ai/artifact/XcvJfgqVBQps3egAJ4waZG (source .alt/shell-design/index.html). A list/detail, B contextual sidebar + mixed tabs, C title-bar module tabs + universal inspector, D labelled grouped rail + global set scope + drill-down. Designer recommends D's rail and scope with A's list/detail inside hosted modules; B as fallback. WAITING FOR OWNER PICK.
 - 01:30 polish batch A committed ui/polish-a 417c741 (UX-02,03,05,06,07,08-activity,14,20,21,22). Real frontend bug fixed: RefPicker/commits refetch loop when a repo had no refs entry (endless refetch -> freeze/spinner). Reviewer running before merge.
@@ -48,7 +48,7 @@ To the alt session: the main session took over your "Next steps" from `handoff-1
 - 05:05 packet 28 merged 57cd8d9 (317 bun tests). Left: rail badge after shell pick; backend target_repo lookup for forks.
 - 06:11 owner OK'd Codex sol now: packet 42 finish crew/api-builder-j6sse, packet 17 round 2 crew/api-builder-j6wme, packet 33 backend (lease + GitHub release) crew/api-builder-j73bl. 06:20 cron cancelled.
 - 06:15 owner rejected shell round 1 (too compact; keep current repo look). Round 2 assigned to alt session (designer on Opus); brief plans/2026-10-07/shell-redesign-brief.md.
-- 06:23 alt (paperwing-c9) claimed shell redesign round 2 (Opus designer).
+- 06:23 alt (skein-c9) claimed shell redesign round 2 (Opus designer).
 - 06:34 packet 42 done + merged with main on crew/api-builder-j6sse 5fad9ce (cargo 514, bun 326, clippy 25<29; removed dead English stderr matcher); reviewer running. Packet 33 backend approve-with-nits; nits (target_commitish, remote param, error choice, control-flow test, retry) on Codex crew/api-builder-k0exg, base 0c38db7.
 - 06:49 packet 33 merged to main (cargo 516, bun 341).
 - 07:20 alt took over merge+push (owner). 42: k5ts0 stopped on stash retry (index conflict also exits 128); committed 75b833d on its branch; decided: precheck untracked collisions via stash^3 plumbing (no attempt), retry on any exit when snapshots unchanged; sol run lmu2p. 17: j6wme committed 9f1748e; gates outside sandbox: svelte-check 0, build ok, css-order ok (esbuild errors were sandbox-only); reviewer running. Owner picked shell A; rail grouping variants (flat / provider groups with sidebar submenu / flyout) being drawn.

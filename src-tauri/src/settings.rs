@@ -4,9 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-#[cfg(not(feature = "test-profile"))]
-const LEGACY_IDENTIFIER: &str = "dev.flock.app";
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Source {
@@ -178,14 +175,7 @@ fn initialize_with(
 }
 
 fn prepare_initial_settings<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Settings, String> {
-    let file = prepare_settings(app)?;
-    #[cfg(not(feature = "test-profile"))]
-    if !file.exists() && !file.with_extension("json.bak").exists() {
-        if let Some(legacy) = file.parent().and_then(|dir| dir.parent()).map(|parent| parent.join(LEGACY_IDENTIFIER).join("settings.json")) {
-            if legacy.is_file() { let _ = std::fs::copy(&legacy, &file); }
-        }
-    }
-    let _ = file;
+    prepare_settings(app)?;
     load_persisted(app).map(|loaded| loaded.settings)
 }
 

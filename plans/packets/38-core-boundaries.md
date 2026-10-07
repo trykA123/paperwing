@@ -22,7 +22,7 @@ Source: owner's architecture notes "Încăpățânatul × Arhitecta" (2026-10-06
 - **The registry owns lifecycle.** A provider is constructed only when enabled. The enabled flag lives in SQLite (store from 34). Disabling drops it: its tasks stop and its cache rows are removed.
 - **Event bus is in-process first**: a `tokio::sync::broadcast` of one serializable `CoreEvent` enum (`RepoOpened`, `RepoCloned`, `BranchChanged`, `PullRequestUpdated`, `CiStarted`, `CiCompleted`, `IssueUpdated`, `ProviderHealthChanged`). The Tauri layer forwards events to the UI. The enum must be serde-serializable, so moving a provider out of process later needs no redesign.
 - **Out-of-process workers only when a real integration needs one.** Not in this packet.
-- Keep the keyring service name `paperwing` and the app identifier `dev.paperwing.app` (user data compatibility).
+- Use only the keyring service name `skein` and the app identifier `dev.skein.app`; do not import older namespaces.
 
 ## Scope
 - Do: workspace with `skein-core`; thin Tauri command layer; registry; event bus; GitHub moved behind provider traits; an enable/disable setting per provider.

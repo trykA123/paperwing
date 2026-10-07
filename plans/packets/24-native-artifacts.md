@@ -9,7 +9,7 @@ Role: orchestrator plus deployer; the owner observes the Windows walkthrough
 Launch the fresh Windows and Linux artifacts outside dev mode, prove the key workflows, and document build, storage, credentials and support honestly. No release, tag, version bump or upload happens here.
 
 ## Already done
-- `src-tauri/tauri.conf.json`: product `Skein`, binary `skein`, version 0.2.0, identifier `dev.paperwing.app`, NSIS `installMode: currentUser` with `windows/hooks.nsh`.
+- `src-tauri/tauri.conf.json`: product `Skein`, binary `skein`, version 0.2.0, identifier `dev.skein.app`, NSIS `installMode: currentUser` with `windows/hooks.nsh`.
 - `src-tauri/windows/hooks.nsh`: per-user HKCU "Open with Skein" for `Directory`, `Directory\Background` and `Drive`; removed on uninstall.
 - `src-tauri/tauri.windows.conf.json`: custom title bar (`decorations: false`).
 - `src-tauri/tauri.linux.conf.json`: deb and AppImage, desktop template `linux/skein.desktop.hbs`, KDE service menu `linux/skein-open.desktop`.

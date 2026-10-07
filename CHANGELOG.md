@@ -8,7 +8,7 @@
 - Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
 - Bind saved tokens to their hosts, recover settings from durable backups, move disk IPC work off the main thread, remove locale-dependent Git decisions, wait up to five seconds for the local store, and share full object-id validation. Stop writing the unused commit cache.
 
-- Rename the remaining PaperWing names in code and docs to Skein: the Cargo package (`skein`, `skein_lib`), the HTTP user agent, and test variables (`SKEIN_*`, with `PAPERWING_*` still read as a fallback). Identifiers stored on disk keep the old name; see `docs/naming.md`.
+- Rename the project to Skein everywhere.
 - Add a Rust-owned SQLite local store (`skein-store.sqlite3`) for repository listings and commit histories. It opens in the background, so startup never waits for it, and a corrupt file is moved aside while other open errors only disable the store. Old `repos-*.json` caches are deleted. Packet 34 gaps: commit recall is unused and the ref epoch is constant, pruning goes by oldest fetch time rather than LRU, vacuum runs only over the size cap, and the schema version uses `user_version`.
 - Add the Formation layout: a dense repository table with one next action per row (Clone, Commit, Switch, Pull, Push, or a Diverged marker that opens History), inline sync rails, filter chips with live counts, and a floating bulk bar. Add an activity rail (Sets, Compare, Recovery, Activity, Settings; Ctrl+1 to Ctrl+5), a repository details panel, and temporary sets for folders opened with Skein that you can save or discard. Fetch, Pull and Push show one loading notice with Retry. Folders opened in place are never cloned, pulled, switched, compared or trashed by Skein.
 - Fix pull request reviews, status summaries, fork targets and publication checks; support separate Enterprise hosts with scoped tokens and typed rate-limit errors.
@@ -17,8 +17,8 @@
 - Add guarded Linux clone/reclone and desktop Trash with recoverable moves; failed recycling keeps the set until explicit configuration-only removal. Windows behavior is unchanged.
 - Add a repository history drawer: open it from the command palette or the details panel to see working tree, local commits, origin commits and the shared base as two rails, with hover and keyboard details. It reads local refs only and never fetches.
 - Redesign notifications and inline alerts: five notification types with status-coloured icon and edge, a Rails loop for loading, and Retry and Show log actions on errors. Errors and loading notices stay until dismissed.
-- Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon. The bundle identifier, settings folder and credential service names are unchanged.
-- On Windows the installer is now named Skein. If PaperWing 0.2.0 still appears in Installed apps, uninstall it first. Settings and data are kept because the bundle identifier is unchanged.
+- Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon.
+- On Windows the installer is now named Skein. Uninstall earlier builds before installing it.
 - Scope metadata by source, credential and ref epochs; share foreground requests and discover authenticated personal private repositories.
 - Enable probe-gated Linux edit/save, directional copies and conditional undo using bounded tickets and the durable Linux journal.
 - Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
@@ -42,11 +42,11 @@
 - Join failed Git stream tasks and keep Activity registration through Linux output cleanup.
 - Preserve completed Linux Git outcomes and retain Activity and permits through failed setup cleanup.
 
-## v0.2.0 - PaperWing preview (2026-10-02)
+## v0.2.0 - Skein preview (2026-10-02)
 
 ### Highlights
 
-- PaperWing application, executable, installer, repository name, and folded-paper icon.
+- Skein application, executable, installer, repository name, and folded-paper icon.
 - Tabbed workspace, command palette, repository trees, and Git Activity with bounded output.
 - Folder comparison between local working trees and read-only Git references without checkout.
 - Monaco file comparison, editable working-tree panes, difference navigation, and directional copying.
@@ -67,8 +67,8 @@
 
 ### Downloads
 
-- `PaperWing_0.2.0_x64-setup.exe`: Windows x64 installer.
-- `PaperWing_0.2.0_x64_portable.exe`: Windows x64 executable; requires Git and WebView2.
+- `Skein_0.2.0_x64-setup.exe`: Windows x64 installer.
+- `Skein_0.2.0_x64_portable.exe`: Windows x64 executable; requires Git and WebView2.
 - `SHA256SUMS.txt`: SHA256 checksums for both binaries.
 
 ## v0.1.0 — first flight 🪿
@@ -107,7 +107,7 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
 - Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
 - Honor configured tree diff algorithms, cache applicable count attributes, share endpoint readers, and revoke readers before fetch/pull; drain comparison sessions before page reload cleanup.
-- Rename the remaining PaperWing names in code and docs to Skein: the Cargo package (`skein`, `skein_lib`), the HTTP user agent, and test variables (`SKEIN_*`, with `PAPERWING_*` still read as a fallback). Identifiers stored on disk keep the old name; see `docs/naming.md`.
+- Rename the project to Skein everywhere.
 - Add a Rust-owned SQLite local store (`skein-store.sqlite3`) for repository listings and commit histories. It opens in the background, so startup never waits for it, and a corrupt file is moved aside while other open errors only disable the store. Old `repos-*.json` caches are deleted. Packet 34 gaps: commit recall is unused and the ref epoch is constant, pruning goes by oldest fetch time rather than LRU, vacuum runs only over the size cap, and the schema version uses `user_version`.
 - Batch comparison blob reads per endpoint, hash raw working-tree bytes without filters, and transport file contents as binary IPC; preserve Git count fallbacks and comparison results.
 - Add the Formation layout: a dense repository table with one next action per row (Clone, Commit, Switch, Pull, Push, or a Diverged marker that opens History), inline sync rails, filter chips with live counts, and a floating bulk bar. Add an activity rail (Sets, Compare, Recovery, Activity, Settings; Ctrl+1 to Ctrl+5), a repository details panel, and temporary sets for folders opened with Skein that you can save or discard. Fetch, Pull and Push show one loading notice with Retry. Folders opened in place are never cloned, pulled, switched, compared or trashed by Skein.
@@ -117,8 +117,8 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 - Add guarded Linux clone/reclone and desktop Trash with recoverable moves; failed recycling keeps the set until explicit configuration-only removal. Windows behavior is unchanged.
 - Add a repository history drawer: open it from the command palette or the details panel to see working tree, local commits, origin commits and the shared base as two rails, with hover and keyboard details. It reads local refs only and never fetches.
 - Redesign notifications and inline alerts: five notification types with status-coloured icon and edge, a Rails loop for loading, and Retry and Show log actions on errors. Errors and loading notices stay until dismissed.
-- Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon. The bundle identifier, settings folder and credential service names are unchanged.
-- On Windows the installer is now named Skein. If PaperWing 0.2.0 still appears in Installed apps, uninstall it first. Settings and data are kept because the bundle identifier is unchanged.
+- Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon.
+- On Windows the installer is now named Skein. Uninstall earlier builds before installing it.
 - Scope metadata by source, credential and ref epochs; share foreground requests and discover authenticated personal private repositories.
 - Enable probe-gated Linux edit/save, directional copies and conditional undo using bounded tickets and the durable Linux journal.
 - Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
@@ -142,11 +142,11 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 - Join failed Git stream tasks and keep Activity registration through Linux output cleanup.
 - Preserve completed Linux Git outcomes and retain Activity and permits through failed setup cleanup.
 
-## v0.2.0 - PaperWing preview (2026-10-02)
+## v0.2.0 - Skein preview (2026-10-02)
 
 ### Highlights
 
-- PaperWing application, executable, installer, repository name, and folded-paper icon.
+- Skein application, executable, installer, repository name, and folded-paper icon.
 - Tabbed workspace, command palette, repository trees, and Git Activity with bounded output.
 - Folder comparison between local working trees and read-only Git references without checkout.
 - Monaco file comparison, editable working-tree panes, difference navigation, and directional copying.
@@ -167,8 +167,8 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 
 ### Downloads
 
-- `PaperWing_0.2.0_x64-setup.exe`: Windows x64 installer.
-- `PaperWing_0.2.0_x64_portable.exe`: Windows x64 executable; requires Git and WebView2.
+- `Skein_0.2.0_x64-setup.exe`: Windows x64 installer.
+- `Skein_0.2.0_x64_portable.exe`: Windows x64 executable; requires Git and WebView2.
 - `SHA256SUMS.txt`: SHA256 checksums for both binaries.
 
 ## v0.1.0 — first flight 🪿
@@ -207,7 +207,7 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 - Remote branch and tag deletion removed; deletes are local only. The cleanup dialog lists local branches only, the tag delete dialog deletes the local tag only, and the `delete_remote_branches` and `delete_remote_tag` commands are no longer registered.
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
 - Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
-- Rename the remaining PaperWing names in code and docs to Skein: the Cargo package (`skein`, `skein_lib`), the HTTP user agent, and test variables (`SKEIN_*`, with `PAPERWING_*` still read as a fallback). Identifiers stored on disk keep the old name; see `docs/naming.md`.
+- Rename the project to Skein everywhere.
 - Add a Rust-owned SQLite local store (`skein-store.sqlite3`) for repository listings and commit histories. It opens in the background, so startup never waits for it, and a corrupt file is moved aside while other open errors only disable the store. Old `repos-*.json` caches are deleted. Packet 34 gaps: commit recall is unused and the ref epoch is constant, pruning goes by oldest fetch time rather than LRU, vacuum runs only over the size cap, and the schema version uses `user_version`.
 - Add the Formation layout: a dense repository table with one next action per row (Clone, Commit, Switch, Pull, Push, or a Diverged marker that opens History), inline sync rails, filter chips with live counts, and a floating bulk bar. Add an activity rail (Sets, Compare, Recovery, Activity, Settings; Ctrl+1 to Ctrl+5), a repository details panel, and temporary sets for folders opened with Skein that you can save or discard. Fetch, Pull and Push show one loading notice with Retry. Folders opened in place are never cloned, pulled, switched, compared or trashed by Skein.
 - Fix pull request reviews, status summaries, fork targets and publication checks; support separate Enterprise hosts with scoped tokens and typed rate-limit errors.
@@ -216,8 +216,8 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 - Add guarded Linux clone/reclone and desktop Trash with recoverable moves; failed recycling keeps the set until explicit configuration-only removal. Windows behavior is unchanged.
 - Add a repository history drawer: open it from the command palette or the details panel to see working tree, local commits, origin commits and the shared base as two rails, with hover and keyboard details. It reads local refs only and never fetches.
 - Redesign notifications and inline alerts: five notification types with status-coloured icon and edge, a Rails loop for loading, and Retry and Show log actions on errors. Errors and loading notices stay until dismissed.
-- Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon. The bundle identifier, settings folder and credential service names are unchanged.
-- On Windows the installer is now named Skein. If PaperWing 0.2.0 still appears in Installed apps, uninstall it first. Settings and data are kept because the bundle identifier is unchanged.
+- Rename the product to Skein with the Benzol colour system, Geist and Geist Mono fonts, and the Rails icon.
+- On Windows the installer is now named Skein. Uninstall earlier builds before installing it.
 - Scope metadata by source, credential and ref epochs; share foreground requests and discover authenticated personal private repositories.
 - Enable probe-gated Linux edit/save, directional copies and conditional undo using bounded tickets and the durable Linux journal.
 - Add durable Linux parent creation with exact file linkage, restart classification and private cleanup; application writes remain disabled.
@@ -241,11 +241,11 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 - Join failed Git stream tasks and keep Activity registration through Linux output cleanup.
 - Preserve completed Linux Git outcomes and retain Activity and permits through failed setup cleanup.
 
-## v0.2.0 - PaperWing preview (2026-10-02)
+## v0.2.0 - Skein preview (2026-10-02)
 
 ### Highlights
 
-- PaperWing application, executable, installer, repository name, and folded-paper icon.
+- Skein application, executable, installer, repository name, and folded-paper icon.
 - Tabbed workspace, command palette, repository trees, and Git Activity with bounded output.
 - Folder comparison between local working trees and read-only Git references without checkout.
 - Monaco file comparison, editable working-tree panes, difference navigation, and directional copying.
@@ -266,8 +266,8 @@ Both are unsigned for now; Windows SmartScreen may ask you to confirm (**More in
 
 ### Downloads
 
-- `PaperWing_0.2.0_x64-setup.exe`: Windows x64 installer.
-- `PaperWing_0.2.0_x64_portable.exe`: Windows x64 executable; requires Git and WebView2.
+- `Skein_0.2.0_x64-setup.exe`: Windows x64 installer.
+- `Skein_0.2.0_x64_portable.exe`: Windows x64 executable; requires Git and WebView2.
 - `SHA256SUMS.txt`: SHA256 checksums for both binaries.
 
 ## v0.1.0 — first flight 🪿

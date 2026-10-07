@@ -308,7 +308,7 @@ mod tests {
         let fixture = Fixture::new("job-chosen");
         assert!(chosen_folder(fixture.0.to_str().unwrap()).is_ok());
         assert!(chosen_folder(fixture.0.join("missing").to_str().unwrap()).is_err());
-        assert!(chosen_folder(fixture.0.join(".paperwing-test-root").to_str().unwrap()).is_err());
+        assert!(chosen_folder(fixture.0.join(".skein-test-root").to_str().unwrap()).is_err());
         assert!(chosen_folder("relative/path").is_err());
     }
 }

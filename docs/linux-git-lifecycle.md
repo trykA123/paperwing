@@ -73,8 +73,8 @@ cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib git:: -
 ```
 
 Tests clean their generated processes and default temporary roots. To retain PID reports,
-create a fresh private evidence directory containing `.paperwing-process-evidence` with
-`paperwing-process-evidence-v1` and a newline, then set `SKEIN_PROCESS_EVIDENCE` only for
+create a fresh private evidence directory containing `.skein-process-evidence` with
+`skein-process-evidence-v1` and a newline, then set `SKEIN_PROCESS_EVIDENCE` only for
 that test process. This opt-in exists in Rust tests, not the production app.
 
 Ignored evidence under `11/process-before` records the failing native controls; final and
