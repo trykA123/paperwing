@@ -8,6 +8,7 @@ mod commit_cache;
 mod http;
 mod listing;
 pub mod pulls;
+pub mod releases;
 use http::{get_json, GithubApi};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

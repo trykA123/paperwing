@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::path::Path;
 use tauri::AppHandle;
 
-pub(super) async fn load(
+pub(in crate::github) async fn load(
     app: AppHandle,
     path: String,
     repo: &Repository,
@@ -18,7 +18,7 @@ pub(super) async fn load(
     .map_err(|_| "Cannot resolve the stored GitHub source".to_string())?
 }
 
-pub(super) fn for_path(
+pub(in crate::github) fn for_path(
     settings: &Settings,
     path: &Path,
     repo: &Repository,

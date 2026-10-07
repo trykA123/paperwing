@@ -56,3 +56,8 @@ The user creates, pushes and deletes tags for one repository or a whole set in o
 
 ## Report
 Commit sha, files changed, each step's check result, gate results, anything skipped.
+
+## Backend and release implementation (2026-10-07)
+- Remote deletion requires a validated object lease; stale or missing objects are refused.
+- Release creation uses the registered GitHub source and stored token, verifies the annotated remote tag object, and defaults to draft.
+- Tag results offer release creation only after annotated pushes, with editable notes and per-repository links or errors.

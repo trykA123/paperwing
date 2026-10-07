@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { git } from './fixture.mjs';
 
 export const calls = [];
@@ -60,11 +61,10 @@ export function removeRemote(path, remote, name, expected) {
   calls.push({ command: 'delete_remote_tag', remote, expected });
   validName(path, name);
   validRemote(path, remote);
-  if (!expected) throw new Error('Expected tag object is required');
-  const url = git(path, 'remote', 'get-url', remote).trim();
-  const current = tryGit(url, 'rev-parse', '--verify', '--quiet', `refs/tags/${name}`);
-  if (typeof current !== 'string' || current.trim() !== expected) throw new Error(`stale info: ${name} on ${remote} is not the expected object`);
-  const out = tryGit(path, 'push', '-q', remote, '--delete', `refs/tags/${name}`);
+  if (!expected) throw new Error('Expected tag object required');
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(expected)) throw new Error('Invalid expected tag object');
+  const ref = `refs/tags/${name}`;
+  const out = tryGit(path, 'push', '-q', `--force-with-lease=${ref}:${expected}`, remote, '--delete', ref);
   if (typeof out !== 'string') throw new Error(failure(out));
   return { remote, name, forced: false };
 }
@@ -75,4 +75,15 @@ export function history(path) {
     return { sha, short, subject, author, date };
   });
   return { kind: 'noUpstream', branch: git(path, 'branch', '--show-current').trim(), upstream: null, uncommitted: 0, local: log, localTotal: log.length, origin: [], originTotal: 0, base: null, below: [] };
+}
+
+export function createRelease(path, tag, notes, draft = true) {
+  calls.push({ command: 'create_github_release', path, tag, notes, draft });
+  validName(path, tag);
+  const object = objectOf(path, tag);
+  if (!object || git(path, 'cat-file', '-t', object).trim() !== 'tag') throw new Error('GitHub releases require an annotated tag');
+  const remote = git(path, 'ls-remote', '--refs', 'origin', `refs/tags/${tag}`).trim();
+  if (remote !== `${object}\trefs/tags/${tag}`) throw new Error(`Tag ${tag} is not on the remote at the expected object`);
+  if (basename(path) === 'gamma') throw new Error('GitHub access denied; check token repository permissions');
+  return { id: 33, url: `https://gitint.company.com/admin/${basename(path)}/releases/33`, draft };
 }

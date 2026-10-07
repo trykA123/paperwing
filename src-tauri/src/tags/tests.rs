@@ -24,10 +24,7 @@ fn scratch(label: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = base.join(format!(
-        "skein-tags-{label}-{}-{nonce}",
-        std::process::id()
-    ));
+    let dir = base.join(format!("skein-tags-{label}-{}-{nonce}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -189,7 +186,7 @@ async fn rejects_invalid_tag_and_remote_names() {
             "{remote}"
         );
         assert!(
-            delete_remote_tag(path(&dir), remote.into(), "v1".into())
+            delete_remote_tag(path(&dir), remote.into(), "v1".into(), None)
                 .await
                 .is_err(),
             "{remote}"
@@ -213,7 +210,8 @@ async fn pushes_one_tag_only_and_deletes_it_remotely() {
     delete_tag(path(&dir), "v1".into()).await.unwrap();
     assert_eq!(git_out(&dir, &["tag", "--list"]), "v2");
     assert_eq!(git_out(&bare, &["tag", "--list"]), "v1");
-    delete_remote_tag(path(&dir), "origin".into(), "v1".into())
+    let object = git_out(&bare, &["rev-parse", "refs/tags/v1"]);
+    delete_remote_tag(path(&dir), "origin".into(), "v1".into(), Some(object))
         .await
         .unwrap();
     assert_eq!(git_out(&bare, &["tag", "--list"]), "");
@@ -298,4 +296,68 @@ fn message_cleaning_trims_and_bounds() {
     );
     assert_eq!(clean_message(Some("   ".into())).unwrap(), None);
     assert!(clean_message(Some("a".repeat(MAX_MESSAGE + 1))).is_err());
+}
+
+#[tokio::test]
+async fn remote_delete_refuses_a_tag_moved_by_someone_else() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let (dir, bare) = repo_with_remote();
+    let created = create_tag(path(&dir), request("v1", Some("one")))
+        .await
+        .unwrap();
+    push_tag(path(&dir), "origin".into(), "v1".into(), None)
+        .await
+        .unwrap();
+    let other = create_tag(path(&dir), request("v2", Some("someone else's tag")))
+        .await
+        .unwrap();
+    git_out(&dir, &["push", "-q", "origin", "v2"]);
+    git_out(&bare, &["update-ref", "refs/tags/v1", &other.object]);
+    assert!(delete_remote_tag(
+        path(&dir),
+        "origin".into(),
+        "v1".into(),
+        Some(created.object)
+    )
+    .await
+    .is_err());
+    assert_eq!(git_out(&bare, &["rev-parse", "refs/tags/v1"]), other.object);
+}
+
+#[tokio::test]
+async fn remote_delete_requires_a_valid_expected_object_and_keeps_the_tag() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let (dir, bare) = repo_with_remote();
+    let created = create_tag(path(&dir), request("v1", Some("one")))
+        .await
+        .unwrap();
+    push_tag(path(&dir), "origin".into(), "v1".into(), None)
+        .await
+        .unwrap();
+    let error = delete_remote_tag(path(&dir), "origin".into(), "v1".into(), None)
+        .await
+        .unwrap_err();
+    assert_eq!(error, "Expected tag object required");
+    for expected in ["", "zz", &"g".repeat(40), &"a".repeat(41), "--delete"] {
+        assert!(delete_remote_tag(
+            path(&dir),
+            "origin".into(),
+            "v1".into(),
+            Some(expected.into())
+        )
+        .await
+        .is_err());
+    }
+    assert_eq!(
+        git_out(&bare, &["rev-parse", "refs/tags/v1"]),
+        created.object
+    );
+}
+
+#[test]
+fn expected_tag_objects_accept_sha1_and_sha256_only() {
+    assert!(valid_object_id(&"a".repeat(40)));
+    assert!(valid_object_id(&"A".repeat(64)));
+    assert!(!valid_object_id(&"a".repeat(63)));
+    assert!(!valid_object_id(&"z".repeat(64)));
 }

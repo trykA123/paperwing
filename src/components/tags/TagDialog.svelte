@@ -5,9 +5,10 @@
   import { dialogOut } from '../../lib/motion';
   import { plural } from '../../lib/plural';
   import { tagFlow } from '../../lib/tag-flow.svelte';
-  import { createTags, moveConfirmMessage, moveRows, planTags, shortId, type CreateRow, type CreateStatus, type PlanRow, type TagTarget } from '../../lib/tags-set';
+  import { createTags, moveConfirmMessage, moveRows, planTags, releaseTargets, shortId, type CreateRow, type CreateStatus, type PlanRow, type TagTarget } from '../../lib/tags-set';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
+  import TagReleases from './TagReleases.svelte';
 
   let { targets }: { targets: TagTarget[] } = $props();
   const LABEL: Record<CreateStatus, string> = { created: 'Tagged', pushed: 'Tagged and pushed', 'push-failed': 'Tagged, push failed', refused: 'Not tagged, name already used', failed: 'Not tagged' };
@@ -22,6 +23,7 @@
   let planning = $state(false);
   let phase = $state<'review' | 'running' | 'done'>('review');
   let results = $state<CreateRow[]>([]);
+  let releasing = $state(false);
   let sequence = 0;
   let confirming = false;
   let lists: Record<string, Promise<TagInfo[]>> = {};
@@ -34,6 +36,7 @@
   const blocked = $derived(!move && plan.length > 0 && plan.every(row => row.existing || row.error));
   const ok = $derived(results.filter(row => row.status === 'pushed' || row.status === 'created').length);
   const failed = $derived(results.length - ok);
+  const releasable = $derived(releaseTargets(results));
   const cached = { listTags: (path: string) => (lists[path] ??= api.listTags(path)), localStatus: (paths: string[]) => api.localStatus(paths) };
 
   async function refresh() {
@@ -65,7 +68,7 @@
     app.toast(failed ? `Tagged ${ok} of ${plural(results.length, 'repository', 'repositories')}` : `Tagged ${plural(results.length, 'repository', 'repositories')} with ${tag}`, failed ? 'warn' : 'success');
   }
 
-  const close = () => { if (phase !== 'running') tagFlow.close(); };
+  const close = () => { if (phase !== 'running' && !releasing) tagFlow.close(); };
   onMount(() => {
     dialog.showModal();
     input?.focus();
@@ -78,7 +81,7 @@
     <h2>New tag</h2>
     <span class="mut">{many ? plural(targets.length, 'repository', 'repositories') : targets[0].name}</span>
     <span class="grow"></span>
-    <button class="icon" title="Close" aria-label="Close" disabled={phase === 'running'} onclick={close}><Icon name="close" /></button>
+    <button class="icon" title="Close" aria-label="Close" disabled={phase === 'running' || releasing} onclick={close}><Icon name="close" /></button>
   </header>
 
   <form class="tag-form" onsubmit={event => { event.preventDefault(); void run(); }}>
@@ -124,13 +127,17 @@
       {/each}
     </ul>
 
+    {#if phase === 'done' && releasable.length}
+      <TagReleases rows={releasable} {tag} message={message.trim()} onbusy={busy => (releasing = busy)} />
+    {/if}
+
     <footer>
       {#if phase === 'review'}
         <span class="hint">{blocked ? 'Every repository already has this tag. Tick Move existing tags to replace it.' : planning ? 'Checking existing tags…' : 'Nothing runs until you choose Create.'}</span>
         <button type="button" class="btn" onclick={close}>Cancel</button>
         <button type="submit" class="btn dark" disabled={!tag || blocked || planning}><Icon name="tag" /> {many ? `Tag ${plural(targets.length, 'repository', 'repositories')}` : 'Create tag'}</button>
       {:else}
-        <button type="button" class="btn dark" disabled={phase === 'running'} onclick={close}>Done</button>
+        <button type="button" class="btn dark" disabled={phase === 'running' || releasing} onclick={close}>Done</button>
       {/if}
     </footer>
   </form>

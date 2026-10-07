@@ -1,7 +1,7 @@
 import './test-support/svelte-loader.js';
 import { describe, expect, test } from 'bun:test';
 import { withIpc } from './test-support/ipc-fixture.js';
-import { compareTagsDesc, createTags, deleteLocalTags, deleteRemoteTags, moveConfirmMessage, planTags, refreshAfterTagChange, remoteDeleteMessage } from './tags-set.ts';
+import { compareTagsDesc, createGithubReleases, createTags, deleteLocalTags, deleteRemoteTags, moveConfirmMessage, planTags, refreshAfterTagChange, releaseTargets, remoteDeleteMessage } from './tags-set.ts';
 
 const target = name => ({ path: `/r/${name}`, name, remote: 'origin', commit: null });
 const repo = path => path.split('/').pop();
@@ -187,5 +187,59 @@ describe('ref epoch', () => {
       expect(state.refs[url].tags).toEqual(['v2.4.0']);
       expect(seen.filter(command => command === 'get_refs_many').length).toBe(1);
     });
+  });
+});
+
+describe('GitHub releases', () => {
+  const pushed = (name, patch = {}) => ({ ...target(name), status: 'pushed', created: { name: 'v1', annotated: true }, pushed: { remote: 'origin', name: 'v1' }, error: null, ...patch });
+
+  test('only a successfully pushed annotated tag is eligible', () => {
+    const rows = [pushed('a'), pushed('b', { status: 'created', pushed: null }), pushed('c', { status: 'push-failed', pushed: null }), pushed('d', { created: { annotated: false } }), pushed('e', { status: 'failed', created: null }), pushed('f', { pushed: null })];
+    expect(releaseTargets(rows).map(row => row.name)).toEqual(['a']);
+  });
+
+  test('missing draft defaults to true and one denied repository does not stop the rest', async () => {
+    const calls = [], seen = [];
+    const api = { createGithubRelease: async (path, tag, notes, draft) => {
+      calls.push([path, tag, notes, draft]);
+      if (repo(path) === 'b') throw { kind: 'message', message: 'GitHub access denied; check token repository permissions' };
+      return { id: 33, url: `https://gitint.company.com/admin/${repo(path)}/releases/33`, draft };
+    } };
+    const results = await createGithubReleases(['a', 'b', 'c'].map(name => pushed(name)), { tag: 'v1', notes: 'Tag message' }, api, row => seen.push(row.name));
+    expect(results.map(row => row.status)).toEqual(['created', 'failed', 'created']);
+    expect(results[1].error).toContain('permissions');
+    expect(results[2].release.url).toContain('gitint.company.com');
+    expect(calls.every(call => call[2] === 'Tag message' && call[3] === true)).toBe(true);
+    expect(seen).toEqual(['a', 'b', 'c']);
+  });
+
+  test('ineligible rows are refused without making an API request', async () => {
+    const calls = [];
+    const api = { createGithubRelease: async (...args) => { calls.push(args); } };
+    const rows = [pushed('a', { created: { annotated: false } }), pushed('b', { status: 'push-failed', pushed: null })];
+    const results = await createGithubReleases(rows, { tag: 'v1', notes: '' }, api);
+    expect(results.map(row => row.status)).toEqual(['refused', 'refused']);
+    expect(calls).toEqual([]);
+  });
+
+  test('explicit publication and structured rate-limit messages reach the result', async () => {
+    const calls = [];
+    const api = { createGithubRelease: async (...args) => { calls.push(args); throw { kind: 'rateLimited', resetAt: '2026-10-07T00:00:00Z', message: 'GitHub rate limit reached; retry after 2026-10-07T00:00:00Z' }; } };
+    const [result] = await createGithubReleases([pushed('a')], { tag: 'v1', notes: '', draft: false }, api);
+    expect(calls[0][3]).toBe(false);
+    expect(result.error).toContain('retry after 2026-10-07');
+  });
+
+  test('the IPC wrapper sends the tag, notes and default draft flag', async () => {
+    const { api } = await import('./api.ts');
+    const calls = [];
+    await withIpc((command, args) => {
+      calls.push([command, args]);
+      return Promise.resolve({ id: 33, url: 'https://gitint.company.com/admin/a/releases/33', draft: args.draft });
+    }, async () => {
+      expect((await api.createGithubRelease('/r/a', 'v1', 'Tag message')).draft).toBe(true);
+      expect((await api.createGithubRelease('/r/a', 'v1', '', false)).draft).toBe(false);
+    });
+    expect(calls[0]).toEqual(['create_github_release', { path: '/r/a', tag: 'v1', notes: 'Tag message', draft: true }]);
   });
 });

@@ -1,4 +1,4 @@
-import type { api as Api, CreatedTag, DeletedTag, PushedTag, TagInfo } from './api';
+import type { api as Api, CreatedGithubRelease, CreatedTag, DeletedTag, PushedTag, TagInfo } from './api';
 import { describeError } from './errors';
 
 export type TagApi = Pick<typeof Api, 'localStatus' | 'listTags' | 'createTag' | 'pushTag' | 'deleteTag' | 'deleteRemoteTag'>;
@@ -12,6 +12,33 @@ export type CreateRow = TagTarget & { status: CreateStatus; created: CreatedTag 
 /** `expected` is the tag object the remote delete is leased on; null means unknown and the delete is refused. */
 export type RemoteTarget = TagTarget & { expected: string | null };
 export type RemoveRow = TagTarget & { status: 'removed' | 'failed' | 'refused'; deleted: DeletedTag | null; pushed: PushedTag | null; error: string | null };
+export type ReleaseRow = TagTarget & { status: 'created' | 'failed' | 'refused'; release: CreatedGithubRelease | null; error: string | null };
+export type ReleaseRequest = { tag: string; notes: string; draft?: boolean };
+
+export const releaseTargets = (rows: CreateRow[]) => rows.filter(row => row.status === 'pushed' && row.pushed && row.created?.annotated);
+
+function releaseError(reason: unknown, name: string): string {
+  const message = typeof reason === 'object' && reason !== null && 'message' in reason && typeof reason.message === 'string' ? reason.message : reason;
+  return describeError(message, `create a GitHub release for ${name}`);
+}
+
+export async function createGithubReleases(rows: CreateRow[], request: ReleaseRequest, api: Pick<typeof Api, 'createGithubRelease'>, onRow?: (row: ReleaseRow) => void): Promise<ReleaseRow[]> {
+  const done: ReleaseRow[] = [];
+  for (const row of rows) {
+    const target = { path: row.path, name: row.name, remote: row.remote, commit: row.commit };
+    let result: ReleaseRow;
+    if (!releaseTargets([row]).length) result = { ...target, status: 'refused', release: null, error: 'Push an annotated tag before creating a GitHub release.' };
+    else {
+      try {
+        const release = await api.createGithubRelease(row.path, request.tag, request.notes, request.draft ?? true);
+        result = { ...target, status: 'created', release, error: null };
+      } catch (reason) { result = { ...target, status: 'failed', release: null, error: releaseError(reason, row.name) }; }
+    }
+    done.push(result);
+    onRow?.(result);
+  }
+  return done;
+}
 
 export const shortId = (id: string | null | undefined) => (id ? id.slice(0, 8) : 'HEAD');
 
