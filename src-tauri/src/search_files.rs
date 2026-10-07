@@ -27,19 +27,31 @@ impl Listing {
     }
 
     fn accept(&mut self, row: &[u8]) -> Result<(), String> {
-        let at = row
-            .iter()
-            .position(|byte| *byte == b'\t')
-            .ok_or("Invalid Git index listing")?;
-        let metadata = std::str::from_utf8(&row[..at]).map_err(|_| "Invalid Git index entry")?;
-        let mode = metadata
-            .split_whitespace()
-            .next()
-            .ok_or("Missing Git file mode")?;
-        if matches!(mode, "120000" | "160000") {
-            return Ok(());
+        if row.get(1) != Some(&b' ') {
+            return Err("Invalid Git file listing tag".into());
         }
-        let path = relative_path(&row[at + 1..])?;
+        let untracked = row[0] == b'?';
+        let row = &row[2..];
+        let path = if row.is_empty() {
+            return Err("Empty Git file listing row".into());
+        } else if !untracked {
+            let at = row
+                .iter()
+                .position(|byte| *byte == b'\t')
+                .ok_or("Invalid Git index listing")?;
+            let metadata =
+                std::str::from_utf8(&row[..at]).map_err(|_| "Invalid Git index entry")?;
+            let mode = metadata
+                .split_whitespace()
+                .next()
+                .ok_or("Missing Git file mode")?;
+            if matches!(mode, "120000" | "160000") {
+                return Ok(());
+            }
+            relative_path(&row[at + 1..])?
+        } else {
+            relative_path(row)?
+        };
         self.paths.insert(path);
         Ok(())
     }
@@ -63,14 +75,23 @@ fn relative_path(bytes: &[u8]) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-pub async fn tracked(
-    path: &str,
-    pathspecs: &[String],
+pub struct FilesRequest<'a> {
+    pub root: &'a str,
+    pub pathspecs: &'a [String],
+    pub untracked: bool,
+}
+
+pub async fn list(
+    request: FilesRequest<'_>,
     cancel: Arc<AtomicBool>,
 ) -> Result<Vec<PathBuf>, String> {
-    let mut args = vec!["ls-files", "--cached", "--stage", "-z", "--"];
-    args.extend(pathspecs.iter().map(String::as_str));
-    let args = RepoGit::at(path).no_optional_locks().argv(&args);
+    let mut args = vec!["ls-files", "--cached", "--stage", "-t", "-z"];
+    if request.untracked {
+        args.extend(["--others", "--exclude-standard"]);
+    }
+    args.push("--");
+    args.extend(request.pathspecs.iter().map(String::as_str));
+    let args = RepoGit::at(request.root).no_optional_locks().argv(&args);
     let listing = Arc::new(Mutex::new(Listing::default()));
     let state = listing.clone();
     let sink: StdoutSink = Arc::new(move |bytes| {

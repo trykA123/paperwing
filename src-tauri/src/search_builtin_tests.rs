@@ -267,3 +267,53 @@ async fn unicode_case_words_and_regex_ignore_the_process_locale() {
         }
     }
 }
+
+#[tokio::test]
+async fn untracked_search_respects_nested_info_and_configured_global_excludes() {
+    let _guard = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("builtin-untracked-ignores");
+    let path = repo(
+        &fixture,
+        "a",
+        &[
+            ("tracked.txt", b"needle\n"),
+            (".gitignore", b"ignored*\n"),
+            ("nested/.gitignore", b"nested-ignore.txt\n"),
+        ],
+    );
+    let root = Path::new(&path);
+    for name in [
+        "untracked.txt",
+        "ignored.txt",
+        "nested/visible.txt",
+        "nested/nested-ignore.txt",
+        "info-ignore.txt",
+        "global-ignore.txt",
+        "ignored-tracked.txt",
+    ] {
+        std::fs::write(root.join(name), b"needle\n").unwrap();
+    }
+    #[cfg(unix)]
+    std::fs::write(root.join("100644 abc 0\tname.txt"), b"needle\n").unwrap();
+    git(root, &["add", "-f", "ignored-tracked.txt"]);
+    std::fs::write(root.join(".git/info/exclude"), b"info-ignore.txt\n").unwrap();
+    let global = fixture.0.join("global-excludes");
+    std::fs::write(&global, b"global-ignore.txt\n").unwrap();
+    git(
+        root,
+        &["config", "core.excludesFile", global.to_str().unwrap()],
+    );
+    let mut query = request(&[&path], "needle");
+    query.untracked = true;
+    let expected = run(query.clone(), Engine::GitGrep, Arc::default()).await;
+    crate::git::clear_activity();
+    let actual = run(query.clone(), Engine::BuiltIn, Arc::default()).await;
+    assert_eq!(actual.1, expected.1);
+    assert_eq!(actual.0, expected.0);
+    assert_eq!(crate::git::activity_snapshot().len(), 1);
+    query.pathspecs = vec!["nested/*".into()];
+    assert_eq!(
+        run(query.clone(), Engine::BuiltIn, Arc::default()).await.1,
+        run(query, Engine::GitGrep, Arc::default()).await.1
+    );
+}

@@ -51,6 +51,7 @@ mod search_grep;
 mod search_job;
 mod search_rows;
 mod search_service;
+mod search_walk;
 mod trash;
 #[cfg(test)]
 mod test_support;

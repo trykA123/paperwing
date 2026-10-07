@@ -81,7 +81,6 @@ impl SearchEngine for Engine {
         search: RepoSearch<'a>,
     ) -> Pin<Box<dyn Future<Output = RepoResult> + Send + 'a>> {
         let engine = if search.target.git_ref.is_some()
-            || search.plan.untracked
             || search.plan.flags.contains(&"-P")
             || crate::search_pattern::needs_git(search.plan)
         {

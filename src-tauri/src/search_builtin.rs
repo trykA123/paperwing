@@ -19,9 +19,12 @@ impl SearchEngine for BuiltIn {
         search: RepoSearch<'a>,
     ) -> Pin<Box<dyn std::future::Future<Output = RepoResult> + Send + 'a>> {
         Box::pin(async move {
-            let files = crate::search_files::tracked(
-                &search.target.path,
-                &search.plan.pathspecs,
+            let files = crate::search_files::list(
+                crate::search_files::FilesRequest {
+                    root: &search.target.path,
+                    pathspecs: &search.plan.pathspecs,
+                    untracked: search.plan.untracked,
+                },
                 search.cancel.clone(),
             )
             .await;
@@ -81,6 +84,14 @@ fn scan(search: Scan<'_>) -> RepoResult {
         budget,
         cancel,
     } = search;
+    let files = if plan.untracked {
+        match crate::search_walk::collect(&target.path, files, cancel) {
+            Ok(files) => files,
+            Err(error) => return failed(error, cancel),
+        }
+    } else {
+        files
+    };
     let matcher = match matcher(plan) {
         Ok(matcher) => matcher,
         Err(error) => return failed(error, cancel),
