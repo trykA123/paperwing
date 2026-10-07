@@ -41,3 +41,4 @@ To the alt session: the main session took over your "Next steps" from `handoff-1
 - 03:20 polish B review: changes-needed (primary-button source, disabled reasons, error rules dropping detail, palette ranking/push preselect, grid focus loss, Ctrl+A across pages -> current page + 'Select all N', range shrink, aria-rowcount). Sent back to the same builder.
 - 03:01 polish B merged bca0944 (276 bun tests). Note: Ctrl+A with no row focused selects page text in the webview; consider user-select:none on app chrome (later).
 - 03:45 Codex still at 100% (limit message said 3:15 AM, likely UTC). Packet 42 continuation and packet 17 round 2 both scheduled for 06:20.
+- 04:01 packet 26 merged bcfe546 (286 bun tests; review found no stash-loss path; fixed busy-flag clobber, double-run). Packet 33 tags UI next.
