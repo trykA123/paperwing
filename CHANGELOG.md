@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Remote branch and tag deletion removed; deletes are local only. The cleanup dialog lists local branches only, the tag delete dialog deletes the local tag only, and the `delete_remote_branches` and `delete_remote_tag` commands are no longer registered.
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
 - Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
 - Rename the remaining PaperWing names in code and docs to Skein: the Cargo package (`skein`, `skein_lib`), the HTTP user agent, and test variables (`SKEIN_*`, with `PAPERWING_*` still read as a fallback). Identifiers stored on disk keep the old name; see `docs/naming.md`.

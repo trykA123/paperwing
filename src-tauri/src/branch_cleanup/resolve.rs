@@ -247,6 +247,7 @@ impl Target {
         Target::build(path.to_string(), remote, local, remote_base).await
     }
 
+    #[allow(dead_code)]
     pub(super) async fn remote(
         path: &str,
         remote: String,
