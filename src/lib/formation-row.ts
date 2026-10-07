@@ -1,5 +1,7 @@
 import type { LocalStatus, RefKind, SetItem } from './api';
 import { isCloned, nextAction, syncView, type NextAction, type SyncView } from './formation';
+import { pullKey } from './pull-flow.svelte';
+import type { PullKey } from './pull-support';
 import { rowFacts } from './row-actions';
 import { app } from './state.svelte';
 
@@ -7,7 +9,7 @@ export type RowModel = {
   item: SetItem; folder: string; sub: string; onDisk: boolean; problem: string | null;
   refType: RefKind; refLabel: string; refBad: boolean; refTitle: string; localNote: string | null;
   local: LocalStatus | undefined; sync: SyncView; next: NextAction | null; busy: string | null; fixed: boolean;
-  selected: boolean; focused: boolean; canAct: boolean;
+  selected: boolean; focused: boolean; canAct: boolean; pull: PullKey | null;
 };
 
 const parentOf = (path: string) => path.replace(/[\\/][^\\/]*[\\/]?$/, '');
@@ -36,6 +38,6 @@ export function describeRow(item: SetItem, state: { focused: boolean; canAct: bo
     refType: item.ref.type, refLabel: facts.refLabel, refBad: ref.bad, refTitle: ref.title,
     localNote: isCloned(local) && !facts.onRef && !item.path && localLabel ? `on ${localLabel}` : null,
     local, sync: syncView(local, app.statusFailures[app.dest(item)]), next: nextAction(facts), busy: app.rowBusy(item), fixed: !!item.path,
-    selected: item.on, focused: state.focused, canAct: state.canAct,
+    selected: item.on, focused: state.focused, canAct: state.canAct, pull: pullKey(item),
   };
 }

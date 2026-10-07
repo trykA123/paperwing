@@ -28,6 +28,7 @@
 
 .ab {
     font-size: var(--fs-xs);
+    font-variant-numeric: tabular-nums;
     font-weight: 600;
     border-radius: 99px;
     padding: 0 6px;

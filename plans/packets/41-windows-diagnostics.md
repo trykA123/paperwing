@@ -1,6 +1,6 @@
 # 41 — Anonymous diagnostics export (test builds only)
 
-Status: ready
+Status: done except the Windows proof (windows-diag CI job runs on the next push)
 Platform: Windows first; Linux parity so it can be tested on the dev box
 Size: M
 Role: both (backend first: api-builder; then Settings section: ui-builder)

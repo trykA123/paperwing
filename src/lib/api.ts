@@ -143,10 +143,11 @@ export type RepoSet = { id: string; name: string; items: SetItem[] };
 export type ColWidths = { repo: number; checkout: number; local: number; status: number };
 export type RailSection = 'sets' | 'compare' | 'recovery' | 'activity';
 export type ShellLayout = { version: 1; sidebarWidth: number; sidebarVisible: boolean; rightVisible: boolean; section: RailSection };
+export type RowDensity = 'comfortable' | 'compact';
 export type Workspace = {
   sets: RepoSet[]; stars: string[]; activeSet: string; root: string; layout: 'flat' | 'custom'; pathTemplate: string;
   cols: ColWidths;
-  shallow: boolean; parallel: number; onExisting: OnExisting; pageSize: PageSize; rightWidth: number;
+  shallow: boolean; parallel: number; onExisting: OnExisting; pageSize: PageSize; density?: RowDensity; rightWidth: number;
   theme: Theme; uiFont: string; codeFont: string;
   shell: ShellLayout;
 };
@@ -227,6 +228,13 @@ export const api = {
   cancelActivity: (id: string) => invoke<boolean>('cancel_activity', { id }),
   repositoryTree: (path: string) => invoke<RepositoryTree>('repository_tree', { path }),
   repositoryHistory: (path: string, limit?: number) => invoke<RepositoryHistory>('repository_history', { path, limit }),
+  stashList: (path: string) => invoke<StashEntry[]>('stash_list', { path }),
+  stashPush: (path: string, message: string | null, includeUntracked: boolean) => invoke<StashPushOutcome>('stash_push', { path, message, includeUntracked }),
+  stashApply: (path: string, oid: string) => invoke<StashRestoreOutcome>('stash_apply', { path, oid }),
+  stashPop: (path: string, oid: string) => invoke<StashRestoreOutcome>('stash_pop', { path, oid }),
+  stashDrop: (path: string, oid: string) => invoke<void>('stash_drop', { path, oid }),
+  stashShow: (path: string, oid: string) => invoke<StashDiff>('stash_show', { path, oid }),
+  switchWithStash: (path: string, branch: string) => invoke<SwitchStashOutcome>('switch_with_stash', { path, branch }),
   repoChanges: (path: string) => invoke<RepoChanges>('repo_changes', { path }),
   changeContent: (path: string, file: string, origPath: string | null, area: DiffArea) => invoke<ChangeContent>('change_content', { path, file, origPath, area }),
   stagePaths: (path: string, files: string[]) => invoke<void>('stage_paths', { path, files }),
@@ -239,7 +247,7 @@ export const api = {
   createTag: (path: string, request: CreateTagRequest) => invoke<CreatedTag>('create_tag', { path, request }),
   pushTag: (path: string, remote: string, name: string, lease: string | null) => invoke<PushedTag>('push_tag', { path, remote, name, lease }),
   deleteTag: (path: string, name: string) => invoke<DeletedTag>('delete_tag', { path, name }),
-  deleteRemoteTag: (path: string, remote: string, name: string) => invoke<PushedTag>('delete_remote_tag', { path, remote, name }),
+  deleteRemoteTag: (path: string, remote: string, name: string, expected: string | null) => invoke<PushedTag>('delete_remote_tag', { path, remote, name, expected }),
   mergedBranches: (path: string, base: string | null = null, remote: string | null = null) => invoke<MergedBranches>('merged_branches', { path, base, remote }),
   deleteMergedBranches: (path: string, names: string[], expected: string[], base: string | null = null) => invoke<BranchOutcome[]>('delete_merged_branches', { path, names, expected, base }),
   deleteRemoteBranches: (path: string, remote: string, names: string[], expected: string[], base: string | null = null) => invoke<BranchOutcome[]>('delete_remote_branches', { path, remote, names, expected, base }),
@@ -264,4 +272,11 @@ export const api = {
   searchCancel: (id: number) => invoke<boolean>('search_cancel', { id }),
   searchCancelAll: () => invoke<number>('search_cancel_all'),
   searchCapabilities: () => invoke<SearchCapabilities>('search_capabilities'),
+  diagnosticsStatus: () => invoke<{ sampling: boolean; samples: number }>('diagnostics_status'),
+  diagnosticsPreview: () => invoke<string>('diagnostics_preview'),
+  diagnosticsCancel: () => invoke<boolean>('diagnostics_cancel'),
+  diagnosticsExport: () => invoke<boolean>('diagnostics_export'),
+  createGithubRelease: (path: string, tag: string, notes: string, draft = true, remote: string | null = null) => invoke<CreatedGithubRelease>('create_github_release', { path, tag, notes, draft, remote }),
 };
+
+export type CreatedGithubRelease = { id: number; url: string; draft: boolean };

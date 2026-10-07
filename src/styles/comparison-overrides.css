@@ -111,3 +111,96 @@
     }
 }
 
+
+.set-compare-table th,
+.set-compare-table td {
+    height: 36px;
+    padding: 0 var(--sp-3);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.set-compare-table th {
+    z-index: 1;
+    box-shadow: 0 1px 0 var(--line);
+}
+
+.set-compare-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.set-compare-table td:first-child {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.set-compare-table .warn {
+    white-space: normal;
+}
+
+.sort-head {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sort-head:hover {
+    color: var(--text);
+}
+
+.sort-mark {
+    min-width: 1ch;
+}
+
+.cmp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: 1px var(--sp-2);
+    border-radius: 99px;
+    background: var(--soft);
+    color: var(--dim);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+}
+
+.cmp-chip b {
+    font: 700 var(--fs-sm) var(--mono);
+}
+
+.cmp-chip.k-different {
+    background: color-mix(in oklch, var(--c-diff) 14%, var(--panel));
+    color: var(--c-diff-text);
+}
+
+.cmp-chip.k-leftOnly {
+    background: color-mix(in oklch, var(--c-lo) 12%, var(--panel));
+    color: var(--c-lo-text);
+}
+
+.cmp-chip.k-rightOnly {
+    background: color-mix(in oklch, var(--c-ro) 14%, var(--panel));
+    color: var(--c-ro-text);
+}
+
+.cmp-chip.k-same {
+    color: var(--ok-text);
+}
+
+.cmp-chip.k-partial {
+    background: var(--warn-bg);
+    color: var(--warn-text);
+}
+
+.set-compare-table .set-compare-empty {
+    height: 64px;
+    color: var(--dim);
+    text-align: center;
+}

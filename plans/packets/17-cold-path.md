@@ -78,3 +78,16 @@ Reviewer verdict on sfzxd: fix first. Git starts across repos fell from 1062 to 
 6. Working-tree speed: keep one `ReadCache` per worker, not per 128-path chunk. Set `[profile.dev.package.sha1] opt-level = 3`. Measure before and after with a release build.
 7. Frontend: `compare-state.svelte.ts` must not default an unknown entry kind to `'file'`. Use the server's kind, or fetch the row.
 Done when: all phase 1 tests plus the new tests pass; Linux release-build medians are no worse than before on every workload; Git starts are reported; and the Windows CI job is green. Windows VM measurements follow as a separate step.
+
+## After phase 1 merges
+Architecture audit items 2, 8, 9, 10, 12, 13 and 19 (`plans/2026-10-06/audits/architecture.md`) touch the runner and compare code. Also pin the Git locale in the runner env (`LC_ALL=C`, `LANGUAGE=`) for stable messages. Write them as packet 43 once phase 1 is on main.
+
+## Phase 1 review round 2 (2026-10-07 03:00)
+Base 9eeecd5 on `crew/api-builder-368uj`. Reviewer: changes-needed.
+1. `diff-tree` ignores `diff.algorithm` set with `-c` (it is plumbing). Pass `--diff-algorithm=<v>`; keep `-c diff.renameLimit`. Add a fixture where myers and histogram differ.
+2. In-process counts never turn on with stock Git for Windows (`core.autocrlf=true`, the system `etc/gitattributes`). Decide eligibility with one cached `git check-attr -a -- left right` in the storage root. For autocrlf, measure real Git behaviour; in-process counts must equal the legacy Git result in every tested config.
+3. The reader cap counts readers, not sessions. Share one reader when both sides use the same git dir, and raise the cap to 12 readers.
+4. Race in the non-blocking release: drain sessions synchronously under a short lock, then spawn only the reader closes.
+5. The eligibility cache is cleared only on refresh. Make config and attributes changes visible on open.
+6. `close_root` before fetch and pull.
+Then merge main, run the gates, and rerun the release benchmark (plus one run with `normalize_eol=false`).

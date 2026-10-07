@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
+- Add an opt-in diagnostics backend that samples Git, process and resource metrics and exports a leak-checked anonymous report.
 - Honor configured tree diff algorithms, cache applicable count attributes, share endpoint readers, and revoke readers before fetch/pull; drain comparison sessions before page reload cleanup.
 - Rename the remaining PaperWing names in code and docs to Skein: the Cargo package (`skein`, `skein_lib`), the HTTP user agent, and test variables (`SKEIN_*`, with `PAPERWING_*` still read as a fallback). Identifiers stored on disk keep the old name; see `docs/naming.md`.
 - Add a Rust-owned SQLite local store (`skein-store.sqlite3`) for repository listings and commit histories. It opens in the background, so startup never waits for it, and a corrupt file is moved aside while other open errors only disable the store. Old `repos-*.json` caches are deleted. Packet 34 gaps: commit recall is unused and the ref epoch is constant, pruning goes by oldest fetch time rather than LRU, vacuum runs only over the size cap, and the schema version uses `user_version`.

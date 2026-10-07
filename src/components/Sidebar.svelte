@@ -1,9 +1,16 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
+  import { countLabel, errorSummary } from '../lib/source-status';
   import type { Repo } from '../lib/api';
   import Icon from './Icon.svelte';
 
   const favs = $derived(app.ws.stars.map(id => app.repoById.get(id)).filter((r): r is Repo => !!r));
+
+  const favsNote = $derived.by(() => {
+    if (!app.ws.stars.length) return 'No favorites';
+    if (Object.values(app.loadingRepos).some(Boolean)) return 'Loading favorites\u2026';
+    return Object.values(app.repoErrors).some(errors => errors.length) ? 'Favorites unavailable' : 'No favorites';
+  });
 
   function onSearch() {
     const query = app.query;
@@ -53,17 +60,31 @@
       <span class="star">★</span><span class="lbl">{r.name} <small>{r.org}</small></span>
       {#if app.inSet(r.id)}<span class="inset">IN SET</span>{/if}
     </button>
-  {:else}<div class="nav ghost">No favorites</div>{/each}
+  {:else}<div class="nav ghost">{favsNote}</div>{/each}
 </div>
 
 {#each app.sources as src (src.id)}
+  {@const known = app.repos[src.id] !== undefined}
+  {@const loading = !!app.loadingRepos[src.id]}
+  {@const failure = errorSummary(app.repoErrors[src.id])}
   <div class="sec">
-    <h6>Browse · {src.name}{#if app.loadingRepos[src.id]}<span class="spin"></span>{/if}</h6>
+    <h6>{#if failure}<Icon name="alert" size={12} tone="warn" />{/if}Browse · {src.name}{#if loading}<span class="spin" role="status" aria-label="Loading {src.name}"></span>{/if}</h6>
+    {#if failure}
+      <div class="src-error" role="status">
+        <span class="src-error-text"><b>Can't reach {src.name}.</b> <span title={failure}>{failure}</span></span>
+        <span class="src-error-actions">
+          <button class="link" disabled={loading} onclick={() => app.loadRepos(src, true)}>Retry</button>
+          <button class="link" onclick={() => app.openView({ kind: 'settings' })}>Edit source</button>
+        </span>
+      </div>
+    {/if}
     {#each app.orgsOf(src) as o (o)}
       {@const v = app.view}
       <button class="nav" class:on={v.kind === 'org' && v.source === src.id && v.org === o}
         onclick={() => app.openView({ kind: 'org', source: src.id, org: o })}>
-        <span class="lbl">{o}</span><span class="cnt">{app.reposOf(src.id, o).length}</span>
+        <span class="lbl">{o}</span>
+        {#if loading && !known}<i class="skel cnt-skel" aria-hidden="true"></i><span class="sr-only">loading</span>
+        {:else}<span class="cnt" title={known ? undefined : 'Unknown until the list loads'}>{countLabel(known, app.reposOf(src.id, o).length)}</span>{/if}
       </button>
     {/each}
   </div>

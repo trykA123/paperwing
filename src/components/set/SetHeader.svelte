@@ -2,7 +2,10 @@
   import { untrack } from 'svelte';
   import { confirmWith } from '../../lib/confirm';
   import { bulkTargets } from '../../lib/formation';
-  import { rowFacts } from '../../lib/row-actions';
+  import { needsClone, rowFacts } from '../../lib/row-actions';
+  import { doingWord } from '../../lib/state/run-notices';
+  import { headerPrimary } from '../../lib/header-primary';
+  import { plural } from '../../lib/plural';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
 
@@ -11,7 +14,10 @@
   const temporary = $derived(app.temporary.find(set.id));
   const selected = $derived(app.selected);
   const missing = $derived(selected.filter(item => app.refState(item) === 'missing').length);
+  let { extend = null }: { extend?: { count: number; run: () => void } | null } = $props();
   const fetchable = $derived(bulkTargets(set.items, rowFacts).fetchable);
+  const primary = $derived(headerPrimary({ running: app.running, itemCount: set.items.length, cloneCount: app.actionItems.filter(needsClone).length, rightVisible: app.ws.shell.rightVisible, fetchable: fetchable.length }));
+  const progress = $derived(app.runProgress);
   const busy = $derived(app.running || app.gitBusy || app.clonePreparing);
 
   $effect(() => {
@@ -72,7 +78,7 @@
     {/if}
     <div class="mut">
       {#if temporary}<span class="mono" title={temporary.path}>{temporary.path}</span> · {/if}
-      {#if temporary?.scanning}<span class="spin" aria-hidden="true"></span> Scanning, {set.items.length} found{:else}{set.items.length} repositories{/if} · {selected.length} selected{#if missing} · <span class="warn">{missing} with a missing ref</span>{/if}
+      {#if temporary?.scanning}<span class="spin" aria-hidden="true"></span> Scanning, {set.items.length} found{:else}{#if selected.length}{selected.length} of {set.items.length} selected · {#if extend}<button class="link" onclick={extend.run}>Select all {extend.count}</button>{' · '}{/if}<button class="link" onclick={() => app.setAllOn(false)}>Clear</button>{:else}{plural(set.items.length, 'repository', 'repositories')}{/if}{/if}{#if missing} · <span class="warn">{missing} with a missing ref</span>{/if}
     </div>
   </div>
   <div class="hbtns">
@@ -80,9 +86,17 @@
       <button class="btn dark" disabled={temporary.scanning} title={temporary.scanning ? 'Wait for the scan to finish' : 'Keep this set in the list of sets'} onclick={() => app.temporary.save(temporary.id)}><Icon name="check" /> Save as set</button>
       <button class="btn" onclick={() => app.temporary.discard(temporary.id)}><Icon name="close" /> Discard</button>
     {:else}
-      <button class="btn" onclick={() => app.goAddRepos()}><Icon name="plus" /> Add repos</button>
+      <button class="btn" disabled={!set.items.length} title="Search code across the repositories of this set (Ctrl+Shift+F)" onclick={() => app.openCodeSearch()}><Icon name="search" /> Search code</button>
+      <button class="btn" onclick={() => app.goAddRepos()}><Icon name="plus" /> Add repositories</button>
       <button class="btn icon-only" title="Delete set" aria-label="Delete set" disabled={app.ws.sets.length < 2} onclick={deleteSet}><Icon name="trash" /></button>
-      <button class="btn dark" disabled={busy || !fetchable.length} title={fetchable.length ? `git fetch --prune in the ${fetchable.length} cloned repositories` : 'Nothing cloned to fetch'} onclick={() => app.startClone(fetchable, 'fetch')}><Icon name="refresh" /> Fetch all</button>
+      {#if app.running}
+        <span class="btn progress" class:dark={primary.progress} role="status" aria-label="{doingWord(app.runMode)} {progress.finished} of {progress.total}">
+          <span class="bar" style:transform="scaleX({progress.pct / 100})"></span>
+          <span class="lbl"><span class="spin"></span> {doingWord(app.runMode)} {progress.finished}/{progress.total}</span>
+        </span>
+      {:else}
+        <button class="btn" class:dark={primary.fetch} disabled={busy || !fetchable.length} title={fetchable.length ? `git fetch --prune in the ${plural(fetchable.length, 'cloned repository', 'cloned repositories')}` : 'Nothing cloned to fetch'} onclick={() => app.startClone(fetchable, 'fetch')}><Icon name="refresh" /> Fetch all</button>
+      {/if}
     {/if}
   </div>
 </header>

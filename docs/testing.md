@@ -253,3 +253,13 @@ a test module declaration and the harness, and uses its own14 target directory. 
 that exact consumer; broad frozen suites would write historical evidence. The four rows
 prove foreign-artifact preservation, unchanged r-format export/undo, later-edit refusal and
 blocked ordinary admission. They do not enable application writes or replace independent review.
+
+## Windows diagnostics
+
+Download the `skein-windows-diag-nsis` artifact from the GitHub Actions run that built the test
+version, then install that NSIS installer on the Windows test machine. Use Skein normally while
+the diagnostics build samples process and benchmark data in memory.
+
+In Settings, choose **Generate diagnostics**, review the anonymous JSON preview, and save the
+file when ready. Skein does not upload it. Send the saved file privately through the approved
+support channel; do not attach it to a public issue or commit it to the repository.

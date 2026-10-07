@@ -2,6 +2,7 @@
   import type { SetItem } from '../../lib/api';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
+  import { plural } from '../../lib/plural';
 
   let { items }: { items: SetItem[] } = $props();
 
@@ -14,9 +15,9 @@
 <div class="rfoot">
   <div class="sum">
     {#if app.running}{done + failed} of {items.length} finished{#if failed} · <b>{failed} failed</b>{/if}
-    {:else}<span>{items.length} to clone</span>{#if missing}<b>{missing} with a missing ref</b>{/if}{/if}
+    {:else}<span>{plural(items.length, 'repository', 'repositories')} to clone</span>{#if missing}<b>{missing} with a missing ref</b>{/if}{/if}
   </div>
   <button class="btn dark go" title={app.rootSupport.reason ?? 'Clone repositories'} disabled={app.running || app.clonePreparing || !items.length || !app.rootSupport.valid} onclick={() => app.startClone(items)}>
-    {#if app.running}<span class="spin"></span> Cloning…{:else}<Icon name="folder" /> Clone {items.length} repos{/if}
+    {#if app.running}<span class="spin"></span> Cloning…{:else}<Icon name="folder" /> Clone {plural(items.length, 'repository', 'repositories')}{/if}
   </button>
 </div>

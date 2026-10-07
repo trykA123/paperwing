@@ -125,7 +125,7 @@
   </div>
   <div class="compare-summary">
     <div class="seg"><button class:on={comparison.mode === 'files'} onclick={() => comparison.mode = 'files'}>Files</button><button class:on={comparison.mode === 'commits'} onclick={commits}>Commits</button></div>
-    {#if comparison.snapshot?.history.available}<span class="compare-history">Right: <b>{comparison.snapshot.history.rightCount}</b> ahead, <b>{comparison.snapshot.history.leftCount}</b> behind{#if comparison.snapshot.history.leftBasis === 'workingTreeHead' || comparison.snapshot.history.rightBasis === 'workingTreeHead'} <span class="faint">(HEAD history)</span>{/if}</span>
+    {#if comparison.snapshot?.history.available}<span class="compare-history">Right: <b>{comparison.snapshot.history.rightCount}</b> ahead, <b>{comparison.snapshot.history.leftCount}</b> behind{#if comparison.snapshot.history.leftBasis === 'workingTreeHead' || comparison.snapshot.history.rightBasis === 'workingTreeHead'}&nbsp;<span class="faint">(HEAD history)</span>{/if}</span>
     {:else if comparison.snapshot}<span class="faint" title={comparison.snapshot.history.reason ?? ''}>History: N/A</span>{/if}
     <span class="grow"></span>
     {#if summary}<span class="compare-different">{summary.different + summary.typeConflict} differ</span><span class="compare-leftOnly">{summary.leftOnly} only left</span><span class="compare-rightOnly">{summary.rightOnly} only right</span><span class="faint">{summary.same} identical</span>{#if summary.unavailable}<span class="warn">{summary.unavailable} unavailable</span>{/if}{/if}

@@ -4,8 +4,28 @@ import { app } from './state.svelte';
 import { historyDrawer } from './history-drawer.svelte';
 import { paletteReturn } from './focus-trap';
 import { railShortcut } from './rail';
+import { plural } from './plural';
 
 export type Command = { id: string; label: string; icon: IconName; tone?: IconTone; enabled: boolean; reason?: string | null; run: () => void | Promise<void> };
+
+export const GROUPS = ['Actions', 'Files', 'Navigate', 'View'] as const;
+export type CommandGroup = (typeof GROUPS)[number];
+
+const GROUP_OF: Record<string, CommandGroup> = {
+  'tab-next': 'Navigate', 'tab-previous': 'Navigate', 'tab-close': 'Navigate', set: 'Navigate', 'search-code': 'Navigate', 'new-set': 'Navigate', add: 'Navigate', settings: 'Navigate',
+  sidebar: 'View', details: 'View', theme: 'View',
+  'copy-left': 'Files', 'copy-right': 'Files', recovery: 'Files', 'editor-save': 'Files', 'editor-save-left': 'Files', 'editor-save-right': 'Files', 'difference-next': 'Files',
+  'difference-previous': 'Files', 'hunk-left': 'Files', 'hunk-right': 'Files', 'file-undo': 'Files',
+};
+
+const SHORTCUT_OF: Record<string, string> = {
+  'tab-next': 'Ctrl Tab', 'tab-previous': 'Ctrl Shift Tab', 'tab-close': 'Ctrl W', 'editor-save': 'Ctrl S', 'search-code': 'Ctrl Shift F',
+  'difference-next': 'F7', 'difference-previous': 'Shift F7', 'hunk-left': 'Ctrl Alt ←', 'hunk-right': 'Ctrl Alt →',
+};
+
+export const commandGroup = (command: Pick<Command, 'id'>): CommandGroup => (command.id.startsWith('set:') ? 'Navigate' : GROUP_OF[command.id] ?? 'Actions');
+export const commandShortcut = (command: Pick<Command, 'id'>): string | undefined => SHORTCUT_OF[command.id];
+export { isRisky } from './palette';
 
 export function commands(items: SetItem[] = app.actionItems): Command[] {
   const local = items.filter(item => app.local[app.dest(item)]?.repo);
@@ -39,12 +59,13 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
       id: `set:${set.id}`, label: `Open set: ${set.name}`, icon: 'folder' as const, enabled: app.ready,
       run: () => app.openView({ kind: 'set' }, set.id),
     })),
+    { id: 'search-code', label: 'Search code across set', icon: 'search', reason: 'Clone at least one repository of the set first', enabled: app.ready && app.set.items.some(item => app.local[app.dest(item)]?.repo), run: () => app.openCodeSearch() },
     { id: 'new-set', label: 'New set', icon: 'plus', enabled: app.ready, run: () => app.newSet() },
     { id: 'add', label: 'Browse repositories', icon: 'search', enabled: app.ready, run: () => app.goAddRepos() },
     { id: 'settings', label: 'Settings', icon: 'gear', enabled: app.ready, run: () => app.openView({ kind: 'settings' }) },
     { id: 'sidebar', label: `${app.ws.shell.sidebarVisible ? 'Hide' : 'Show'} sidebar`, icon: 'panel', enabled: true,
       run: () => { app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible; } },
-    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.view.kind !== 'settings',
+    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.view.kind !== 'settings' && app.view.kind !== 'codeSearch',
       run: () => { app.ws.shell.rightVisible = !app.ws.shell.rightVisible; } },
     { id: 'theme', label: `Use ${app.ws.theme === 'dark' ? 'light' : 'dark'} theme`, icon: 'theme', enabled: true,
       run: () => { app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark'; } },
@@ -53,18 +74,20 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
     { id: 'compare', label: 'Compare repository refs', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length && !items[0]?.path,
       run: () => app.openCompare(items[0]) },
     { id: 'set-compare', label: 'Compare every repository across set', icon: 'copy', tone: 'inspect' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!app.set.items.length && !app.set.items.some(item => item.path), run: () => app.openSetCompare() },
-    { id: 'clone', label: `Clone ${items.length} repositories`, icon: 'folder', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length && !items.some(item => item.path),
+    { id: 'clone', label: `Clone ${plural(items.length, 'repository', 'repositories')}`, icon: 'folder', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!items.length && !items.some(item => item.path),
       run: () => app.startClone(items) },
-    { id: 'fetch', label: `Fetch ${managed.length} repositories`, icon: 'refresh', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!managed.length,
+    { id: 'fetch', label: `Fetch ${plural(managed.length, 'repository', 'repositories')}`, icon: 'refresh', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!managed.length,
       run: () => app.startClone(managed, 'fetch') },
-    { id: 'pull', label: `Pull ${behind.length} repositories (fast-forward)`, icon: 'download', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!behind.length,
+    { id: 'pull', label: `Pull ${plural(behind.length, 'repository', 'repositories')} (fast-forward)`, icon: 'download', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!behind.length,
       run: () => app.startClone(behind, 'pull') },
-    { id: 'switch', label: `Switch ${offRef.length} repositories to checkout ref`, icon: 'branch', tone: 'branch' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!offRef.length,
+    { id: 'switch', label: `Switch ${plural(offRef.length, 'repository', 'repositories')} to checkout ref`, icon: 'branch', tone: 'branch' as const, reason: app.rootSupport.reason, enabled: rootIdle && !!offRef.length,
       run: () => app.startClone(offRef, 'switch') },
-    { id: 'push', label: `Push ${pushable.length} repositories`, icon: 'upload', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!pushable.length,
+    { id: 'push', label: `Push ${plural(pushable.length, 'repository', 'repositories')}`, icon: 'upload', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!pushable.length,
       run: () => app.pushRepos(pushable.map(item => ({ path: app.dest(item), name: app.folderOf(item) }))) },
     { id: 'new-branch', label: local.length > 1 ? `New branch in ${local.length} repositories…` : 'New branch…', icon: 'branch', tone: 'branch' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!local.length,
       run: () => app.openBranchDialog(local) },
+    { id: 'cleanup', label: local.length > 1 ? `Clean up merged branches in ${local.length} repositories…` : 'Clean up merged branches…', icon: 'trash', tone: 'branch' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!local.length,
+      run: () => app.openCleanupDialog(local) },
     ...(items.length === 1 ? [
       { id: 'commit', label: 'Commit changes…', icon: 'check' as const, tone: 'record' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!local.length, run: () => app.openGitDialog('commit', items[0]) },
       { id: 'history', label: 'Show commit history', icon: 'commit' as const, tone: 'inspect' as const, enabled: !!local.length, run: () => historyDrawer.open({ path: app.dest(items[0]), name: app.folderOf(items[0]) }, paletteReturn.element) },
@@ -75,6 +98,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
 
 export function shortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): string | undefined {
   const control = event.ctrlKey || event.metaKey;
+  if (control && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'f') return 'search-code';
   if (control && !event.altKey && !event.shiftKey && railShortcut(event.key)) return `rail-${event.key}`;
   if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Tab') return event.shiftKey ? 'tab-previous' : 'tab-next';
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'w') return 'tab-close';

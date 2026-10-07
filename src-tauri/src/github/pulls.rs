@@ -1,8 +1,8 @@
-mod client;
+pub(super) mod client;
 mod error;
 mod model;
 pub(super) mod repository;
-mod source;
+pub(super) mod source;
 mod summary;
 
 pub use error::PullsError;
@@ -11,7 +11,7 @@ pub use model::{CreatedPullRequest, OpenPullRequest, PullRequest};
 use super::http::Http;
 use tauri::AppHandle;
 
-async fn connect<'a>(
+pub(super) async fn connect<'a>(
     source: &'a crate::settings::Source,
     host: &'a str,
 ) -> Result<Http<'a>, PullsError> {

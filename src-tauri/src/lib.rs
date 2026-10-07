@@ -1,5 +1,7 @@
 #[cfg(feature = "benchmark")]
 mod benchmark;
+#[cfg(feature = "diagnostics")]
+mod diagnostics;
 #[cfg(feature = "test-profile")]
 mod test_profile;
 #[cfg(any(test, feature = "test-profile"))]
@@ -103,6 +105,8 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            #[cfg(feature = "diagnostics")]
+            app.manage(diagnostics::Service::start()?);
             #[cfg(target_os = "linux")]
             app.state::<compare::Service>().configure_diff(app.path().app_data_dir()?)?;
             #[cfg(feature = "test-profile")]
@@ -126,6 +130,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_status,
+            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_preview,
+            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_cancel,
+            #[cfg(feature = "diagnostics")] diagnostics::diagnostics_export,
             #[cfg(feature = "benchmark")] benchmark::benchmark_record,
             #[cfg(feature = "benchmark")] benchmark::benchmark_snapshot,
             #[cfg(feature = "test-profile")] test_profile::benchmark_plan,
@@ -144,6 +152,7 @@ pub fn run() {
             github::get_commits,
             github::pulls::pull_for_branch,
             github::pulls::open_pull_request,
+            github::releases::create_github_release,
             git::get_refs_many,
             git::activity_snapshot,
             git::clear_activity,

@@ -36,7 +36,7 @@ fn invalid_remote() -> Error {
     )
 }
 
-pub(super) fn remote_host(url: &str) -> Result<String, Error> {
+pub(in crate::github) fn remote_host(url: &str) -> Result<String, Error> {
     crate::git::valid_url(url).map_err(|_| invalid_remote())?;
     if url.starts_with("https://") || url.starts_with("ssh://") {
         let parsed = reqwest::Url::parse(url).map_err(|_| invalid_remote())?;

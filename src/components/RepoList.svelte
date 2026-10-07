@@ -10,6 +10,9 @@
   import Alert from './Alert.svelte';
   import EmptyState from './EmptyState.svelte';
   import Skeleton from './Skeleton.svelte';
+  import { countLabel, errorSummary } from '../lib/source-status';
+  import { explainError } from '../lib/errors';
+  import { plural } from '../lib/plural';
 
   let { mode, source = '', org = '' }: { mode: 'org' | 'search'; source?: string; org?: string } = $props();
 
@@ -28,6 +31,8 @@
   const rows = $derived(size === 'all' ? list : list.slice(cur * size, cur * size + size));
   const loading = $derived(mode === 'org' ? !!app.loadingRepos[source] : Object.values(app.loadingRepos).some(Boolean));
   const errors = $derived(mode === 'org' ? (app.repoErrors[source] ?? []) : Object.values(app.repoErrors).flat());
+  const unknown = $derived(!base.length && (loading || errors.length > 0));
+  const failing = $derived(mode === 'org' ? (src ? [src] : []) : app.sources.filter(s => app.repoErrors[s.id]?.length));
   const warnings = $derived(mode === 'org' ? warningsForOrg(app.repoWarnings[source] ?? [], org) : Object.values(app.repoWarnings).flat());
 
   let previousQuery = untrack(() => query);
@@ -36,21 +41,30 @@
     previousQuery = query;
   });
 
+  const explain = (raw: string) => { const { cause, detail } = explainError(raw); return `${cause ?? 'Try again.'}${detail ? ` Details: ${detail}` : ''}`; };
+  const errorLines = $derived(mode === 'org' ? [explain(errorSummary(errors))] : failing.map(s => `${s.name}: ${explain(errorSummary(app.repoErrors[s.id]))}`));
+  const retry = () => failing.forEach(s => void app.loadRepos(s, true));
+
   async function addAll() {
     const toAdd = list.filter(r => !app.inSet(r.id));
-    if (!toAdd.length) return app.toast('All shown repos are already in the set');
-    if (toAdd.length > 25 && !(await confirm(`Add ${toAdd.length} repositories to "${app.set.name}"?`, { title: 'Add repos', okLabel: 'Add' }))) return;
+    if (!toAdd.length) return app.toast('All shown repositories are already in the set');
+    if (toAdd.length > 25 && !(await confirm(`Add ${plural(toAdd.length, 'repository', 'repositories')} to "${app.set.name}"?`, { title: 'Add repositories', okLabel: 'Add' }))) return;
     toAdd.forEach(r => app.addRepo(r, false));
-    app.toast(`Added ${toAdd.length} repos to ${app.set.name}`, 'success');
+    app.toast(`Added ${plural(toAdd.length, 'repository', 'repositories')} to ${app.set.name}`, 'success');
+  }
+
+  function clearQuery() {
+    if (mode === 'org') filter = '';
+    else app.query = '';
   }
 </script>
 
 <header class="mh">
   <div class="grow">
-    <div class="crumb">{mode === 'org' ? `Organization · ${src?.name ?? ''}` : 'Search'}</div>
+    <div class="crumb">{mode === 'org' ? `Organization · ${src?.name ?? ''}` : 'Search'} · <button class="link" onclick={() => app.openView({ kind: 'set' })}>← Back to {app.set.name}</button></div>
     <h1>{mode === 'org' ? org : `“${app.query}”`}</h1>
     <div class="mut">
-      {list.length}{query.trim() && mode === 'org' ? ` of ${base.length}` : ''} repositories{mode === 'search' ? ' across all sources' : ''}
+      {unknown ? countLabel(false, 0) : list.length}{query.trim() && mode === 'org' && !unknown ? ` of ${base.length}` : ''} repositories{mode === 'search' ? ' across all sources' : ''}
       {#if loading}· <span class="spin"></span> loading{/if}
     </div>
   </div>
@@ -63,12 +77,16 @@
         <Icon name="refresh" /> Refresh
       </button>
     {/if}
-    <button class="btn" disabled={!list.length} onclick={addAll}><Icon name="plus" /> Add {list.length} shown</button>
-    <button class="btn dark" onclick={() => app.openView({ kind: 'set' })}>Back to {app.set.name} →</button>
+    <button class="btn dark" disabled={!list.length} title="Add the repositories listed here to {app.set.name}" onclick={addAll}><Icon name="plus" /> Add {plural(list.length, 'repository', 'repositories')}</button>
   </div>
 </header>
 
-{#if errors.length}<Alert kind="err">{errors.join(' · ')}</Alert>{/if}
+{#if errors.length}
+  <Alert kind="err" role="status" title="Can't reach {failing.map(s => s.name).join(', ') || 'the source'}">
+    {#each errorLines as line}<span class="err-line">{line}</span>{/each}
+    {#snippet action()}<button class="btn small" disabled={loading} onclick={retry}>Retry</button>{/snippet}
+  </Alert>
+{/if}
 {#if warnings.length}<Alert kind="warn" role="status" title={mode === 'org' ? 'Partial list' : 'Some repositories may be missing'}>{warnings.join(' · ')}</Alert>{/if}
 
 <div class="card fill">
@@ -76,7 +94,9 @@
     <VirtualList items={rows} rowHeight={56} key={r => r.id}>
       {#snippet empty()}
         {#if loading}<Skeleton rows={8} height={56} />
-        {:else if query.trim()}<EmptyState icon="search" title="No repositories match" hint="Try a different filter." />
+        {:else if query.trim()}<EmptyState icon="search" title={`No repositories match "${query.trim()}"`} hint="Check the spelling or try a shorter term.">
+          <button class="btn" onclick={clearQuery}>{mode === 'org' ? 'Clear filter' : 'Clear search'}</button>
+        </EmptyState>
         {:else}<EmptyState icon="folder" title="No repositories found" hint="Refresh the list, or check the source in Settings." />{/if}
       {/snippet}
       {#snippet row(r: Repo)}

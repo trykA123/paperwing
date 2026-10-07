@@ -1,0 +1,261 @@
+.stash-dialog {
+    width: min(640px, calc(100vw - 48px));
+}
+
+.stash-dialog[open] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.stash-dialog > header,
+.stash-dialog > footer,
+.stash-form > footer {
+    margin: 0;
+}
+
+.stash-lead {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--fs-md);
+}
+
+.stash-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.stash-note-line {
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+
+.stash-targets {
+    display: flex;
+    flex-direction: column;
+    max-height: min(320px, 40vh);
+    margin: 0;
+    padding: var(--sp-1) var(--sp-3);
+    overflow: auto;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sidebar);
+    font-size: var(--fs-sm);
+}
+
+.stash-targets li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 32px;
+}
+
+.stash-targets li + li {
+    border-top: 1px solid var(--line);
+}
+
+.stash-name {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stash-error {
+    flex-basis: 100%;
+    margin: 0 0 var(--sp-2);
+    overflow-wrap: anywhere;
+}
+
+.stash-note-row {
+    flex-basis: 100%;
+    margin-bottom: var(--sp-2);
+}
+
+.stash-tag {
+    flex: none;
+    padding: 1px var(--sp-2);
+    border: 1px solid var(--warn-line);
+    border-radius: var(--r-ctl);
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    font-size: var(--fs-xs);
+}
+
+.stash-restore {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+}
+
+.stash-restore-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+}
+
+.stash-restore-head h3,
+.stash-head h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin: 0;
+    font-size: var(--fs-base);
+}
+
+.stash-head h3 small {
+    padding: 1px 6px;
+    border-radius: var(--r-ctl);
+    background: var(--soft);
+    color: var(--dim);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+}
+
+.stash-note {
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+
+.stash-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--line);
+}
+
+.stash-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+}
+
+.stash-empty {
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+
+.stash-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+}
+
+.stash-entry {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+}
+
+.stash-entry + .stash-entry {
+    border-top: 1px solid var(--line);
+}
+
+.stash-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.stash-title {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.stash-title svg {
+    flex: none;
+    transition: transform 120ms ease;
+}
+
+.stash-entry.open .stash-title svg {
+    transform: rotate(90deg);
+}
+
+.stash-msg {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stash-meta {
+    padding-inline-start: 20px;
+    font-size: var(--fs-sm);
+}
+
+.stash-actions {
+    display: flex;
+    gap: var(--sp-2);
+    padding-inline-start: 20px;
+}
+
+.stash-diff {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+}
+
+.stash-patch {
+    max-height: 320px;
+    margin: 0;
+    padding: var(--sp-2) 0;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--soft);
+    font-size: var(--fs-xs);
+    line-height: 1.5;
+    white-space: pre;
+}
+
+.stash-patch .pl {
+    display: block;
+    min-width: max-content;
+    padding: 0 var(--sp-3);
+}
+
+.stash-patch .pl.add {
+    background: var(--ok-bg);
+    color: var(--ok-text);
+}
+
+.stash-patch .pl.del {
+    background: var(--err-bg);
+    color: var(--err-text);
+}
+
+.stash-patch .pl.hunk {
+    color: var(--dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stash-title svg {
+        transition: none;
+    }
+}

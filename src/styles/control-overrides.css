@@ -17,7 +17,7 @@ svg.i.tone-file {
 }
 
 svg.i.tone-branch {
-    color: var(--tone-branch);
+    color: var(--dim);
 }
 
 svg.i.tone-tag {
@@ -258,6 +258,7 @@ svg.i.tone-err {
 
 .pager {
     padding: var(--sp-2) var(--sp-4);
+    font-variant-numeric: tabular-nums;
 }
 
 .srow {

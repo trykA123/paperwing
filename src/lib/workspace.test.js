@@ -373,17 +373,18 @@ test('palette navigation belongs only to input; arrows and Enter execute once', 
     const declaration = ast.instance.content.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === 'key');
     const handler = new Bun.Transpiler({ loader: 'ts' }).transformSync(source.slice(declaration.start, declaration.end));
     const invoked = [], scrolled = [];
-    const available = [{ id: 'first' }, { id: 'second' }];
-    const makeHandler = new Function('available', 'current', 'execute', 'dialog',
-        `let selected = current; ${handler}; return event => { current = Math.min(selected, Math.max(0, available.length - 1)); key(event); };`);
+    const available = [{ command: { id: 'first', enabled: true } }, { command: { id: 'second', enabled: true } }];
+    const stepIndex = (entries, from, direction) => (from + direction + entries.length) % entries.length;
+    const makeHandler = new Function('available', 'current', 'execute', 'dialog', 'stepIndex',
+        `let picked = null; ${handler}; return event => { current = picked ?? 0; key(event); };`);
     let prevented = 0;
     const key = makeHandler(available, 0, command => invoked.push(command.id),
-        { querySelectorAll: () => available.map(command => ({ scrollIntoView: () => scrolled.push(command.id) })) });
+        { querySelectorAll: () => available.map(entry => ({ scrollIntoView: () => scrolled.push(entry.command.id) })) }, stepIndex);
     for (const name of ['ArrowDown', 'ArrowUp', 'Enter']) key({ key: name, preventDefault: () => prevented++ });
     expect(scrolled).toEqual(['second', 'first']);
     expect(invoked).toEqual(['first']);
     expect(prevented).toBe(3);
-    makeHandler([], 0, command => invoked.push(command.id), {})({ key: 'Enter', preventDefault() {} });
+    makeHandler([], 0, command => invoked.push(command.id), {}, stepIndex)({ key: 'Enter', preventDefault() {} });
     expect(invoked).toEqual(['first']);
 });
 
