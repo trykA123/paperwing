@@ -150,7 +150,10 @@ impl ListingRequest {
             version: listings::VERSION,
             repos: list.repos,
         };
+        let admission = store.clone();
         store.enqueue(move |connection| {
+            let disabled = crate::store::providers::disabled_sources(&admission)?;
+            if disabled.contains(&listing.source_id) { return Ok(()); }
             if partial && has_fuller_listing(connection, &listing, &configuration) {
                 return Ok(());
             }

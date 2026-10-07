@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Replace Monaco with CodeMirror 6 in file compare behind one editor adapter (`src/lib/editor.ts`, contract-tested), and open files over 5 MB in a read-only large-file renderer. Saves keep each file's BOM and line endings; files with mixed line endings stay read-only.
+- Add core boundaries inside the app crate: domain command registration, synchronous typed frontend events plus an in-process CoreEvent bus, per-host RepositoryProvider and PullRequestProvider instances, and a labeled per-source switch backed by settings.json, independent of SQLite (packet 38).
 - Keep close and clone available during settings recovery, add Retry to the startup notice, protect valid or unreadable backups, and allow two minutes for stash status snapshots.
 - Pin GitHub releases to the annotated tag commit and pushed remote, preserve the first remote error, and allow failed releases to retry.
 - Retry settings after startup read errors, show defaults with a notice, protect valid settings from auto-save, and avoid retrying partially applied untracked stashes.
