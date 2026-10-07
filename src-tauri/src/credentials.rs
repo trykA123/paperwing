@@ -149,13 +149,28 @@ pub fn metadata_revision(source: &crate::settings::Source) -> Result<u64, String
     Ok(revision(&source.id))
 }
 
-pub fn invalidate(app: &AppHandle, source_id: &str) {
+fn invalidate_blocking(app: &AppHandle, source_id: &str) {
     let revision = advance_revision(source_id, || {
         if let Some(store) = app.try_state::<crate::store::Store>() {
             store.remove_source(source_id);
         }
     });
     let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+}
+
+async fn invalidate_with(source_id: String, clear: impl FnOnce() + Send + 'static) -> Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(move || advance_revision(&source_id, clear)).await
+        .map_err(|_| "Credential invalidation task failed".to_string())
+}
+
+async fn invalidate(app: &AppHandle, source_id: &str) -> Result<(), String> {
+    let store = app.try_state::<crate::store::Store>().map(|store| store.inner().clone());
+    let id = source_id.to_string();
+    let revision = invalidate_with(id.clone(), move || {
+        if let Some(store) = store { store.remove_source(&id); }
+    }).await?;
+    let _ = app.emit("credential-changed", serde_json::json!({ "sourceId": source_id, "revision": revision }));
+    Ok(())
 }
 
 pub(crate) fn advance_revision(source_id: &str, clear: impl FnOnce()) -> u64 {
@@ -174,7 +189,7 @@ pub fn configure_sources(app: &AppHandle, sources: &[crate::settings::Source], n
         let empty = HashMap::new();
         let previous = previous.as_ref().unwrap_or(&empty);
         for id in previous.keys().chain(next.keys()).collect::<std::collections::HashSet<_>>() {
-            if previous.get(id) != next.get(id) { invalidate(app, id); }
+            if previous.get(id) != next.get(id) { invalidate_blocking(app, id); }
         }
     }
     *previous = Some(next);
@@ -186,7 +201,7 @@ pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
     if revisions().lock().unwrap().get(source_id).is_some_and(|entry| entry.uncertain) {
         return Err(reason(CredentialState::Uncertain).into());
     }
-    host::read_bound(source_id).map(|token| token.map(|token| token.token))
+    host::read_for_request(source_id, None)
 }
 
 pub async fn read(source_id: String) -> Result<Option<String>, String> {
@@ -201,9 +216,7 @@ pub(crate) async fn read_for_host(source_id: String, request_host: Option<String
         if revisions().lock().unwrap().get(&source_id).is_some_and(|entry| entry.uncertain) {
             return Err(reason(CredentialState::Uncertain).into());
         }
-        host::read_bound(&source_id)?.map(|token| match request_host {
-            Some(host) => token.for_host(&host), None => Ok(token.token),
-        }).transpose()
+        host::read_for_request(&source_id, request_host.as_deref())
     }).await
         .map_err(|_| "Credential task failed".to_string())?
 }
@@ -240,14 +253,14 @@ async fn mutate(app: AppHandle, source_id: String, token: Option<String>, host: 
     validate(&source_id)?;
     if token.as_ref().is_some_and(|token| token.trim().is_empty()) { return Err("Token is empty".into()); }
     let permit = admit_async().await?;
+    let token = token.map(|token| {
+        let host = host.map(Ok).unwrap_or_else(|| host::saved_host(&source_id))?;
+        crate::github::valid_host(&host)?;
+        host::encode(&host, token.trim())
+    }).transpose()?;
+    invalidate(&app, &source_id).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
-        let token = token.map(|token| {
-            let host = host.map(Ok).unwrap_or_else(|| host::saved_host(&source_id))?;
-            crate::github::valid_host(&host)?;
-            host::encode(&host, token.trim())
-        }).transpose()?;
-        invalidate(&app, &source_id);
         complete_mutation(&source_id, || match token {
             Some(token) => native::write(&source_id, token.trim()), None => native::delete(&source_id)
         })

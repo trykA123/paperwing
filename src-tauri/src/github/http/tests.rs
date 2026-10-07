@@ -340,9 +340,14 @@ async fn bound_token_mismatch_stops_the_counting_transport() {
         async { crate::credentials::token_fixture(r#"skein-token-v1:{"host":"saved.invalid","token":"synthetic-stored-token"}"#, &source.host) },
         || 0,
     ).await;
-    if let Ok(http) = connection {
-        let request = http.build_request(Method::GET, "/user", None).unwrap();
-        http.dispatch_request(request, |_| async { sends.set(sends.get() + 1); Ok((200, ())) }).await.unwrap();
-    }
+    let error = match connection {
+        Err(error) => error,
+        Ok(http) => {
+            let request = http.build_request(Method::GET, "/user", None).unwrap();
+            http.dispatch_request(request, |_| async { sends.set(sends.get() + 1); Ok((200, ())) }).await.unwrap();
+            panic!("a bound token mismatch must fail before dispatch");
+        }
+    };
+    assert_eq!(error, (0, "This token was saved for saved.invalid. Save a token for new.invalid first.".into()));
     assert_eq!(sends.get(), 0);
 }

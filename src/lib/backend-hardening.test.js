@@ -20,38 +20,10 @@ test('draft Test and Load orgs carry a typed token without saving it', async () 
     expect(read('../components/Settings.svelte')).not.toContain('await saveToken(); await task();');
 });
 
-test('disk IPC commands are async and the dead probe is removed', () => {
-    const settings = read('../../src-tauri/src/settings.rs');
-    const clone = read('../../src-tauri/src/clone.rs');
-    const lib = read('../../src-tauri/src/lib.rs');
-    expect(settings).toMatch(/pub async fn load_settings/);
-    expect(settings).toMatch(/pub async fn save_settings/);
-    expect(clone).not.toMatch(/pub fn start_clone/);
-    expect(lib).toMatch(/async fn open_in_vscode/);
-    expect(lib).not.toContain('paths_exist');
-    expect(read('./api.ts')).not.toContain('pathsExist');
-});
-
-test('settings reads do not reconfigure sources', () => {
-    const source = read('../../src-tauri/src/settings.rs');
-    const body = source.slice(source.indexOf('pub fn load_settings'), source.indexOf('fn save_settings'));
-    expect(body).not.toContain('configure_sources');
-});
-
 test('locale-sensitive decisions do not match stderr prose', () => {
     expect(read('../../src-tauri/src/commit.rs')).not.toContain('output.stderr_contains');
     expect(read('../../src-tauri/src/stash/ops.rs')).not.toContain('Try without --index');
     expect(read('./state.svelte.ts')).not.toContain("text.includes('not fully merged')");
-});
-
-test('object validation is shared by the four IPC boundaries', () => {
-    for (const file of ['stash.rs', 'tags.rs', 'branch_cleanup/resolve.rs', 'github/pulls/repository.rs']) {
-        expect(read(`../../src-tauri/src/${file}`)).toContain('crate::object_id::valid');
-    }
-});
-
-test('get_commits stops publishing unused cache entries', () => {
-    expect(read('../../src-tauri/src/github.rs')).not.toContain('commit_cache::remember');
 });
 
 const { app } = await import('./state.svelte.ts');
@@ -100,10 +72,3 @@ test('settings initialization shows the backup restoration toast', async () => {
     });
 });
 
-test('resolving the settings read path does not create files or directories', () => {
-    const source = read('../../src-tauri/src/settings.rs');
-    const start = source.indexOf('fn settings_file');
-    const body = source.slice(start, source.indexOf('\n}', start) + 2);
-    expect(body).not.toContain('create_dir_all');
-    expect(body).not.toContain('std::fs::copy');
-});

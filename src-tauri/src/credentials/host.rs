@@ -1,4 +1,4 @@
-use super::{admit, native, Failure, SOURCES};
+use super::{native, Failure, SOURCES};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -75,6 +75,31 @@ pub(crate) fn check_saved_host(source_id: &str, host: &str) -> Result<(), String
     Ok(())
 }
 
+pub(super) fn read_token(
+    raw: String,
+    saved_host: &str,
+    request_host: Option<&str>,
+    write: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<String, String> {
+    if request_host.is_none() && !raw.starts_with(PREFIX) {
+        return Ok(raw);
+    }
+    let token = read(raw, saved_host, write)?;
+    match request_host {
+        Some(host) => token.for_host(host),
+        None => Ok(token.token),
+    }
+}
+
+pub(super) fn read_for_request(source_id: &str, request_host: Option<&str>) -> Result<Option<String>, String> {
+    let Some(raw) = native::read(source_id).map_err(Failure::message)? else {
+        return Ok(None);
+    };
+    read_token(raw, &saved_host(source_id).unwrap_or_default(), request_host, |encoded| {
+        native::write(source_id, encoded).map_err(Failure::message)
+    }).map(Some)
+}
+
 pub(super) fn read_bound(source_id: &str) -> Result<Option<SavedToken>, String> {
     let Some(raw) = native::read(source_id).map_err(Failure::message)? else {
         return Ok(None);
@@ -134,9 +159,13 @@ pub(crate) fn bind_before_host_edits(sources: &[crate::settings::Source]) -> Res
     if changes.is_empty() {
         return Ok(());
     }
-    let _permit = admit()?;
+    bind_changes(changes, |id| read_bound(id).map(|_| ()))
+}
+
+fn bind_changes(changes: Vec<String>, read: impl Fn(&str) -> Result<(), String>) -> Result<(), String> {
+    let _permit = tauri::async_runtime::block_on(super::admit_async())?;
     for id in changes {
-        read_bound(&id)?;
+        read(&id)?;
     }
     Ok(())
 }
@@ -262,5 +291,53 @@ mod manual_source_tests {
             super::super::source_configuration(&source),
         )]);
         assert_eq!(host_changes(&configured, &[]).unwrap(), [source.id]);
+    }
+}
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn hostless_manual_legacy_token_redacts_git_errors_without_migration_regression() {
+        let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+        let source: crate::settings::Source = serde_json::from_value(serde_json::json!({
+            "id":"manual-legacy-regression", "name":"admin", "kind":"manual", "credentialManaged":true
+        })).unwrap();
+        let mut migrated = false;
+        let token = read_token("synthetic-legacy-secret".into(), &source.host, None, |_| {
+            migrated = true;
+            Ok(())
+        }).map(Some);
+        let _credentials = crate::git::CredentialFixture::new(std::collections::BTreeMap::from([
+            (source.id, token),
+        ]));
+        assert_eq!(crate::git::safe("fatal: rejected synthetic-legacy-secret"), "fatal: rejected [redacted]");
+        assert!(!migrated);
+        assert!(read_token("synthetic-legacy-secret".into(), "", Some("new.invalid"), |_| Ok(())).is_err());
+    }
+
+    #[test]
+    fn redaction_reads_do_not_migrate_even_when_the_source_has_a_host_regression() {
+        assert_eq!(read_token("synthetic-token".into(), "saved.invalid", None, |_| {
+            Err("redaction must not write".into())
+        }).unwrap(), "synthetic-token");
+    }
+
+    #[test]
+    fn saving_a_host_edit_waits_for_a_concurrent_credential_read_regression() {
+        let permit = super::super::admit().unwrap();
+        let (started, starting) = std::sync::mpsc::sync_channel(0);
+        let (done, result) = std::sync::mpsc::channel();
+        let save = std::thread::spawn(move || {
+            started.send(()).unwrap();
+            done.send(bind_changes(vec!["saved-source".into()], |_| Ok(()))).unwrap();
+        });
+        starting.recv().unwrap();
+        let early = result.recv_timeout(std::time::Duration::from_millis(100));
+        drop(permit);
+        save.join().unwrap();
+        assert!(matches!(early, Err(std::sync::mpsc::RecvTimeoutError::Timeout)), "save did not wait: {early:?}");
+        result.recv_timeout(std::time::Duration::from_secs(3)).unwrap().unwrap();
     }
 }

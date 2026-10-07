@@ -71,6 +71,7 @@ pub fn load_settings(app: AppHandle) -> Result<Settings, String> {
 }
 
 fn load_with_status(app: &AppHandle) -> Result<Loaded, String> {
+    if let Some(state) = app.try_state::<Startup>() { state.check()?; }
     let file = settings_file(app)?;
     #[cfg(feature = "test-profile")]
     if !file.exists() {
@@ -93,13 +94,49 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let file = prepare_settings(&app)?;
     crate::credentials::bind_before_host_edits(&settings.sources)?;
     persistence::save(&file, &settings)?;
+    if let Some(state) = app.try_state::<Startup>() {
+        *state.0.lock().map_err(|_| "Settings initialization is unavailable")? = None;
+    }
     crate::credentials::configure_sources(&app, &settings.sources, true);
     crate::git::configure_sources(redaction_sources(&settings.sources));
     Ok(())
 }
 
-pub(crate) fn initialize(app: AppHandle) -> Result<(), String> {
-    let file = prepare_settings(&app)?;
+#[derive(Default)]
+pub(crate) struct Startup(std::sync::Mutex<Option<String>>);
+
+impl Startup {
+    fn record(&self, error: String) {
+        eprintln!("Settings initialization failed; starting with defaults: {error}");
+        *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(error);
+    }
+
+    fn check(&self) -> Result<(), String> {
+        match self.0.lock().map_err(|_| "Settings initialization is unavailable")?.as_ref() {
+            Some(error) => Err(error.clone()),
+            None => Ok(()),
+        }
+    }
+}
+
+fn initialize_with(
+    state: &Startup,
+    load: impl FnOnce() -> Result<Settings, String>,
+    configure: impl FnOnce(&[Source]),
+) -> Result<(), String> {
+    let settings = match load() {
+        Ok(settings) => settings,
+        Err(error) => {
+            state.record(error);
+            Settings::default()
+        }
+    };
+    configure(&settings.sources);
+    Ok(())
+}
+
+fn prepare_initial_settings(app: &AppHandle) -> Result<Settings, String> {
+    let file = prepare_settings(app)?;
     #[cfg(not(feature = "test-profile"))]
     if !file.exists() && !file.with_extension("json.bak").exists() {
         if let Some(legacy) = file.parent().and_then(|dir| dir.parent()).map(|parent| parent.join(LEGACY_IDENTIFIER).join("settings.json")) {
@@ -107,10 +144,20 @@ pub(crate) fn initialize(app: AppHandle) -> Result<(), String> {
         }
     }
     let _ = file;
-    let settings = load_settings(app.clone())?;
-    crate::credentials::configure_sources(&app, &settings.sources, false);
-    crate::git::configure_sources(redaction_sources(&settings.sources));
-    Ok(())
+    load_settings(app.clone())
+}
+
+pub(crate) fn initialize(app: AppHandle) -> Result<(), String> {
+    initialize_with(&app.state::<Startup>(), || prepare_initial_settings(&app), |sources| {
+        crate::credentials::configure_sources(&app, sources, false);
+        crate::git::configure_sources(redaction_sources(sources));
+    })
+}
+
+pub(crate) fn initialization_failed(app: &AppHandle, error: String) {
+    app.state::<Startup>().record(error);
+    crate::credentials::configure_sources(app, &[], false);
+    crate::git::configure_sources(Vec::new());
 }
 
 #[derive(Serialize)]
@@ -174,3 +221,6 @@ mod tests {
         assert_eq!(saved[1]["credentialManaged"], true);
     }
 }
+
+#[cfg(test)]
+mod startup_tests;

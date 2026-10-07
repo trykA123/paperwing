@@ -84,6 +84,13 @@ async fn attempt(
     .await
 }
 
+async fn snapshot(path: &str) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let context = format!("Stash state: {path}");
+    let index = quick(path, &["write-tree"], &context, &[0]).await?;
+    let worktree = quick(path, &["status", "--porcelain=v2", "-z"], &context, &[0]).await?;
+    Ok((index.stdout, worktree.stdout))
+}
+
 pub(crate) async fn restore(path: &str, oid: &str, mode: Restore) -> Result<ApplyOutcome, String> {
     let _guard = lock_repository(path).await;
     let reference = locate(path, oid).await?;
@@ -94,10 +101,12 @@ pub(crate) async fn restore(path: &str, oid: &str, mode: Restore) -> Result<Appl
         Restore::Pop => ("pop", reference.as_str()),
         Restore::Apply => ("apply", oid),
     };
+    let before = snapshot(path).await?;
     let mut output = attempt(path, verb, target, true).await?;
     let mut index_restored = true;
     let retry = output.code != Some(0)
-        && conflicted_paths(path).await?.is_empty();
+        && conflicted_paths(path).await?.is_empty()
+        && snapshot(path).await? == before;
     if retry {
         index_restored = false;
         output = attempt(path, verb, target, false).await?;

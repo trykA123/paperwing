@@ -20,7 +20,15 @@ pub(super) fn load(file: &Path) -> Result<(Settings, bool), String> {
     let _guard = WRITES
         .lock()
         .map_err(|_| "Settings persistence is unavailable")?;
-    let main = match std::fs::read(file) {
+    load_with(file, |path| std::fs::read(path), |from, to| std::fs::rename(from, to))
+}
+
+pub(super) fn load_with(
+    file: &Path,
+    read: impl Fn(&Path) -> std::io::Result<Vec<u8>>,
+    rename: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(Settings, bool), String> {
+    let main = match read(file) {
         Ok(bytes) => match parse(&bytes) {
             Ok(settings) => return Ok((settings, false)),
             Err(_) => Some(bytes),
@@ -29,7 +37,7 @@ pub(super) fn load(file: &Path) -> Result<(Settings, bool), String> {
         Err(error) => return Err(error.to_string()),
     };
     let backup = file.with_extension("json.bak");
-    match std::fs::read(&backup) {
+    match read(&backup) {
         Ok(bytes) => {
             if let Ok(settings) = parse(&bytes) {
                 return Ok((settings, true));
@@ -39,18 +47,22 @@ pub(super) fn load(file: &Path) -> Result<(Settings, bool), String> {
         Err(error) => return Err(error.to_string()),
     }
     if main.is_some() {
-        keep_broken(file)?;
+        keep_broken_with(file, rename)?;
     }
     Ok((Settings::default(), false))
 }
 
 fn keep_broken(file: &Path) -> Result<(), String> {
+    keep_broken_with(file, |from, to| std::fs::rename(from, to))
+}
+
+fn keep_broken_with(file: &Path, rename: impl Fn(&Path, &Path) -> std::io::Result<()>) -> Result<(), String> {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_nanos();
     let kept = file.with_file_name(format!("settings.json.broken-{timestamp}"));
-    std::fs::rename(file, kept).map_err(|error| error.to_string())?;
+    rename(file, &kept).map_err(|error| error.to_string())?;
     sync_directory(file)
 }
 

@@ -106,7 +106,11 @@ impl ListingRequest {
         login: Option<String>,
         list: &RepoList,
     ) -> Result<(), String> {
-        let queued = self.if_current(|| Ok(self.enqueue(&store, login, list.clone())))?;
+        let request = self.clone();
+        let list = list.clone();
+        let queued = tauri::async_runtime::spawn_blocking(move || {
+            request.if_current(|| Ok(request.enqueue(&store, login, list)))
+        }).await.map_err(|_| "Repository cache write task failed".to_string())??;
         let outcome = match queued {
             Ok(receiver) => receiver
                 .await

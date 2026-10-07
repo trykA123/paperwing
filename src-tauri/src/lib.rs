@@ -88,6 +88,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(launch::single_instance())
         .manage(launch::Pending::from_process())
+        .manage(settings::Startup::default())
         .manage(discover_job::Service::default())
         .manage(search_service::Service::default())
         .manage(compare::Service::default());
@@ -121,8 +122,10 @@ pub fn run() {
             }
             app.manage(store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok()));
             let handle = app.handle().clone();
-            tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || settings::initialize(handle)))
-                .map_err(std::io::Error::other)?.map_err(std::io::Error::other)?;
+            if let Err(error) = tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || settings::initialize(handle)))
+                .map_err(|error| error.to_string()).and_then(|result| result) {
+                settings::initialization_failed(app.handle(), error);
+            }
             git::attach(app.handle().clone());
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
