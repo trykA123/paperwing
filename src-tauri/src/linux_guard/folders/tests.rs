@@ -21,7 +21,7 @@ fn newly_opened_move_parent_must_match_the_captured_parent_identity() {
 fn marked_folder_fixture_is_removed_when_dropped() {
     let fixture = Fixture::new("folder-fixture-drop-");
     let path = fixture.0.clone();
-    assert!(path.join(".paperwing-folder-fixture").is_file());
+    assert!(path.join(".skein-folder-fixture").is_file());
     fixture.repository("repo");
     drop(fixture);
     assert!(!path.exists());

@@ -5,7 +5,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 
-export const fixtureMarker = 'paperwing-disposable-fixture-v1\n';
+export const fixtureMarker = 'skein-disposable-fixture-v1\n';
 export type Manifest = { version: 1; scale: number; content: string; objects: string; head: string; base: string; orphan: string; restore: { path: 'sacrificial.txt'; backup: 'sacrificial.backup'; sha256: string } };
 export const sha256 = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
@@ -26,7 +26,7 @@ export function noSymlinks(path: string) {
 export function markedRoot(root: string, marker = fixtureMarker) {
   const target = noSymlinks(root);
   if (!isAbsolute(root) || !lstatSync(target).isDirectory()) throw new Error('Expected absolute disposable directory');
-  const file = noSymlinks(join(target, '.paperwing-disposable'));
+  const file = noSymlinks(join(target, '.skein-disposable'));
   if (readFileSync(file, 'utf8') !== marker) throw new Error('Disposable marker mismatch');
   return realpathSync(target);
 }
@@ -35,7 +35,7 @@ export function newRoot(root: string, marker = fixtureMarker) {
   const target = noSymlinks(root);
   if (!isAbsolute(root) || existsSync(target)) throw new Error('Refusing existing or relative root');
   mkdirSync(target, { recursive: true });
-  writeFileSync(join(target, '.paperwing-disposable'), marker, { flag: 'wx' });
+  writeFileSync(join(target, '.skein-disposable'), marker, { flag: 'wx' });
   return target;
 }
 

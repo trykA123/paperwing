@@ -1,6 +1,6 @@
 # 29 — Discard changes and partial staging
 
-Status: ready (Linux recovery records are merged; Windows path needs a check)
+Status: backend in review on `crew/api-builder-p29-stage`; step 4 (UI) follows on the CodeMirror diff view.
 Platform: Windows first, Linux parity
 Size: M
 Role: both (backend first)

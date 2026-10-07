@@ -3,6 +3,8 @@ use rustix::fs::{AtFlags, Mode, OFlags, RenameFlags};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+pub(crate) const STAGE_PREFIX: &str = ".skein-stage-";
+
 mod authorized;
 mod parents;
 pub(crate) use authorized::AuthorizedPublication;
@@ -120,7 +122,7 @@ impl Parent {
     }
 
     pub(crate) fn stage(&self, bytes: &[u8], expected: &Snapshot) -> Result<Staged, Error> {
-        self.stage_named(bytes, expected, &super::storage::unique_name(".paperwing-stage-")?)
+        self.stage_named(bytes, expected, &super::storage::unique_name(STAGE_PREFIX)?)
     }
     pub(crate) fn stage_named(&self, bytes: &[u8], expected: &Snapshot, name: &str) -> Result<Staged, Error> {
         stage_name(name)?;
@@ -250,7 +252,7 @@ pub(crate) struct StageProof { pub name: String, pub directory: Identity, pub fi
 #[derive(Debug)]
 pub(crate) struct StageArtifact { pub name: String, pub directory: Identity, pub content: Option<(Identity, u64)>, pub size: u64 }
 fn stage_name(name: &str) -> Result<(), Error> {
-    if name.len() != 49 || !name.starts_with(".paperwing-stage-") || !name[17..].bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+    if name.len() != STAGE_PREFIX.len() + 32 || !name.starts_with(STAGE_PREFIX) || !name[STAGE_PREFIX.len()..].bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
         return Err(Error::unsupported("Invalid journal staging name"));
     }
     Ok(())
@@ -275,7 +277,7 @@ impl Parent {
         self.revalidate()?;
         let mut result = Vec::new();
         for name in super::entries(self.directory(), limit)? {
-            if !name.starts_with(".paperwing-stage-") { continue; }
+            if !name.starts_with(STAGE_PREFIX) { continue; }
             stage_name(&name)?;
             let directory = Handle::open(self.directory(), Path::new(&name), OFlags::RDONLY | OFlags::DIRECTORY, Mode::empty(), CONFINED)?;
             super::storage::private_directory(&directory)?;
@@ -341,5 +343,29 @@ impl Parent {
 impl Staged {
     pub(crate) fn proof(&self) -> Result<StageProof, Error> {
         Ok(StageProof { name: self.name.clone(), directory: self.identity.clone(), file: self.file_identity.clone().ok_or_else(|| Error::conflict("Stage is incomplete"))? })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stage_name;
+
+    #[test]
+    fn stage_names_accept_skein_prefix() {
+        assert!(stage_name(".skein-stage-0123456789abcdef0123456789abcdef").is_ok());
+    }
+
+    #[test]
+    fn stage_names_reject_malformed_names() {
+        for name in [
+            ".other-stage-0123456789abcdef0123456789abcdef",
+            ".skein-stage-0123456789abcdef0123456789abcde",
+            ".skein-stage-0123456789abcdef0123456789abcdef0",
+            ".skein-stage-0123456789abcdef0123456789abcdeF",
+            ".skein-stage-0123456789abcdef0123456789abcdeg",
+            ".skein-stage-0123456789abcdef0123456789abcde/",
+        ] {
+            assert!(stage_name(name).is_err(), "accepted invalid stage: {name}");
+        }
     }
 }

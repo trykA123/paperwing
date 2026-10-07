@@ -17,7 +17,7 @@ fn snapshot(path: &Path) -> serde_json::Value {
 impl Fixture {
     fn new() -> Self {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../.skillify/evidence/paperwing/14/a2/native/parents")
+            .join("../.skillify/evidence/skein/14/a2/native/parents")
             .join(format!(
                 "fixture-{}-{}",
                 std::process::id(),
@@ -27,8 +27,8 @@ impl Fixture {
         std::fs::create_dir(&path).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
         std::fs::write(
-            path.join(".paperwing-parent-fixture"),
-            b"paperwing-parent-fixture-v1\n",
+            path.join(".skein-parent-fixture"),
+            b"skein-parent-fixture-v1\n",
         )
         .unwrap();
         for name in ["repo", "repo/.git", "data", "metadata", "alias"] {
@@ -419,8 +419,8 @@ fn native_bind_constructor_helper() {
     let path = PathBuf::from(crate::env_names::var_os("SKEIN_PARENT_BIND_FIXTURE").unwrap());
     assert!(path.is_absolute());
     assert_eq!(
-        std::fs::read(path.join(".paperwing-parent-fixture")).unwrap(),
-        b"paperwing-parent-fixture-v1\n"
+        std::fs::read(path.join(".skein-parent-fixture")).unwrap(),
+        b"skein-parent-fixture-v1\n"
     );
     let root = Root::open(&path.join("repo"), &[]).unwrap();
     let value = root.value().unwrap();

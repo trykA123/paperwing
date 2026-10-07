@@ -13,8 +13,8 @@
   let selected = $state<{ path: string; area: DiffArea } | null>(null);
   let content = $state<ChangeContent | null>(null);
   let inline = $state(false);
-  let wide = $state(localStorage.getItem('paperwing.commitMax') === '1');
-  $effect(() => { localStorage.setItem('paperwing.commitMax', wide ? '1' : '0'); });
+  let wide = $state(localStorage.getItem('skein.commitMax') === '1');
+  $effect(() => { localStorage.setItem('skein.commitMax', wide ? '1' : '0'); });
   let diffError = $state('');
   let message = $state('');
   let busy = $state(false), loading = $state(true), error = $state('');

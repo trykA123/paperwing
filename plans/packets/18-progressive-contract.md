@@ -1,6 +1,6 @@
 # 18 — Progressive comparison: contract and UX
 
-Status: blocked by 17 (phase 1 landed). Design only; gates 19 and 20.
+Status: ready (packet 17 phase 1 is on main). Design only; gates 19 and 20.
 Platform: neutral contract; measured on Windows first
 Size: S
 Role: orchestrator with reviewer (documentation only, no product code)

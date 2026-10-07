@@ -3,7 +3,7 @@
   "productName": "Skein",
   "mainBinaryName": "skein",
   "version": "0.2.0",
-  "identifier": "dev.paperwing.app",
+  "identifier": "dev.skein.app",
   "build": {
     "beforeDevCommand": "bun run --bun dev",
     "devUrl": "http://localhost:1420",

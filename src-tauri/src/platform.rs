@@ -474,7 +474,7 @@ impl Fixture {
         #[cfg(not(unix))]
         std::fs::create_dir(&path).unwrap();
         std::fs::write(
-            path.join(".paperwing-test-root"),
+            path.join(".skein-test-root"),
             b"packet09 disposable fixture",
         )
         .unwrap();
@@ -486,7 +486,7 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         assert_eq!(
-            std::fs::read(self.0.join(".paperwing-test-root")).unwrap(),
+            std::fs::read(self.0.join(".skein-test-root")).unwrap(),
             b"packet09 disposable fixture"
         );
         std::fs::remove_dir_all(&self.0).unwrap();

@@ -19,9 +19,9 @@ root = Path(args.profile)
 binary = Path(args.binary)
 assert root.is_absolute() and root.resolve() == root
 assert len(str(root / 'bus/session').encode()) < 100
-assert root.joinpath('.paperwing-disposable').read_text() == 'paperwing-disposable-profile-v1\n'
+assert root.joinpath('.skein-disposable').read_text() == 'skein-disposable-profile-v1\n'
 assert binary.is_absolute() and binary.is_file()
-assert b'paperwing-test-profile-build-v1' in binary.read_bytes()
+assert b'skein-test-profile-build-v1' in binary.read_bytes()
 assert not (root / 'data/kwalletd').exists()
 for path in [root, *root.rglob('*')]:
     assert not path.is_symlink()
@@ -29,7 +29,7 @@ for path in [root, *root.rglob('*')]:
         path.chmod(0o700)
 for name in ['runtime', 'bus']:
     (root / name).mkdir(mode=0o700)
-settings_path = root / 'config/dev.paperwing.testing/settings.json'
+settings_path = root / 'config/dev.skein.testing/settings.json'
 original_settings = settings_path.read_bytes()
 source_id = json.loads(original_settings)['sources'][0]['id']
 assert source_id.startswith('fixture-') and str(uuid.UUID(source_id[8:])) == source_id[8:]
@@ -39,7 +39,7 @@ settings_path.write_bytes(b'{"sacrificialRestoreProof":true}\n')
 settings_path.write_bytes(backup.read_bytes())
 assert settings_path.read_bytes() == original_settings
 backup.unlink()
-wallet = 'PaperWing private test'
+wallet = 'Skein private test'
 (root / 'config/kwalletrc').write_text('[Wallet]\nFirst Use=false\nUse One Wallet=true\nDefault Wallet=' + wallet + '\nClose When Idle=false\n[KSecretD]\nEnabled=true\n[org.freedesktop.secrets]\napiEnabled=true\n')
 configuration = root / 'private-bus.conf'
 
@@ -81,7 +81,7 @@ connection = dbus.bus.BusConnection(address)
 password = secrets.token_urlsafe(32)
 token = secrets.token_urlsafe(48)
 replacement = secrets.token_urlsafe(48)
-report = {'native': True, 'backend': 'secretService', 'namespace': 'paperwing-testing-fixtures-v1', 'sourceId': source_id, 'homePreserved': preserved_home == os.environ['HOME'], 'settingsRestoreVerified': True, 'checks': []}
+report = {'native': True, 'backend': 'secretService', 'namespace': 'skein-testing-fixtures-v1', 'sourceId': source_id, 'homePreserved': preserved_home == os.environ['HOME'], 'settingsRestoreVerified': True, 'checks': []}
 api_state = {'status': 200, 'calls': 0, 'authenticated': False}
 
 class ApiHandler(BaseHTTPRequestHandler):
@@ -160,7 +160,7 @@ def complete_prompt(prompt, daemon):
 
 def invoke(operation, **payload):
     request = json.dumps({'operation': operation, 'sourceId': source_id, **payload}).encode()
-    result = subprocess.run([str(binary), '--paperwing-credential-drill'], input=request, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20)
+    result = subprocess.run([str(binary), '--skein-credential-drill'], input=request, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20)
     for secret in [token, replacement, password]:
         assert secret.encode() not in result.stdout
     output = json.loads(result.stdout)

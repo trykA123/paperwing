@@ -9,12 +9,12 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.skillify/evidence/paperwing/12/native")
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.skillify/evidence/skein/12/native")
             .join(format!("fixture-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::create_dir(&path).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::fs::write(path.join(".paperwing-guard-fixture"), b"paperwing-guard-fixture-v1\n").unwrap();
+        std::fs::write(path.join(".skein-guard-fixture"), b"skein-guard-fixture-v1\n").unwrap();
         std::fs::create_dir(path.join("repo")).unwrap();
         std::fs::create_dir(path.join("repo/.git")).unwrap();
         std::fs::write(path.join("repo/file"), b"before").unwrap();
@@ -61,7 +61,7 @@ fn guarded_replace_create_metadata_and_stage_cleanup() {
     assert!(matches!(parent.snapshot().unwrap(), Snapshot::Regular{identity,..} if identity==published.identity));
     let mut value=[0;32];let count=rustix::fs::getxattr(&path,"user.skein-fixture",&mut value).unwrap();
     assert_eq!(&value[..count],b"preserved");
-    assert!(std::fs::read_dir(fixture.path.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".paperwing-stage-")));
+    assert!(std::fs::read_dir(fixture.path.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".skein-stage-")));
     let new=root.parent("nested/new",true).unwrap();let missing=new.snapshot().unwrap();
     assert_eq!(missing,Snapshot::Missing);new.publish(new.stage(b"new",&missing).unwrap(),&missing).unwrap();
     let expected=new.snapshot().unwrap();new.remove_created(&expected).unwrap();
@@ -168,7 +168,7 @@ fn bounded_private_files_and_handle_ownership_fail_closed() {
 fn isolated_storage_failures_and_mount_crossings() {
     if let Some(root)=crate::env_names::var_os("SKEIN_GUARD_IO_ROOT") {
         let root=PathBuf::from(root);assert!(root.is_absolute() && root.canonicalize().unwrap()==root);
-        assert_eq!(std::fs::read_to_string(root.join(".paperwing-guard-fixture")).unwrap(),"paperwing-guard-fixture-v1\n");
+        assert_eq!(std::fs::read_to_string(root.join(".skein-guard-fixture")).unwrap(),"skein-guard-fixture-v1\n");
         let mount=root.join("namespace-mount");
         let phase=crate::env_names::var("SKEIN_GUARD_IO_PHASE").unwrap();
         if phase=="full" {
@@ -208,7 +208,7 @@ fn published_mutation_failures_preserve_applied_outcome_and_changed_bytes() {
     assert!(error.applied);assert_eq!(error.error.code,Some(libc::EIO));
     assert_eq!(std::fs::read(fixture.path.join("repo/file")).unwrap(),b"published");
     assert!(parent.validate(&before).is_err());
-    assert!(std::fs::read_dir(fixture.path.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".paperwing-stage-")));
+    assert!(std::fs::read_dir(fixture.path.join("repo")).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().starts_with(".skein-stage-")));
     let created=root.parent("new",false).unwrap();let missing=created.snapshot().unwrap();
     created.publish(created.stage(b"created",&missing).unwrap(),&missing).unwrap();
     let expected=created.snapshot().unwrap();let error=created.remove_with_sync(&expected,fail).unwrap_err();
