@@ -1,3 +1,4 @@
+use crate::git::repo_command::RepoGit;
 use crate::git::{buffered, valid_root};
 use serde::Serialize;
 use std::path::Path;
@@ -32,7 +33,8 @@ async fn status_of(path: String) -> LocalStatus {
         st.error = Some(error);
         return st;
     }
-    let out = match buffered(&["-C", &path, "status", "--porcelain=v2", "--branch"], &format!("Status: {path}"), &[0]).await {
+    let status_args = RepoGit::at(&path).argv(&["status", "--porcelain=v2", "--branch"]);
+    let out = match buffered(&status_args, &format!("Status: {path}"), &[0]).await {
         Ok(o) if o.code == Some(0) => o,
         Ok(o) => {
             st.error = Some(o.last_error());
@@ -63,7 +65,8 @@ async fn status_of(path: String) -> LocalStatus {
         }
     }
     if st.branch.is_none() {
-        let tag = buffered(&["-C", &path, "describe", "--tags", "--exact-match", "HEAD"], &format!("Tag probe: {path}"), &[0, 128]).await;
+        let describe_args = RepoGit::at(&path).argv(&["describe", "--tags", "--exact-match", "HEAD"]);
+        let tag = buffered(&describe_args, &format!("Tag probe: {path}"), &[0, 128]).await;
         if let Ok(o) = tag {
             if o.code == Some(0) {
                 let name = String::from_utf8_lossy(&o.stdout);

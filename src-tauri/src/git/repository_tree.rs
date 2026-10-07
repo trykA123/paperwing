@@ -1,6 +1,7 @@
 #[path = "tree_identity.rs"]
 mod identity;
 
+use super::repo_command::RepoGit;
 use super::{execute, valid_path, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::time::Duration;
@@ -56,8 +57,7 @@ async fn tree_output(
     expected: &[i32],
     policy: OutputPolicy,
 ) -> Result<Captured, String> {
-    let mut argv = vec!["-C", path];
-    argv.extend_from_slice(args);
+    let argv = RepoGit::at(path).argv(args);
     let output = execute(
         Request {
             args: &argv,

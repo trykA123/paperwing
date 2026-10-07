@@ -22,6 +22,7 @@ pub type TreeRemote = repository_tree::TreeRemote;
 pub type TreeStash = repository_tree::TreeStash;
 pub type TreeSubmodule = repository_tree::TreeSubmodule;
 
+pub(crate) mod repo_command;
 mod redaction;
 mod validation;
 pub use redaction::{last_error, redact, safe};

@@ -1,4 +1,5 @@
 use super::super::{enc, http::Error, parse_manual_path, valid_name};
+use crate::git::repo_command::RepoGit;
 use crate::git::{execute, Captured, OutputPolicy, Request};
 use std::path::Path;
 use std::time::Duration;
@@ -96,8 +97,7 @@ pub(super) async fn validate(path: &str, branch: &str) -> Result<(), String> {
 }
 
 async fn git(path: &str, args: &[&str], expected: &[i32]) -> Result<Captured, Error> {
-    let mut argv = vec!["--no-optional-locks", "-C", path];
-    argv.extend_from_slice(args);
+    let argv = RepoGit::at(path).no_optional_locks().argv(args);
     execute(
         Request {
             args: &argv,
@@ -292,6 +292,9 @@ mod tests {
         assert_eq!(branch.repo.owner, "admin");
         assert_eq!(branch.repo.name, "repo");
         assert_eq!(branch.head, "feature/remote");
+        let argv = crate::git::repo_command::argv_of("Pull request remote");
+        crate::git::repo_command::assert_hardened(&argv, path);
+        assert_eq!(argv[0], "--no-optional-locks");
         let sha = run_git(&fixture.0, &["rev-parse", "feature/local"]).await;
         assert_eq!(branch.sha, String::from_utf8(sha).unwrap().trim());
         run_git(

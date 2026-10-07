@@ -107,7 +107,8 @@ async fn run(app: &AppHandle, job: &Job, phase: &str, args: &[&str]) -> Result<(
     let (app, job, phase) = (app.clone(), job.clone(), phase.to_string());
     let last = Arc::new(std::sync::Mutex::new(-1));
     let context = format!("{}: {} ({})", job.id, phase, job.dest);
-    let output = execute(Request { args, context: &context, timeout: Duration::from_secs(600), expected: &[0], policy: OutputPolicy::Text },
+    let argv = crate::git::repo_command::harden(args);
+    let output = execute(Request { args: &argv, context: &context, timeout: Duration::from_secs(600), expected: &[0], policy: OutputPolicy::Text },
         Some(Arc::new(move |stream, text| {
             if stream != "stderr" { return; }
             if let Some(pct) = progress_pct(text) {

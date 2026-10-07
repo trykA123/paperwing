@@ -1,5 +1,6 @@
 use super::parse::{self, StashEntry};
 use super::valid_oid;
+use crate::git::repo_command::RepoGit;
 use crate::git::{execute_cancellable, Captured, OutputPolicy, Request};
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
@@ -12,15 +13,7 @@ pub(crate) async fn run(
     policy: OutputPolicy,
     timeout: Duration,
 ) -> Result<Captured, String> {
-    let mut argv = vec![
-        "-C",
-        path,
-        "-c",
-        "core.fsmonitor=false",
-        "-c",
-        "core.quotepath=false",
-    ];
-    argv.extend_from_slice(args);
+    let argv = RepoGit::at(path).argv(args);
     let output = execute_cancellable(
         Request {
             args: &argv,
