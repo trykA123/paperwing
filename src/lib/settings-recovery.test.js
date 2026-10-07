@@ -171,3 +171,19 @@ test('clone starts without a settings pre-save while startup recovery is pending
         expect(calls).not.toContain('save_settings');
     });
 });
+
+test('a successful explicit save ends startup recovery and dismisses its notice', async () => {
+    await withIpc(command => {
+        if (command === 'load_settings') return { sources: [], workspace: null, startupError };
+        if (command === 'save_settings') return;
+        throw Error(`unexpected ${command}`);
+    }, async () => {
+        const state = stateWithError();
+        state.platform = linuxPlatform;
+        await state.retrySettings();
+        expect(state.notices.items.filter(item => item.kind === 'error')).toHaveLength(1);
+        await state.saveSettings();
+        expect(state.startupError).toBeNull();
+        expect(state.notices.items.filter(item => item.kind === 'error')).toHaveLength(0);
+    });
+});

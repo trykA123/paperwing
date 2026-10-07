@@ -67,17 +67,17 @@ fn prepare_settings<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<PathBuf, St
 }
 
 pub fn load_settings<R: tauri::Runtime>(app: AppHandle<R>) -> Result<Settings, String> {
-    Ok(load_with_status(&app)?.settings)
+    Ok(load_with_status(&app, false)?.settings)
 }
 
-fn load_with_status<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Loaded, String> {
+fn load_with_status<R: tauri::Runtime>(app: &AppHandle<R>, record: bool) -> Result<Loaded, String> {
     let Some(state) = app.try_state::<Startup>() else {
         return load_persisted(app);
     };
     if state.check().is_ok() {
         let loaded = load_persisted(app);
-        if loaded.is_ok() {
-            return loaded;
+        if loaded.is_ok() || !record {
+            return loaded.or_else(|_| load_persisted(app));
         }
     }
     match load_persisted(app) {
@@ -86,6 +86,7 @@ fn load_with_status<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Loaded, Str
             state.clear()?;
             Ok(loaded)
         }
+        Err(error) if !record => Err(error),
         Err(error) => {
             state.record(error.clone());
             Ok(Loaded {
@@ -214,7 +215,7 @@ pub mod commands {
 
     #[tauri::command]
     pub async fn load_settings<R: tauri::Runtime>(app: AppHandle<R>) -> Result<Loaded, String> {
-        tauri::async_runtime::spawn_blocking(move || load_with_status(&app)).await
+        tauri::async_runtime::spawn_blocking(move || load_with_status(&app, true)).await
             .map_err(|_| "Could not load settings".to_string())?
     }
 

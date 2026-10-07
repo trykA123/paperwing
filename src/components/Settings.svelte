@@ -151,7 +151,7 @@
       s.credentialManaged = draft?.credentialManaged;
       const sources = app.sources.map(source => source.id === s.id ? s : $state.snapshot(source) as Source);
       if (!sources.some(source => source.id === s.id)) sources.push(s);
-      await api.saveSettings({ sources, workspace: $state.snapshot(app.ws) });
+      await app.saveSettings({ sources, workspace: $state.snapshot(app.ws) });
       app.credentials.invalidate(s.id);
       await app.credentials.synchronize(s.id);
       app.sources = sources;
@@ -181,7 +181,7 @@
     try {
       if (s.kind !== 'manual' || s.credentialManaged || app.platform.platform === 'windows') await app.credentials.mutate(s.id);
       const sources = app.sources.filter(source => source.id !== s.id);
-      await api.saveSettings({ sources: $state.snapshot(sources), workspace: $state.snapshot(app.ws) });
+      await app.saveSettings({ sources: $state.snapshot(sources), workspace: $state.snapshot(app.ws) });
       app.sources = sources;
       app.credentials.invalidate(s.id);
     } catch (e) { app.toast(`Source retained. ${String(e)}`, 'error'); }

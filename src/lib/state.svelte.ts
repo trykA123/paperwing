@@ -307,6 +307,14 @@ class AppState {
     } catch (error) { this.toast(describeError(error, 'refresh the loaded settings'), 'error'); }
   }
 
+  async saveSettings(settings = { sources: this.sources, workspace: this.ws }) {
+    await api.saveSettings(settings);
+    if (!this.startupError) return;
+    this.startupError = null;
+    if (this.#startupNotice !== null) this.notices.dismiss(this.#startupNotice);
+    this.#startupNotice = null;
+  }
+
   toast(msg: string, kind: NoticeKind = 'info', action?: NoticeAction, options: NoticeOptions = {}) {
     return this.notices.notify(msg, kind, { ...options, actions: [...(action ? [action] : []), ...(options.actions ?? [])] });
   }
@@ -580,7 +588,7 @@ class AppState {
     if (trashFolders) {
       this.gitBusy = true;
       try {
-        await api.saveSettings({ sources: this.sources, workspace: this.ws });
+        await this.saveSettings();
         const outcomes = await api.trashSetFolders(id);
         const moved = outcomes.filter(outcome => outcome.state === 'trashed').length;
         const kept = outcomes.filter(outcome => outcome.state === 'skipped' || outcome.state === 'failed');
@@ -796,7 +804,7 @@ class AppState {
       this.running = true;
       this.#runNotice = this.runNotices.begin(mode, jobs.length);
       try {
-        if (!this.startupError) await api.saveSettings({ sources: this.sources, workspace: this.ws });
+        if (!this.startupError) await this.saveSettings();
         await api.startClone(jobs, { parallel: this.ws.parallel, shallow: this.ws.shallow, onExisting: this.ws.onExisting }, mode);
       } catch (e) {
         this.running = false;

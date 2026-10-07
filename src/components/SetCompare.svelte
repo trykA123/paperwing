@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '../lib/api';
   import { app } from '../lib/state.svelte';
   import type { SetCompareState } from '../lib/compare.svelte';
   import CompareReferencePicker from './CompareReferencePicker.svelte';
@@ -27,7 +26,7 @@
     if (!mounted || !owner || preparing) return;
     preparing = true; error = '';
     try {
-      await api.saveSettings({ sources: $state.snapshot(app.sources), workspace: $state.snapshot(app.ws) });
+      await app.saveSettings({ sources: $state.snapshot(app.sources), workspace: $state.snapshot(app.ws) });
       if (!mounted || !owner) return;
       fingerprint = context(); await comparison.run($state.snapshot(owner.items));
     }

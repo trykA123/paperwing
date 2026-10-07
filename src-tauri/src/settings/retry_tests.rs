@@ -242,3 +242,33 @@ async fn startup_autosave_preserves_torn_main_and_unreadable_backup_regression()
     assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 3);
     assert!(app.state::<Startup>().check().is_err());
 }
+
+#[tokio::test]
+async fn internal_load_failures_leave_startup_clean_and_saves_working_regression() {
+    if !run_isolated("settings::retry_tests::internal_load_failures_leave_startup_clean_and_saves_working_regression") {
+        return;
+    }
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("settings-internal-load");
+    let app = app_for(&fixture);
+    let file = settings_file(app.handle()).unwrap();
+    let source = saved_settings(&file);
+    initialize(app.handle().clone()).unwrap();
+    {
+        let _failure = ReadFailure::new(&file, 2);
+        assert!(load_settings(app.handle().clone()).is_err());
+    }
+    assert!(app.state::<Startup>().check().is_ok());
+    commands::save_settings(
+        app.handle().clone(),
+        Settings {
+            sources: vec![source],
+            workspace: serde_json::json!({ "root": "edited-root" }),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(String::from_utf8(std::fs::read(&file).unwrap())
+        .unwrap()
+        .contains("edited-root"));
+}
