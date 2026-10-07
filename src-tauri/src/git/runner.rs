@@ -2,6 +2,8 @@
 mod batch;
 #[path = "activity.rs"]
 mod activity;
+#[path = "cancel.rs"]
+mod cancel;
 #[path = "binary.rs"]
 pub(super) mod binary;
 pub(crate) use batch::BatchReader;
@@ -17,6 +19,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinSet;
 
 use activity::Emit;
+use cancel::{is_cancelled, Stop};
 use super::{redact, redaction::{cached_secrets, remember_secrets, secret_key, Redaction}};
 
 #[cfg(target_os = "linux")]
@@ -31,7 +34,7 @@ const OUTPUT_LIMIT: usize = 64 * 1024;
 pub(crate) const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
 pub(super) static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static SOURCES: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
-struct RunningJob { id: String, cancelled: Arc<AtomicBool>, accepts_cancel: bool }
+struct RunningJob { id: String, cancelled: Arc<AtomicBool>, stop: Arc<Stop>, accepts_cancel: bool }
 type RunningJobs = Vec<RunningJob>;
 static RUNNING: OnceLock<Mutex<RunningJobs>> = OnceLock::new();
 static SLOTS: OnceLock<Semaphore> = OnceLock::new();
@@ -87,13 +90,13 @@ pub(crate) static SECRET_READS: std::sync::atomic::AtomicUsize = std::sync::atom
 async fn redaction_secrets(
     ids: Vec<String>,
     cancellation: &Option<Arc<AtomicBool>>,
-    owner: &Option<Arc<AtomicBool>>,
+    stop: &Stop,
 ) -> Result<(Vec<String>, bool), String> {
     let key = secret_key(&ids);
     if let Some(secrets) = cached_secrets(&key) { return Ok((secrets, false)); }
     let mut secrets = Vec::new();
     for source_id in ids {
-        if is_cancelled(cancellation, owner) { return Err("Git command cancelled".into()); }
+        if is_cancelled(cancellation, stop) { return Err("Git command cancelled".into()); }
         match read_secret(source_id).await {
             Ok(Some(token)) if !token.is_empty() => secrets.push(token),
             Ok(_) => (),
@@ -135,6 +138,7 @@ pub fn cancel_activity(id: String) -> bool {
     let entries = RUNNING.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
     if let Some(job) = entries.iter().find(|job| job.id == id && job.accepts_cancel) {
         job.cancelled.store(true, AtomicOrdering::Relaxed);
+        job.stop.wake();
         true
     } else {
         false
@@ -176,7 +180,7 @@ pub(super) type Observer = Arc<dyn Fn(&str, &str) + Send + Sync>;
 pub(super) type ExitObserver = Arc<dyn Fn(&str, &str) -> Result<(), String> + Send + Sync>;
 
 pub type StdoutSink = Arc<dyn Fn(&[u8]) -> bool + Send + Sync>;
-type SinkHook = (StdoutSink, Arc<AtomicBool>);
+type SinkHook = (StdoutSink, Arc<AtomicBool>, Arc<Stop>);
 
 pub(super) async fn drain(reader: impl AsyncRead + Unpin, stream: &'static str, sender: tokio::sync::mpsc::Sender<(String, String)>, secrets: Vec<String>, policy: OutputPolicy) -> Result<(Vec<u8>, usize, bool), String> {
     drain_with(reader, stream, sender, secrets, policy, None).await
@@ -194,8 +198,8 @@ async fn drain_with(reader: impl AsyncRead + Unpin, stream: &'static str, sender
         let count = reader.read(&mut buffer).await.map_err(|_| "Could not read Git output".to_string())?;
         if count == 0 { break; }
         total += count;
-        if let Some((sink, stop)) = &sink {
-            if sink(&buffer[..count]) { stop.store(true, AtomicOrdering::Relaxed); break; }
+        if let Some((sink, sunk, stop)) = &sink {
+            if sink(&buffer[..count]) { sunk.store(true, AtomicOrdering::Relaxed); stop.wake(); break; }
             continue;
         }
         let room = CAPTURE_LIMIT.saturating_sub(captured.len());
@@ -274,29 +278,24 @@ async fn execute_core(request: Request<'_>, observer: Option<Observer>, cancella
         let timeout = request.timeout;
         let policy = request.policy;
         let input = input.map(<[u8]>::to_vec);
-        let owner = Arc::new(AtomicBool::new(false));
-        let _call = CancelOnDrop(owner.clone());
+        let stop = Stop::new();
+        let _call = CancelOnDrop(stop.clone());
         tokio::spawn(async move {
             let args: Vec<_> = args.iter().map(String::as_str).collect();
             run_inner(Request { args: &args, context: &context, expected: &expected, timeout, policy }, observer,
-                cancellation, input.as_deref(), Some(owner), sink, #[cfg(test)] after_exit).await
+                cancellation, input.as_deref(), stop, sink, #[cfg(test)] after_exit).await
         }).await.map_err(|_| "Git runner task failed".to_string())?
     }
     #[cfg(not(target_os = "linux"))]
-    run_inner(request, observer, cancellation, input, None, sink, #[cfg(test)] after_exit).await
+    run_inner(request, observer, cancellation, input, Stop::new(), sink, #[cfg(test)] after_exit).await
 }
 
 #[cfg(target_os = "linux")]
-struct CancelOnDrop(Arc<AtomicBool>);
+struct CancelOnDrop(Arc<Stop>);
 
 #[cfg(target_os = "linux")]
 impl Drop for CancelOnDrop {
-    fn drop(&mut self) { self.0.store(true, AtomicOrdering::Relaxed); }
-}
-
-fn is_cancelled(external: &Option<Arc<AtomicBool>>, owner: &Option<Arc<AtomicBool>>) -> bool {
-    external.as_ref().is_some_and(|flag| flag.load(AtomicOrdering::Relaxed))
-        || owner.as_ref().is_some_and(|flag| flag.load(AtomicOrdering::Relaxed))
+    fn drop(&mut self) { self.0.request(); }
 }
 
 #[cfg(target_os = "linux")]
@@ -382,7 +381,7 @@ fn write_root_from(
     None
 }
 
-async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, owner: Option<Arc<AtomicBool>>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, stop: Arc<Stop>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
     if let Some(root) = write_root(request.args) { BatchReader::close_root(&root).await?; }
     if request.args.windows(2).any(|args| args == ["worktree", "remove"]) {
         let root = request.args.windows(2).find(|args| args[0] == "-C").map(|args| std::path::PathBuf::from(args[1]));
@@ -399,40 +398,25 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     crate::benchmark::command(operation);
     #[cfg(feature = "benchmark")]
     let queue = crate::benchmark::Span::new("git.queue", operation);
-    #[cfg(target_os = "linux")]
-    let _filesystem = loop {
-        tokio::select! {
-            guard = filesystem_gate().read() => break guard,
-            _ = tokio::time::sleep(Duration::from_millis(25)) => if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); },
-        }
-    };
-    #[cfg(not(target_os = "linux"))]
-    let _filesystem = filesystem_gate().read().await;
-    let permit = SLOTS.get_or_init(|| Semaphore::new(32)).acquire();
-    tokio::pin!(permit);
-    let _permit = loop {
-        tokio::select! {
-            result = &mut permit => break result.map_err(|_| "Git runner unavailable")?,
-            _ = tokio::time::sleep(Duration::from_millis(25)) => {
-                if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
-            }
-        }
-    };
-    if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
+    let _watch = cancel::watch(cancellation.as_ref(), &stop);
+    let _filesystem = cancel::admitted(filesystem_gate().read(), &cancellation, &stop).await?;
+    let _permit = cancel::admitted(SLOTS.get_or_init(|| Semaphore::new(32)).acquire(), &cancellation, &stop).await?
+        .map_err(|_| "Git runner unavailable")?;
+    if is_cancelled(&cancellation, &stop) { return Err("Git command cancelled".into()); }
     #[cfg(feature = "benchmark")]
     drop(queue);
     #[cfg(feature = "benchmark")]
     let _process = crate::benchmark::Span::new("git.process", operation);
-    let (secrets, quiet) = redaction_secrets(configured_sources(), &cancellation, &owner).await?;
+    let (secrets, quiet) = redaction_secrets(configured_sources(), &cancellation, &stop).await?;
     let redaction = if quiet { Redaction::Quiet } else { Redaction::Ready(secrets) };
     let observer = if quiet { None } else { observer };
-    if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
+    if is_cancelled(&cancellation, &stop) { return Err("Git command cancelled".into()); }
     let start = Instant::now();
     let cancelled = Arc::new(AtomicBool::new(false));
     let id = {
         let mut jobs = RUNNING.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
         let id = format!("git-{}", NEXT_ID.fetch_add(1, AtomicOrdering::Relaxed));
-        jobs.push(RunningJob { id: id.clone(), cancelled: cancelled.clone(), accepts_cancel: true });
+        jobs.push(RunningJob { id: id.clone(), cancelled: cancelled.clone(), stop: stop.clone(), accepts_cancel: true });
         id
     };
     let mut activity = Activity {
@@ -457,11 +441,10 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         let stderr = child.stderr.take().ok_or("Missing Git stderr")?;
         let streaming = sink.is_some();
         let sunk = Arc::new(AtomicBool::new(false));
-        let hook = sink.map(|sink| (sink, sunk.clone()));
+        let hook = sink.map(|sink| (sink, sunk.clone(), stop.clone()));
         let mut streams = Streams::new(stdin, stdout, stderr, input, redaction.secrets(), if quiet { OutputPolicy::Metadata } else { request.policy }, hook);
         let deadline = tokio::time::sleep(request.timeout);
         tokio::pin!(deadline);
-        let mut tick = tokio::time::interval(Duration::from_millis(25));
         let mut logged = 0;
         let mut stopped = None;
         let mut flush_due: Option<Instant> = None;
@@ -469,7 +452,10 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
             tokio::select! {
                 status = child.wait() => break status.map_err(|_| "Could not wait for Git".to_string())?,
                 _ = &mut deadline => { stopped = Some("timedOut"); break terminate(&mut child).await?; },
-                _ = tick.tick() => if sunk.load(AtomicOrdering::Relaxed) { stopped = Some("sunk"); break terminate(&mut child).await?; } else if cancelled.load(AtomicOrdering::Relaxed) || is_cancelled(&cancellation, &owner) { stopped = Some("cancelled"); break terminate(&mut child).await?; },
+                _ = cancel::until(&stop, || sunk.load(AtomicOrdering::Relaxed) || cancelled.load(AtomicOrdering::Relaxed) || is_cancelled(&cancellation, &stop)) => {
+                    stopped = Some(if sunk.load(AtomicOrdering::Relaxed) { "sunk" } else { "cancelled" });
+                    break terminate(&mut child).await?;
+                }
                 Some((stream, text)) = streams.receiver.recv() => match record_output(&mut activity, &mut logged, stream, text, observer.as_ref(), start) {
                     Some(Emit::Sent) => flush_due = None,
                     Some(Emit::Deferred(due)) => flush_due = Some(due),
