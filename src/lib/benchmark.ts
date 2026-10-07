@@ -1,13 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { CompareEndpoint, CompareFile, CompareSnapshot, RootSupport } from './api';
 
-export const benchmarkEnabled = import.meta.env.VITE_SKEIN_BENCHMARK === '1' || import.meta.env.VITE_PAPERWING_BENCHMARK === '1';
+export const benchmarkEnabled = import.meta.env.VITE_SKEIN_BENCHMARK_FIXTURE === '1';
+const timingEnabled = benchmarkEnabled || import.meta.env.VITE_SKEIN_BENCHMARK === '1' || import.meta.env.VITE_PAPERWING_BENCHMARK === '1';
 export type BenchmarkPhase = 'ui.request' | 'ui.files-ready' | 'ui.first-render' | 'ui.complete' | 'editor.import' | 'editor.construct' | 'editor.diff';
 const pending = new Set<Promise<unknown>>();
 let failed = false;
 
 export function benchmarkTimer(phase: BenchmarkPhase) {
-  if (!benchmarkEnabled) return () => {};
+  if (!timingEnabled) return () => {};
   const started = performance.now();
   let ended = false;
   return () => {

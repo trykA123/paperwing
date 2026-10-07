@@ -31,3 +31,5 @@ would orphan data on existing installs or break the scripts and evidence that re
 
 Test and benchmark variables use the `SKEIN_` prefix, for example `SKEIN_TEST_TMP` and
 `VITE_SKEIN_BENCHMARK`. The `PAPERWING_` name is still read when the `SKEIN_` name is unset.
+`VITE_SKEIN_BENCHMARK` only records UI timings (diagnostics builds). `VITE_SKEIN_BENCHMARK_FIXTURE` also runs the
+fixture comparison harness and needs the `test-profile` Rust feature.
