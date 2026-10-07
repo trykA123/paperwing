@@ -1,3 +1,4 @@
+pub(super) use super::linux_file::recycle_file;
 use crate::linux_guard::{
     folders::{create_private_path, Directory},
     Error, Root,
@@ -78,9 +79,19 @@ impl Trash {
         &self,
         source: &Directory,
         repository: &Root,
+        move_folder: impl FnMut(&Directory, &str, &mut bool) -> Result<PathBuf, Error>,
+    ) -> Result<(), String> {
+        self.recycle_entry(source, repository, &source.path, move_folder)
+    }
+
+    pub(super) fn recycle_entry(
+        &self,
+        source: &Directory,
+        repository: &Root,
+        source_path: &Path,
         mut move_folder: impl FnMut(&Directory, &str, &mut bool) -> Result<PathBuf, Error>,
     ) -> Result<(), String> {
-        let bytes = self.info_bytes(source)?;
+        let bytes = self.info_bytes_for(source, source_path)?;
         for _ in 0..128 {
             let name =
                 crate::linux_guard::storage::unique_name("skein-").map_err(|e| e.to_string())?;
@@ -117,24 +128,23 @@ impl Trash {
         Err("Trash names are exhausted; source retained".into())
     }
 
-    fn info_bytes(&self, source: &Directory) -> Result<String, String> {
+    fn info_bytes_for(&self, source: &Directory, source_path: &Path) -> Result<String, String> {
         self.directory.private().map_err(|e| e.to_string())?;
         self.files.private().map_err(|e| e.to_string())?;
         self.info.private().map_err(|e| e.to_string())?;
         if !source.same_mount(&self.files) {
             return Err("Cross-device folder moves are refused".into());
         }
-        if self.directory.path.starts_with(&source.path)
-            || source.path.starts_with(&self.directory.path)
+        if self.directory.path.starts_with(source_path)
+            || source_path.starts_with(&self.directory.path)
         {
             return Err("Trash storage overlaps the source folder".into());
         }
         let original = match &self.top {
-            Some(top) => source
-                .path
+            Some(top) => source_path
                 .strip_prefix(top)
                 .map_err(|_| "Trash source is outside its mount")?,
-            None => &source.path,
+            None => source_path,
         };
         Ok(format!(
             "[Trash Info]\nPath={}\nDeletionDate={}\n",

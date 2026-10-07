@@ -257,42 +257,78 @@ pub async fn execute_cancellable(request: Request<'_>, cancellation: Arc<AtomicB
     execute_cancellable_input(request, cancellation, None).await
 }
 
+fn subcommand<'a>(args: &'a [&'a str]) -> Option<&'a str> {
+    let mut index = 0;
+    while let Some(&arg) = args.get(index) {
+        match arg {
+            "-C" | "-c" | "--git-dir" | "--work-tree" | "--namespace" | "--exec-path" => index += 2,
+            opt if opt.starts_with('-') => index += 1,
+            subcmd => return Some(subcmd),
+        }
+    }
+    None
+}
+
+fn input_limit(args: &[&str]) -> usize {
+    if matches!(subcommand(args), Some("apply" | "hash-object")) {
+        crate::paths::CONTENT_LIMIT
+    } else {
+        256 * 1024
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
 pub async fn execute_input(request: Request<'_>, input: Option<&[u8]>) -> Result<Captured, String> {
-    if input.is_some_and(|bytes| bytes.len() > 256 * 1024) { return Err("Git input exceeded the limit".into()); }
+    execute_input_env(request, input, &[]).await
+}
+
+pub async fn execute_input_env(request: Request<'_>, input: Option<&[u8]>, envs: &[(&str, &str)]) -> Result<Captured, String> {
+    let limit = input_limit(request.args);
+    if input.is_some_and(|bytes| bytes.len() > limit) { return Err("Git input exceeded the limit".into()); }
     #[cfg(test)]
-    { execute_inner(request, None, None, input, None).await }
+    { execute_inner_env(request, None, None, input, envs, None).await }
     #[cfg(not(test))]
-    { execute_inner(request, None, None, input).await }
+    { execute_inner_env(request, None, None, input, envs).await }
 }
 
 pub async fn execute_cancellable_input(request: Request<'_>, cancellation: Arc<AtomicBool>, input: Option<&[u8]>) -> Result<Captured, String> {
-    if input.is_some_and(|bytes| bytes.len() > 256 * 1024) { return Err("Git input exceeded the limit".into()); }
+    execute_cancellable_input_env(request, cancellation, input, &[]).await
+}
+
+pub async fn execute_cancellable_input_env(request: Request<'_>, cancellation: Arc<AtomicBool>, input: Option<&[u8]>, envs: &[(&str, &str)]) -> Result<Captured, String> {
+    let limit = input_limit(request.args);
+    if input.is_some_and(|bytes| bytes.len() > limit) { return Err("Git input exceeded the limit".into()); }
     #[cfg(test)]
-    { execute_inner(request, None, Some(cancellation), input, None).await }
+    { execute_inner_env(request, None, Some(cancellation), input, envs, None).await }
     #[cfg(not(test))]
-    { execute_inner(request, None, Some(cancellation), input).await }
+    { execute_inner_env(request, None, Some(cancellation), input, envs).await }
 }
 
 pub async fn execute_streaming(request: Request<'_>, cancellation: Arc<AtomicBool>, sink: StdoutSink) -> Result<Captured, String> {
     #[cfg(test)]
-    { execute_core(request, None, Some(cancellation), None, Some(sink), None).await }
+    { execute_core_env(request, None, Some(cancellation), None, &[], Some(sink), None).await }
     #[cfg(not(test))]
-    { execute_core(request, None, Some(cancellation), None, Some(sink)).await }
+    { execute_core_env(request, None, Some(cancellation), None, &[], Some(sink)).await }
 }
 
 pub(super) async fn execute_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
-    #[cfg(test)]
-    { execute_core(request, observer, cancellation, input, None, after_exit).await }
-    #[cfg(not(test))]
-    { execute_core(request, observer, cancellation, input, None).await }
+    execute_inner_env(request, observer, cancellation, input, &[], #[cfg(test)] after_exit).await
 }
 
-async fn execute_core(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+pub(super) async fn execute_inner_env(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, envs: &[(&str, &str)], #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+    #[cfg(test)]
+    { execute_core_env(request, observer, cancellation, input, envs, None, after_exit).await }
+    #[cfg(not(test))]
+    { execute_core_env(request, observer, cancellation, input, envs, None).await }
+}
+
+async fn execute_core_env(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, envs: &[(&str, &str)], sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
     #[cfg(test)]
     require_runner_lock(&TEST_RUNNER_LOCK);
     #[cfg(target_os = "linux")]
     {
         let args: Vec<_> = request.args.iter().map(|arg| arg.to_string()).collect();
+        let envs_owned: Vec<(String, String)> = envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         let context = request.context.to_string();
         let expected = request.expected.to_vec();
         let timeout = request.timeout;
@@ -302,12 +338,13 @@ async fn execute_core(request: Request<'_>, observer: Option<Observer>, cancella
         let _call = CancelOnDrop(stop.clone());
         tokio::spawn(async move {
             let args: Vec<_> = args.iter().map(String::as_str).collect();
+            let envs_ref: Vec<(&str, &str)> = envs_owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
             run_inner(Request { args: &args, context: &context, expected: &expected, timeout, policy }, observer,
-                cancellation, input.as_deref(), stop, sink, #[cfg(test)] after_exit).await
+                cancellation, input.as_deref(), stop, sink, &envs_ref, #[cfg(test)] after_exit).await
         }).await.map_err(|_| "Git runner task failed".to_string())?
     }
     #[cfg(not(target_os = "linux"))]
-    run_inner(request, observer, cancellation, input, Stop::new(), sink, #[cfg(test)] after_exit).await
+    run_inner(request, observer, cancellation, input, Stop::new(), sink, envs, #[cfg(test)] after_exit).await
 }
 
 #[cfg(target_os = "linux")]
@@ -401,7 +438,8 @@ fn write_root_from(
     None
 }
 
-async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, stop: Arc<Stop>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+#[allow(clippy::too_many_arguments)]
+async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, stop: Arc<Stop>, sink: Option<StdoutSink>, envs: &[(&str, &str)], #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
     if let Some(root) = write_root(request.args) { BatchReader::close_root(&root).await?; }
     if request.args.windows(2).any(|args| args == ["worktree", "remove"]) {
         let root = request.args.windows(2).find(|args| args[0] == "-C").map(|args| std::path::PathBuf::from(args[1]));
@@ -450,6 +488,9 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     let _registration = Registration(id.clone());
     let result: Result<Captured, String> = async {
         let mut command = git();
+        for (key, val) in envs {
+            command.env(key, val);
+        }
         command.args(request.args).stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() }).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(target_os = "linux")]
         let mut child = Child::spawn(&mut command, Some(&id)).await.map_err(|_| "Could not start Git. Check Git installation and Linux pidfd/waitid process support.".to_string())?;
@@ -591,7 +632,7 @@ pub(super) fn publish_cleanup_state(context: &str, state: &str) {
 }
 
 /// `git` with prompts disabled and (on Windows) no console window.
-fn git() -> tokio::process::Command {
+pub(crate) fn git() -> tokio::process::Command {
     let binary = binary::current();
     let mut c = tokio::process::Command::new(&binary.program);
     if let Some(path) = binary.path_value(std::env::var_os("PATH")) { c.env("PATH", path); }

@@ -209,3 +209,44 @@ fn a_read_that_started_before_a_token_change_cannot_drop_the_new_token() {
     let text = super::super::safe("synthetic-interleave-new synthetic-interleave-old");
     assert_eq!(text, "[redacted] [redacted]");
 }
+
+#[test]
+fn input_limit_matches_subcommand_position_not_arbitrary_arguments() {
+    assert_eq!(
+        input_limit(&["apply", "--cached"]),
+        crate::paths::CONTENT_LIMIT
+    );
+    assert_eq!(
+        input_limit(&["-C", "/path", "apply", "--cached"]),
+        crate::paths::CONTENT_LIMIT
+    );
+    assert_eq!(
+        input_limit(&["-c", "user.name=me", "hash-object", "-w"]),
+        crate::paths::CONTENT_LIMIT
+    );
+
+    assert_eq!(input_limit(&["commit", "-m", "apply"]), 256 * 1024);
+    assert_eq!(input_limit(&["commit", "-m", "hash-object"]), 256 * 1024);
+    assert_eq!(
+        input_limit(&["-C", "/path", "commit", "-m", "apply"]),
+        256 * 1024
+    );
+    assert_eq!(input_limit(&["log", "--grep=apply"]), 256 * 1024);
+}
+
+#[tokio::test]
+async fn execute_input_rejects_large_input_when_apply_is_not_subcommand() {
+    let big_input = vec![0u8; 300 * 1024];
+    let request = Request {
+        args: &["commit", "-m", "apply"],
+        context: "test-limit",
+        timeout: Duration::from_secs(5),
+        expected: &[0],
+        policy: OutputPolicy::Metadata,
+    };
+    let err = match execute_input(request, Some(&big_input)).await {
+        Ok(_) => panic!("Expected error due to input limit"),
+        Err(err) => err,
+    };
+    assert_eq!(err, "Git input exceeded the limit");
+}
