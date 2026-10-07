@@ -242,6 +242,10 @@ pub(super) async fn diff_metadata(
     } else {
         args.insert(0, "diff");
     }
+    let algorithm = left.diff_config.iter().rev()
+        .find_map(|value| value.strip_prefix("diff.algorithm="))
+        .map(|value| format!("--diff-algorithm={value}"));
+    if let Some(algorithm) = &algorithm { args.push(algorithm); }
     args.splice(0..0, left.diff_config.iter().map(String::as_str));
     args.extend([left.commit.as_str(), right.commit.as_str()]);
     let mut names = args.clone();

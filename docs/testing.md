@@ -138,18 +138,25 @@ The comparison content command sends raw binary through `tauri::ipc::Response`.
 The API adapter returns a `Uint8Array` and derives content metadata from the request
 and selected row. The backend still validates the session, generation, source and bytes.
 
-Rust counts cover disjoint edits when a cached check for the private storage root and
-source repositories finds no applicable system, global, configured or repository
-attributes or automatic EOL conversion. The decision runs before materialization. Other contexts retain Git
-counts. Batch readers use six independent sessions, release after 30 seconds idle,
-and restart once after a read error. They release together on close, cancel, refresh,
-root mutation and page reload. Linked worktrees use their Git and common directories.
+Rust counts cover disjoint LF edits when a cached `git check-attr -a` probe finds no
+applicable attributes for `left` and `right` in the private storage root. The probe
+uses the same `core.attributesFile=` override as the legacy no-index diff. CR-bearing
+inputs retain Git counts: `core.autocrlf=true` and `input` normalize CRLF even when
+check-attr reports no attributes. Eligibility and diff configuration reset on open
+and refresh, before materialization. Storage ancestors with `.gitattributes` keep
+the Git fallback because attributes can target generated child directories.
+Batch readers have twelve independent permits;
+same-Git-directory endpoints share one reader. Readers release after 30 seconds idle
+and restart once after a read error. They close on session release, cancellation,
+refresh, root mutation, fetch and pull. Page reload drains sessions synchronously
+before scheduling reader closes. Linked worktrees use their Git and common directories.
 Long-path inventories retain name-status metadata at the existing capture limit.
 
 The ignored `compare::tests::cold_measure::measure_cold_comparison` test provides a
 backend-only before/after harness with the `benchmark` feature. It requires
 `SKEIN_COLD_ROOT`, `SKEIN_COLD_ENGINE` (`old` or `new`),
 `SKEIN_COLD_WORKLOAD` (`refs`, `cross` or `working`) and `SKEIN_COLD_RESULT`.
+`SKEIN_COLD_NORMALIZE_EOL=false` disables EOL normalization; it defaults to `true`.
 Use fixtures with `.skein-disposable` containing `skein-disposable-fixture-v1` and output paths inside the owned worktree. Capture process-tree
 RSS only between its `MEASURE_BEGIN` and `MEASURE_END` markers. These measurements
 exclude WebView rendering and do not replace native release or Windows/Defender evidence.

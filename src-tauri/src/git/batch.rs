@@ -10,13 +10,14 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot, watch, Semaphore};
 
-static READERS: Semaphore = Semaphore::const_new(6);
+const READER_LIMIT: usize = 12;
+static READERS: Semaphore = Semaphore::const_new(READER_LIMIT);
 static OWNERS: OnceLock<Mutex<Vec<Weak<Owner>>>> = OnceLock::new();
 const IDLE: Duration = Duration::from_secs(30);
 
 #[cfg(test)]
 pub(super) fn resources_idle() -> bool {
-    READERS.available_permits() == 6
+    READERS.available_permits() == READER_LIMIT
 }
 
 struct RunState {
@@ -57,6 +58,18 @@ impl Drop for Owner {
 pub(crate) struct BatchReader(Arc<Owner>);
 
 impl BatchReader {
+    pub(crate) async fn shares_directory(&self, root: PathBuf) -> bool {
+        let left = self.0.root.clone();
+        tokio::task::spawn_blocking(move || {
+            batch_repository::resolve(&left)
+                .ok()
+                .zip(batch_repository::resolve(&root).ok())
+                .is_some_and(|(left, right)| left.directory == right.directory)
+        })
+        .await
+        .unwrap_or(false)
+    }
+
     #[cfg(test)]
     pub(crate) fn is_started(&self) -> bool {
         self.0.handle.lock().is_ok_and(|handle| {

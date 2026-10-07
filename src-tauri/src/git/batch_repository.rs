@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, PartialEq)]
-pub(super) struct Repository {
-    pub(super) directory: PathBuf,
+pub(crate) struct Repository {
+    pub(crate) directory: PathBuf,
     identity: [String; 3],
 }
 
-pub(super) fn resolve(root: &Path) -> Result<Repository, String> {
+pub(crate) fn resolve(root: &Path) -> Result<Repository, String> {
     let marker = root.join(".git");
     let metadata =
         std::fs::symlink_metadata(&marker).map_err(|_| "Batch metadata is unavailable")?;

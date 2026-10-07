@@ -4,7 +4,8 @@ use std::collections::HashSet;
 pub(super) fn count(left: &[u8], right: &[u8], job: &Job) -> Result<Option<Lines>, Problem> {
     job.check()?;
     let lines = |bytes: &[u8]| bytes.iter().filter(|byte| **byte == b'\n').count();
-    if lines(left) > 8192 || lines(right) > 8192 {
+    if left.contains(&b'\r') || right.contains(&b'\r') || lines(left) > 8192 || lines(right) > 8192
+    {
         return Ok(None);
     }
     let mut left: Vec<_> = left.split_inclusive(|byte| *byte == b'\n').collect();

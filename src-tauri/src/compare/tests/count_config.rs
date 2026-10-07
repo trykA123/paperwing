@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn automatic_eol_conversion_requires_git_counts() {
+async fn automatic_eol_conversion_falls_back_for_cr_inputs() {
     let _guard = git::TEST_RUNNER_LOCK.lock().await;
     if std::env::var_os("SKEIN_COUNT_EOL_CHILD").is_some() {
         let fixture = Fixture::new().await;
@@ -18,7 +18,7 @@ async fn automatic_eol_conversion_requires_git_counts() {
             .allows(&fixture.0.join("repo"), &job)
             .await
             .unwrap();
-        assert!(!job.rust_counts);
+        assert!(job.rust_counts);
         assert_eq!(
             line_counts(b"same\r\n", b"same\n", &job).await.unwrap(),
             legacy::counts(b"same\r\n", b"same\n", &job).await.unwrap()
@@ -33,7 +33,7 @@ async fn automatic_eol_conversion_requires_git_counts() {
         command
             .args([
                 "--exact",
-                "compare::tests::count_config::automatic_eol_conversion_requires_git_counts",
+                "compare::tests::count_config::automatic_eol_conversion_falls_back_for_cr_inputs",
                 "--nocapture",
             ])
             .env("SKEIN_COUNT_EOL_CHILD", "1")

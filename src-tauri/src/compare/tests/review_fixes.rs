@@ -36,7 +36,7 @@ async fn attribute_free_counts_skip_git_and_materialization_without_environment_
 }
 
 #[tokio::test]
-async fn repository_and_storage_attributes_require_git_counts() {
+async fn only_applicable_storage_attributes_require_git_counts() {
     let _guard = git::TEST_RUNNER_LOCK.lock().await;
     for placement in [
         "nested/.gitattributes",
@@ -66,10 +66,11 @@ async fn repository_and_storage_attributes_require_git_counts() {
         }
         let eligibility = count_eligibility::Eligibility::new(storage);
         assert!(
-            !eligibility
+            eligibility
                 .allows(&fixture.0.join("repo"), &job)
                 .await
-                .unwrap(),
+                .unwrap()
+                == (placement != "storage"),
             "{placement}"
         );
         assert_eq!(
@@ -121,7 +122,7 @@ async fn root_revocation_closes_every_reader_before_the_directory_moves() {
         .trim()
         .to_owned();
     let mut readers = Vec::new();
-    for _ in 0..6 {
+    for _ in 0..12 {
         let reader =
             git::BatchReader::new(fixture.0.join("repo"), Arc::new(AtomicBool::new(false)));
         assert_eq!(reader.read(&oid).await.unwrap(), b"blob\n");
@@ -183,7 +184,7 @@ async fn idle_readers_close_after_thirty_seconds_and_can_start_again() {
 }
 
 #[tokio::test]
-async fn system_and_global_attributes_disable_in_process_counting() {
+async fn attribute_probes_match_no_index_configuration() {
     let _guard = git::TEST_RUNNER_LOCK.lock().await;
     if let Ok(case) = std::env::var("SKEIN_COUNT_ATTRIBUTE_CASE") {
         let fixture = Fixture::new().await;
@@ -191,10 +192,11 @@ async fn system_and_global_attributes_disable_in_process_counting() {
         fixture.commit("base").await;
         let eligibility = count_eligibility::Eligibility::new(fixture.0.join("storage"));
         assert!(
-            !eligibility
+            eligibility
                 .allows(&fixture.0.join("repo"), &fixture.job())
                 .await
-                .unwrap(),
+                .unwrap()
+                == (case != "system"),
             "{case}"
         );
         return;
@@ -209,7 +211,7 @@ async fn system_and_global_attributes_disable_in_process_counting() {
     )
     .unwrap();
     #[cfg(target_os = "linux")]
-    let cases = ["global", "system"];
+    let cases = ["global", "system", "system-unrelated"];
     #[cfg(not(target_os = "linux"))]
     let cases = ["global"];
     #[cfg(target_os = "linux")]
@@ -218,15 +220,31 @@ async fn system_and_global_attributes_disable_in_process_counting() {
         let bin = fixture.0.join("bin");
         std::fs::create_dir(&bin).unwrap();
         let git = bin.join("git");
-        std::fs::write(&git, b"#!/bin/sh\ncase \"$*\" in *\"var GIT_ATTR_SYSTEM\") printf '%s\\n' \"$SKEIN_SYSTEM_ATTRIBUTES\"; exit 0;; esac\nexec /usr/bin/git \"$@\"\n").unwrap();
+        std::fs::write(&git, b"#!/usr/bin/python3\nimport os, sys\nargs = sys.argv[1:]\nfor command in ('check-attr', 'diff'):\n    if command in args:\n        index = args.index(command)\n        args[index:index] = ['-c', 'core.attributesFile=' + os.environ['SKEIN_SYSTEM_ATTRIBUTES']]\n        break\nos.execv('/usr/bin/git', ['git'] + args)\n").unwrap();
         std::fs::set_permissions(git, std::fs::Permissions::from_mode(0o700)).unwrap();
     }
     for case in cases {
         let mut command = std::process::Command::new(std::env::current_exe().unwrap());
-        command.args(["--exact", "compare::tests::review_fixes::system_and_global_attributes_disable_in_process_counting", "--nocapture"])
-            .env("SKEIN_COUNT_ATTRIBUTE_CASE", case).env_remove("GIT_ATTR_NOSYSTEM");
-        if case == "system" {
-            command.env("SKEIN_SYSTEM_ATTRIBUTES", &attributes);
+        command
+            .args([
+                "--exact",
+                "compare::tests::review_fixes::attribute_probes_match_no_index_configuration",
+                "--nocapture",
+            ])
+            .env("SKEIN_COUNT_ATTRIBUTE_CASE", case)
+            .env_remove("GIT_ATTR_NOSYSTEM");
+        if case.starts_with("system") {
+            let system_attributes = fixture.0.join(format!("attributes-{case}"));
+            std::fs::write(
+                &system_attributes,
+                if case == "system" {
+                    b"* -diff\n".as_slice()
+                } else {
+                    b"*.png -diff\n".as_slice()
+                },
+            )
+            .unwrap();
+            command.env("SKEIN_SYSTEM_ATTRIBUTES", &system_attributes);
             let mut path = vec![fixture.0.join("bin")];
             path.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap()));
             command.env("PATH", std::env::join_paths(path).unwrap());

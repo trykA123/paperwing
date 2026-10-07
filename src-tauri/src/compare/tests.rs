@@ -53,6 +53,7 @@ async fn fresh_clone_into_pinned_empty_destination_preserves_git_workflow() {
 use super::*;
 
 mod review_fixes;
+mod review_round2;
 mod count_config;
 mod cold_lifecycle;
 #[cfg(feature = "benchmark")]
@@ -1040,16 +1041,14 @@ async fn compare_contract_unborn_reasons_capabilities_and_reload_reclamation() {
         "limitExceeded"
     );
     let flags: Vec<_> = service
-        .sessions
-        .lock()
-        .await
+        .sessions()
         .values()
         .map(|session| session.cancel.clone())
         .collect();
     let saved_workspace = settings.workspace.clone();
     service.release_sessions().await;
     assert!(flags.iter().all(|flag| flag.load(Ordering::Relaxed)));
-    assert!(service.sessions.lock().await.is_empty());
+    assert!(service.sessions().is_empty());
     assert_eq!(settings.workspace, saved_workspace);
     let opened = service.open(&settings, left, right).await.unwrap();
     assert_eq!(

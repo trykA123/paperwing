@@ -400,7 +400,23 @@ impl Streams {
     }
 }
 
+fn write_root(args: &[&str]) -> Option<std::path::PathBuf> {
+    let mut root = std::env::current_dir().ok()?;
+    let mut index = 0;
+    while let Some(arg) = args.get(index) {
+        match *arg {
+            "-C" => { root = root.join(args.get(index + 1)?); index += 2; }
+            "-c" | "--git-dir" | "--work-tree" => index += 2,
+            "fetch" | "pull" => return Some(root),
+            value if value.starts_with('-') => index += 1,
+            _ => return None,
+        }
+    }
+    None
+}
+
 async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, owner: Option<Arc<AtomicBool>>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+    if let Some(root) = write_root(request.args) { BatchReader::close_root(&root).await?; }
     if request.args.windows(2).any(|args| args == ["worktree", "remove"]) {
         let root = request.args.windows(2).find(|args| args[0] == "-C").map(|args| std::path::PathBuf::from(args[1]));
         if let Some(root) = &root { BatchReader::close_root(root).await?; }

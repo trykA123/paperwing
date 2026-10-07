@@ -72,7 +72,13 @@ async fn measure_cold_comparison() {
         workspace_root: root.join("checkouts"),
     });
     let options = Options {
-        normalize_eol: true,
+        normalize_eol: crate::env_names::var("SKEIN_COLD_NORMALIZE_EOL")
+            .map(|value| match value.as_str() {
+                "true" => true,
+                "false" => false,
+                _ => panic!("Invalid SKEIN_COLD_NORMALIZE_EOL"),
+            })
+            .unwrap_or(true),
         ignore_whitespace: false,
     };
     let before = crate::benchmark::benchmark_snapshot().unwrap()["commands"].clone();

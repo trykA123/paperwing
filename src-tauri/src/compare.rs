@@ -676,7 +676,7 @@ struct Fetch {
 type WriteRootHook = Arc<dyn Fn() + Send + Sync>;
 
 pub struct Service {
-    sessions: Mutex<HashMap<String, Session>>,
+    sessions: std::sync::Mutex<HashMap<String, Session>>,
     fetches: Mutex<HashMap<PathBuf, Arc<Mutex<Fetch>>>>,
     slots: Semaphore,
     #[cfg(target_os = "linux")]
@@ -698,7 +698,7 @@ struct Session {
 impl Default for Service {
     fn default() -> Self {
         Self {
-            sessions: Mutex::new(HashMap::new()),
+            sessions: std::sync::Mutex::new(HashMap::new()),
             fetches: Mutex::new(HashMap::new()),
             slots: Semaphore::new(4),
             #[cfg(target_os = "linux")]
@@ -729,6 +729,18 @@ pub enum RefreshResult {
 }
 
 impl Service {
+    fn sessions(&self) -> std::sync::MutexGuard<'_, HashMap<String, Session>> {
+        self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    async fn reset_configuration(&self, contexts: &[Context]) -> Result<(), Problem> {
+        if let Some(counts) = self.counts.get() { counts.reset().await; }
+        for context in contexts {
+            self.fetch_state(&context.root).await?.lock().await.diff_config = Arc::default();
+        }
+        Ok(())
+    }
+
     #[cfg(target_os = "linux")]
     pub(crate) async fn write_revocation(
         &self,
@@ -755,7 +767,8 @@ impl Service {
     ) -> Result<Opened, Problem> {
         let left = bind(settings, left).map_err(|problem| problem.side("left"))?;
         let right = bind(settings, right).map_err(|problem| problem.side("right"))?;
-        let mut sessions = self.sessions.lock().await;
+        self.reset_configuration(&[left.clone(), right.clone()]).await?;
+        let mut sessions = self.sessions();
         if sessions.len() >= 16 {
             return Err(Problem::new(
                 "limitExceeded",
@@ -793,7 +806,7 @@ impl Service {
     }
 
     async fn close(&self, id: &str) -> bool {
-        let session = self.sessions.lock().await.remove(id);
+        let session = self.sessions().remove(id);
         if let Some(session) = session {
             session.cancel.store(true, Ordering::Relaxed);
             close_readers(&session.readers).await;
@@ -803,19 +816,21 @@ impl Service {
         }
     }
 
-    pub async fn release_sessions(&self) {
-        let sessions: Vec<_> = self.sessions.lock().await.drain()
+    pub fn release_sessions(&self) -> impl std::future::Future<Output = ()> + Send + 'static {
+        let sessions: Vec<_> = self.sessions().drain()
             .map(|(_, session)| session)
             .collect();
         for session in &sessions {
             session.cancel.store(true, Ordering::Relaxed);
         }
-        futures_util::future::join_all(sessions.iter().map(|session| close_readers(&session.readers))).await;
+        async move {
+            futures_util::future::join_all(sessions.iter().map(|session| close_readers(&session.readers))).await;
+        }
     }
 
     async fn cancel(&self, id: &str) -> bool {
         let readers = {
-            let mut sessions = self.sessions.lock().await;
+            let mut sessions = self.sessions();
             let Some(session) = sessions.get_mut(id) else {
                 return false;
             };
@@ -992,7 +1007,12 @@ impl Service {
         let left_format = ObjectFormat::read(&left_context.root, job).await?;
         let right_format = ObjectFormat::read(&right_context.root, job).await?;
         let left_reader = git::BatchReader::new(left_context.root.clone(), job.cancel.clone());
-        let right_reader = git::BatchReader::new(right_context.root.clone(), job.cancel.clone());
+        let right_reader = if left_context.root == right_context.root
+            || left_reader.shares_directory(right_context.root.clone()).await {
+            left_reader.clone()
+        } else {
+            git::BatchReader::new(right_context.root.clone(), job.cancel.clone())
+        };
         {
             let mut readers = job.readers.lock().await;
             job.check()?;
@@ -1301,7 +1321,7 @@ impl Service {
         options: Options,
     ) -> Result<RefreshResult, Problem> {
         let (contexts, generation, job, previous) = {
-            let mut sessions = self.sessions.lock().await;
+            let mut sessions = self.sessions();
             let session = sessions
                 .get_mut(id)
                 .ok_or_else(|| Problem::new("unknownSession", "Unknown comparison"))?;
@@ -1332,17 +1352,14 @@ impl Service {
             )
         };
         close_readers(&previous).await;
-        if let Some(counts) = self.counts.get() { counts.reset().await; }
-        for context in &contexts {
-            self.fetch_state(&context.root).await?.lock().await.diff_config = Arc::default();
-        }
+        self.reset_configuration(&contexts).await?;
         let _permit = job.slot(&self.slots).await?;
         let result = self.prepare(id, generation, contexts, options, &job).await;
         if result.is_err() {
             close_readers(&job.readers).await;
         }
         job.check()?;
-        let mut sessions = self.sessions.lock().await;
+        let mut sessions = self.sessions();
         let session = sessions
             .get_mut(id)
             .filter(|session| session.generation == generation)
@@ -1431,7 +1448,7 @@ impl Service {
         id: &str,
         generation: u64,
     ) -> Result<(Arc<Prepared>, Job), Problem> {
-        let sessions = self.sessions.lock().await;
+        let sessions = self.sessions();
         let session = sessions
             .get(id)
             .filter(|session| session.generation == generation)
