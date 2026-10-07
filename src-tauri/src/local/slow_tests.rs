@@ -55,7 +55,7 @@ fn shim(root: &Path, millis: u64) -> std::path::PathBuf {
 #[ignore]
 async fn measure_slow_git_local_status_and_refs() {
     let root =
-        std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap()).join("slow-fixture");
+        crate::test_support::tmp_root().join("slow-fixture");
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let count: usize = std::env::var("SLOW_COUNT")

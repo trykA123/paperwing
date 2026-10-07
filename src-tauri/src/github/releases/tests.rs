@@ -191,7 +191,7 @@ fn git(path: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap().trim().into()
 }
 fn fixture() -> Fixture {
-    let root = PathBuf::from(crate::env_names::var_os("SKEIN_TEST_TMP").unwrap()).join(format!(
+    let root = crate::test_support::tmp_root().join(format!(
         "releases-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
