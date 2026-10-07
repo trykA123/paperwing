@@ -23,7 +23,7 @@ Read this first, then `plans/README.md`. The overnight running log is `plans/202
 | What | Where | State |
 |---|---|---|
 | Packet 17 round 2 (faster compare) | Codex `crew/api-builder-j6wme`, `.crew/paperwing-api-builder-j6wme` | Running. Fix list in packet 17, "Phase 1 review round 2". Then review, then merge. Base 9eeecd5. |
-| Packet 42 backend hardening | `crew/api-builder-j6sse` at 5fad9ce (main merged in, gates green: cargo 514, bun 326) | Review: changes-needed (legacy token hides Git output, settings error aborts startup, stash retry too broad, busy slot on save, store Condvar on async threads, weak tests). Fixes running on Codex `crew/api-builder-k1*` (see /crew), base 5fad9ce. Then merge. |
+| Packet 42 backend hardening | `crew/api-builder-j6sse` at 5fad9ce (main merged in, gates green: cargo 514, bun 326) | Review: changes-needed (legacy token hides Git output, settings error aborts startup, stash retry too broad, busy slot on save, store Condvar on async threads, weak tests). Fixes running on Codex `crew/api-builder-k5ts0`, base 5fad9ce. Then merge. |
 | Packet 33 tags | UI `ui/33-tags` 7f0f83e; backend plus main merge `crew/api-builder-j8evh` 0c38db7 (cargo 507, bun 339) | Review: approve-with-nits. Nits running on Codex `crew/api-builder-k0exg` (base 0c38db7). Merge after that; it contains the UI. |
 | Shell redesign round 2 | alt session, `.alt/shell-design-2/` | Alt posts the Artifact link in `parallel-claims.md`. |
 
