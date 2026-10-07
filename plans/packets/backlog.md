@@ -18,3 +18,6 @@ Moved out: branch cleanup and set search are in 39.
 - Several refs per repo in one search (backend already accepts repeated repos with different refs), e.g. all remote branches.
 - History search: `git log -S` / `-G` across a set.
 - A match limit selector (default caps are 200 per repo, 2000 overall).
+
+## Test stability
+- `git::process_tests::linux_post_spawn_capture_failure_retains_registration_and_permits_until_reap` flakes under parallel load (CI run 37573417043, passed on rerun). Make the process tests take `TEST_RUNNER_LOCK` or wait for runner idleness.
