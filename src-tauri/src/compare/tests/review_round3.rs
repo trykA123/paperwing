@@ -175,6 +175,8 @@ async fn crlf_working_tree_fingerprints_match_legacy_for_every_autocrlf() {
         ("binary", b"old\0\r\n"),
         ("bom", b"\xef\xbb\xbfold\r\n"),
         ("incomplete", b"old\r\nlast"),
+        ("control", b"\x01\x01a\r\nb\r\n"),
+        ("delete", b"\x7f\r\nb\r\n"),
     ] {
         fixture.write(path, bytes);
     }
@@ -185,6 +187,8 @@ async fn crlf_working_tree_fingerprints_match_legacy_for_every_autocrlf() {
     fixture.write("binary", b"new\0\r\n");
     fixture.write("bom", b"\xef\xbb\xbfnew\r\n");
     fixture.write("incomplete", b"new\r\nlast");
+    fixture.write("control", b"\x01\x01a\nb\n");
+    fixture.write("delete", b"\x7f\nb\n");
     let service = fixture.service();
     let job = fixture.job();
     for normalize_eol in [false, true] {

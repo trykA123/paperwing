@@ -45,11 +45,7 @@ fn convert_eol(bytes: &[u8], autocrlf: bool) -> Option<Cow<'_, [u8]>> {
     if !autocrlf || !bytes.contains(&b'\r') {
         return Some(Cow::Borrowed(bytes));
     }
-    if bytes
-        .iter()
-        .enumerate()
-        .any(|(index, byte)| *byte == b'\r' && bytes.get(index + 1) != Some(&b'\n'))
-    {
+    if git_binary(bytes) {
         return None;
     }
     Some(Cow::Owned(
@@ -61,19 +57,48 @@ fn convert_eol(bytes: &[u8], autocrlf: bool) -> Option<Cow<'_, [u8]>> {
     ))
 }
 
+// Git's convert_is_binary (convert.c gather_stats): CRLF is not converted in such files.
+fn git_binary(bytes: &[u8]) -> bool {
+    let (mut printable, mut nonprintable) = (0_usize, 0_usize);
+    let mut index = 0;
+    while let Some(&byte) = bytes.get(index) {
+        index += 1;
+        match byte {
+            b'\r' if bytes.get(index) == Some(&b'\n') => index += 1,
+            b'\r' | 0 => return true,
+            b'\n' => {}
+            b'\x08' | b'\t' | 0x1b | 0x0c => printable += 1,
+            0x01..=0x1f | 0x7f => nonprintable += 1,
+            _ => printable += 1,
+        }
+    }
+    if bytes.last() == Some(&0x1a) {
+        nonprintable -= 1;
+    }
+    (printable >> 7) < nonprintable
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn automatic_crlf_conversion_uses_gits_binary_probe_boundary() {
-        let mut bytes = vec![b'a'; 8000];
-        bytes.extend_from_slice(b"\0\r\n");
-        assert_eq!(
-            convert_eol(&bytes, true).unwrap().as_ref(),
-            [vec![b'a'; 8000], b"\0\n".to_vec()].concat()
-        );
-        bytes[7999] = 0;
-        assert!(convert_eol(&bytes, true).is_none());
+    fn automatic_crlf_conversion_skips_files_git_treats_as_binary() {
+        let mut late_nul = vec![b'a'; 8000];
+        late_nul.extend_from_slice(b"\0\r\n");
+        for bytes in [
+            late_nul.as_slice(),
+            b"\x01\x01a\r\nb\r\n",
+            b"\x7f\r\nb\r\n",
+            b"one\rtwo\r\n",
+        ] {
+            assert!(convert_eol(bytes, true).is_none(), "{bytes:?}");
+        }
+        for (bytes, converted) in [
+            (b"a\tb\x1b\r\nc\r\n".as_slice(), b"a\tb\x1b\nc\n".as_slice()),
+            (b"text\r\n\x1a", b"text\n\x1a"),
+        ] {
+            assert_eq!(convert_eol(bytes, true).unwrap().as_ref(), converted);
+        }
     }
 }
