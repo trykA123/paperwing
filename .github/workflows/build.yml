@@ -64,6 +64,8 @@ jobs:
       - run: bun test src/lib
       - run: cargo test --locked
         working-directory: src-tauri
+        env:
+          GIT_CONFIG_NOSYSTEM: 1
 
   windows:
     runs-on: windows-latest

@@ -210,7 +210,14 @@ async fn attribute_probes_match_no_index_configuration() {
     let config = fixture.0.join("global-config");
     std::fs::write(
         &config,
-        format!("[core]\nattributesFile = {}\n", attributes.display()),
+        format!(
+            "[core]\nattributesFile = \"{}\"\n",
+            attributes
+                .display()
+                .to_string()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+        ),
     )
     .unwrap();
     #[cfg(target_os = "linux")]
