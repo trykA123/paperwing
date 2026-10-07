@@ -1,8 +1,7 @@
 use super::parse::{self, StashEntry};
 use super::valid_oid;
 use crate::git::repo_command::RepoGit;
-use crate::git::{execute_cancellable, Captured, OutputPolicy, Request};
-use std::sync::{atomic::AtomicBool, Arc};
+use crate::git::{execute, Captured, OutputPolicy, Request};
 use std::time::Duration;
 
 pub(crate) async fn run(
@@ -14,7 +13,7 @@ pub(crate) async fn run(
     timeout: Duration,
 ) -> Result<Captured, String> {
     let argv = RepoGit::at(path).argv(args);
-    let output = execute_cancellable(
+    let output = execute(
         Request {
             args: &argv,
             context,
@@ -22,7 +21,7 @@ pub(crate) async fn run(
             policy,
             timeout,
         },
-        Arc::new(AtomicBool::new(false)),
+        None,
     )
     .await?;
     if !output.code.is_some_and(|code| expected.contains(&code)) {

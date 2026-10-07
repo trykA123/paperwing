@@ -2,7 +2,7 @@ pub(crate) use runner::CAPTURE_LIMIT;
 pub(crate) mod batch_repository;
 pub(crate) use runner::BatchReader;
 mod runner;
-pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_streaming, filesystem_gate, StdoutSink};
+pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_input, execute_streaming, filesystem_gate, StdoutSink};
 pub type ActivityOutput = runner::ActivityOutput;
 use runner::configured_sources;
 #[cfg(test)]

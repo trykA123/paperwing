@@ -257,6 +257,14 @@ pub async fn execute_cancellable(request: Request<'_>, cancellation: Arc<AtomicB
     execute_cancellable_input(request, cancellation, None).await
 }
 
+pub async fn execute_input(request: Request<'_>, input: Option<&[u8]>) -> Result<Captured, String> {
+    if input.is_some_and(|bytes| bytes.len() > 256 * 1024) { return Err("Git input exceeded the limit".into()); }
+    #[cfg(test)]
+    { execute_inner(request, None, None, input, None).await }
+    #[cfg(not(test))]
+    { execute_inner(request, None, None, input).await }
+}
+
 pub async fn execute_cancellable_input(request: Request<'_>, cancellation: Arc<AtomicBool>, input: Option<&[u8]>) -> Result<Captured, String> {
     if input.is_some_and(|bytes| bytes.len() > 256 * 1024) { return Err("Git input exceeded the limit".into()); }
     #[cfg(test)]
