@@ -1,20 +1,28 @@
-use crate::kernel::events::CoreEvent;
 #[path = "batch.rs"]
 mod batch;
+#[path = "activity.rs"]
+mod activity;
+#[path = "locale.rs"]
+pub(super) mod locale;
+#[path = "cancel.rs"]
+mod cancel;
+#[path = "binary.rs"]
+pub(super) mod binary;
 pub(crate) use batch::BatchReader;
 use serde::Serialize;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
-use std::collections::VecDeque;
 use std::sync::{Mutex, OnceLock, atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering}};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle};
+use tauri::AppHandle;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinSet;
 
-use super::{redact, redaction::Redaction};
+use activity::Emit;
+use cancel::{is_cancelled, Stop};
+use super::{redact, redaction::{cached_secrets, remember_secrets, secret_key, Redaction}};
 
 #[cfg(target_os = "linux")]
 #[path = "linux_job.rs"]
@@ -27,13 +35,15 @@ type Child = tokio::process::Child;
 const OUTPUT_LIMIT: usize = 64 * 1024;
 pub(crate) const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
 pub(super) static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-static ACTIVITY: OnceLock<Mutex<VecDeque<Activity>>> = OnceLock::new();
-static APPLICATION: OnceLock<AppHandle> = OnceLock::new();
 static SOURCES: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
-struct RunningJob { id: String, cancelled: Arc<AtomicBool>, accepts_cancel: bool }
+struct RunningJob { id: String, cancelled: Arc<AtomicBool>, stop: Arc<Stop>, accepts_cancel: bool }
 type RunningJobs = Vec<RunningJob>;
 static RUNNING: OnceLock<Mutex<RunningJobs>> = OnceLock::new();
 static SLOTS: OnceLock<Semaphore> = OnceLock::new();
+#[cfg(test)]
+pub(crate) fn require_runner_lock(lock: &tokio::sync::Mutex<()>) {
+    assert!(lock.try_lock().is_err(), "tests that spawn Git must hold test_support::git_runner()");
+}
 #[cfg(test)]
 pub(crate) static TEST_RUNNER_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -63,11 +73,16 @@ pub struct Activity {
 }
 
 pub fn attach(app: AppHandle) {
-    let _ = APPLICATION.set(app);
+    activity::attach(app);
+    std::thread::spawn(binary::resolve);
 }
 
 pub fn configure_sources(ids: Vec<String>) {
     *SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap() = ids;
+    #[cfg(not(test))]
+    tauri::async_runtime::spawn(async {
+        let _ = redaction_secrets(configured_sources(), &None, &Stop::new()).await;
+    });
 }
 
 async fn read_secret(source_id: String) -> Result<Option<String>, String> {
@@ -79,77 +94,40 @@ async fn read_secret(source_id: String) -> Result<Option<String>, String> {
     crate::credentials::read(source_id).await
 }
 
-type SecretKey = Vec<(String, u64)>;
-
-static SECRET_CACHE: Mutex<Option<(SecretKey, Vec<String>)>> = Mutex::new(None);
-
 #[cfg(test)]
 pub(crate) static SECRET_READS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 async fn redaction_secrets(
     ids: Vec<String>,
     cancellation: &Option<Arc<AtomicBool>>,
-    owner: &Option<Arc<AtomicBool>>,
+    stop: &Stop,
 ) -> Result<(Vec<String>, bool), String> {
-    let key: SecretKey = ids.iter().map(|id| (id.clone(), crate::credentials::revision(id))).collect();
-    if let Some((cached, secrets)) = SECRET_CACHE.lock().unwrap().as_ref() {
-        if *cached == key { return Ok((secrets.clone(), false)); }
-    }
+    let key = secret_key(&ids);
+    if let Some(secrets) = cached_secrets(&key) { return Ok((secrets, false)); }
     let mut secrets = Vec::new();
     for source_id in ids {
-        if is_cancelled(cancellation, owner) { return Err("Git command cancelled".into()); }
+        if is_cancelled(cancellation, stop) { return Err("Git command cancelled".into()); }
         match read_secret(source_id).await {
             Ok(Some(token)) if !token.is_empty() => secrets.push(token),
             Ok(_) => (),
             Err(_) => return Ok((Vec::new(), true)),
         }
     }
-    *SECRET_CACHE.lock().unwrap() = Some((key, secrets.clone()));
+    remember_secrets(key, &secrets);
     Ok((secrets, false))
 }
 
-pub(super) fn configured_secrets() -> Result<Vec<String>, String> {
-    let ids = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
-    let mut secrets = Vec::new();
-    for id in ids {
-        #[cfg(test)]
-        let token = fixture_secret(&id).unwrap_or_else(|| crate::settings::get_token(&id));
-        #[cfg(not(test))]
-        let token = crate::settings::get_token(&id);
-        if let Some(token) = token? {
-            if !token.is_empty() { secrets.push(token); }
-        }
-    }
-    Ok(secrets)
+pub(super) fn configured_sources() -> Vec<String> {
+    SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone()
 }
 
-fn publish(activity: &Activity) {
-    let mut entries = ACTIVITY.get_or_init(|| Mutex::new(VecDeque::new())).lock().unwrap();
-    if let Some(entry) = entries.iter_mut().find(|entry| entry.id == activity.id) {
-        *entry = activity.clone();
-    } else {
-        while entries.len() >= 64 {
-            let Some(index) = entries.iter().position(|entry| entry.state != "running") else { break };
-            entries.remove(index);
-        }
-        entries.push_back(activity.clone());
-    }
-    drop(entries);
-    if let Some(app) = APPLICATION.get() {
-        let _ = crate::events::publish_payload(app, CoreEvent::GitActivity, activity);
-    }
-}
-
-pub fn activity_snapshot() -> Vec<Activity> {
-    ACTIVITY.get_or_init(|| Mutex::new(VecDeque::new())).lock().unwrap().iter().cloned().collect()
-}
+pub fn activity_snapshot() -> Vec<Activity> { activity::snapshot() }
 
 pub fn clear_activity() -> ClearedActivity {
     let jobs = RUNNING.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
-    let mut entries = ACTIVITY.get_or_init(|| Mutex::new(VecDeque::new())).lock().unwrap();
     let retained = jobs.iter().map(|job| job.id.clone()).collect();
-    entries.retain(|entry| entry.state == "running" || jobs.iter().any(|job| job.id == entry.id));
-    ClearedActivity { running: entries.iter().cloned().collect(), retained, through: NEXT_ID.load(AtomicOrdering::Relaxed).saturating_sub(1) }
+    let running = activity::retain_active(|id| jobs.iter().any(|job| job.id == id));
+    ClearedActivity { running, retained, through: NEXT_ID.load(AtomicOrdering::Relaxed).saturating_sub(1) }
 }
 
 #[derive(Serialize)]
@@ -170,6 +148,7 @@ pub fn cancel_activity(id: String) -> bool {
     let entries = RUNNING.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
     if let Some(job) = entries.iter().find(|job| job.id == id && job.accepts_cancel) {
         job.cancelled.store(true, AtomicOrdering::Relaxed);
+        job.stop.wake();
         true
     } else {
         false
@@ -211,7 +190,7 @@ pub(super) type Observer = Arc<dyn Fn(&str, &str) + Send + Sync>;
 pub(super) type ExitObserver = Arc<dyn Fn(&str, &str) -> Result<(), String> + Send + Sync>;
 
 pub type StdoutSink = Arc<dyn Fn(&[u8]) -> bool + Send + Sync>;
-type SinkHook = (StdoutSink, Arc<AtomicBool>);
+type SinkHook = (StdoutSink, Arc<AtomicBool>, Arc<Stop>);
 
 pub(super) async fn drain(reader: impl AsyncRead + Unpin, stream: &'static str, sender: tokio::sync::mpsc::Sender<(String, String)>, secrets: Vec<String>, policy: OutputPolicy) -> Result<(Vec<u8>, usize, bool), String> {
     drain_with(reader, stream, sender, secrets, policy, None).await
@@ -229,8 +208,8 @@ async fn drain_with(reader: impl AsyncRead + Unpin, stream: &'static str, sender
         let count = reader.read(&mut buffer).await.map_err(|_| "Could not read Git output".to_string())?;
         if count == 0 { break; }
         total += count;
-        if let Some((sink, stop)) = &sink {
-            if sink(&buffer[..count]) { stop.store(true, AtomicOrdering::Relaxed); break; }
+        if let Some((sink, sunk, stop)) = &sink {
+            if sink(&buffer[..count]) { sunk.store(true, AtomicOrdering::Relaxed); stop.wake(); break; }
             continue;
         }
         let room = CAPTURE_LIMIT.saturating_sub(captured.len());
@@ -278,6 +257,14 @@ pub async fn execute_cancellable(request: Request<'_>, cancellation: Arc<AtomicB
     execute_cancellable_input(request, cancellation, None).await
 }
 
+pub async fn execute_input(request: Request<'_>, input: Option<&[u8]>) -> Result<Captured, String> {
+    if input.is_some_and(|bytes| bytes.len() > 256 * 1024) { return Err("Git input exceeded the limit".into()); }
+    #[cfg(test)]
+    { execute_inner(request, None, None, input, None).await }
+    #[cfg(not(test))]
+    { execute_inner(request, None, None, input).await }
+}
+
 pub async fn execute_cancellable_input(request: Request<'_>, cancellation: Arc<AtomicBool>, input: Option<&[u8]>) -> Result<Captured, String> {
     if input.is_some_and(|bytes| bytes.len() > 256 * 1024) { return Err("Git input exceeded the limit".into()); }
     #[cfg(test)]
@@ -301,6 +288,8 @@ pub(super) async fn execute_inner(request: Request<'_>, observer: Option<Observe
 }
 
 async fn execute_core(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+    #[cfg(test)]
+    require_runner_lock(&TEST_RUNNER_LOCK);
     #[cfg(target_os = "linux")]
     {
         let args: Vec<_> = request.args.iter().map(|arg| arg.to_string()).collect();
@@ -309,29 +298,24 @@ async fn execute_core(request: Request<'_>, observer: Option<Observer>, cancella
         let timeout = request.timeout;
         let policy = request.policy;
         let input = input.map(<[u8]>::to_vec);
-        let owner = Arc::new(AtomicBool::new(false));
-        let _call = CancelOnDrop(owner.clone());
+        let stop = Stop::new();
+        let _call = CancelOnDrop(stop.clone());
         tokio::spawn(async move {
             let args: Vec<_> = args.iter().map(String::as_str).collect();
             run_inner(Request { args: &args, context: &context, expected: &expected, timeout, policy }, observer,
-                cancellation, input.as_deref(), Some(owner), sink, #[cfg(test)] after_exit).await
+                cancellation, input.as_deref(), stop, sink, #[cfg(test)] after_exit).await
         }).await.map_err(|_| "Git runner task failed".to_string())?
     }
     #[cfg(not(target_os = "linux"))]
-    run_inner(request, observer, cancellation, input, None, sink, #[cfg(test)] after_exit).await
+    run_inner(request, observer, cancellation, input, Stop::new(), sink, #[cfg(test)] after_exit).await
 }
 
 #[cfg(target_os = "linux")]
-struct CancelOnDrop(Arc<AtomicBool>);
+struct CancelOnDrop(Arc<Stop>);
 
 #[cfg(target_os = "linux")]
 impl Drop for CancelOnDrop {
-    fn drop(&mut self) { self.0.store(true, AtomicOrdering::Relaxed); }
-}
-
-fn is_cancelled(external: &Option<Arc<AtomicBool>>, owner: &Option<Arc<AtomicBool>>) -> bool {
-    external.as_ref().is_some_and(|flag| flag.load(AtomicOrdering::Relaxed))
-        || owner.as_ref().is_some_and(|flag| flag.load(AtomicOrdering::Relaxed))
+    fn drop(&mut self) { self.0.request(); }
 }
 
 #[cfg(target_os = "linux")]
@@ -341,14 +325,13 @@ struct Registration(String);
 impl Drop for Registration {
     fn drop(&mut self) {
         RUNNING.get().unwrap().lock().unwrap().retain(|job| job.id != self.0);
-        let mut incomplete = ACTIVITY.get().and_then(|entries| entries.lock().ok()
-            .and_then(|entries| entries.iter().find(|entry| entry.id == self.0 && entry.state == "running").cloned()));
+        let mut incomplete = activity::find_running(&self.0);
         if let Some(activity) = &mut incomplete {
             activity.state = "failed".into();
             activity.sequence += 1;
             activity.output.push(ActivityOutput { sequence: activity.sequence, stream: "runner".into(),
                 text: "Git runner stopped before finalizing its job.".into() });
-            publish(activity);
+            activity::publish(activity, true);
         }
     }
 }
@@ -418,7 +401,7 @@ fn write_root_from(
     None
 }
 
-async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, owner: Option<Arc<AtomicBool>>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, stop: Arc<Stop>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
     if let Some(root) = write_root(request.args) { BatchReader::close_root(&root).await?; }
     if request.args.windows(2).any(|args| args == ["worktree", "remove"]) {
         let root = request.args.windows(2).find(|args| args[0] == "-C").map(|args| std::path::PathBuf::from(args[1]));
@@ -435,41 +418,25 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     crate::benchmark::command(operation);
     #[cfg(feature = "benchmark")]
     let queue = crate::benchmark::Span::new("git.queue", operation);
-    #[cfg(target_os = "linux")]
-    let _filesystem = loop {
-        tokio::select! {
-            guard = filesystem_gate().read() => break guard,
-            _ = tokio::time::sleep(Duration::from_millis(25)) => if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); },
-        }
-    };
-    #[cfg(not(target_os = "linux"))]
-    let _filesystem = filesystem_gate().read().await;
-    let permit = SLOTS.get_or_init(|| Semaphore::new(32)).acquire();
-    tokio::pin!(permit);
-    let _permit = loop {
-        tokio::select! {
-            result = &mut permit => break result.map_err(|_| "Git runner unavailable")?,
-            _ = tokio::time::sleep(Duration::from_millis(25)) => {
-                if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
-            }
-        }
-    };
-    if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
+    let _watch = cancel::watch(cancellation.as_ref(), &stop);
+    let _filesystem = cancel::admitted(filesystem_gate().read(), &cancellation, &stop).await?;
+    let _permit = cancel::admitted(SLOTS.get_or_init(|| Semaphore::new(32)).acquire(), &cancellation, &stop).await?
+        .map_err(|_| "Git runner unavailable")?;
+    if is_cancelled(&cancellation, &stop) { return Err("Git command cancelled".into()); }
     #[cfg(feature = "benchmark")]
     drop(queue);
     #[cfg(feature = "benchmark")]
     let _process = crate::benchmark::Span::new("git.process", operation);
-    let ids = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
-    let (secrets, quiet) = redaction_secrets(ids, &cancellation, &owner).await?;
+    let (secrets, quiet) = redaction_secrets(configured_sources(), &cancellation, &stop).await?;
     let redaction = if quiet { Redaction::Quiet } else { Redaction::Ready(secrets) };
     let observer = if quiet { None } else { observer };
-    if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }
+    if is_cancelled(&cancellation, &stop) { return Err("Git command cancelled".into()); }
     let start = Instant::now();
     let cancelled = Arc::new(AtomicBool::new(false));
     let id = {
         let mut jobs = RUNNING.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
         let id = format!("git-{}", NEXT_ID.fetch_add(1, AtomicOrdering::Relaxed));
-        jobs.push(RunningJob { id: id.clone(), cancelled: cancelled.clone(), accepts_cancel: true });
+        jobs.push(RunningJob { id: id.clone(), cancelled: cancelled.clone(), stop: stop.clone(), accepts_cancel: true });
         id
     };
     let mut activity = Activity {
@@ -478,7 +445,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         sequence: 0, started_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(), elapsed_ms: 0,
         state: "running".into(), exit_code: None, output: Vec::new(), truncated: false, stdout_bytes: 0, stderr_bytes: 0,
     };
-    publish(&activity);
+    activity::publish(&activity, true);
     #[cfg(target_os = "linux")]
     let _registration = Registration(id.clone());
     let result: Result<Captured, String> = async {
@@ -494,19 +461,30 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         let stderr = child.stderr.take().ok_or("Missing Git stderr")?;
         let streaming = sink.is_some();
         let sunk = Arc::new(AtomicBool::new(false));
-        let hook = sink.map(|sink| (sink, sunk.clone()));
+        let hook = sink.map(|sink| (sink, sunk.clone(), stop.clone()));
         let mut streams = Streams::new(stdin, stdout, stderr, input, redaction.secrets(), if quiet { OutputPolicy::Metadata } else { request.policy }, hook);
         let deadline = tokio::time::sleep(request.timeout);
         tokio::pin!(deadline);
-        let mut tick = tokio::time::interval(Duration::from_millis(25));
         let mut logged = 0;
         let mut stopped = None;
+        let mut flush_due: Option<Instant> = None;
         let status = loop {
             tokio::select! {
                 status = child.wait() => break status.map_err(|_| "Could not wait for Git".to_string())?,
                 _ = &mut deadline => { stopped = Some("timedOut"); break terminate(&mut child).await?; },
-                _ = tick.tick() => if sunk.load(AtomicOrdering::Relaxed) { stopped = Some("sunk"); break terminate(&mut child).await?; } else if cancelled.load(AtomicOrdering::Relaxed) || is_cancelled(&cancellation, &owner) { stopped = Some("cancelled"); break terminate(&mut child).await?; },
-                Some((stream, text)) = streams.receiver.recv() => record_output(&mut activity, &mut logged, stream, text, observer.as_ref(), start),
+                _ = cancel::until(&stop, || sunk.load(AtomicOrdering::Relaxed) || cancelled.load(AtomicOrdering::Relaxed) || is_cancelled(&cancellation, &stop)) => {
+                    stopped = Some(if sunk.load(AtomicOrdering::Relaxed) { "sunk" } else { "cancelled" });
+                    break terminate(&mut child).await?;
+                }
+                Some((stream, text)) = streams.receiver.recv() => match record_output(&mut activity, &mut logged, stream, text, observer.as_ref(), start) {
+                    Some(Emit::Sent) => flush_due = None,
+                    Some(Emit::Deferred(due)) => flush_due = Some(due),
+                    None => (),
+                },
+                _ = tokio::time::sleep_until(tokio::time::Instant::from_std(flush_due.unwrap_or_else(Instant::now))), if flush_due.is_some() => {
+                    activity::publish(&activity, true);
+                    flush_due = None;
+                }
             }
         };
         {
@@ -561,7 +539,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     }
     activity.sequence += 1;
     activity.elapsed_ms = start.elapsed().as_millis();
-    publish(&activity);
+    activity::publish(&activity, true);
     RUNNING.get().unwrap().lock().unwrap().retain(|job| job.id != id);
     result
 }
@@ -578,17 +556,17 @@ async fn terminate(child: &mut Child) -> Result<std::process::ExitStatus, String
         .map_err(|_| "Git termination timed out".to_string())?.map_err(|_| "Could not reap Git".to_string())
 }
 
-fn record_output(activity: &mut Activity, logged: &mut usize, stream: String, text: String, observer: Option<&Observer>, start: Instant) {
+fn record_output(activity: &mut Activity, logged: &mut usize, stream: String, text: String, observer: Option<&Observer>, start: Instant) -> Option<Emit> {
     if let Some(observer) = observer { observer(&stream, &text); }
     if *logged + text.len() > OUTPUT_LIMIT || activity.output.len() >= 512 {
         activity.truncated = true;
-        return;
+        return None;
     }
     *logged += text.len();
     activity.sequence += 1;
     activity.elapsed_ms = start.elapsed().as_millis();
     activity.output.push(ActivityOutput { sequence: activity.sequence, stream, text });
-    publish(activity);
+    Some(activity::publish(activity, false))
 }
 
 pub fn filesystem_gate() -> &'static tokio::sync::RwLock<()> {
@@ -609,17 +587,20 @@ pub(super) fn resources_idle() -> bool {
 #[cfg(all(test, target_os = "linux"))]
 pub(super) fn publish_cleanup_state(context: &str, state: &str) {
     let mut entry = activity_snapshot().into_iter().find(|entry| entry.context == context).unwrap();
-    entry.state = state.to_string(); publish(&entry);
+    entry.state = state.to_string(); activity::publish(&entry, true);
 }
 
 /// `git` with prompts disabled and (on Windows) no console window.
 fn git() -> tokio::process::Command {
-    let mut c = tokio::process::Command::new("git");
+    let binary = binary::current();
+    let mut c = tokio::process::Command::new(&binary.program);
+    if let Some(path) = binary.path_value(std::env::var_os("PATH")) { c.env("PATH", path); }
     c.env("GIT_TERMINAL_PROMPT", "0").env("GCM_INTERACTIVE", "Never")
         .env("GIT_ASKPASS", "").env("SSH_ASKPASS", "")
         .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes -oConnectTimeout=15")
         .env("GIT_OPTIONAL_LOCKS", "0").stdin(Stdio::null()).kill_on_drop(true);
     c.env("GIT_NO_REPLACE_OBJECTS", "1");
+    locale::apply(&mut c);
     for variable in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG", "GIT_SHALLOW_FILE", "GIT_NAMESPACE", "GIT_EXTERNAL_DIFF", "GIT_DIFF_OPTS", "GIT_TRACE", "GIT_TRACE_CURL", "GIT_CURL_VERBOSE"] {
         c.env_remove(variable);
     }
@@ -650,6 +631,7 @@ pub(crate) struct CredentialFixture { sources: Vec<String> }
 impl CredentialFixture {
     pub(crate) fn new(secrets: FixtureSecrets) -> Self {
         let sources = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
+        for token in secrets.values().filter_map(|value| value.clone().ok().flatten()) { super::redaction::remember_secret(&token); }
         assert!(FIXTURE_SECRETS.lock().unwrap().replace(secrets.clone()).is_none());
         bump(secrets.keys());
         configure_sources(secrets.keys().cloned().collect());
@@ -670,6 +652,10 @@ impl Drop for CredentialFixture {
         configure_sources(self.sources.clone());
     }
 }
+
+#[cfg(test)]
+#[path = "runner_tests.rs"]
+mod runner_tests;
 
 #[cfg(test)]
 mod write_root_tests {

@@ -1,3 +1,4 @@
+use crate::git::repo_command::RepoGit;
 use crate::git::{execute, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::time::Duration;
@@ -43,18 +44,10 @@ pub struct RepositoryHistory {
 }
 
 async fn git(path: &str, args: &[&str], expected: &[i32]) -> Result<Captured, String> {
-    let mut argv = vec![
-        "--no-optional-locks",
-        "-C",
-        path,
-        "-c",
-        "core.fsmonitor=false",
-        "-c",
-        "core.quotepath=false",
-        "-c",
-        "log.showSignature=false",
-    ];
-    argv.extend_from_slice(args);
+    let argv = RepoGit::at(path)
+        .no_optional_locks()
+        .config("log.showSignature=false")
+        .argv(args);
     let context = format!("History: {path}");
     let output = execute(
         Request {

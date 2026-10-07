@@ -1,7 +1,7 @@
-use crate::git::{execute_cancellable_input, valid_ref, valid_root, Captured, OutputPolicy, Request};
+use crate::git::repo_command::RepoGit;
+use crate::git::{execute_input, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
 
 const MAX_FILES: usize = 2000;
@@ -58,9 +58,8 @@ pub struct CommitResult {
 
 /// Runs git in `path` with literal pathspecs and without fsmonitor hooks; fails on any unexpected exit code.
 pub(crate) async fn run(path: &str, args: &[&str], context: &str, expected: &[i32], policy: OutputPolicy, input: Option<&[u8]>, timeout: Duration) -> Result<Captured, String> {
-    let mut argv = vec!["-C", path, "-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "--literal-pathspecs"];
-    argv.extend_from_slice(args);
-    let output = execute_cancellable_input(Request { args: &argv, context, expected, policy, timeout }, Arc::new(AtomicBool::new(false)), input).await?;
+    let argv = RepoGit::at(path).literal_pathspecs().argv(args);
+    let output = execute_input(Request { args: &argv, context, expected, policy, timeout }, input).await?;
     if !output.code.is_some_and(|code| expected.contains(&code)) {
         return Err(output.last_error());
     }

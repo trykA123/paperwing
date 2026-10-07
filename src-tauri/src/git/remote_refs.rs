@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use super::{buffered, valid_url};
 
 pub(super) fn natural_cmp(a: &str, b: &str) -> Ordering {
@@ -39,28 +40,39 @@ pub(super) fn natural_cmp(a: &str, b: &str) -> Ordering {
     }
 }
 
-async fn remote_refs(url: &str) -> Result<RefsResult, String> {
-    valid_url(url)?;
-    let out = buffered(&["ls-remote", "--heads", "--tags", "--", url], "Remote references", &[0]).await?;
-    if out.code != Some(0) {
-        return Err(out.last_error());
-    }
+type RefList = Vec<(String, String)>;
+
+fn parse_refs(text: &str) -> (RefList, RefList) {
     let mut branches: Vec<(String, String)> = Vec::new();
     let mut tags: Vec<(String, String)> = Vec::new();
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
+    let mut tag_index: HashMap<String, usize> = HashMap::new();
+    for line in text.lines() {
         let Some((sha, r)) = line.split_once('\t') else { continue };
         if let Some(b) = r.strip_prefix("refs/heads/") {
             branches.push((b.to_string(), sha.to_string()));
         } else if let Some(t) = r.strip_prefix("refs/tags/") {
             // Annotated tags appear twice; the peeled `^{}` line carries the commit SHA.
             let (name, peeled) = t.strip_suffix("^{}").map_or((t, false), |n| (n, true));
-            match tags.iter_mut().find(|(n, _)| n == name) {
-                Some(e) if peeled => e.1 = sha.to_string(),
+            match tag_index.get(name) {
+                Some(&index) if peeled => tags[index].1 = sha.to_string(),
                 Some(_) => {}
-                None => tags.push((name.to_string(), sha.to_string())),
+                None => {
+                    tag_index.insert(name.to_string(), tags.len());
+                    tags.push((name.to_string(), sha.to_string()));
+                }
             }
         }
     }
+    (branches, tags)
+}
+
+async fn remote_refs(url: &str) -> Result<RefsResult, String> {
+    valid_url(url)?;
+    let out = buffered(&["ls-remote", "--heads", "--tags", "--", url], "Remote references", &[0]).await?;
+    if out.code != Some(0) {
+        return Err(out.last_error());
+    }
+    let (mut branches, mut tags) = parse_refs(&String::from_utf8_lossy(&out.stdout));
     branches.sort_by(|a, b| natural_cmp(&a.0, &b.0));
     tags.sort_by(|a, b| natural_cmp(&b.0, &a.0));
     let branch_labels = branches.iter().map(|(name, _)| out.safe(name)).collect();
@@ -107,4 +119,26 @@ pub(crate) async fn get_refs_many(urls: Vec<String>) -> Vec<RefsResult> {
         move |index| failed_refs(names[index].clone(), "Remote refs check did not finish".into()),
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn peeled_tags_replace_the_tag_object_sha_in_any_order() {
+        let text = "a1\trefs/tags/v1\nc1\trefs/tags/v1^{}\nc2\trefs/tags/v2^{}\na2\trefs/tags/v2\nb1\trefs/heads/main\n";
+        let (branches, tags) = parse_refs(text);
+        assert_eq!(branches, [("main".to_string(), "b1".to_string())]);
+        assert_eq!(tags, [("v1".to_string(), "c1".to_string()), ("v2".to_string(), "c2".to_string())]);
+    }
+
+    #[test]
+    fn ten_thousand_annotated_tags_keep_their_peeled_shas() {
+        let mut text = String::new();
+        for index in 0..10_000 { text.push_str(&format!("t{index}\trefs/tags/v{index}\nc{index}\trefs/tags/v{index}^{{}}\n")); }
+        let (_, tags) = parse_refs(&text);
+        assert_eq!(tags.len(), 10_000);
+        assert!(tags.iter().enumerate().all(|(index, (name, sha))| *name == format!("v{index}") && *sha == format!("c{index}")));
+    }
 }

@@ -1,0 +1,211 @@
+use super::*;
+
+#[cfg(unix)]
+use std::path::{Path, PathBuf};
+
+#[cfg(unix)]
+fn shim(name: &str) -> (PathBuf, PathBuf) {
+    let root = crate::test_support::tmp_root()
+        .join("runner-shim")
+        .join(name);
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let log = root.join("spawns.log");
+    let program = root.join("git-shim");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\necho \"$*\" >> {}\nexec git \"$@\"\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (program, log)
+}
+
+#[cfg(unix)]
+fn lines(log: &Path) -> usize {
+    std::fs::read_to_string(log)
+        .map(|text| text.lines().count())
+        .unwrap_or(0)
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn one_call_starts_exactly_one_git_child() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let (program, log) = shim("one-child");
+    let _override = binary::BinaryOverride::new(program);
+    let output = buffered(&["--version"], "one-child", &[0]).await.unwrap();
+    assert_eq!(output.code, Some(0));
+    assert_eq!(lines(&log), 1);
+}
+
+#[tokio::test]
+async fn safe_redacts_without_reading_the_keyring() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let fixture = CredentialFixture::new(std::collections::BTreeMap::from([(
+        "safe-owner".to_string(),
+        Ok(Some("synthetic-safe-token".to_string())),
+    )]));
+    buffered(&["--version"], "safe-warm", &[0]).await.unwrap();
+    drop(fixture);
+    configure_sources(vec!["safe-owner".into()]);
+    let _held = crate::credentials::hold_slot();
+    assert_eq!(
+        super::super::safe("a synthetic-safe-token b"),
+        "a [redacted] b"
+    );
+    configure_sources(Vec::new());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_500_line_command_emits_at_most_three_deltas_that_rebuild_every_line() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let context = "delta-500-lines";
+    let request = Request {
+        args: &["-c", "alias.skein-lines=!seq 1 500", "skein-lines"],
+        context,
+        expected: &[0],
+        timeout: Duration::from_secs(45),
+        policy: OutputPolicy::Text,
+    };
+    execute(request, None).await.unwrap();
+    let id = activity_snapshot()
+        .into_iter()
+        .find(|entry| entry.context == context)
+        .unwrap()
+        .id;
+    let events: Vec<_> = activity::TEST_EVENTS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| event["id"] == id.as_str())
+        .cloned()
+        .collect();
+    assert!(events.len() <= 3, "{} events", events.len());
+    let mut lines: Vec<String> = Vec::new();
+    for event in &events {
+        assert_eq!(event["from"], lines.len());
+        lines.extend(
+            event["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|line| line["text"].as_str().unwrap().to_string()),
+        );
+    }
+    assert_eq!(
+        lines,
+        (1..=500)
+            .map(|number| number.to_string())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(events.last().unwrap()["state"], "completed");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_throttled_line_is_flushed_while_the_command_is_still_running() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let context = "delta-flush-timer";
+    let request = Request {
+        args: &[
+            "-c",
+            "alias.skein-slow=!echo first; sleep 1; echo second",
+            "skein-slow",
+        ],
+        context,
+        expected: &[0],
+        timeout: Duration::from_secs(45),
+        policy: OutputPolicy::Text,
+    };
+    execute(request, None).await.unwrap();
+    let id = activity_snapshot()
+        .into_iter()
+        .find(|entry| entry.context == context)
+        .unwrap()
+        .id;
+    let events: Vec<_> = activity::TEST_EVENTS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| event["id"] == id.as_str())
+        .cloned()
+        .collect();
+    let running_first = events.iter().any(|event| {
+        event["state"] == "running"
+            && event["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|line| line["text"] == "first")
+    });
+    assert!(
+        running_first,
+        "first line only arrived with the final event"
+    );
+}
+
+#[test]
+#[should_panic(expected = "must hold test_support::git_runner()")]
+fn the_check_fails_when_no_test_at_all_holds_the_runner_lock_though_it_cannot_tell_which_test_holds_it(
+) {
+    require_runner_lock(&tokio::sync::Mutex::new(()));
+}
+
+#[tokio::test]
+async fn the_check_passes_when_some_test_holds_the_runner_lock() {
+    let lock = tokio::sync::Mutex::new(());
+    let _held = lock.lock().await;
+    require_runner_lock(&lock);
+}
+
+#[test]
+fn every_git_child_gets_pinned_messages_and_no_forced_ctype() {
+    let command = git();
+    let envs: std::collections::HashMap<_, _> = command.as_std().get_envs().collect();
+    assert_eq!(envs[std::ffi::OsStr::new("LC_ALL")], None);
+    assert_eq!(
+        envs[std::ffi::OsStr::new("LC_MESSAGES")],
+        Some(std::ffi::OsStr::new("C"))
+    );
+    assert_eq!(
+        envs[std::ffi::OsStr::new("LANGUAGE")],
+        Some(std::ffi::OsStr::new(""))
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_running_git_child_sees_the_pinned_locale() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let script = "alias.skein-locale=!echo \"[$LC_ALL][$LC_MESSAGES][$LANGUAGE]\"";
+    let output = buffered(&["-c", script, "skein-locale"], "locale-pin", &[0])
+        .await
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "[][C][]");
+}
+
+#[test]
+fn a_saved_token_is_redacted_by_safe_before_any_git_call_and_old_secrets_stay() {
+    crate::git::remember_secret("synthetic-old-secret");
+    crate::credentials::finish_for_test("saved-source", Some("synthetic-new-secret"));
+    let text = super::super::safe("a synthetic-new-secret b synthetic-old-secret c");
+    assert_eq!(text, "a [redacted] b [redacted] c");
+}
+
+#[test]
+fn a_read_that_started_before_a_token_change_cannot_drop_the_new_token() {
+    use super::super::redaction::{remember_secrets, secret_key};
+    let ids = vec!["interleave-source".to_string()];
+    let key = secret_key(&ids);
+    crate::git::remember_secret("synthetic-interleave-new");
+    crate::credentials::advance_revision("interleave-source", || ());
+    remember_secrets(key, &["synthetic-interleave-old".to_string()]);
+    let text = super::super::safe("synthetic-interleave-new synthetic-interleave-old");
+    assert_eq!(text, "[redacted] [redacted]");
+}

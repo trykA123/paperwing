@@ -2,11 +2,15 @@ pub(crate) use runner::CAPTURE_LIMIT;
 pub(crate) mod batch_repository;
 pub(crate) use runner::BatchReader;
 mod runner;
-pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_streaming, filesystem_gate, StdoutSink};
+pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_input, execute_streaming, filesystem_gate, StdoutSink};
 pub type ActivityOutput = runner::ActivityOutput;
-use runner::configured_secrets;
+use runner::configured_sources;
 #[cfg(test)]
 pub(crate) use runner::TEST_RUNNER_LOCK;
+#[cfg(test)]
+pub(crate) use runner::binary::BinaryOverride;
+#[cfg(test)]
+pub(crate) use runner::locale::CTYPE_OVERRIDE;
 #[cfg(test)]
 use runner::{ExitObserver, NEXT_ID, Observer, drain, execute_inner};
 
@@ -22,9 +26,12 @@ pub type TreeRemote = repository_tree::TreeRemote;
 pub type TreeStash = repository_tree::TreeStash;
 pub type TreeSubmodule = repository_tree::TreeSubmodule;
 
+pub(crate) mod repo_command;
 mod redaction;
+mod remote_list;
 mod validation;
-pub use redaction::{last_error, redact, safe};
+pub use redaction::{last_error, redact, safe};
+pub(crate) use redaction::remember_secret;
 #[cfg(test)]
 pub(crate) use runner::CredentialFixture;
 pub use validation::{valid_path, valid_ref, valid_root, valid_url};
