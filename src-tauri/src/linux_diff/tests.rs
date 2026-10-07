@@ -336,13 +336,15 @@ fn native_child() {
             .build()
             .unwrap();
         let result = runtime
-            .block_on(crate::compare::native_diff_counts(
-                crate::compare::NativeDiffTest {
+            .block_on(async {
+                let _runner = crate::test_support::git_runner().await;
+                crate::compare::native_diff_counts(crate::compare::NativeDiffTest {
                     storage: Arc::new(storage),
                     roots: fixture.roots(),
                     cancel: Arc::new(AtomicBool::new(false)),
-                },
-            ))
+                })
+                .await
+            })
             .unwrap();
         assert_eq!(result["lines"], serde_json::json!({"added":2,"removed":1}));
         assert_eq!(result["commands"], serde_json::json!({"diff":1}));

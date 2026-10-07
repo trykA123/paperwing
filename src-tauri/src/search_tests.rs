@@ -635,7 +635,11 @@ async fn untracked_files_need_the_flag_and_a_working_tree_target() {
 
 #[tokio::test]
 async fn perl_mode_matches_when_supported() {
-    if !perl_supported().await {
+    let supported = {
+        let _runner = crate::test_support::git_runner().await;
+        perl_supported().await
+    };
+    if !supported {
         return;
     }
     let fixture = Fixture::new("search-perl");

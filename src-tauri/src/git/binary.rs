@@ -1,5 +1,7 @@
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+#[cfg(any(windows, test))]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,8 +27,10 @@ impl GitBinary {
     }
 }
 
+#[cfg(any(windows, test))]
 const RUNTIME_DIRS: [&str; 3] = ["mingw64", "mingw32", "clangarm64"];
 
+#[cfg(any(windows, test))]
 pub(super) fn from_exec_path(exec_path: &Path) -> GitBinary {
     let runtime = exec_path.ancestors().find(|dir| {
         dir.file_name()

@@ -54,7 +54,10 @@ async fn safe_redacts_without_reading_the_keyring() {
     drop(fixture);
     configure_sources(vec!["safe-owner".into()]);
     let _held = crate::credentials::hold_slot();
-    assert_eq!(super::super::safe("a synthetic-safe-token b"), "a [redacted] b");
+    assert_eq!(
+        super::super::safe("a synthetic-safe-token b"),
+        "a [redacted] b"
+    );
     configure_sources(Vec::new());
 }
 
@@ -63,17 +66,44 @@ async fn safe_redacts_without_reading_the_keyring() {
 async fn a_500_line_command_emits_at_most_three_deltas_that_rebuild_every_line() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
     let context = "delta-500-lines";
-    let request = Request { args: &["-c", "alias.skein-lines=!seq 1 500", "skein-lines"], context, expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text };
+    let request = Request {
+        args: &["-c", "alias.skein-lines=!seq 1 500", "skein-lines"],
+        context,
+        expected: &[0],
+        timeout: Duration::from_secs(45),
+        policy: OutputPolicy::Text,
+    };
     execute(request, None).await.unwrap();
-    let id = activity_snapshot().into_iter().find(|entry| entry.context == context).unwrap().id;
-    let events: Vec<_> = activity::TEST_EVENTS.lock().unwrap().iter().filter(|event| event["id"] == id.as_str()).cloned().collect();
+    let id = activity_snapshot()
+        .into_iter()
+        .find(|entry| entry.context == context)
+        .unwrap()
+        .id;
+    let events: Vec<_> = activity::TEST_EVENTS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| event["id"] == id.as_str())
+        .cloned()
+        .collect();
     assert!(events.len() <= 3, "{} events", events.len());
     let mut lines: Vec<String> = Vec::new();
     for event in &events {
         assert_eq!(event["from"], lines.len());
-        lines.extend(event["lines"].as_array().unwrap().iter().map(|line| line["text"].as_str().unwrap().to_string()));
+        lines.extend(
+            event["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|line| line["text"].as_str().unwrap().to_string()),
+        );
     }
-    assert_eq!(lines, (1..=500).map(|number| number.to_string()).collect::<Vec<_>>());
+    assert_eq!(
+        lines,
+        (1..=500)
+            .map(|number| number.to_string())
+            .collect::<Vec<_>>()
+    );
     assert_eq!(events.last().unwrap()["state"], "completed");
 }
 
@@ -82,10 +112,85 @@ async fn a_500_line_command_emits_at_most_three_deltas_that_rebuild_every_line()
 async fn a_throttled_line_is_flushed_while_the_command_is_still_running() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
     let context = "delta-flush-timer";
-    let request = Request { args: &["-c", "alias.skein-slow=!echo first; sleep 1; echo second", "skein-slow"], context, expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text };
+    let request = Request {
+        args: &[
+            "-c",
+            "alias.skein-slow=!echo first; sleep 1; echo second",
+            "skein-slow",
+        ],
+        context,
+        expected: &[0],
+        timeout: Duration::from_secs(45),
+        policy: OutputPolicy::Text,
+    };
     execute(request, None).await.unwrap();
-    let id = activity_snapshot().into_iter().find(|entry| entry.context == context).unwrap().id;
-    let events: Vec<_> = activity::TEST_EVENTS.lock().unwrap().iter().filter(|event| event["id"] == id.as_str()).cloned().collect();
-    let running_first = events.iter().any(|event| event["state"] == "running" && event["lines"].as_array().unwrap().iter().any(|line| line["text"] == "first"));
-    assert!(running_first, "first line only arrived with the final event");
+    let id = activity_snapshot()
+        .into_iter()
+        .find(|entry| entry.context == context)
+        .unwrap()
+        .id;
+    let events: Vec<_> = activity::TEST_EVENTS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| event["id"] == id.as_str())
+        .cloned()
+        .collect();
+    let running_first = events.iter().any(|event| {
+        event["state"] == "running"
+            && event["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|line| line["text"] == "first")
+    });
+    assert!(
+        running_first,
+        "first line only arrived with the final event"
+    );
+}
+
+#[test]
+#[should_panic(expected = "must hold test_support::git_runner()")]
+fn spawning_git_without_the_runner_lock_fails() {
+    require_runner_lock(&tokio::sync::Mutex::new(()));
+}
+
+#[tokio::test]
+async fn spawning_git_with_the_runner_lock_passes() {
+    let lock = tokio::sync::Mutex::new(());
+    let _held = lock.lock().await;
+    require_runner_lock(&lock);
+}
+
+#[test]
+fn every_git_child_gets_a_pinned_locale() {
+    let command = git();
+    let envs: std::collections::HashMap<_, _> = command.as_std().get_envs().collect();
+    assert_eq!(
+        envs[std::ffi::OsStr::new("LC_ALL")],
+        Some(std::ffi::OsStr::new("C"))
+    );
+    assert_eq!(
+        envs[std::ffi::OsStr::new("LANGUAGE")],
+        Some(std::ffi::OsStr::new(""))
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_running_git_child_sees_the_pinned_locale() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let output = buffered(
+        &[
+            "-c",
+            "alias.skein-locale=!echo \"[$LC_ALL][$LANGUAGE]\"",
+            "skein-locale",
+        ],
+        "locale-pin",
+        &[0],
+    )
+    .await
+    .unwrap();
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "[C][]");
 }

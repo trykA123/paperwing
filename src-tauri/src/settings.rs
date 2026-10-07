@@ -238,10 +238,6 @@ pub mod commands {
     }
 }
 
-pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
-    crate::credentials::get_token(source_id)
-}
-
 #[tauri::command]
 pub async fn set_token(app: AppHandle, source_id: String, token: String, host: Option<String>) -> Result<(), String> {
     crate::credentials::set_token(app, source_id, token, host).await

@@ -39,6 +39,10 @@ type RunningJobs = Vec<RunningJob>;
 static RUNNING: OnceLock<Mutex<RunningJobs>> = OnceLock::new();
 static SLOTS: OnceLock<Semaphore> = OnceLock::new();
 #[cfg(test)]
+pub(crate) fn require_runner_lock(lock: &tokio::sync::Mutex<()>) {
+    assert!(lock.try_lock().is_err(), "tests that spawn Git must hold test_support::git_runner()");
+}
+#[cfg(test)]
 pub(crate) static TEST_RUNNER_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Clone, Serialize)]
@@ -270,6 +274,8 @@ pub(super) async fn execute_inner(request: Request<'_>, observer: Option<Observe
 }
 
 async fn execute_core(request: Request<'_>, observer: Option<Observer>, cancellation: Option<Arc<AtomicBool>>, input: Option<&[u8]>, sink: Option<StdoutSink>, #[cfg(test)] after_exit: Option<ExitObserver>) -> Result<Captured, String> {
+    #[cfg(test)]
+    require_runner_lock(&TEST_RUNNER_LOCK);
     #[cfg(target_os = "linux")]
     {
         let args: Vec<_> = request.args.iter().map(|arg| arg.to_string()).collect();
@@ -578,7 +584,7 @@ fn git() -> tokio::process::Command {
     c.env("GIT_TERMINAL_PROMPT", "0").env("GCM_INTERACTIVE", "Never")
         .env("GIT_ASKPASS", "").env("SSH_ASKPASS", "")
         .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes -oConnectTimeout=15")
-        .env("GIT_OPTIONAL_LOCKS", "0").stdin(Stdio::null()).kill_on_drop(true);
+        .env("GIT_OPTIONAL_LOCKS", "0").env("LC_ALL", "C").env("LANGUAGE", "").stdin(Stdio::null()).kill_on_drop(true);
     c.env("GIT_NO_REPLACE_OBJECTS", "1");
     for variable in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG", "GIT_SHALLOW_FILE", "GIT_NAMESPACE", "GIT_EXTERNAL_DIFF", "GIT_DIFF_OPTS", "GIT_TRACE", "GIT_TRACE_CURL", "GIT_CURL_VERBOSE"] {
         c.env_remove(variable);

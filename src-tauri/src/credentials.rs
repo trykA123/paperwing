@@ -97,6 +97,7 @@ fn revisions() -> &'static Mutex<HashMap<String, Revision>> {
     REVISIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+#[cfg(test)]
 fn admit() -> Result<OwnedSemaphorePermit, String> {
     SLOTS.get_or_init(|| Arc::new(Semaphore::new(1))).clone().try_acquire_owned()
         .map_err(|_| "The credential store is busy. Retry when the current operation finishes.".into())
@@ -212,6 +213,7 @@ fn read_raw(source_id: &str) -> Result<Option<String>, Failure> {
     native::read(source_id)
 }
 
+#[cfg(test)]
 pub fn get_token(source_id: &str) -> Result<Option<String>, String> {
     validate(source_id)?;
     let _permit = admit()?;
