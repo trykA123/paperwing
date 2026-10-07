@@ -1,12 +1,11 @@
 import { api, type MergedBranches } from './api';
 import {
-  defaultSelection, deleteLocalAcross, deleteRemoteAcross, localRows, remoteRows, selectableNames,
-  type CleanupClient, type CleanupResult, type CleanupRow, type CleanupTarget, type LocalDelete, type RemotePlan,
+  defaultSelection, deleteLocalAcross, localRows, selectableNames,
+  type CleanupClient, type CleanupResult, type CleanupRow, type CleanupTarget, type LocalDelete,
 } from './branch-cleanup';
 
-export type CleanupLoad = { status: 'loading' } | { status: 'ready'; data: MergedBranches; local: CleanupRow[]; remote: CleanupRow[] } | { status: 'error'; message: string };
-export type CleanupRepo = { target: CleanupTarget; load: CleanupLoad; localPicked: string[]; remotePicked: string[]; result: CleanupResult | null; remoteResult: CleanupResult | null };
-export type CleanupSide = 'local' | 'remote';
+export type CleanupLoad = { status: 'loading' } | { status: 'ready'; data: MergedBranches; local: CleanupRow[] } | { status: 'error'; message: string };
+export type CleanupRepo = { target: CleanupTarget; load: CleanupLoad; localPicked: string[]; result: CleanupResult | null };
 export type CleanupApi = CleanupClient & { mergedBranches: (path: string) => Promise<MergedBranches> };
 
 const LOAD_CONCURRENCY = 4;
@@ -17,12 +16,11 @@ export class CleanupSession {
   #disposed = false;
 
   constructor(targets: CleanupTarget[], private readonly client: CleanupApi = api) {
-    this.repos = targets.map(target => ({ target, load: { status: 'loading' }, localPicked: [], remotePicked: [], result: null, remoteResult: null }));
+    this.repos = targets.map(target => ({ target, load: { status: 'loading' }, localPicked: [], result: null }));
   }
 
   loading = $derived(this.repos.some(repo => repo.load.status === 'loading'));
   localCount = $derived(this.repos.reduce((sum, repo) => sum + repo.localPicked.length, 0));
-  remoteCount = $derived(this.repos.reduce((sum, repo) => sum + repo.remotePicked.length, 0));
 
   async load(): Promise<void> {
     const queue = [...this.repos];
@@ -43,53 +41,42 @@ export class CleanupSession {
     try {
       const data = await this.client.mergedBranches(path);
       if (this.#disposed) return;
-      const local = localRows(data), remote = remoteRows(data);
-      const [localKept, remoteKept] = [selectableNames(local, repo.localPicked), selectableNames(remote, repo.remotePicked)];
-      repo.load = { status: 'ready', data, local, remote };
-      repo.localPicked = keep ? localKept : defaultSelection(local);
-      repo.remotePicked = keep ? remoteKept : [];
+      const local = localRows(data);
+      repo.load = { status: 'ready', data, local };
+      repo.localPicked = keep ? selectableNames(local, repo.localPicked) : defaultSelection(local);
     } catch (reason) {
       if (!this.#disposed) repo.load = { status: 'error', message: `Could not list branches in ${repo.target.name}: ${reason instanceof Error ? reason.message : String(reason)}` };
     }
   }
 
-  toggle(path: string, side: CleanupSide, name: string, on: boolean) {
+  toggle(path: string, name: string, on: boolean) {
     const repo = this.#find(path);
-    const key = side === 'local' ? 'localPicked' : 'remotePicked';
-    repo[key] = on ? [...repo[key].filter(entry => entry !== name), name] : repo[key].filter(entry => entry !== name);
+    repo.localPicked = on ? [...repo.localPicked.filter(entry => entry !== name), name] : repo.localPicked.filter(entry => entry !== name);
   }
 
-  setAll(path: string, side: CleanupSide, on: boolean) {
+  setAll(path: string, on: boolean) {
     const repo = this.#find(path);
     if (repo.load.status !== 'ready') return;
-    const rows = side === 'local' ? repo.load.local : repo.load.remote;
-    const names = on ? rows.filter(row => !row.blocked).map(row => row.name) : [];
-    if (side === 'local') repo.localPicked = names; else repo.remotePicked = names;
+    repo.localPicked = on ? repo.load.local.filter(row => !row.blocked).map(row => row.name) : [];
   }
 
-  #entries(side: CleanupSide): LocalDelete[] {
+  #entries(): LocalDelete[] {
     return this.repos.flatMap(repo => {
       if (repo.load.status !== 'ready') return [];
-      const rows = side === 'local' ? repo.load.local : repo.load.remote;
-      const names = selectableNames(rows, side === 'local' ? repo.localPicked : repo.remotePicked);
-      return names.length ? [{ target: repo.target, data: repo.load.data, rows, names }] : [];
+      const names = selectableNames(repo.load.local, repo.localPicked);
+      return names.length ? [{ target: repo.target, data: repo.load.data, rows: repo.load.local, names }] : [];
     });
   }
 
-  remotePlan(): RemotePlan[] {
-    return this.#entries('remote').map(entry => ({ remote: entry.data.remote ?? '', repo: entry.target.name, names: entry.names }));
-  }
-
-  async run(side: CleanupSide): Promise<CleanupResult[]> {
+  async run(): Promise<CleanupResult[]> {
     if (this.busy) return [];
     this.busy = true;
     try {
-      const entries = this.#entries(side);
-      for (const repo of this.repos) { if (side === 'local') repo.result = null; else repo.remoteResult = null; }
-      const results = side === 'local' ? await deleteLocalAcross(this.client, entries) : await deleteRemoteAcross(this.client, entries);
+      const entries = this.#entries();
+      for (const repo of this.repos) repo.result = null;
+      const results = await deleteLocalAcross(this.client, entries);
       for (const result of results) {
-        const repo = this.#find(result.target.path);
-        if (side === 'local') repo.result = result; else repo.remoteResult = result;
+        this.#find(result.target.path).result = result;
         if (!this.#disposed) await this.#read(result.target.path, true);
       }
       return results;

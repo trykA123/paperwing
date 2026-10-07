@@ -6,20 +6,6 @@
     margin-bottom: var(--sp-3);
 }
 
-.cleanup-tabs {
-    margin-bottom: var(--sp-3);
-    background: var(--soft);
-}
-
-.cleanup-tabs button small {
-    margin-left: var(--sp-2);
-    padding: 1px 6px;
-    border-radius: var(--r-ctl);
-    background: var(--accs);
-    color: var(--acc-text, var(--text));
-    font-size: var(--fs-xs);
-}
-
 .cleanup-body {
     display: flex;
     flex-direction: column;

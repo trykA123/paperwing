@@ -303,6 +303,7 @@ pub async fn delete_tag(path: String, name: String) -> Result<DeletedTag, String
 }
 
 #[tauri::command]
+#[allow(dead_code)]
 pub async fn delete_remote_tag(
     path: String,
     remote: String,

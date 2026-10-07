@@ -1,7 +1,7 @@
 import type { api as Api, CreatedGithubRelease, CreatedTag, DeletedTag, PushedTag, TagInfo } from './api';
 import { describeError } from './errors';
 
-export type TagApi = Pick<typeof Api, 'localStatus' | 'listTags' | 'createTag' | 'pushTag' | 'deleteTag' | 'deleteRemoteTag'>;
+export type TagApi = Pick<typeof Api, 'localStatus' | 'listTags' | 'createTag' | 'pushTag' | 'deleteTag'>;
 /** `commit` is the full target object id; null means HEAD, which planning replaces with the commit HEAD is at now. */
 export type TagTarget = { path: string; name: string; remote: string; commit: string | null };
 export type PlanRow = TagTarget & { existing: TagInfo | null; error: string | null };
@@ -9,9 +9,7 @@ export type TagRequest = { name: string; message: string; push: boolean; move: b
 
 export type CreateStatus = 'created' | 'pushed' | 'push-failed' | 'refused' | 'failed';
 export type CreateRow = TagTarget & { status: CreateStatus; created: CreatedTag | null; pushed: PushedTag | null; error: string | null };
-/** `expected` is the tag object the remote delete is leased on; null means unknown and the delete is refused. */
-export type RemoteTarget = TagTarget & { expected: string | null };
-export type RemoveRow = TagTarget & { status: 'removed' | 'failed' | 'refused'; deleted: DeletedTag | null; pushed: PushedTag | null; error: string | null };
+export type RemoveRow = TagTarget & { status: 'removed' | 'failed'; deleted: DeletedTag | null; error: string | null };
 export type ReleaseRow = TagTarget & { status: 'created' | 'failed' | 'refused'; release: CreatedGithubRelease | null; error: string | null };
 export type ReleaseRequest = { tag: string; notes: string; draft?: boolean };
 
@@ -119,23 +117,8 @@ export async function deleteLocalTags(rows: PlanRow[], tag: string, api: Pick<Ta
   for (const [index, plan] of rows.entries()) {
     const { existing: _existing, error: _error, ...target } = plan;
     let row: RemoveRow;
-    try { row = { ...target, status: 'removed', deleted: await api.deleteTag(target.path, tag), pushed: null, error: null }; }
-    catch (reason) { row = { ...target, status: 'failed', deleted: null, pushed: null, error: describeError(reason, `delete ${tag} in ${target.name}`) }; }
-    done.push(row);
-    onRow?.(index, row);
-  }
-  return done;
-}
-
-export async function deleteRemoteTags(targets: RemoteTarget[], tag: string, api: Pick<TagApi, 'deleteRemoteTag'>, onRow?: (index: number, row: RemoveRow) => void): Promise<RemoveRow[]> {
-  const done: RemoveRow[] = [];
-  for (const [index, { expected, ...target }] of targets.entries()) {
-    let row: RemoveRow;
-    if (!expected) row = { ...target, status: 'refused', deleted: null, pushed: null, error: `Skein does not know which ${tag} object ${target.name} has on ${target.remote}, so it will not delete it.` };
-    else {
-      try { row = { ...target, status: 'removed', deleted: null, pushed: await api.deleteRemoteTag(target.path, target.remote, tag, expected), error: null }; }
-      catch (reason) { row = { ...target, status: 'failed', deleted: null, pushed: null, error: describeError(reason, `delete ${tag} from ${target.remote} for ${target.name}`) }; }
-    }
+    try { row = { ...target, status: 'removed', deleted: await api.deleteTag(target.path, tag), error: null }; }
+    catch (reason) { row = { ...target, status: 'failed', deleted: null, error: describeError(reason, `delete ${tag} in ${target.name}`) }; }
     done.push(row);
     onRow?.(index, row);
   }
@@ -145,11 +128,6 @@ export async function deleteRemoteTags(targets: RemoteTarget[], tag: string, api
 export function moveConfirmMessage(rows: PlanRow[], tag: string): string {
   const lines = rows.map(row => `${row.name}: ${shortId(row.existing?.commit)} to ${shortId(row.commit)}`);
   return `Move the tag ${tag} in ${rows.length === 1 ? '1 repository' : `${rows.length} repositories`}?\n\n${lines.join('\n')}\n\nThe old commit is no longer tagged. A pushed tag is moved on the remote only if it still points at the old commit.`;
-}
-
-export function remoteDeleteMessage(targets: RemoteTarget[], tag: string): string {
-  const lines = targets.map(target => `${target.name} (${target.remote}): ${target.expected ? `object ${shortId(target.expected)}` : 'unknown — will be refused'}`);
-  return `Delete the tag ${tag} from the remote?\n\n${lines.join('\n')}\n\nA remote tag that no longer points at that object is kept. Anyone who has fetched the tag keeps their copy. Skein cannot restore it on the remote. Local tags are not touched.`;
 }
 
 export type RefreshDeps = {

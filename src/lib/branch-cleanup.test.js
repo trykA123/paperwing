@@ -1,6 +1,6 @@
 import './test-support/svelte-loader.js';
 import { describe, expect, test } from 'bun:test';
-import { remoteConfirmMessage, defaultSelection, deleteLocalAcross, deleteRemoteAcross, expectedTips, localRows, remoteRows, summarizeCleanup } from './branch-cleanup.ts';
+import { defaultSelection, deleteLocalAcross, expectedTips, localRows, summarizeCleanup } from './branch-cleanup.ts';
 
 const { CleanupSession } = await import('./branch-cleanup.svelte.ts');
 
@@ -29,11 +29,6 @@ describe('selection defaults', () => {
     expect(blocked).toMatchObject({ dev: 'Current branch', main: 'Protected', wt: 'Checked out in a worktree', wip: 'Not merged into origin/main', done: null });
   });
 
-  test('protects remote main and never preselects remote branches', () => {
-    const rows = remoteRows(listing());
-    expect(rows.find(row => row.name === 'main').blocked).toBe('Protected');
-    expect(defaultSelection(rows)).toEqual([]);
-  });
 });
 
 describe('deleting', () => {
@@ -67,18 +62,6 @@ describe('deleting', () => {
     ]);
     expect(summarizeCleanup(results)).toEqual({ deleted: 1, failed: 2 });
   });
-
-  test('remote deletion names the remote and passes remote tips', async () => {
-    const calls = [];
-    const client = { deleteRemoteBranches: async (...args) => { calls.push(args); return [{ name: 'old', deleted: true, error: null }]; } };
-    const data = listing();
-    await deleteRemoteAcross(client, [{ target: target('a'), data, rows: remoteRows(data), names: ['old', 'main'] }]);
-    expect(calls).toEqual([['/r/a', 'origin', ['old'], ['r-old'], 'origin/main']]);
-    const diverged = listing({ base: 'master', baseName: 'master', remoteBase: 'origin/main' });
-    await deleteRemoteAcross(client, [{ target: target('a'), data: diverged, rows: remoteRows(diverged), names: ['old'] }]);
-    expect(calls.at(-1)[4]).toBe('origin/main');
-    expect(expectedTips(remoteRows(data), ['old'])).toEqual(['r-old']);
-  });
 });
 
 describe('session', () => {
@@ -87,34 +70,17 @@ describe('session', () => {
     const client = {
       mergedBranches: async path => { if (path === '/r/bad') throw new Error('not a repository'); return listing(); },
       deleteMergedBranches: async (path, names) => { deleted.push([path, names]); return names.map(name => ({ name, deleted: true, error: null })); },
-      deleteRemoteBranches: async () => [],
     };
     const session = new CleanupSession([{ path: '/r/a', name: 'a' }, { path: '/r/bad', name: 'bad' }, { path: '/r/c', name: 'c' }], client);
     await session.load();
     expect(session.repos.map(repo => repo.load.status)).toEqual(['ready', 'error', 'ready']);
     expect(session.localCount).toBe(2);
-    session.toggle('/r/c', 'local', 'done', false);
-    session.toggle('/r/a', 'remote', 'old', true);
-    expect(session.remotePlan()).toEqual([{ remote: 'origin', repo: 'a', names: ['old'] }]);
-    await session.run('local');
+    session.toggle('/r/c', 'done', false);
+    await session.run();
     expect(deleted).toEqual([['/r/a', ['done']]]);
     expect(session.repos[0].result.deleted).toEqual(['done']);
-    expect(session.repos[0].remotePicked).toEqual(['old']);
-    session.setAll('/r/a', 'local', false);
-    await session.run('local');
+    session.setAll('/r/a', false);
+    await session.run();
     expect(session.repos.map(repo => repo.result)).toEqual([null, null, null]);
-  });
-});
-
-describe('remote confirmation', () => {
-  test('names the remote, the repository and the branches', () => {
-    const message = remoteConfirmMessage([{ remote: 'origin', repo: 'api', names: ['old-1', 'old-2'] }]);
-    expect(message).toContain('Delete 2 merged branches from the remote?');
-    expect(message).toContain('origin in api: old-1, old-2');
-  });
-
-  test('shortens long lists', () => {
-    const names = Array.from({ length: 13 }, (_, index) => `b${index}`);
-    expect(remoteConfirmMessage([{ remote: 'origin', repo: 'api', names }])).toContain('b9 and 3 more');
   });
 });

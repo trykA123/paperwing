@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { calls, deleteMerged, deleteRemote, localStatus, mergedBranches } from './backend.mjs';
+import { calls, deleteMerged, localStatus, mergedBranches } from './backend.mjs';
 import { git, makeCapRepo, makeDivergentRepo, makeRepo, moveTip } from './fixture.mjs';
 import { SearchJobs } from './search-jobs.mjs';
 
@@ -21,7 +21,7 @@ makeDivergentRepo(delta, deltaRemote);
 const capPaths = Array.from({ length: 13 }, (_, index) => join(root, 'caps', `c${String(index + 1).padStart(2, '0')}`));
 capPaths.forEach(path => makeCapRepo(path));
 const itemsOf = paths => paths.map(path => ({ id: path.split('/').pop(), repoId: 'fixture:' + path, url: path, org: 'fixture', name: path.split('/').pop(), ref: { type: 'branch', name: 'main' }, on: false, path }));
-const workspace = { sets: [{ id: 'fix', name: 'Fixture set', items: itemsOf(Object.values(repos)) }, { id: 'div', name: 'Divergent set', items: itemsOf([delta]) }, { id: 'caps', name: 'Caps set', items: itemsOf(capPaths) }], activeSet: 'fix', root, theme, pageSize: 'all' };
+const workspace = { sets: [{ id: 'fix', name: 'Fixture set', items: itemsOf(Object.values(repos)) }, { id: 'div', name: 'Divergent set', items: itemsOf([delta]) }, { id: 'caps', name: 'Caps set', items: itemsOf(capPaths) }], activeSet: 'fix', root, theme, pageSize: 'all', shell: { version: 1, sidebarWidth: 250, sidebarVisible: Number(width) >= 700, rightVisible: Number(width) >= 700, section: 'sets' } };
 const source = { id: 'fixture', name: 'Fixture', kind: 'manual', host: '', orgs: [], urls: [] };
 
 const browser = await chromium.launch({ executablePath: '/opt/helium-browser-bin/helium', headless: true, args: ['--no-sandbox'] });
@@ -44,12 +44,11 @@ await page.exposeFunction('__backend', async (cmd, a) => {
     case 'list_repos': return { repos: [], fetchedAt: 0, errors: [] };
     case 'merged_branches': return mergedBranches(a.path);
     case 'delete_merged_branches': return deleteMerged(a.path, a.names, a.expected, a.base);
-    case 'delete_remote_branches': return deleteRemote(a.path, a.remote, a.names, a.expected, a.base);
     case 'search_capabilities': return { perl: true };
     case 'search_start': return jobs.start(a.request);
     case 'search_cancel': return jobs.cancel(a.id);
     case 'search_cancel_all': return jobs.cancelAll();
-    case 'save_settings': case 'list_cached_repos': case 'plugin:window|set_theme': return null;
+    case 'save_settings': case 'pull_for_branch': case 'list_cached_repos': case 'plugin:window|set_theme': return null;
     case 'source_revision': return 0;
     case 'credential_status': return { sourceId: a.sourceId, backend: 'unsupported', state: 'unavailable', revision: 0, reason: null };
     default: unknown.add(cmd); return null;
@@ -80,12 +79,12 @@ const branches = dir => git(dir, 'for-each-ref', '--format=%(refname:short)', 'r
 
 await page.goto(url);
 await page.waitForTimeout(5500);
-await page.waitForSelector('.fm-row[aria-label^="Repository"]');
+await page.waitForSelector('.fm-row[data-id]');
 await page.waitForTimeout(800);
 await shot('set');
 
 // 1. Cleanup from the row menu on a repository with a remote.
-await page.hover('.fm-row[aria-label="Repository alpha"]');
+await page.hover('.fm-row[data-id="alpha"]');
 await page.click('button[aria-label="More actions for alpha"]');
 await page.click('[role=menuitem]:has-text("Clean up merged branches")');
 await page.waitForSelector('.cleanup-dialog[open] .cleanup-row');
@@ -105,29 +104,17 @@ await page.waitForSelector('.cleanup-repo [role=status]:has-text("2 deleted")');
 check('selected merged branches deleted, others kept', branches(repos.alpha).join() === 'dev,gone,main,wip,wt-branch', branches(repos.alpha).join());
 await shot('cleanup-done');
 
-// 2. Remote section with its own confirmation.
-await page.click('.cleanup-tabs [role=tab]:has-text("Remote")');
-await page.waitForSelector('.cleanup-list[aria-label="Branches on origin"]');
-const remoteOffered = await page.$$eval('.cleanup-list .cleanup-row .cleanup-name', nodes => nodes.map(node => node.textContent));
-check('remote lists merged branches without main', remoteOffered.join() === 'feature/done,old-remote', remoteOffered.join());
-check('nothing preselected on the remote', (await page.$$('.cleanup-row input:checked')).length === 0);
-await page.check('.cleanup-row:has-text("old-remote") input');
-await shot('remote-preview');
-await page.click('.cleanup-dialog footer .btn.danger');
-await page.waitForSelector('.confirm-dialog[open]');
-const confirmText = await page.locator('.confirm-dialog').innerText();
-check('confirmation names remote and branch', confirmText.includes('origin in alpha: old-remote'), confirmText.slice(0, 120));
-await shot('remote-confirm');
-await page.click('.confirm-dialog .btn.danger');
-await page.waitForSelector('.cleanup-repo [role=status]:has-text("1 deleted")');
-check('remote branch deleted', !execFileSync('git', ['ls-remote', '--heads', remote], { encoding: 'utf8' }).includes('old-remote'));
-check('remote base passed as origin/main', calls.at(-1)?.base === 'origin/main', String(calls.at(-1)?.base));
+// 2. No remote section.
+check('no remote tab, remote list or remote delete button', (await page.locator('.cleanup-tabs, .cleanup-list[aria-label^="Branches on"], .cleanup-dialog .btn.danger').count()) === 0 && !(await page.locator('.cleanup-dialog').innerText()).includes('emote'));
+check('remote branch kept', execFileSync('git', ['ls-remote', '--heads', remote], { encoding: 'utf8' }).includes('old-remote'));
+check('no remote delete command was called', calls.every(call => call.command !== 'delete_remote_branches'));
 await page.click('.cleanup-dialog footer .btn:not(.danger):not(.dark)');
 await page.waitForSelector('.cleanup-dialog', { state: 'detached' });
 
 // 3. Set-wide cleanup with one expected failure.
-await page.check('input[aria-label="Select all shown repositories"]');
-await page.click('.fm-bar button[aria-label="Clean up merged branches"]');
+await page.check('input[aria-label="Select all repositories on this page"]');
+await page.click('.fm-bar .more');
+await page.click('[role=menuitem]:has-text("Clean up merged branches")');
 await page.waitForSelector('.cleanup-dialog[open] .cleanup-repo h3');
 await page.waitForFunction(() => document.querySelectorAll('.cleanup-repo .cleanup-list').length === 3);
 moveTip(repos.gamma, 'feature/two');
@@ -196,24 +183,14 @@ check('closing the tab removes the listeners', (await page.evaluate(() => window
 
 // 5. Divergent bases: local master, remote main and master, no origin/HEAD.
 await page.click('.shell-side button:has-text("Divergent set")');
-await page.waitForSelector('.fm-row[aria-label="Repository delta repo"]');
-await page.hover('.fm-row[aria-label="Repository delta repo"]');
+await page.waitForSelector('.fm-row[data-id="delta repo"]');
+await page.hover('.fm-row[data-id="delta repo"]');
 await page.click('button[aria-label="More actions for delta repo"]');
 await page.click('[role=menuitem]:has-text("Clean up merged branches")');
 await page.waitForSelector('.cleanup-dialog[open] .cleanup-row');
 const localOffered = await page.$$eval('.cleanup-row:not(.blocked) .cleanup-name', nodes => nodes.map(node => node.textContent));
 check('local base is master', localOffered.join() === 'topic', localOffered.join());
-await page.click('.cleanup-tabs [role=tab]:has-text("Remote")');
-await page.waitForSelector('.cleanup-list[aria-label="Branches on origin"]');
-const divergedOffered = await page.$$eval('.cleanup-list .cleanup-row .cleanup-name', nodes => nodes.map(node => node.textContent));
-check('remote branches are merged into origin/main', divergedOffered.join() === 'rel-old', divergedOffered.join());
-await page.check('.cleanup-row:has-text("rel-old") input');
-await page.click('.cleanup-dialog footer .btn.danger');
-await page.waitForSelector('.confirm-dialog[open]');
-await page.dblclick('.confirm-dialog .btn.danger').catch(() => {});
-await page.waitForSelector('.cleanup-repo [role=status]:has-text("1 deleted")');
-check('remote base differs from local base', calls.at(-1)?.base === 'origin/main', String(calls.at(-1)?.base));
-check('rel-old deleted on the remote', !execFileSync('git', ['ls-remote', '--heads', deltaRemote], { encoding: 'utf8' }).includes('rel-old'));
+check('remote branch kept on the divergent remote', execFileSync('git', ['ls-remote', '--heads', deltaRemote], { encoding: 'utf8' }).includes('rel-old'));
 await page.waitForTimeout(500);
 check('only one confirmation was queued', (await page.$$('.confirm-dialog')).length === 0);
 await shot('divergent');
@@ -222,7 +199,7 @@ await page.waitForSelector('.cleanup-dialog', { state: 'detached' });
 
 // 6. Caps, failed and skipped repositories, and 10000 matches.
 await page.click('.shell-side button:has-text("Caps set")');
-await page.waitForSelector('.fm-row[aria-label="Repository c13"]');
+await page.waitForSelector('.fm-row[data-id="c13"]');
 await page.waitForTimeout(1500);
 await page.keyboard.press('Control+Shift+F');
 await page.waitForSelector('.code-search');

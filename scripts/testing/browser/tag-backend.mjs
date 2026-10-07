@@ -57,18 +57,6 @@ export function remove(path, name) {
   return { name, object };
 }
 
-export function removeRemote(path, remote, name, expected) {
-  calls.push({ command: 'delete_remote_tag', remote, expected });
-  validName(path, name);
-  validRemote(path, remote);
-  if (!expected) throw new Error('Expected tag object required');
-  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(expected)) throw new Error('Invalid expected tag object');
-  const ref = `refs/tags/${name}`;
-  const out = tryGit(path, 'push', '-q', `--force-with-lease=${ref}:${expected}`, remote, '--delete', ref);
-  if (typeof out !== 'string') throw new Error(failure(out));
-  return { remote, name, forced: false };
-}
-
 export function history(path) {
   const log = lines(git(path, 'log', '-8', '--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI')).map(line => {
     const [sha, short, subject, author, date] = line.split('\x1f');

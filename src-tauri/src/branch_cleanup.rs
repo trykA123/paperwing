@@ -1,5 +1,6 @@
 mod delete;
 mod list;
+#[allow(dead_code)]
 mod remote;
 mod resolve;
 
@@ -117,6 +118,7 @@ pub async fn delete_merged_branches(
 
 /// Deletes merged branches on one remote in one leased push. Protected names are refused.
 #[tauri::command]
+#[allow(dead_code)]
 pub async fn delete_remote_branches(
     path: String,
     remote: String,

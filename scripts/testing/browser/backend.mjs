@@ -62,25 +62,6 @@ export function deleteMerged(path, names, expected, base) {
   });
 }
 
-export function deleteRemote(path, remote, names, expected, base) {
-  calls.push({ command: 'delete_remote_branches', base });
-  const ref = base ? resolveRequested(path, remote, base) : resolveBases(path, remote).remoteRef;
-  if (!ref) throw new Error('Choose a remote base');
-  const outcomes = names.map((name, index) => {
-    const tip = tryGit(path, 'rev-parse', `refs/remotes/${remote}/${name}`)?.trim();
-    const error = PROTECTED.includes(name) ? `${name} is protected`
-      : tip !== expected[index] ? `${name} changed since the preview`
-      : tryGit(path, 'merge-base', '--is-ancestor', tip, ref) === null ? `${name} is not merged into ${short(ref)}` : null;
-    return { name, deleted: false, error };
-  });
-  const ok = outcomes.filter(outcome => !outcome.error);
-  if (ok.length) {
-    git(path, 'push', '-q', remote, '--delete', ...ok.map(outcome => outcome.name));
-    ok.forEach(outcome => { outcome.deleted = true; });
-  }
-  return outcomes;
-}
-
 export function localStatus(paths) {
   return paths.map(path => ({
     path, exists: true, repo: true, branch: git(path, 'branch', '--show-current').trim() || null, tag: null, sha: git(path, 'rev-parse', 'HEAD').trim(),

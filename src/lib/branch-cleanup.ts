@@ -12,7 +12,6 @@ export type CleanupRow = {
 export type CleanupResult = { target: CleanupTarget; deleted: string[]; failed: BranchOutcome[]; error: string | null };
 export type CleanupClient = {
   deleteMergedBranches: (path: string, names: string[], expected: string[], base?: string | null) => Promise<BranchOutcome[]>;
-  deleteRemoteBranches: (path: string, remote: string, names: string[], expected: string[], base?: string | null) => Promise<BranchOutcome[]>;
 };
 
 export const SQUASH_NOTE = 'Squash-merged branches are not detected. Only branches Git sees as merged are listed.';
@@ -34,14 +33,6 @@ export function localRows(data: MergedBranches): CleanupRow[] {
     const notes = branch.upstreamGone ? ['Upstream gone'] : [];
     return { name: branch.name, oid: branch.oid, subject: branch.subject, lastCommit: branch.lastCommit, notes, blocked, preselect: !blocked && !branch.upstreamGone };
   });
-}
-
-export function remoteRows(data: MergedBranches): CleanupRow[] {
-  const guarded = protectedNames(data);
-  return data.remoteBranches.map(branch => ({
-    name: branch.name, oid: branch.oid, subject: branch.subject, lastCommit: branch.lastCommit,
-    notes: [], blocked: guarded.has(branch.name) ? 'Protected' : null, preselect: false,
-  }));
 }
 
 export const defaultSelection = (rows: CleanupRow[]): string[] => rows.filter(row => row.preselect).map(row => row.name);
@@ -78,29 +69,9 @@ export async function deleteLocalAcross(client: CleanupClient, entries: LocalDel
   return results;
 }
 
-export async function deleteRemoteAcross(client: CleanupClient, entries: LocalDelete[]): Promise<CleanupResult[]> {
-  const results: CleanupResult[] = [];
-  for (const { target, data, rows, names } of entries) {
-    const picked = selectableNames(rows, names);
-    if (!picked.length || !data.remote) continue;
-    try { results.push(settle(target, picked, await client.deleteRemoteBranches(target.path, data.remote, picked, expectedTips(rows, picked), data.remoteBase ?? data.base))); }
-    catch (reason) { results.push(failure(target, `Could not delete branches on ${data.remote}`, reason)); }
-  }
-  return results;
-}
-
 export function summarizeCleanup(results: CleanupResult[]): { deleted: number; failed: number } {
   return { deleted: results.reduce((sum, result) => sum + result.deleted.length, 0), failed: results.reduce((sum, result) => sum + result.failed.length + (result.error ? 1 : 0), 0) };
 }
 
 const DATE = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Bucharest', day: 'numeric', month: 'short', year: 'numeric' });
 export const formatCommitDate = (unix: number): string => (unix > 0 ? DATE.format(new Date(unix * 1000)) : '');
-
-export type RemotePlan = { remote: string; repo: string; names: string[] };
-const SHOWN_NAMES = 10;
-
-export function remoteConfirmMessage(plan: RemotePlan[]): string {
-  const total = plan.reduce((sum, entry) => sum + entry.names.length, 0);
-  const parts = plan.map(({ remote, repo, names }) => `${remote} in ${repo}: ${names.slice(0, SHOWN_NAMES).join(', ')}${names.length > SHOWN_NAMES ? ` and ${names.length - SHOWN_NAMES} more` : ''}`);
-  return `Delete ${total} merged ${total === 1 ? 'branch' : 'branches'} from the remote? ${parts.join('; ')}. Anyone who tracks them will lose the branch. Skein cannot restore them.`;
-}

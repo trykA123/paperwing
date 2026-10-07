@@ -42,7 +42,6 @@ await page.exposeFunction('__backend', async (cmd, a) => {
     case 'create_tag': return tags.create(a.path, a.request);
     case 'push_tag': return tags.push(a.path, a.remote, a.name, a.lease);
     case 'delete_tag': return tags.remove(a.path, a.name);
-    case 'delete_remote_tag': return tags.removeRemote(a.path, a.remote, a.name, a.expected);
     case 'create_github_release':
       releaseCalls.push(a);
       releaseStarted?.();
@@ -238,7 +237,7 @@ check('drawer refreshed with the lightweight tag and focus stayed in the drawer'
 check('rails now show two tag chips', (await page.locator('.history-row:has(.history-tagref)').count()) >= 1 && (await page.locator('.history-tagref').count()) === 2);
 await shot('drawer-two-tags');
 
-// Delete from the drawer: local first, then the remote with its own confirmation.
+// Delete from the drawer: local only.
 await page.click('button[aria-label="Delete tag v2.5.0-rc"]');
 await page.waitForSelector('.tag-dialog[open]');
 check('delete dialog is prefilled with the tag', (await page.locator('.tag-dialog input.mono').first().inputValue()) === 'v2.5.0-rc');
@@ -252,7 +251,7 @@ check('focus falls back to New tag after deleting from the drawer', await page.e
 await page.keyboard.press('Escape');
 await page.waitForTimeout(600);
 
-// Delete across the set: local first, then the separate remote confirmation.
+// Delete across the set: local only.
 await page.click('.fm-bar .more');
 await page.click('[role=menuitem]:has-text("Delete tag…")');
 await page.waitForSelector('.tag-dialog[open]');
@@ -263,42 +262,8 @@ await page.click('.tag-dialog footer .btn.danger:has-text("local")');
 await page.waitForSelector('.tag-targets li:has-text("Deleted locally")');
 await page.waitForTimeout(500);
 check('local delete removed v2.4.0 everywhere but left the remotes', ['alpha', 'beta', 'gamma'].every(name => !names(name).includes('v2.4.0')) && remoteNames('alpha').includes('v2.4.0') && remoteNames('gamma').includes('v2.4.0'));
-check('remote delete was not called by the local step', countOf('delete_remote_tag') === 0);
+check('no remote delete is offered or called', countOf('delete_remote_tag') === 0 && (await page.locator('.tag-dialog footer .btn:has-text("remote")').count()) === 0 && (await page.locator('.tag-dialog .tag-remote').count()) === 0);
 await shot('delete-local-set');
-await page.click('.tag-dialog footer .btn.danger:has-text("remote")');
-await page.waitForSelector('.confirm-dialog[open]');
-const remoteText = await page.locator('.confirm-dialog').innerText();
-check('remote confirmation names remote, repositories and the object each will delete', remoteText.includes('alpha (origin): object') && remoteText.includes('beta (origin): object') && remoteText.includes('gamma (origin): object'), remoteText.replace(/\n/g, ' ').slice(0, 160));
-await shot('remote-confirm');
-await page.click('.confirm-dialog button:has-text("Cancel")');
-await page.waitForTimeout(400);
-check('cancel keeps the remote tags', countOf('delete_remote_tag') === 0 && remoteNames('alpha').includes('v2.4.0'));
-git(remotes.gamma, 'tag', '-f', '-a', '-m', 'moved on the remote', 'v2.4.0', 'main');
-await page.click('.tag-dialog footer .btn.danger:has-text("remote")');
-await page.waitForSelector('.confirm-dialog[open]');
-await page.click('.confirm-dialog .btn.danger');
-await page.waitForSelector('.tag-targets li:has-text("Deleted on remote")');
-await page.waitForTimeout(600);
-await shot('remote-result');
-check('remote delete is leased: alpha removed, gamma kept because its remote tag moved, beta failed', !remoteNames('alpha').includes('v2.4.0') && remoteNames('gamma').includes('v2.4.0') && remoteNames('gamma').includes('v1.0.0') && (await page.locator('.tag-targets li:has-text("Remote kept")').count()) === 2, remoteNames('gamma').join());
-check('every submitted remote delete carried the expected object', tags.calls.filter(call => call.command === 'delete_remote_tag').every(call => /^[0-9a-f]{40}$/.test(call.expected)));
-await page.click('.tag-dialog footer .btn:not(.danger)');
-await page.waitForTimeout(600);
-await page.click('.fm-bar .more');
-await page.click('[role=menuitem]:has-text("Delete tag…")');
-await page.waitForSelector('.tag-dialog[open]');
-await page.fill('.tag-dialog input.mono', 'v2.4.0');
-await page.waitForTimeout(500);
-await page.click('.tag-dialog footer .btn.danger:has-text("remote")');
-await page.waitForSelector('.confirm-dialog[open]');
-const unknownText = await page.locator('.confirm-dialog').innerText();
-check('repositories without a known object are listed as refused', (unknownText.match(/unknown — will be refused/g) ?? []).length === 3, unknownText.replace(/\n/g, ' ').slice(0, 200));
-await shot('remote-confirm-unknown');
-const callsBefore = countOf('delete_remote_tag');
-await page.click('.confirm-dialog .btn.danger');
-await page.waitForSelector('.tag-targets li:has-text("Not submitted")');
-check('nothing was submitted for unknown objects', countOf('delete_remote_tag') === callsBefore && (await page.locator('.tag-targets li:has-text("Not submitted")').count()) === 3);
-await shot('remote-not-submitted');
 await page.click('.tag-dialog footer .btn:not(.danger)');
 await page.waitForTimeout(500);
 
