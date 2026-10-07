@@ -4,7 +4,12 @@ use super::super::pulls::{
 };
 use crate::commit::quick;
 
-pub(super) async fn annotated_object(path: &str, tag: &str) -> Result<String, PullsError> {
+pub(super) struct AnnotatedTag {
+    pub object: String,
+    pub commit: String,
+}
+
+pub(super) async fn annotated_object(path: &str, tag: &str) -> Result<AnnotatedTag, PullsError> {
     crate::git::valid_root(path)?;
     crate::tags::validate_name(path, tag).await?;
     let object = crate::tags::tag_object(path, tag)
@@ -16,16 +21,38 @@ pub(super) async fn annotated_object(path: &str, tag: &str) -> Result<String, Pu
             .to_string()
             .into());
     }
-    Ok(object)
+    let commit = quick(
+        path,
+        &["rev-parse", "--verify", &format!("{object}^{{commit}}")],
+        "Release tag commit",
+        &[0],
+    )
+    .await?;
+    Ok(AnnotatedTag {
+        object,
+        commit: String::from_utf8_lossy(&commit.stdout).trim().to_string(),
+    })
 }
 
-pub(super) async fn remotes(path: &str) -> Result<Vec<String>, PullsError> {
+pub(super) async fn remotes(
+    path: &str,
+    requested: Option<&str>,
+) -> Result<Vec<String>, PullsError> {
+    if let Some(remote) = requested {
+        crate::git::valid_ref(remote).map_err(|_| "Invalid remote name".to_string())?;
+    }
     let output = quick(path, &["remote"], "Release remotes", &[0]).await?;
     let mut remotes: Vec<_> = String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter(|name| !name.is_empty())
         .map(str::to_string)
         .collect();
+    if let Some(remote) = requested {
+        if !remotes.iter().any(|name| name == remote) {
+            return Err(format!("There is no remote named {remote}").into());
+        }
+        return Ok(vec![remote.to_string()]);
+    }
     remotes.sort_by_key(|name| name != "origin");
     Ok(remotes)
 }

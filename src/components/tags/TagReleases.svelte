@@ -4,7 +4,7 @@
   import { api } from '../../lib/api';
   import { describeError } from '../../lib/errors';
   import { app } from '../../lib/state.svelte';
-  import { createGithubReleases, type CreateRow, type ReleaseRow } from '../../lib/tags-set';
+  import { createGithubReleases, pendingReleaseTargets, type CreateRow, type ReleaseRow } from '../../lib/tags-set';
 
   let { rows, tag, message, onbusy }: { rows: CreateRow[]; tag: string; message: string; onbusy: (busy: boolean) => void } = $props();
   let notes = $state(untrack(() => message));
@@ -13,10 +13,12 @@
   let results = $state<ReleaseRow[]>([]);
 
   async function create() {
-    if (running || results.length) return;
+    if (running) return;
+    const pending = pendingReleaseTargets(rows, results);
+    if (!pending.length) return;
     running = true;
     onbusy(true);
-    try { results = await createGithubReleases(rows, { tag, notes, draft }, api, row => { results = [...results, row]; }); }
+    try { await createGithubReleases(pending, { tag, notes, draft }, api, row => { results = [...results.filter(result => result.path !== row.path), row]; }); }
     finally { running = false; onbusy(false); }
   }
 
@@ -29,10 +31,10 @@
 
 <section class="tag-section" aria-label="GitHub release">
   <h3>Create GitHub release</h3>
-  {#if !results.length && !running}
+  {#if pendingReleaseTargets(rows, results).length && !running}
     <label class="fld"><span>Release notes</span><textarea bind:value={notes} rows="2" spellcheck="false"></textarea></label>
     <label class="check"><input type="checkbox" bind:checked={draft} /> Save as draft</label>
-    <button type="button" class="btn" onclick={() => void create()}>Create GitHub release</button>
+    <button type="button" class="btn" onclick={() => void create()}>{results.length ? 'Retry failed releases' : 'Create GitHub release'}</button>
   {/if}
   {#if running}<p class="tag-note" role="status">Creating releases…</p>{/if}
   {#if results.length}

@@ -275,7 +275,7 @@ export const api = {
   diagnosticsPreview: () => invoke<string>('diagnostics_preview'),
   diagnosticsCancel: () => invoke<boolean>('diagnostics_cancel'),
   diagnosticsExport: () => invoke<boolean>('diagnostics_export'),
-  createGithubRelease: (path: string, tag: string, notes: string, draft = true) => invoke<CreatedGithubRelease>('create_github_release', { path, tag, notes, draft }),
+  createGithubRelease: (path: string, tag: string, notes: string, draft = true, remote: string | null = null) => invoke<CreatedGithubRelease>('create_github_release', { path, tag, notes, draft, remote }),
 };
 
 export type CreatedGithubRelease = { id: number; url: string; draft: boolean };

@@ -1,7 +1,7 @@
 use super::*;
 use crate::github::http::{Error, Response};
-use crate::github::pulls::client::Transport;
 use crate::github::pulls::repository::{parse_remote, Repository};
+use crate::github::pulls::{client::Transport, source};
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Method,
@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 #[derive(Deserialize)]
 struct Exchange {
@@ -22,16 +23,19 @@ struct Exchange {
     body: Value,
 }
 
+#[derive(Clone)]
 struct Recorded {
-    exchange: RefCell<Option<Exchange>>,
-    bodies: RefCell<Vec<Value>>,
+    exchange: Rc<RefCell<Option<Exchange>>>,
+    bodies: Rc<RefCell<Vec<Value>>>,
+    authenticated: bool,
 }
 
 impl Recorded {
     fn new(fixture: &str) -> Self {
         Self {
-            exchange: RefCell::new(Some(serde_json::from_str(fixture).unwrap())),
-            bodies: RefCell::default(),
+            exchange: Rc::new(RefCell::new(Some(serde_json::from_str(fixture).unwrap()))),
+            bodies: Rc::default(),
+            authenticated: true,
         }
     }
 }
@@ -67,6 +71,21 @@ impl Transport for Recorded {
     }
 }
 
+impl ReleaseTransport for Recorded {
+    fn authenticated(&self) -> bool {
+        self.authenticated
+    }
+}
+
+fn release_request<'a>(tag: &'a str, notes: &'a str, draft: bool) -> client::CreateRelease<'a> {
+    client::CreateRelease {
+        tag,
+        commit: "cccccccccccccccccccccccccccccccccccccccc",
+        notes,
+        draft,
+    }
+}
+
 fn enterprise() -> Repository {
     parse_remote(
         "ssh://git@gitint.company.com/admin/skein-fixture-api.git",
@@ -95,9 +114,13 @@ async fn enterprise_release_uses_the_remote_host_and_registered_source() {
         "https://gitint.company.com/api/v3"
     );
     let recorded = Recorded::new(include_str!("fixtures/enterprise.json"));
-    let release = client::create(&recorded, &repo, "v2.4.0", "Release notes", true)
-        .await
-        .unwrap();
+    let release = client::create(
+        &recorded,
+        &repo,
+        &release_request("v2.4.0", "Release notes", true),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         release.url,
         "https://gitint.company.com/admin/skein-fixture-api/releases/33"
@@ -105,7 +128,7 @@ async fn enterprise_release_uses_the_remote_host_and_registered_source() {
     assert!(release.draft);
     assert_eq!(
         recorded.bodies.borrow()[0],
-        json!({"tag_name":"v2.4.0","body":"Release notes","draft":true})
+        json!({"tag_name":"v2.4.0","target_commitish":"cccccccccccccccccccccccccccccccccccccccc","body":"Release notes","draft":true})
     );
     assert!(recorded.exchange.borrow().is_none());
 }
@@ -113,10 +136,11 @@ async fn enterprise_release_uses_the_remote_host_and_registered_source() {
 #[tokio::test]
 async fn release_rate_limit_serializes_the_reset_time_and_message() {
     let recorded = Recorded::new(include_str!("fixtures/rate-limited.json"));
-    let error: PullsError = client::create(&recorded, &enterprise(), "v1", "", true)
-        .await
-        .unwrap_err()
-        .into();
+    let error: PullsError =
+        client::create(&recorded, &enterprise(), &release_request("v1", "", true))
+            .await
+            .unwrap_err()
+            .into();
     let value = serde_json::to_value(error).unwrap();
     assert_eq!(value["kind"], "rateLimited");
     assert_eq!(
@@ -131,10 +155,11 @@ async fn release_rate_limit_serializes_the_reset_time_and_message() {
 #[tokio::test]
 async fn release_permission_denial_is_a_message_without_a_rate_limit() {
     let recorded = Recorded::new(include_str!("fixtures/permission.json"));
-    let error: PullsError = client::create(&recorded, &enterprise(), "v1", "", true)
-        .await
-        .unwrap_err()
-        .into();
+    let error: PullsError =
+        client::create(&recorded, &enterprise(), &release_request("v1", "", true))
+            .await
+            .unwrap_err()
+            .into();
     let value = serde_json::to_value(error).unwrap();
     assert_eq!(value["kind"], "message");
     assert!(value["message"].as_str().unwrap().contains("permissions"));
@@ -208,7 +233,7 @@ async fn release_requires_the_annotated_tag_on_the_remote_at_the_same_object() {
     let path = fixture.work.to_str().unwrap();
     let url = fixture.remote.to_str().unwrap();
     let object = repository::annotated_object(path, "v1").await.unwrap();
-    let error = repository::require_published(path, url, "v1", &object)
+    let error = repository::require_published(path, url, "v1", &object.object)
         .await
         .unwrap_err();
     assert!(error.to_string().contains("not on the remote"));
@@ -216,7 +241,7 @@ async fn release_requires_the_annotated_tag_on_the_remote_at_the_same_object() {
         &fixture.work,
         &["push", "--quiet", "origin", "refs/tags/v1"],
     );
-    repository::require_published(path, url, "v1", &object)
+    repository::require_published(path, url, "v1", &object.object)
         .await
         .unwrap();
     git(
@@ -227,9 +252,11 @@ async fn release_requires_the_annotated_tag_on_the_remote_at_the_same_object() {
             &git(&fixture.work, &["rev-parse", "HEAD"]),
         ],
     );
-    assert!(repository::require_published(path, url, "v1", &object)
-        .await
-        .is_err());
+    assert!(
+        repository::require_published(path, url, "v1", &object.object)
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -282,7 +309,7 @@ async fn release_rejects_response_links_outside_the_repository_host() {
         "https://user:password@gitint.company.com/releases/33",
     ] {
         let recorded = Recorded::new(&json!({"method":"POST","path":"/repos/admin/skein-fixture-api/releases","status":201,"body":{"id":33,"html_url":url,"draft":true}}).to_string());
-        let error = client::create(&recorded, &enterprise(), "v1", "", true)
+        let error = client::create(&recorded, &enterprise(), &release_request("v1", "", true))
             .await
             .unwrap_err();
         assert_eq!(error.to_string(), "Unexpected release URL from GitHub");
@@ -292,9 +319,270 @@ async fn release_rejects_response_links_outside_the_repository_host() {
 #[tokio::test]
 async fn release_can_be_explicitly_published_instead_of_saved_as_draft() {
     let recorded = Recorded::new(&json!({"method":"POST","path":"/repos/admin/skein-fixture-api/releases","status":201,"body":{"id":33,"html_url":"https://gitint.company.com/admin/skein-fixture-api/releases/33","draft":false}}).to_string());
-    let release = client::create(&recorded, &enterprise(), "v1", "", false)
+    let release = client::create(&recorded, &enterprise(), &release_request("v1", "", false))
         .await
         .unwrap();
     assert!(!release.draft);
     assert_eq!(recorded.bodies.borrow()[0]["draft"], false);
+}
+
+struct Injected {
+    transport: Recorded,
+    resolved: RefCell<Vec<String>>,
+    connected: RefCell<usize>,
+    failures: HashMap<String, String>,
+}
+
+impl Injected {
+    fn new() -> Self {
+        Self {
+            transport: Recorded::new(include_str!("fixtures/enterprise.json")),
+            resolved: RefCell::default(),
+            connected: RefCell::default(),
+            failures: HashMap::new(),
+        }
+    }
+}
+
+impl Connection for Injected {
+    type Transport<'a> = Recorded;
+
+    async fn resolve(&self, path: &str, remote: &str) -> Result<(Repository, String), PullsError> {
+        self.resolved.borrow_mut().push(remote.to_string());
+        if let Some(error) = self.failures.get(remote) {
+            return Err(error.clone().into());
+        }
+        let url = git(Path::new(path), &["remote", "get-url", "--push", remote]);
+        Ok((enterprise(), url))
+    }
+
+    async fn load_source(
+        &self,
+        _path: &str,
+        _repo: &Repository,
+    ) -> Result<crate::settings::Source, PullsError> {
+        Ok(serde_json::from_value(json!({
+            "id": "fixture", "name": "Fixture", "kind": "ghe", "host": "gitint.company.com"
+        }))
+        .unwrap())
+    }
+
+    async fn connect<'a>(
+        &'a self,
+        _source: &'a crate::settings::Source,
+        _host: &'a str,
+    ) -> Result<Self::Transport<'a>, PullsError> {
+        *self.connected.borrow_mut() += 1;
+        Ok(self.transport.clone())
+    }
+}
+
+fn request<'a>(fixture: &'a Fixture, remote: Option<&'a str>) -> ReleaseRequest<'a> {
+    ReleaseRequest {
+        path: fixture.work.to_str().unwrap(),
+        tag: "v1",
+        notes: "Release notes",
+        draft: true,
+        remote,
+    }
+}
+
+fn add_upstream(fixture: &Fixture) -> PathBuf {
+    let remote = fixture.root.join("upstream.git");
+    std::fs::create_dir_all(&remote).unwrap();
+    git(&remote, &["init", "--quiet", "--bare"]);
+    git(
+        &fixture.work,
+        &["remote", "add", "upstream", remote.to_str().unwrap()],
+    );
+    remote
+}
+
+#[tokio::test]
+async fn release_peels_the_annotated_tag_commit_instead_of_current_head() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    let commit = git(&fixture.work, &["rev-parse", "HEAD"]);
+    git(
+        &fixture.work,
+        &["commit", "--quiet", "--allow-empty", "-m", "next commit"],
+    );
+    let tag = repository::annotated_object(fixture.work.to_str().unwrap(), "v1")
+        .await
+        .unwrap();
+    assert_ne!(commit, git(&fixture.work, &["rev-parse", "HEAD"]));
+    assert_eq!(tag.commit, commit);
+    assert_eq!(tag.object, git(&fixture.work, &["rev-parse", "v1"]));
+    assert_ne!(tag.object, tag.commit);
+}
+
+#[tokio::test]
+async fn release_checks_publication_before_connecting_or_posting() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    let connection = Injected::new();
+    let error = create_with_connection(&connection, request(&fixture, Some("origin")))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("not on the remote"));
+    assert_eq!(*connection.connected.borrow(), 0);
+    assert!(connection.transport.bodies.borrow().is_empty());
+    git(
+        &fixture.work,
+        &["push", "--quiet", "origin", "refs/tags/v1"],
+    );
+    git(
+        &fixture.remote,
+        &[
+            "update-ref",
+            "refs/tags/v1",
+            &git(&fixture.work, &["rev-parse", "HEAD"]),
+        ],
+    );
+    let error = create_with_connection(&connection, request(&fixture, Some("origin")))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("expected object"));
+    assert_eq!(*connection.connected.borrow(), 0);
+    assert!(connection.transport.bodies.borrow().is_empty());
+    git(
+        &fixture.work,
+        &["push", "--quiet", "--force", "origin", "refs/tags/v1"],
+    );
+    create_with_connection(&connection, request(&fixture, Some("origin")))
+        .await
+        .unwrap();
+    assert_eq!(*connection.connected.borrow(), 1);
+    assert_eq!(connection.transport.bodies.borrow().len(), 1);
+    assert_eq!(
+        connection.transport.bodies.borrow()[0]["target_commitish"],
+        git(&fixture.work, &["rev-parse", "v1^{commit}"])
+    );
+}
+
+#[tokio::test]
+async fn release_refuses_an_unauthenticated_connection_without_posting() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    git(
+        &fixture.work,
+        &["push", "--quiet", "origin", "refs/tags/v1"],
+    );
+    let mut connection = Injected::new();
+    connection.transport.authenticated = false;
+    let error = create_with_connection(&connection, request(&fixture, None))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("Store a GitHub token"));
+    assert_eq!(*connection.connected.borrow(), 1);
+    assert!(connection.transport.bodies.borrow().is_empty());
+    assert!(connection.transport.exchange.borrow().is_some());
+}
+
+#[tokio::test]
+async fn release_uses_only_the_requested_remote_even_when_origin_is_published() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    add_upstream(&fixture);
+    for remote in ["origin", "upstream"] {
+        git(&fixture.work, &["push", "--quiet", remote, "refs/tags/v1"]);
+    }
+    let connection = Injected::new();
+    create_with_connection(&connection, request(&fixture, Some("upstream")))
+        .await
+        .unwrap();
+    assert_eq!(*connection.resolved.borrow(), ["upstream"]);
+    assert_eq!(connection.transport.bodies.borrow().len(), 1);
+}
+
+#[tokio::test]
+async fn release_falls_back_across_remotes_only_when_none_is_requested() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    add_upstream(&fixture);
+    git(
+        &fixture.work,
+        &["push", "--quiet", "upstream", "refs/tags/v1"],
+    );
+    let connection = Injected::new();
+    create_with_connection(&connection, request(&fixture, None))
+        .await
+        .unwrap();
+    assert_eq!(*connection.resolved.borrow(), ["origin", "upstream"]);
+    assert_eq!(*connection.connected.borrow(), 1);
+    assert_eq!(connection.transport.bodies.borrow().len(), 1);
+}
+
+#[tokio::test]
+async fn release_preserves_the_requested_remote_error_without_falling_back() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    add_upstream(&fixture);
+    git(
+        &fixture.work,
+        &["push", "--quiet", "upstream", "refs/tags/v1"],
+    );
+    let connection = Injected::new();
+    let error = create_with_connection(&connection, request(&fixture, Some("origin")))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("not on the remote"));
+    assert_eq!(*connection.resolved.borrow(), ["origin"]);
+    assert!(connection.transport.bodies.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn release_preserves_the_first_remote_error_when_all_remotes_fail() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    add_upstream(&fixture);
+    let mut connection = Injected::new();
+    connection
+        .failures
+        .insert("upstream".into(), "upstream failure".into());
+    let error = create_with_connection(&connection, request(&fixture, None))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("not on the remote"));
+    assert_eq!(*connection.resolved.borrow(), ["origin", "upstream"]);
+    assert!(connection.transport.bodies.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn release_validates_requested_remote_names_and_configuration() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    let connection = Injected::new();
+    for remote in ["", "--all", "origin\nupstream", "missing"] {
+        let error = create_with_connection(&connection, request(&fixture, Some(remote)))
+            .await
+            .unwrap_err();
+        let expected = if remote == "missing" {
+            "There is no remote named missing"
+        } else {
+            "Invalid remote name"
+        };
+        assert_eq!(error.to_string(), expected);
+    }
+    assert!(connection.resolved.borrow().is_empty());
+    assert_eq!(*connection.connected.borrow(), 0);
+    assert!(connection.transport.bodies.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn release_remote_fallback_keeps_origin_first() {
+    let _runner = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = fixture();
+    for remote in ["zeta", "alpha"] {
+        git(
+            &fixture.work,
+            &["remote", "add", remote, fixture.remote.to_str().unwrap()],
+        );
+    }
+    assert_eq!(
+        repository::remotes(fixture.work.to_str().unwrap(), None)
+            .await
+            .unwrap(),
+        ["origin", "alpha", "zeta"]
+    );
 }

@@ -25,18 +25,23 @@ pub(super) fn validate_notes(notes: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub(super) struct CreateRelease<'a> {
+    pub tag: &'a str,
+    pub commit: &'a str,
+    pub notes: &'a str,
+    pub draft: bool,
+}
+
 pub(super) async fn create(
     transport: &impl Transport,
     repo: &Repository,
-    tag: &str,
-    notes: &str,
-    draft: bool,
+    request: &CreateRelease<'_>,
 ) -> Result<CreatedGithubRelease, Error> {
     let result = transport
         .send(
             Method::POST,
             &format!("{}/releases", repo.api_path()),
-            Some(json!({"tag_name": tag, "body": notes, "draft": draft})),
+            Some(json!({"tag_name": request.tag, "target_commitish": request.commit, "body": request.notes, "draft": request.draft})),
         )
         .await?
         .decode::<GithubRelease>();

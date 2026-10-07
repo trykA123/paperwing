@@ -17,6 +17,11 @@ export type ReleaseRequest = { tag: string; notes: string; draft?: boolean };
 
 export const releaseTargets = (rows: CreateRow[]) => rows.filter(row => row.status === 'pushed' && row.pushed && row.created?.annotated);
 
+export const pendingReleaseTargets = (rows: CreateRow[], results: ReleaseRow[]) => rows.filter(row => {
+  const result = results.find(result => result.path === row.path);
+  return !result || result.status === 'failed';
+});
+
 function releaseError(reason: unknown, name: string): string {
   const message = typeof reason === 'object' && reason !== null && 'message' in reason && typeof reason.message === 'string' ? reason.message : reason;
   return describeError(message, `create a GitHub release for ${name}`);
@@ -30,7 +35,7 @@ export async function createGithubReleases(rows: CreateRow[], request: ReleaseRe
     if (!releaseTargets([row]).length) result = { ...target, status: 'refused', release: null, error: 'Push an annotated tag before creating a GitHub release.' };
     else {
       try {
-        const release = await api.createGithubRelease(row.path, request.tag, request.notes, request.draft ?? true);
+        const release = await api.createGithubRelease(row.path, request.tag, request.notes, request.draft ?? true, row.remote);
         result = { ...target, status: 'created', release, error: null };
       } catch (reason) { result = { ...target, status: 'failed', release: null, error: releaseError(reason, row.name) }; }
     }

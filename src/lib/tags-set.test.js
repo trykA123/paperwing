@@ -1,7 +1,7 @@
 import './test-support/svelte-loader.js';
 import { describe, expect, test } from 'bun:test';
 import { withIpc } from './test-support/ipc-fixture.js';
-import { compareTagsDesc, createGithubReleases, createTags, deleteLocalTags, deleteRemoteTags, moveConfirmMessage, planTags, refreshAfterTagChange, releaseTargets, remoteDeleteMessage } from './tags-set.ts';
+import { compareTagsDesc, createGithubReleases, pendingReleaseTargets, createTags, deleteLocalTags, deleteRemoteTags, moveConfirmMessage, planTags, refreshAfterTagChange, releaseTargets, remoteDeleteMessage } from './tags-set.ts';
 
 const target = name => ({ path: `/r/${name}`, name, remote: 'origin', commit: null });
 const repo = path => path.split('/').pop();
@@ -213,6 +213,25 @@ describe('GitHub releases', () => {
     expect(seen).toEqual(['a', 'b', 'c']);
   });
 
+  test('release creation uses each row push remote', async () => {
+    const calls = [];
+    const api = { createGithubRelease: async (...args) => { calls.push(args); return { id: 33, url: 'https://github.com/admin/a/releases/33', draft: true }; } };
+    await createGithubReleases([pushed('a'), pushed('b', { remote: 'upstream' })], { tag: 'v1', notes: '' }, api);
+    expect(calls.map(call => call[4])).toEqual(['origin', 'upstream']);
+  });
+
+  test('retries select failed rows and preserve successes and refusals', () => {
+    const rows = ['a', 'b', 'c', 'd'].map(name => pushed(name));
+    const results = [
+      { ...target('a'), status: 'created', release: { id: 33 }, error: null },
+      { ...target('b'), status: 'failed', release: null, error: 'permissions' },
+      { ...target('c'), status: 'refused', release: null, error: 'Push first' },
+    ];
+    expect(pendingReleaseTargets(rows, []).map(row => row.name)).toEqual(['a', 'b', 'c', 'd']);
+    expect(pendingReleaseTargets(rows, results).map(row => row.name)).toEqual(['b', 'd']);
+    expect(pendingReleaseTargets(rows.slice(0, 1), results)).toEqual([]);
+  });
+
   test('ineligible rows are refused without making an API request', async () => {
     const calls = [];
     const api = { createGithubRelease: async (...args) => { calls.push(args); } };
@@ -238,8 +257,9 @@ describe('GitHub releases', () => {
       return Promise.resolve({ id: 33, url: 'https://gitint.company.com/admin/a/releases/33', draft: args.draft });
     }, async () => {
       expect((await api.createGithubRelease('/r/a', 'v1', 'Tag message')).draft).toBe(true);
-      expect((await api.createGithubRelease('/r/a', 'v1', '', false)).draft).toBe(false);
+      expect((await api.createGithubRelease('/r/a', 'v1', '', false, 'upstream')).draft).toBe(false);
     });
-    expect(calls[0]).toEqual(['create_github_release', { path: '/r/a', tag: 'v1', notes: 'Tag message', draft: true }]);
+    expect(calls[0]).toEqual(['create_github_release', { path: '/r/a', tag: 'v1', notes: 'Tag message', draft: true, remote: null }]);
+    expect(calls[1]).toEqual(['create_github_release', { path: '/r/a', tag: 'v1', notes: '', draft: false, remote: 'upstream' }]);
   });
 });

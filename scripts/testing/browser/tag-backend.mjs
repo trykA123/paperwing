@@ -77,13 +77,14 @@ export function history(path) {
   return { kind: 'noUpstream', branch: git(path, 'branch', '--show-current').trim(), upstream: null, uncommitted: 0, local: log, localTotal: log.length, origin: [], originTotal: 0, base: null, below: [] };
 }
 
-export function createRelease(path, tag, notes, draft = true) {
-  calls.push({ command: 'create_github_release', path, tag, notes, draft });
+export function createRelease(path, tag, notes, draft = true, remote = 'origin') {
+  calls.push({ command: 'create_github_release', path, tag, notes, draft, remote });
   validName(path, tag);
+  validRemote(path, remote);
   const object = objectOf(path, tag);
   if (!object || git(path, 'cat-file', '-t', object).trim() !== 'tag') throw new Error('GitHub releases require an annotated tag');
-  const remote = git(path, 'ls-remote', '--refs', 'origin', `refs/tags/${tag}`).trim();
-  if (remote !== `${object}\trefs/tags/${tag}`) throw new Error(`Tag ${tag} is not on the remote at the expected object`);
+  const published = git(path, 'ls-remote', '--refs', remote, `refs/tags/${tag}`).trim();
+  if (published !== `${object}\trefs/tags/${tag}`) throw new Error(`Tag ${tag} is not on the remote at the expected object`);
   if (basename(path) === 'gamma') throw new Error('GitHub access denied; check token repository permissions');
   return { id: 33, url: `https://gitint.company.com/admin/${basename(path)}/releases/33`, draft };
 }
