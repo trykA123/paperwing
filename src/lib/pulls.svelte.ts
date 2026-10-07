@@ -48,8 +48,11 @@ export class PullLoader {
     this.#onRateLimit = options.onRateLimit;
   }
 
+  /** Repositories (by folder path) whose pull request is known to await a review. */
+  awaitingPaths = $derived(Object.entries(this.entries).filter(([, entry]) => entry.status === 'ready' && entry.pull?.state === 'open' && entry.pull.reviewState === 'reviewRequired').map(([key]) => ({ path: key.split('\u0000')[0] })));
+
   /** Rows whose pull request is known to await a review; the rail badge can read this. */
-  awaitingReview = $derived(Object.values(this.entries).filter(entry => entry.status === 'ready' && entry.pull?.state === 'open' && entry.pull.reviewState === 'reviewRequired').length);
+  awaitingReview = $derived(this.awaitingPaths.length);
 
   loading = $derived(Object.values(this.entries).filter(entry => entry.status === 'loading').length);
 

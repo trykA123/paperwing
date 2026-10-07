@@ -950,7 +950,7 @@ button.fm-ref:hover {
     .shell-side {
         position: relative;
         overflow: visible;
-        z-index: var(--z-panel, 20);
+        z-index: var(--z-panel);
     }
 
     .shell-side .shell-panel-content {

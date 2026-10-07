@@ -4,7 +4,8 @@ import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
 import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
-import { railClick } from './rail';
+import { moduleById } from './modules';
+import { ModuleNavigation } from './state/modules.svelte';
 import { doingWord, RunNotices } from './state/run-notices';
 import { TemporarySets } from './state/temporary-sets.svelte';
 import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
@@ -15,7 +16,7 @@ import {
     api, type Activity,
     type GitAction, type LocalStatus, type Phase, type Progress, type Ref, type Repo,
     type Capability, type Capabilities, type CompareEndpoint, type PathIdentity, type PlatformInfo, type RootSupport,
-    type RailSection, type RepoSet, type SetItem, type Source, type Workspace,
+    type RepoSet, type SetItem, type Source, type Workspace,
 } from './api';
 import { CompareState, SetCompareState, type SetCompareRow } from './compare.svelte';
 import { confirm } from './confirm';
@@ -174,7 +175,10 @@ class AppState {
     if (open) { this.ws.shell.section = 'activity'; this.ws.shell.sidebarVisible = true; }
     else if (this.activityOpen) this.ws.shell.sidebarVisible = false;
   }
-  clickRail(section: RailSection) { Object.assign(this.ws.shell, railClick(this.ws.shell, section)); }
+  modules = new ModuleNavigation({
+    get ws() { return app.ws; }, get sources() { return app.sources; }, get view() { return app.view; },
+    openView: view => this.openView(view), openCodeSearch: () => this.openCodeSearch(),
+  });
   private gitActivity = new GitActivity();
   get activity() { return this.gitActivity.activity; }
   set activity(value: Activity[]) { this.gitActivity.activity = value; }
@@ -194,6 +198,8 @@ class AppState {
     const view = this.view;
     return view.kind === 'item' ? this.set.items.find(item => item.id === view.itemId) : undefined;
   });
+  /** Settings, code search and module pages have nothing for the details panel to describe. */
+  get detailsAvailable() { return this.view.kind !== 'settings' && this.view.kind !== 'codeSearch' && this.view.kind !== 'module'; }
   paletteOpen = $state(false);
   get query() { return this.activeTab?.query ?? ''; }
   set query(value: string) { if (this.activeTab) this.activeTab.query = value; }
@@ -265,6 +271,7 @@ class AppState {
     await listen<Activity>('git-activity', event => this.mergeActivity(event.payload));
     await this.refreshActivity();
     this.ready = true;
+    this.modules.restore();
     if (!this.sources.length) this.openView({ kind: 'settings' });
     await Promise.all(this.sources.map(s => this.loadRepos(s, false)));
     if (benchmarkEnabled) {
@@ -351,8 +358,9 @@ class AppState {
   activateTab(id: string) {
     const tab = this.tabs.find(tab => tab.id === id);
     if (!tab) return;
-    if (this.ws.sets.some(set => set.id === tab.setId) || this.temporary.find(tab.setId)) this.ws.activeSet = tab.setId;
+    if (tab.view.kind !== 'module' && (this.ws.sets.some(set => set.id === tab.setId) || this.temporary.find(tab.setId))) this.ws.activeSet = tab.setId;
     this.activeTabId = id;
+    if (this.ready) this.modules.follow(tab.view);
   }
 
   cycleTab(direction: number) {
@@ -406,6 +414,7 @@ class AppState {
       case 'compare': return view.readOnly ? 'Compare (read-only)' : 'Compare';
       case 'setCompare': return `Compare ${set?.name ?? 'Set'}`;
       case 'fileDiff': return view.path.split('/').at(-1) ?? 'File diff';
+      case 'module': return moduleById(view.module).label;
       case 'settings': return 'Settings';
     }
   }

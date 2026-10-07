@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { moduleById } from '../lib/modules';
   import { app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
   import WindowControls from './WindowControls.svelte';
@@ -15,6 +16,11 @@
     (event.currentTarget as HTMLElement).closest('.tabstrip')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
+  $effect(() => {
+    app.activeTabId;
+    document.querySelector('.shell-tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  });
+
   const titlebar = $derived(app.platform.platform === 'windows' ? true : undefined);
 </script>
 
@@ -25,7 +31,7 @@
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"
           tabindex={tab.id === app.activeTabId ? 0 : -1} title={app.temporary.find(tab.setId) ? `${app.tabTitle(tab)} (temporary, not saved)` : app.tabTitle(tab)}
           onclick={() => app.activateTab(tab.id)} onkeydown={event => navigate(event, index)}>
-          <Icon name={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'copy' : tab.view.kind === 'fileDiff' ? 'code' : tab.view.kind === 'settings' ? 'gear' : tab.view.kind === 'search' || tab.view.kind === 'codeSearch' || tab.view.kind === 'org' ? 'search' : 'folder'}
+          <Icon name={tab.view.kind === 'module' ? moduleById(tab.view.module).icon : tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'copy' : tab.view.kind === 'fileDiff' ? 'code' : tab.view.kind === 'settings' ? 'gear' : tab.view.kind === 'search' || tab.view.kind === 'codeSearch' || tab.view.kind === 'org' ? 'search' : 'folder'}
             tone={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'brand' : tab.view.kind === 'fileDiff' ? 'file' : tab.view.kind === 'set' || tab.view.kind === 'item' ? 'folder' : undefined} />
           <span>{app.tabTitle(tab)}</span>
         </button>
@@ -38,7 +44,7 @@
     <button class="kbtn" title="Command palette (Ctrl+K)" onclick={() => (app.paletteOpen = true)}><Icon name="search" /><span>Search or run a command...</span><kbd>Ctrl K</kbd></button>
     <button class="icon shell-control" class:on={app.ws.shell.sidebarVisible} title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.ws.shell.sidebarVisible}
       onclick={() => (app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible)}><Icon name="panel" /></button>
-    <button class="icon shell-control" class:on={app.ws.shell.rightVisible} disabled={app.view.kind === 'settings' || app.view.kind === 'codeSearch'} title="Toggle details" aria-label="Toggle details" aria-pressed={app.ws.shell.rightVisible}
+    <button class="icon shell-control" class:on={app.ws.shell.rightVisible} disabled={!app.detailsAvailable} title="Toggle details" aria-label="Toggle details" aria-pressed={app.ws.shell.rightVisible}
       onclick={() => (app.ws.shell.rightVisible = !app.ws.shell.rightVisible)}><Icon name="panel" /></button>
     <button class="icon shell-control" title="Toggle light/dark theme" aria-label="Toggle light/dark theme"
       onclick={() => (app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark')}><Icon name="theme" /></button>

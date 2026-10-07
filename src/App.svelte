@@ -42,9 +42,10 @@
   import { pullFlow } from './lib/pull-flow.svelte';
   import { stashFlow } from './lib/stash-flow.svelte';
   import { tagFlow } from './lib/tag-flow.svelte';
-  import { RAIL_SECTIONS, railShortcut } from './lib/rail';
+  import ModulePage from './components/module/ModulePage.svelte';
+  import { moduleById, moduleShortcut } from './lib/modules';
 
-  const rightVisible = $derived(app.ws.shell.rightVisible && app.view.kind !== 'settings' && app.view.kind !== 'codeSearch');
+  const rightVisible = $derived(app.ws.shell.rightVisible && app.detailsAvailable);
   const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
   let reducedMotion = $state(false), panelsMoving = $state(false);
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activity.some(entry => entry.state === 'running'));
@@ -73,9 +74,8 @@
     if (id.startsWith('rail-')) {
       if (!app.ready || app.paletteOpen) return;
       event.preventDefault(); event.stopPropagation();
-      const target = railShortcut(id.slice(5));
-      if (target === 'settings') app.openView({ kind: 'settings' });
-      else if (target) Object.assign(app.ws.shell, { section: target, sidebarVisible: true });
+      const target = moduleShortcut(id.slice(5));
+      if (target) app.modules.open(target);
       return;
     }
     if (id.startsWith('tab-') || id === 'search-code') {
@@ -161,7 +161,7 @@
 <div id="shell" class:noright={!rightVisible} class:noside={!app.ws.shell.sidebarVisible} class:panels-moving={panelsMoving}
   style:--lw="{app.ws.shell.sidebarVisible ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
   <ActivityRail {gitBusy} />
-  <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{RAIL_SECTIONS.find(entry => entry.id === app.ws.shell.section)?.label}</span></div>
+  <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{moduleById(app.ws.shell.section).label}</span></div>
   <Tabs />
   <div class="shell-side" inert={!app.ws.shell.sidebarVisible} aria-hidden={!app.ws.shell.sidebarVisible} style:--panel-width="{app.ws.shell.sidebarWidth}px">
     {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
@@ -177,6 +177,8 @@
       {/key}
     {:else if app.view.kind === 'search'}
       {#key app.activeTabId}<RepoList mode="search" />{/key}
+    {:else if app.view.kind === 'module'}
+      {#key app.activeTabId}<ModulePage module={app.view.module} />{/key}
     {:else if app.view.kind === 'settings'}
       <Settings />
     {/if}

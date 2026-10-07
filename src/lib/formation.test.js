@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
 import { bulkTargets, filterCounts, matchesFilter, nextAction, syncView } from './formation.ts';
-import { RAIL_SECTIONS, railClick, railShortcut } from './rail.ts';
 
 const repo = (extra = {}) => ({ path: '/w/a', exists: true, repo: true, branch: 'main', tag: null, sha: 'abc', upstream: 'origin/main', ahead: 0, behind: 0, dirty: 0, error: null, ...extra });
 const missing = { path: '/w/m', exists: false, repo: false, branch: null, tag: null, sha: '', upstream: null, ahead: 0, behind: 0, dirty: 0, error: null };
@@ -80,17 +79,4 @@ test('The sync view reads ahead, behind and uncommitted counts', () => {
   expect(syncView(repo({ upstream: null }))).toMatchObject({ inSync: false, unpublished: true });
   expect(syncView(missing).kind).toBe('missing');
   expect(syncView(undefined).kind).toBe('unknown');
-});
-
-test('Clicking the active rail icon folds the panel and any other icon shows its section', () => {
-  expect(railClick({ section: 'sets', sidebarVisible: true }, 'sets')).toEqual({ section: 'sets', sidebarVisible: false });
-  expect(railClick({ section: 'sets', sidebarVisible: false }, 'sets')).toEqual({ section: 'sets', sidebarVisible: true });
-  expect(railClick({ section: 'sets', sidebarVisible: true }, 'activity')).toEqual({ section: 'activity', sidebarVisible: true });
-});
-
-test('Ctrl+1 to Ctrl+4 pick the sections and Ctrl+5 opens settings', () => {
-  expect(RAIL_SECTIONS.map((_, index) => railShortcut(String(index + 1)))).toEqual(['sets', 'compare', 'recovery', 'activity']);
-  expect(railShortcut('5')).toBe('settings');
-  expect(railShortcut('6')).toBeUndefined();
-  expect(railShortcut('a')).toBeUndefined();
 });

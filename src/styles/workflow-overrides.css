@@ -756,7 +756,7 @@ svg.i.tone-danger {
 
 .refselect-list {
     position: fixed;
-    z-index: 100;
+    z-index: var(--z-dialog);
     overflow: auto;
     padding: var(--sp-1);
     border: 1px solid var(--line);

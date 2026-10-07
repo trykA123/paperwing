@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type IconName = 'branch' | 'tag' | 'commit' | 'search' | 'gear' | 'refresh' | 'folder' | 'code' | 'plus' | 'trash' | 'check' | 'copy' | 'close' | 'panel' | 'theme' | 'chevron' | 'activity' | 'download' | 'info' | 'alert' | 'error' | 'disclosure' | 'folderOpen' | 'minimize' | 'maximize' | 'restore' | 'upload' | 'remote' | 'stash' | 'submodule' | 'more' | 'layers' | 'undo';
+  export type IconName = 'branch' | 'tag' | 'commit' | 'search' | 'gear' | 'refresh' | 'folder' | 'code' | 'plus' | 'trash' | 'check' | 'copy' | 'close' | 'panel' | 'theme' | 'chevron' | 'activity' | 'download' | 'info' | 'alert' | 'error' | 'disclosure' | 'folderOpen' | 'minimize' | 'maximize' | 'restore' | 'upload' | 'remote' | 'stash' | 'submodule' | 'more' | 'layers' | 'undo' | 'changes' | 'pr' | 'actions' | 'jira' | 'server' | 'board' | 'eye' | 'external';
   export type IconTone = 'folder' | 'repo' | 'file' | 'branch' | 'tag' | 'commit' | 'ok' | 'warn' | 'err' | 'brand' | 'sync' | 'record' | 'inspect' | 'danger';
 </script>
 
@@ -75,6 +75,22 @@
     <path d="m8 2 6 3-6 3-6-3zM2 8l6 3 6-3M2 11l6 3 6-3" stroke-linejoin="round" />
   {:else if name === 'undo'}
     <path d="M3 8a5 5 0 1 1 1.5 3.5M3 3.5V8h4.5" />
+  {:else if name === 'changes'}
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" /><path d="M8 5.5v5M5.5 8h5" />
+  {:else if name === 'pr'}
+    <circle cx="4" cy="3.5" r="1.6" /><circle cx="4" cy="12.5" r="1.6" /><circle cx="12" cy="12.5" r="1.6" /><path d="M4 5.1v5.8M12 10.9V6.5a2 2 0 0 0-2-2H7.5M9 3 7.5 4.5 9 6" />
+  {:else if name === 'actions'}
+    <circle cx="8" cy="8" r="6" /><path d="M6.5 5.5v5l4-2.5z" stroke-linejoin="round" />
+  {:else if name === 'jira'}
+    <rect x="2.5" y="2" width="11" height="12" rx="1.5" /><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" />
+  {:else if name === 'server'}
+    <rect x="2.5" y="2.5" width="11" height="4.5" rx="1" /><rect x="2.5" y="9" width="11" height="4.5" rx="1" /><path d="M5 4.75h.5M5 11.25h.5" />
+  {:else if name === 'board'}
+    <rect x="2" y="2.5" width="12" height="11" rx="1.5" /><path d="M6 2.5v11M10 2.5v11" />
+  {:else if name === 'eye'}
+    <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" />
+  {:else if name === 'external'}
+    <path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v4h-9v-9h4" />
   {:else if name === 'error'}
     <circle cx="8" cy="8" r="6" /><path d="m5.8 5.8 4.4 4.4M10.2 5.8l-4.4 4.4" stroke-linecap="round" />
   {/if}

@@ -27,6 +27,12 @@
     --shadow-1: 0 1px 2px oklch(0 0 0 / 0.05), 0 8px 28px oklch(0 0 0 / 0.04);
     --shadow-2: 0 12px 40px oklch(0 0 0 / 0.2);
     --shadow-3: 0 24px 60px oklch(0 0 0 / 0.3);
+    --z-panel: 20;
+    --z-flyout: 30;
+    --z-scrim: 40;
+    --z-drawer: 41;
+    --z-popover: 50;
+    --z-dialog: 100;
     --info-bg: var(--accs);
     --ok-line: color-mix(in oklch, var(--ok) 40%, transparent);
     --warn-line: color-mix(in oklch, var(--warn) 45%, transparent);
@@ -793,7 +799,7 @@ kbd {
 
 .row-menu {
     position: fixed;
-    z-index: 50;
+    z-index: var(--z-popover);
     width: 290px;
     max-height: calc(100vh - 50px);
     overflow: auto;

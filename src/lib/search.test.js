@@ -174,3 +174,21 @@ describe('rows and requests', () => {
     expect(matchLocation('/home/u/r/', match('a.ts', 1))).toBe('/home/u/r/a.ts');
   });
 });
+
+describe('recent searches', () => {
+  test('lists each pattern once, newest first, and keeps eight', async () => {
+    const search = session();
+    for (const pattern of ['a', 'b', 'a', 'c', 'd', 'e', 'f', 'g', 'h', 'i']) {
+      await search.start({ ...request, pattern }, names);
+      handlers.done(done(7));
+    }
+    expect(search.recent).toEqual(['i', 'h', 'g', 'f', 'e', 'd', 'c', 'a']);
+  });
+
+  test('a search refused because one is running is not recorded', async () => {
+    const search = session();
+    await search.start({ ...request, pattern: 'first' }, names);
+    await search.start({ ...request, pattern: 'second' }, names);
+    expect(search.recent).toEqual(['first']);
+  });
+});
