@@ -21,6 +21,11 @@ The user sees and controls CI for a repository and for a whole set: runs, jobs, 
 - Write actions (re-run all, re-run failed, cancel, dispatch) confirm first and report the result. Dispatch inputs are parsed from the workflow file at the chosen ref.
 - Missing permissions produce a message naming the permission needed.
 - Set board on orgs with 100+ repositories: load only visible rows and selected rows, concurrency 4.
+- Run page matches GitHub's (owner request 2026-10-07; shell direction A, prototype `.alt/shell-design-2/a-final.html`). Module sidebar lists Summary, jobs (status, duration) and Run details. Summary shows trigger, status, duration, job graph, annotations and artifacts. Job view shows steps that expand to their logs (line numbers, `##[group]` folding, ANSI, error lines, timestamps toggle).
+- Job graph comes from `needs` in the workflow file at the run's `head_sha`; the REST jobs list has no `needs`. Matrix jobs group by name prefix.
+- Annotations come from the job's check run (`check-runs/{id}/annotations`).
+- In-progress jobs show step status only; the log loads when the job finishes. Step summaries (`$GITHUB_STEP_SUMMARY`) have no public API: show "Open on GitHub" instead.
+- Actions and Pull requests scope to the active set by default, with a chip to widen to all repositories.
 
 ## Scope
 - Do: provider-neutral CI types and commands, GitHub Actions provider, set board, repository view, log viewer, actions, artifacts download.
@@ -36,7 +41,7 @@ The user sees and controls CI for a repository and for a whole set: runs, jobs, 
 1. Provider-neutral types and trait usage; GitHub Actions client with a test seam: runs, jobs, logs (redirect handling), artifacts, re-run, cancel, dispatch. Check: recorded-response tests for pagination, 304, 403 rate limit, permission errors and an Enterprise host.
 2. Disable path: a disabled provider is never constructed and makes no requests. Check: counting-transport test.
 3. Set board and repository view in the Formation style: latest run per workflow on the current branch, status, duration, trigger, commit; filters. Check: screenshots, both themes.
-4. Log viewer: virtualised, step folding, search, ANSI colour, download archive. Check: browser test with a 100k-line log.
+4. Run page and log viewer: summary, job graph, annotations, artifacts; job view with steps folding into their logs; virtualised, search, ANSI colour, download archive. Check: browser test with a 100k-line log, a failed step, an in-progress job and a matrix run; screenshots against the prototype.
 5. Actions and artifacts with confirmations; rail badge for failed runs through the badge map from 03b. Check: browser tests with a mocked provider.
 6. Native acceptance on `skein-fixture-api` with a small workflow, then cleanup.
 
