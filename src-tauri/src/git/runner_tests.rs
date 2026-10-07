@@ -188,3 +188,11 @@ async fn the_running_git_child_sees_the_pinned_locale() {
         .unwrap();
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "[][C][]");
 }
+
+#[test]
+fn a_saved_token_is_redacted_by_safe_before_any_git_call_and_old_secrets_stay() {
+    crate::git::remember_secret("synthetic-old-secret");
+    crate::credentials::finish_for_test("saved-source", Some("synthetic-new-secret"));
+    let text = super::super::safe("a synthetic-new-secret b synthetic-old-secret c");
+    assert_eq!(text, "a [redacted] b [redacted] c");
+}

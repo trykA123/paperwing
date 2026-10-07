@@ -19,9 +19,16 @@ pub(super) fn remember_secrets(key: SecretKey, secrets: &[String]) {
     *SECRET_CACHE.lock().unwrap() = Some((key, secrets.to_vec()));
 }
 
+pub(crate) fn remember_secret(secret: &str) {
+    if secret.is_empty() { return; }
+    let mut cache = SECRET_CACHE.lock().unwrap();
+    let (_, secrets) = cache.get_or_insert_with(|| (Vec::new(), Vec::new()));
+    if !secrets.iter().any(|known| known == secret) { secrets.push(secret.into()); }
+}
+
 fn last_good_secrets() -> Option<Vec<String>> {
-    if configured_sources().is_empty() { return Some(Vec::new()); }
-    SECRET_CACHE.lock().unwrap().as_ref().map(|(_, secrets)| secrets.clone())
+    let cached = SECRET_CACHE.lock().unwrap().as_ref().map(|(_, secrets)| secrets.clone());
+    cached.or_else(|| configured_sources().is_empty().then(Vec::new))
 }
 
 #[derive(Clone)]

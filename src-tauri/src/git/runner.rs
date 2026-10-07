@@ -79,6 +79,10 @@ pub fn attach(app: AppHandle) {
 
 pub fn configure_sources(ids: Vec<String>) {
     *SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap() = ids;
+    #[cfg(not(test))]
+    tauri::async_runtime::spawn(async {
+        let _ = redaction_secrets(configured_sources(), &None, &Stop::new()).await;
+    });
 }
 
 async fn read_secret(source_id: String) -> Result<Option<String>, String> {
@@ -619,6 +623,7 @@ pub(crate) struct CredentialFixture { sources: Vec<String> }
 impl CredentialFixture {
     pub(crate) fn new(secrets: FixtureSecrets) -> Self {
         let sources = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
+        for token in secrets.values().filter_map(|value| value.clone().ok().flatten()) { super::redaction::remember_secret(&token); }
         assert!(FIXTURE_SECRETS.lock().unwrap().replace(secrets.clone()).is_none());
         bump(secrets.keys());
         configure_sources(secrets.keys().cloned().collect());

@@ -30,7 +30,8 @@ pub(crate) mod repo_command;
 mod redaction;
 mod remote_list;
 mod validation;
-pub use redaction::{last_error, redact, safe};
+pub use redaction::{last_error, redact, safe};
+pub(crate) use redaction::remember_secret;
 #[cfg(test)]
 pub(crate) use runner::CredentialFixture;
 pub use validation::{valid_path, valid_ref, valid_root, valid_url};

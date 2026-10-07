@@ -272,6 +272,7 @@ async fn mutate(app: AppHandle, source_id: String, token: Option<String>, host: 
     validate(&source_id)?;
     if token.as_ref().is_some_and(|token| token.trim().is_empty()) { return Err("Token is empty".into()); }
     let permit = admit_async().await?;
+    let secret = token.as_ref().map(|token| token.trim().to_string());
     let token = token.map(|token| {
         let host = host.map(Ok).unwrap_or_else(|| host::saved_host(&source_id))?;
         crate::github::valid_host(&host)?;
@@ -280,10 +281,21 @@ async fn mutate(app: AppHandle, source_id: String, token: Option<String>, host: 
     invalidate(&app, &source_id).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
-        complete_mutation(&source_id, || match token {
+        finish_mutation(&source_id, secret.as_deref(), || match token {
             Some(token) => native::write(&source_id, token.trim()), None => native::delete(&source_id)
         })
     }).await.map_err(|_| "Credential task failed".to_string())?
+}
+
+fn finish_mutation(source_id: &str, secret: Option<&str>, operation: impl FnOnce() -> Result<(), Failure>) -> Result<(), String> {
+    complete_mutation(source_id, operation)?;
+    if let Some(secret) = secret { crate::git::remember_secret(secret); }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn finish_for_test(source_id: &str, secret: Option<&str>) {
+    finish_mutation(source_id, secret, || Ok(())).unwrap();
 }
 
 fn complete_mutation(source_id: &str, operation: impl FnOnce() -> Result<(), Failure>) -> Result<(), String> {
