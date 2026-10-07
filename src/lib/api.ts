@@ -93,6 +93,7 @@ export type Activity = {
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'timedOut'; exitCode: number | null;
   output: { sequence: number; stream: string; text: string }[]; truncated: boolean; stdoutBytes: number; stderrBytes: number;
 };
+export type ActivityDelta = Omit<Activity, 'output'> & { from: number; lines: Activity['output'] };
 export type TreeRef = { name: string; label?: string; sha: string; current: boolean; symbolic: string };
 export type RepositoryTree = {
   identity?: string;

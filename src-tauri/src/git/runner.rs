@@ -1,6 +1,7 @@
-use crate::kernel::events::CoreEvent;
 #[path = "batch.rs"]
 mod batch;
+#[path = "activity.rs"]
+mod activity;
 #[path = "binary.rs"]
 pub(super) mod binary;
 pub(crate) use batch::BatchReader;
@@ -9,13 +10,13 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
-use std::collections::VecDeque;
 use std::sync::{Mutex, OnceLock, atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering}};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle};
+use tauri::AppHandle;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinSet;
 
+use activity::Emit;
 use super::{redact, redaction::{cached_secrets, remember_secrets, secret_key, Redaction}};
 
 #[cfg(target_os = "linux")]
@@ -29,8 +30,6 @@ type Child = tokio::process::Child;
 const OUTPUT_LIMIT: usize = 64 * 1024;
 pub(crate) const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
 pub(super) static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-static ACTIVITY: OnceLock<Mutex<VecDeque<Activity>>> = OnceLock::new();
-static APPLICATION: OnceLock<AppHandle> = OnceLock::new();
 static SOURCES: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 struct RunningJob { id: String, cancelled: Arc<AtomicBool>, accepts_cancel: bool }
 type RunningJobs = Vec<RunningJob>;
@@ -65,7 +64,7 @@ pub struct Activity {
 }
 
 pub fn attach(app: AppHandle) {
-    let _ = APPLICATION.set(app);
+    activity::attach(app);
     std::thread::spawn(|| { binary::current(); });
 }
 
@@ -109,33 +108,13 @@ pub(super) fn configured_sources() -> Vec<String> {
     SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone()
 }
 
-fn publish(activity: &Activity) {
-    let mut entries = ACTIVITY.get_or_init(|| Mutex::new(VecDeque::new())).lock().unwrap();
-    if let Some(entry) = entries.iter_mut().find(|entry| entry.id == activity.id) {
-        *entry = activity.clone();
-    } else {
-        while entries.len() >= 64 {
-            let Some(index) = entries.iter().position(|entry| entry.state != "running") else { break };
-            entries.remove(index);
-        }
-        entries.push_back(activity.clone());
-    }
-    drop(entries);
-    if let Some(app) = APPLICATION.get() {
-        let _ = crate::events::publish_payload(app, CoreEvent::GitActivity, activity);
-    }
-}
-
-pub fn activity_snapshot() -> Vec<Activity> {
-    ACTIVITY.get_or_init(|| Mutex::new(VecDeque::new())).lock().unwrap().iter().cloned().collect()
-}
+pub fn activity_snapshot() -> Vec<Activity> { activity::snapshot() }
 
 pub fn clear_activity() -> ClearedActivity {
     let jobs = RUNNING.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap();
-    let mut entries = ACTIVITY.get_or_init(|| Mutex::new(VecDeque::new())).lock().unwrap();
     let retained = jobs.iter().map(|job| job.id.clone()).collect();
-    entries.retain(|entry| entry.state == "running" || jobs.iter().any(|job| job.id == entry.id));
-    ClearedActivity { running: entries.iter().cloned().collect(), retained, through: NEXT_ID.load(AtomicOrdering::Relaxed).saturating_sub(1) }
+    let running = activity::retain_active(|id| jobs.iter().any(|job| job.id == id));
+    ClearedActivity { running, retained, through: NEXT_ID.load(AtomicOrdering::Relaxed).saturating_sub(1) }
 }
 
 #[derive(Serialize)]
@@ -327,14 +306,13 @@ struct Registration(String);
 impl Drop for Registration {
     fn drop(&mut self) {
         RUNNING.get().unwrap().lock().unwrap().retain(|job| job.id != self.0);
-        let mut incomplete = ACTIVITY.get().and_then(|entries| entries.lock().ok()
-            .and_then(|entries| entries.iter().find(|entry| entry.id == self.0 && entry.state == "running").cloned()));
+        let mut incomplete = activity::find_running(&self.0);
         if let Some(activity) = &mut incomplete {
             activity.state = "failed".into();
             activity.sequence += 1;
             activity.output.push(ActivityOutput { sequence: activity.sequence, stream: "runner".into(),
                 text: "Git runner stopped before finalizing its job.".into() });
-            publish(activity);
+            activity::publish(activity, true);
         }
     }
 }
@@ -463,7 +441,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         sequence: 0, started_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(), elapsed_ms: 0,
         state: "running".into(), exit_code: None, output: Vec::new(), truncated: false, stdout_bytes: 0, stderr_bytes: 0,
     };
-    publish(&activity);
+    activity::publish(&activity, true);
     #[cfg(target_os = "linux")]
     let _registration = Registration(id.clone());
     let result: Result<Captured, String> = async {
@@ -486,12 +464,21 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
         let mut tick = tokio::time::interval(Duration::from_millis(25));
         let mut logged = 0;
         let mut stopped = None;
+        let mut flush_due: Option<Instant> = None;
         let status = loop {
             tokio::select! {
                 status = child.wait() => break status.map_err(|_| "Could not wait for Git".to_string())?,
                 _ = &mut deadline => { stopped = Some("timedOut"); break terminate(&mut child).await?; },
                 _ = tick.tick() => if sunk.load(AtomicOrdering::Relaxed) { stopped = Some("sunk"); break terminate(&mut child).await?; } else if cancelled.load(AtomicOrdering::Relaxed) || is_cancelled(&cancellation, &owner) { stopped = Some("cancelled"); break terminate(&mut child).await?; },
-                Some((stream, text)) = streams.receiver.recv() => record_output(&mut activity, &mut logged, stream, text, observer.as_ref(), start),
+                Some((stream, text)) = streams.receiver.recv() => match record_output(&mut activity, &mut logged, stream, text, observer.as_ref(), start) {
+                    Some(Emit::Sent) => flush_due = None,
+                    Some(Emit::Deferred(due)) => flush_due = Some(due),
+                    None => (),
+                },
+                _ = tokio::time::sleep_until(tokio::time::Instant::from_std(flush_due.unwrap_or_else(Instant::now))), if flush_due.is_some() => {
+                    activity::publish(&activity, true);
+                    flush_due = None;
+                }
             }
         };
         {
@@ -546,7 +533,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     }
     activity.sequence += 1;
     activity.elapsed_ms = start.elapsed().as_millis();
-    publish(&activity);
+    activity::publish(&activity, true);
     RUNNING.get().unwrap().lock().unwrap().retain(|job| job.id != id);
     result
 }
@@ -563,17 +550,17 @@ async fn terminate(child: &mut Child) -> Result<std::process::ExitStatus, String
         .map_err(|_| "Git termination timed out".to_string())?.map_err(|_| "Could not reap Git".to_string())
 }
 
-fn record_output(activity: &mut Activity, logged: &mut usize, stream: String, text: String, observer: Option<&Observer>, start: Instant) {
+fn record_output(activity: &mut Activity, logged: &mut usize, stream: String, text: String, observer: Option<&Observer>, start: Instant) -> Option<Emit> {
     if let Some(observer) = observer { observer(&stream, &text); }
     if *logged + text.len() > OUTPUT_LIMIT || activity.output.len() >= 512 {
         activity.truncated = true;
-        return;
+        return None;
     }
     *logged += text.len();
     activity.sequence += 1;
     activity.elapsed_ms = start.elapsed().as_millis();
     activity.output.push(ActivityOutput { sequence: activity.sequence, stream, text });
-    publish(activity);
+    Some(activity::publish(activity, false))
 }
 
 pub fn filesystem_gate() -> &'static tokio::sync::RwLock<()> {
@@ -594,7 +581,7 @@ pub(super) fn resources_idle() -> bool {
 #[cfg(all(test, target_os = "linux"))]
 pub(super) fn publish_cleanup_state(context: &str, state: &str) {
     let mut entry = activity_snapshot().into_iter().find(|entry| entry.context == context).unwrap();
-    entry.state = state.to_string(); publish(&entry);
+    entry.state = state.to_string(); activity::publish(&entry, true);
 }
 
 /// `git` with prompts disabled and (on Windows) no console window.

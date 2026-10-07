@@ -46,9 +46,9 @@
   import { moduleById, moduleShortcut } from './lib/modules';
 
   const rightVisible = $derived(app.ws.shell.rightVisible && app.detailsAvailable);
-  const failedRuns = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
+  const failedRuns = $derived(app.activityFailed);
   let reducedMotion = $state(false), panelsMoving = $state(false);
-  const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activity.some(entry => entry.state === 'running'));
+  const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activityRunning > 0);
   let previousPanels: string | undefined;
   $effect.pre(() => {
     const visibility = `${app.ws.shell.sidebarVisible}:${rightVisible}`;

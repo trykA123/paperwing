@@ -1,21 +1,31 @@
-import { api, type Activity } from '../api';
+import { api, type Activity, type ActivityDelta } from '../api';
+import { applyDelta, applyEntry, sortedActivity, trimActivity } from './activity-delta';
+
+const serialOf = (id: string) => Number(id.slice(4));
 
 export class GitActivity {
-  activity = $state<Activity[]>([]);
+  #entries = $state.raw<ReadonlyMap<string, Activity>>(new Map());
+  activity = $derived(sortedActivity(this.#entries));
+  failed = $derived(this.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
+  running = $derived(this.activity.filter(entry => entry.state === 'running').length);
   #activityThrough = 0;
   #activityRetained = new Set<string>();
+  #resync: Promise<void> | null = null;
+
+  #isCleared(id: string) {
+    return serialOf(id) <= this.#activityThrough && !this.#activityRetained.has(id);
+  }
 
   mergeActivity(entry: Activity) {
-    const serial = Number(entry.id.slice(4));
-    if (serial <= this.#activityThrough && !this.#activityRetained.has(entry.id)) return;
-    const current = this.activity.find(activity => activity.id === entry.id);
-    if (current && current.sequence >= entry.sequence) return;
-    this.activity = [...this.activity.filter(activity => activity.id !== entry.id), entry].sort((left, right) => left.startedAt - right.startedAt);
-    while (this.activity.length > 64) {
-      const index = this.activity.findIndex(activity => activity.state !== 'running');
-      if (index < 0) break;
-      this.activity.splice(index, 1);
-    }
+    if (this.#isCleared(entry.id)) return;
+    this.#entries = trimActivity(applyEntry(this.#entries, entry));
+  }
+
+  applyDelta(delta: ActivityDelta) {
+    if (this.#isCleared(delta.id)) return;
+    const result = applyDelta(this.#entries, delta);
+    this.#entries = trimActivity(result.entries);
+    if (result.resync) this.#resync ??= this.refreshActivity().finally(() => { this.#resync = null; });
   }
 
   async refreshActivity() {
@@ -26,8 +36,7 @@ export class GitActivity {
     const cleared = await api.clearActivity();
     this.#activityThrough = cleared.through;
     this.#activityRetained = new Set(cleared.retained);
-    this.activity = this.activity.filter(entry => Number(entry.id.slice(4)) > cleared.through || this.#activityRetained.has(entry.id));
+    this.#entries = new Map([...this.#entries].filter(([id]) => !this.#isCleared(id)));
     for (const entry of cleared.running) this.mergeActivity(entry);
   }
-
 }

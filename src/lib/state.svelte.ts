@@ -13,7 +13,7 @@ import { pendingPlatform, unavailableRoot } from './platform';
 import { benchmarkEnabled, benchmarkPlan } from './benchmark';
 import { listen } from '@tauri-apps/api/event';
 import {
-    api, type Activity,
+    api, type Activity, type ActivityDelta,
     type GitAction, type LocalStatus, type Phase, type Progress, type Ref, type Repo,
     type Capability, type Capabilities, type CompareEndpoint, type PathIdentity, type PlatformInfo, type RootSupport,
     type RepoSet, type SetItem, type Source, type Workspace,
@@ -181,7 +181,8 @@ class AppState {
   });
   private gitActivity = new GitActivity();
   get activity() { return this.gitActivity.activity; }
-  set activity(value: Activity[]) { this.gitActivity.activity = value; }
+  get activityFailed() { return this.gitActivity.failed; }
+  get activityRunning() { return this.gitActivity.running; }
   private repositoryTrees = new RepositoryTrees(path => JSON.stringify([this.ws.root,
     this.rootProbing.identity(this.ws.root), this.pathIdentities[path]?.identity ?? '']));
   get trees() { return this.repositoryTrees.trees; }
@@ -268,7 +269,7 @@ class AppState {
     await listen<Progress>('clone-progress', e => { this.jobs[e.payload.id] = e.payload; });
     await listen('clone-finished', () => this.#finished());
     await listen<{ sourceId: string; revision: number }>('credential-changed', event => this.credentials.invalidate(event.payload.sourceId, event.payload.revision));
-    await listen<Activity>('git-activity', event => this.mergeActivity(event.payload));
+    await listen<ActivityDelta>('git-activity', event => this.gitActivity.applyDelta(event.payload));
     await this.refreshActivity();
     this.ready = true;
     this.modules.restore();

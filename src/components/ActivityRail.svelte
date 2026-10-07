@@ -14,8 +14,8 @@
   const comparisons = $derived(app.tabs.filter(tab => tab.view.kind === 'compare' || tab.view.kind === 'setCompare').length);
   const layout = $derived(railLayout(app.sources, {
     comparisons, awaitingReview: pulls.awaitingReview, failedRuns: 0,
-    gitFailed: app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length,
-    gitRunning: app.activity.filter(entry => entry.state === 'running').length,
+    gitFailed: app.activityFailed,
+    gitRunning: app.activityRunning,
   }));
   const shown = $derived(layout.providers.find(entry => entry.provider.id === flyout.open?.id));
   const isOn = (module: ModuleDef) => module.id === 'settings' ? app.view.kind === 'settings' : app.ws.shell.sidebarVisible && app.ws.shell.section === module.id;

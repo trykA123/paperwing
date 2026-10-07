@@ -57,3 +57,35 @@ async fn safe_redacts_without_reading_the_keyring() {
     assert_eq!(super::super::safe("a synthetic-safe-token b"), "a [redacted] b");
     configure_sources(Vec::new());
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_500_line_command_emits_at_most_three_deltas_that_rebuild_every_line() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let context = "delta-500-lines";
+    let request = Request { args: &["-c", "alias.skein-lines=!seq 1 500", "skein-lines"], context, expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text };
+    execute(request, None).await.unwrap();
+    let id = activity_snapshot().into_iter().find(|entry| entry.context == context).unwrap().id;
+    let events: Vec<_> = activity::TEST_EVENTS.lock().unwrap().iter().filter(|event| event["id"] == id.as_str()).cloned().collect();
+    assert!(events.len() <= 3, "{} events", events.len());
+    let mut lines: Vec<String> = Vec::new();
+    for event in &events {
+        assert_eq!(event["from"], lines.len());
+        lines.extend(event["lines"].as_array().unwrap().iter().map(|line| line["text"].as_str().unwrap().to_string()));
+    }
+    assert_eq!(lines, (1..=500).map(|number| number.to_string()).collect::<Vec<_>>());
+    assert_eq!(events.last().unwrap()["state"], "completed");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_throttled_line_is_flushed_while_the_command_is_still_running() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let context = "delta-flush-timer";
+    let request = Request { args: &["-c", "alias.skein-slow=!echo first; sleep 1; echo second", "skein-slow"], context, expected: &[0], timeout: Duration::from_secs(45), policy: OutputPolicy::Text };
+    execute(request, None).await.unwrap();
+    let id = activity_snapshot().into_iter().find(|entry| entry.context == context).unwrap().id;
+    let events: Vec<_> = activity::TEST_EVENTS.lock().unwrap().iter().filter(|event| event["id"] == id.as_str()).cloned().collect();
+    let running_first = events.iter().any(|event| event["state"] == "running" && event["lines"].as_array().unwrap().iter().any(|line| line["text"] == "first"));
+    assert!(running_first, "first line only arrived with the final event");
+}
