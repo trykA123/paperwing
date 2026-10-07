@@ -14,6 +14,18 @@ export type RestoreState =
   | { phase: 'failed'; message: string }
   | { phase: 'dropped' };
 
+export type BusyFlags = { running: boolean; gitBusy: boolean };
+export type Guarded<T> = { ran: false } | { ran: true; value: T };
+
+/** Runs `work` only when no Git operation is active; sets gitBusy and puts back the previous value. */
+export async function withBusy<T>(flags: BusyFlags, work: () => Promise<T>): Promise<Guarded<T>> {
+  if (flags.running || flags.gitBusy) return { ran: false };
+  const previous = flags.gitBusy;
+  flags.gitBusy = true;
+  try { return { ran: true, value: await work() }; }
+  finally { flags.gitBusy = previous; }
+}
+
 /** One repository at a time; a failure is recorded and the loop goes on. */
 export async function switchWithStash(targets: SwitchTarget[], api: SwitchApi, onRow?: (index: number, row: SwitchRow) => void): Promise<SwitchRow[]> {
   const rows: SwitchRow[] = [];

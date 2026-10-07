@@ -4,7 +4,7 @@
   import { dialogOut } from '../../lib/motion';
   import { plural } from '../../lib/plural';
   import { stashFlow } from '../../lib/stash-flow.svelte';
-  import { restoreStash, rowStatus, stashedRows, switchWithStash, type RestoreState, type SwitchRow, type SwitchTarget } from '../../lib/stash-switch';
+  import { restoreStash, rowStatus, stashedRows, switchWithStash, withBusy, type RestoreState, type SwitchRow, type SwitchTarget } from '../../lib/stash-switch';
   import { app } from '../../lib/state.svelte';
   import Alert from '../Alert.svelte';
   import Icon from '../Icon.svelte';
@@ -16,7 +16,6 @@
   let phase = $state<'review' | 'running' | 'done'>('review');
   let rows = $state<SwitchRow[]>([]);
   let restores = $state<Record<string, RestoreState>>({});
-  let current = $state(0);
 
   const stashed = $derived(stashedRows(rows));
   const switched = $derived(rows.filter(row => row.switched).length);
@@ -28,17 +27,16 @@
   const message = (row: SwitchRow) => `Skein: before switching to ${row.branch}`;
 
   async function run() {
-    if (!await app.guardBuffers()) return;
+    if (phase !== 'review') return;
     phase = 'running';
-    app.gitBusy = true;
-    try {
-      rows = await switchWithStash(targets, api, index => { current = index + 1; });
-    } finally {
-      app.gitBusy = false;
-      phase = 'done';
-      stashFlow.changed();
-      await app.checkExists(targets.map(target => target.path));
-    }
+    if (!await app.guardBuffers()) { phase = 'review'; return; }
+    rows = [];
+    const result = await withBusy(app, () => switchWithStash(targets, api, (_, row) => { rows = [...rows, row]; }));
+    if (!result.ran) { phase = 'review'; app.toast('A Git operation is already running', 'warn'); return; }
+    rows = result.value;
+    phase = 'done';
+    stashFlow.changed();
+    await app.checkExists(targets.map(target => target.path));
     const failed = rows.length - switched;
     app.toast(failed ? `Switched ${switched} of ${plural(rows.length, 'repository', 'repositories')}` : `Switched ${plural(rows.length, 'repository', 'repositories')}`, failed ? 'warn' : 'success');
   }
@@ -46,7 +44,8 @@
   async function restore(row: SwitchRow) {
     if (!row.stashed) return;
     restores[row.path] = { phase: 'working' };
-    restores[row.path] = await stashFlow.guarded([row.path], () => restoreStash(row.path, row.stashed!, api));
+    const result = await stashFlow.guarded([row.path], () => restoreStash(row.path, row.stashed!, api));
+    restores[row.path] = result.ran ? result.value : { phase: 'failed', message: 'A Git operation is already running. Try again when it finishes.' };
   }
 
   async function restoreAll() { for (const row of pending) await restore(row); }
@@ -56,7 +55,11 @@
   }
 
   const close = () => { if (phase !== 'running' && !working) stashFlow.close(); };
-  onMount(() => { dialog.showModal(); primary?.focus(); });
+  onMount(() => {
+    dialog.showModal();
+    primary?.focus();
+    return () => stashFlow.restoreFocus();
+  });
 </script>
 
 <dialog class="operation-dialog stash-dialog" bind:this={dialog} out:dialogOut|global aria-label="Switch with stash" oncancel={event => { event.preventDefault(); close(); }}>
@@ -78,7 +81,7 @@
     </ul>
   {:else}
     <p class="stash-lead" role="status" aria-live="polite">
-      {#if phase === 'running'}<span class="spin"></span> Switching {current} of {targets.length}…
+      {#if phase === 'running'}<span class="spin"></span> Switching {Math.min(rows.length + 1, targets.length)} of {targets.length}…
       {:else}Switched {switched} of {plural(rows.length, 'repository', 'repositories')}.{/if}
     </p>
     <ul class="stash-targets" aria-label="Results">
@@ -87,7 +90,7 @@
         <li class="stash-result">
           <Icon name={row ? (row.switched ? 'check' : 'error') : 'branch'} size={12} tone={row ? (row.switched ? 'ok' : 'err') : 'branch'} />
           <span class="grow stash-name"><span>{target.name}</span><Icon name="chevron" size={12} /><span class="mono mut">{target.branch}</span></span>
-          {#if row}<span class={row.switched ? 'okc' : 'err'}>{LABEL[rowStatus(row)]}</span>{:else if index < current}<span class="spin"></span>{:else}<span class="mut">Waiting</span>{/if}
+          {#if row}<span class={row.switched ? 'okc' : 'err'}>{LABEL[rowStatus(row)]}</span>{:else if index === rows.length && phase === 'running'}<span class="spin"></span>{:else}<span class="mut">Waiting</span>{/if}
           {#if row?.error}<p class="stash-error err" role="alert">{row.error}</p>{/if}
         </li>
       {/each}

@@ -69,8 +69,8 @@
   {#each commands([item]).filter(command => IDS.includes(command.id) && (command.id !== 'clone' || needsClone(item))) as command (command.id)}
     <button role="menuitem" title={command.enabled ? undefined : why(NEEDS[command.id] ?? [], command.reason)} data-tip-side="left" disabled={!command.enabled} onclick={() => choose(() => execute(command), FOCUS_TAKERS.includes(command.id))}><Icon name={command.icon} tone={command.tone} />{LABELS[command.id]}</button>
   {/each}
-  <button role="menuitem" disabled={!!stashWhy} title={stashWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openPush([item]), true)}><Icon name="stash" tone="record" />Stash changes…</button>
-  <button role="menuitem" disabled={!!switchWhy} title={switchWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openSwitch([item]), true)}><Icon name="stash" tone="record" />Switch with stash…</button>
+  <button role="menuitem" disabled={!!stashWhy} title={stashWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openPush([item], opener), true)}><Icon name="stash" tone="record" />Stash changes…</button>
+  <button role="menuitem" disabled={!!switchWhy} title={switchWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openSwitch([item], opener), true)}><Icon name="stash" tone="record" />Switch with stash…</button>
   <hr />
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => onrename(item.id), true)}>Rename folder</button>
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => app.duplicateItem(item.id))}><Icon name="copy" />Duplicate into another folder</button>

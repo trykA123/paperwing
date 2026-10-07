@@ -3,7 +3,7 @@ import { api } from './api';
 import { confirm } from './confirm';
 import { describeError } from './errors';
 import type { MenuFacts } from './menu-reason';
-import type { SwitchTarget } from './stash-switch';
+import { withBusy, type Guarded, type SwitchTarget } from './stash-switch';
 import { app } from './state.svelte';
 
 export type StashTarget = { path: string; name: string };
@@ -31,30 +31,48 @@ class StashFlow {
   /** Bumped after any stash change so open lists reload. */
   revision = $state(0);
 
-  openPush(items: SetItem[]) {
-    const targets = stashable(items).map(target);
-    if (!targets.length) { app.toast('No selected repository has changes to stash', 'warn'); return; }
-    if (!this.dialog) this.dialog = { kind: 'push', targets };
+  /** Where focus returns when the dialog closes; menu items vanish, so they never count. */
+  opener: HTMLElement | null = null;
+
+  #open(dialog: StashDialog, opener?: Element | null) {
+    if (this.dialog) return;
+    const at = opener ?? document.activeElement;
+    this.opener = at instanceof HTMLElement && !at.closest('[role=menu]') ? at : null;
+    this.dialog = dialog;
   }
 
-  openSwitch(items: SetItem[]) {
+  openPush(items: SetItem[], opener?: Element | null) {
+    const targets = stashable(items).map(target);
+    if (!targets.length) { app.toast('No selected repository has changes to stash', 'warn'); return; }
+    this.#open({ kind: 'push', targets }, opener);
+  }
+
+  openPushFor(targets: StashTarget[], opener?: Element | null) { this.#open({ kind: 'push', targets }, opener); }
+
+  openSwitch(items: SetItem[], opener?: Element | null) {
     const targets = switchable(items).map(item => ({ ...target(item), branch: item.ref.name }));
     if (!targets.length) { app.toast('Every selected repository is already on its branch, or has no branch to switch to', 'warn'); return; }
-    if (!this.dialog) this.dialog = { kind: 'switch', targets };
+    this.#open({ kind: 'switch', targets }, opener);
   }
 
   close() { this.dialog = null; }
+
+  /** The opener may be disabled once the stash cleans the tree; then focus goes to its panel. */
+  restoreFocus() {
+    const opener = this.opener;
+    if (!opener?.isConnected) return;
+    opener.focus();
+    setTimeout(() => {
+      if (document.activeElement === document.body && opener.isConnected) opener.closest<HTMLElement>('[tabindex="-1"]')?.focus();
+    }, 400);
+  }
   changed() { this.revision += 1; }
 
   /** Holds the Git lock for the app while `work` runs, then refreshes status and open lists. */
-  async guarded<T>(paths: string[], work: () => Promise<T>): Promise<T> {
-    app.gitBusy = true;
-    try { return await work(); }
-    finally {
-      app.gitBusy = false;
-      this.changed();
-      void app.checkExists(paths);
-    }
+  async guarded<T>(paths: string[], work: () => Promise<T>): Promise<Guarded<T>> {
+    const result = await withBusy(app, work);
+    if (result.ran) { this.changed(); void app.checkExists(paths); }
+    return result;
   }
 
   /** Drop is always a separate, confirmed action that names the stash. */
@@ -63,8 +81,9 @@ class StashFlow {
       { title: 'Drop stash', kind: 'warning', okLabel: 'Drop stash', destructive: true });
     if (!ok) return false;
     try {
-      await this.guarded([path], () => api.stashDrop(path, oid));
-      return true;
+      const result = await this.guarded([path], () => api.stashDrop(path, oid));
+      if (!result.ran) app.toast('A Git operation is already running', 'warn');
+      return result.ran;
     } catch (reason) {
       app.toast(describeError(reason, `drop the stash in ${repo}`), 'error');
       return false;

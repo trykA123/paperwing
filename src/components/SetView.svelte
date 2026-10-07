@@ -186,6 +186,8 @@
     retryStatus: () => { void app.checkExists([app.dest(item)]); },
   });
 
+  const moreButton = () => document.querySelector<HTMLElement>('.fm-bar .more');
+
   const bulk = {
     fetch: () => app.startClone(targets.fetchable, 'fetch'),
     pull: () => app.startClone(targets.behind, 'pull'),
@@ -199,8 +201,8 @@
     branch: () => app.openBranchDialog(targets.cloned),
     cleanup: () => app.openCleanupDialog(targets.cloned),
     commit: () => { if (dirty[0]) app.openGitDialog('commit', dirty[0]); },
-    stash: () => stashFlow.openPush(dirty),
-    switchStash: () => stashFlow.openSwitch(selected),
+    stash: () => stashFlow.openPush(dirty, moreButton()),
+    switchStash: () => stashFlow.openSwitch(selected, moreButton()),
     clear: () => app.setAllOn(false),
   };
 </script>

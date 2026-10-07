@@ -19,12 +19,13 @@
 
   const many = $derived(targets.length > 1);
   const finished = $derived(targets.every(target => results[target.path]));
+  const anyNothing = $derived(targets.some(target => results[target.path]?.state === 'nothing'));
   const stashedCount = $derived(Object.values(results).filter(result => result.state === 'stashed').length);
 
   async function run() {
     if (busy) return;
     busy = true;
-    await stashFlow.guarded(targets.map(target => target.path), async () => {
+    const guarded = await stashFlow.guarded(targets.map(target => target.path), async () => {
       for (const target of targets) {
         if (results[target.path]?.state === 'stashed') continue;
         try {
@@ -34,6 +35,7 @@
       }
     });
     busy = false;
+    if (!guarded.ran) { app.toast('A Git operation is already running', 'warn'); return; }
     if (targets.every(target => results[target.path]?.state === 'stashed')) {
       app.toast(many ? `Stashed changes in ${plural(targets.length, 'repository', 'repositories')}` : `Stashed changes in ${targets[0].name}`, 'success');
       stashFlow.close();
@@ -41,7 +43,11 @@
   }
 
   const close = () => { if (!busy) stashFlow.close(); };
-  onMount(() => { dialog.showModal(); input.focus(); });
+  onMount(() => {
+    dialog.showModal();
+    input.focus();
+    return () => stashFlow.restoreFocus();
+  });
 </script>
 
 <dialog class="operation-dialog stash-dialog" bind:this={dialog} out:dialogOut|global aria-label="Stash changes" oncancel={event => { event.preventDefault(); close(); }}>
@@ -63,7 +69,7 @@
         {/each}
       </ul>
     {:else if results[targets[0].path]?.state === 'nothing'}
-      <p class="stash-note-line mut">Nothing to stash. Tick “Include untracked files” if the changes are new files.</p>
+      <p class="stash-note-line mut">Nothing to stash. New (untracked) files stay in the folder unless you tick “Include untracked files”.</p>
     {:else if results[targets[0].path]?.state === 'failed'}
       <p class="stash-note-line err" role="alert">{results[targets[0].path].message}</p>
     {/if}
@@ -71,6 +77,7 @@
       <input bind:this={input} bind:value={message} placeholder="What is in this stash" spellcheck="false" autocomplete="off" disabled={busy} />
     </label>
     <label class="check"><input type="checkbox" bind:checked={untracked} disabled={busy} /> Include untracked files</label>
+    {#if !untracked && (!many || anyNothing)}<p class="stash-note-line mut">New (untracked) files stay in the folder.</p>{/if}
     <footer>
       <span class="hint">Changes are saved in a stash and the working folder is cleaned. Nothing is dropped.</span>
       <span class="grow"></span>

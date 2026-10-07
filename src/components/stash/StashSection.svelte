@@ -45,18 +45,21 @@
   async function apply(entry: StashEntry) {
     busy = entry.oid;
     notes[entry.oid] = { phase: 'working' };
-    notes[entry.oid] = await stashFlow.guarded([path], () => restoreStash(path, entry.oid, api));
+    const result = await stashFlow.guarded([path], () => restoreStash(path, entry.oid, api));
+    if (result.ran) notes[entry.oid] = result.value; else delete notes[entry.oid];
     busy = null;
   }
 
   async function pop(entry: StashEntry) {
     busy = entry.oid;
     try {
-      const outcome = await stashFlow.guarded([path], () => api.stashPop(path, entry.oid));
+      const result = await stashFlow.guarded([path], () => api.stashPop(path, entry.oid));
+      if (!result.ran) return;
+      const outcome = result.value;
       if (outcome.applied) { delete notes[entry.oid]; app.toast(`Restored “${title(entry)}” in ${name}`, 'success'); }
       else notes[entry.oid] = outcome.conflicted.length ? { phase: 'conflicted', files: outcome.conflicted, message: outcome.error ?? '' } : { phase: 'failed', message: outcome.error ?? 'The stash did not apply.' };
     } catch (reason) { notes[entry.oid] = { phase: 'failed', message: describeError(reason, 'pop the stash') }; }
-    busy = null;
+    finally { busy = null; }
   }
 
   async function drop(entry: StashEntry) {
@@ -68,7 +71,7 @@
   <header class="stash-head">
     <h3><Icon name="stash" size={14} tone="record" />Stashes {#if entries}<small>{entries.length}</small>{/if}</h3>
     <button class="btn small" disabled={!!stashReason} title={stashReason ?? 'Set the uncommitted changes aside'}
-      onclick={() => { const target = { path, name }; stashFlow.dialog ??= { kind: 'push', targets: [target] }; }}>Stash changes…</button>
+      onclick={event => stashFlow.openPushFor([{ path, name }], event.currentTarget)}>Stash changes…</button>
   </header>
   {#if loadError}
     <Alert kind="err" role="alert">{loadError}{#snippet action()}<button class="btn small" onclick={load}>Retry</button>{/snippet}</Alert>

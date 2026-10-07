@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { restoreStash, rowStatus, stashedRows, switchWithStash } from './stash-switch.ts';
+import { restoreStash, rowStatus, stashedRows, switchWithStash, withBusy } from './stash-switch.ts';
 
 const target = name => ({ path: `/r/${name}`, name, branch: 'release' });
 const fake = outcomes => {
@@ -62,5 +62,26 @@ describe('restore', () => {
   test('thrown errors become a failed state', async () => {
     const state = await restoreStash('/r/a', 'o1', api(new Error('Resolve the current conflicts first')));
     expect(state.phase).toBe('failed');
+  });
+});
+
+describe('busy guard', () => {
+  test('does not run or clear the flag during a running bulk operation', async () => {
+    for (const flags of [{ running: true, gitBusy: false }, { running: false, gitBusy: true }]) {
+      let ran = false;
+      const result = await withBusy(flags, async () => { ran = true; });
+      expect(result).toEqual({ ran: false });
+      expect(ran).toBe(false);
+      expect(flags.gitBusy).toBe(flags.running ? false : true);
+    }
+  });
+
+  test('sets the flag while working and restores it, also after a throw', async () => {
+    const flags = { running: false, gitBusy: false };
+    const seen = [];
+    expect(await withBusy(flags, async () => { seen.push(flags.gitBusy); return 7; })).toEqual({ ran: true, value: 7 });
+    await expect(withBusy(flags, async () => { throw new Error('x'); })).rejects.toThrow('x');
+    expect(seen).toEqual([true]);
+    expect(flags.gitBusy).toBe(false);
   });
 });
