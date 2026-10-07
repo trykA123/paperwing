@@ -7,6 +7,6 @@
 </script>
 
 <SectionCard label="Pull requests">
-  <PullSection item={entry.item} />
+  <PullSection item={entry.item} drawer />
   <p class="hint rf-none">Pull requests belong to the branch this clone has checked out.</p>
 </SectionCard>

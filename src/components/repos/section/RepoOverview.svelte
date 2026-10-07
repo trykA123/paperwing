@@ -46,7 +46,7 @@
       <RepoMiniHistory {entry} onmore={() => goto('history')} />
     </div>
     <div class="rf-col">
-      <SectionCard label="Pull request"><PullSection item={entry.item} /></SectionCard>
+      <SectionCard label="Pull request"><PullSection item={entry.item} drawer /></SectionCard>
       <RepoActions {entry} />
     </div>
   </div>

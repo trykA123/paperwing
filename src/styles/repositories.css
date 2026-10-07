@@ -575,3 +575,101 @@
 .rf-empty p {
     margin: 0;
 }
+
+/* quick look and the details drawer */
+.ql-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-2);
+}
+
+.ql-block h3 {
+    margin: 0;
+    color: var(--dim);
+    font-size: var(--fs-xs);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.ql-block h3 small {
+    margin-left: var(--sp-1);
+    color: var(--faint-text);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.ql-block>* {
+    max-width: 100%;
+}
+
+.ql-block .rf-files,
+.ql-block .rf-commits {
+    align-self: stretch;
+}
+
+.ql-status {
+    margin: 0;
+    font-size: var(--fs-base);
+}
+
+.ql-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+}
+
+.drawer-foot {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-top: 1px solid var(--line);
+    background: var(--sidebar);
+}
+
+.drawer-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--sp-1) var(--sp-3);
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+
+.drawer-facts dt {
+    color: var(--dim);
+}
+
+.drawer-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.rf-commit-b {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: 100%;
+    min-height: 36px;
+    border-radius: var(--r-ctl);
+    text-align: left;
+}
+
+.rf-commit-b:hover {
+    background: var(--soft);
+}
+
+.rf-commit-b .mut {
+    flex: none;
+    font-size: var(--fs-sm);
+}
+
+.link-title {
+    padding: 0;
+    text-align: left;
+}
+
+.link-title:hover {
+    color: var(--acc);
+}

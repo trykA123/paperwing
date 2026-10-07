@@ -5,7 +5,6 @@
   import { tagFlow } from '../lib/tag-flow.svelte';
   import Alert from './Alert.svelte';
   import EmptyState from './EmptyState.svelte';
-  import HistoryDetails from './HistoryDetails.svelte';
   import HistoryGraph from './HistoryGraph.svelte';
   import Skeleton from './Skeleton.svelte';
 
@@ -18,7 +17,7 @@
   const LAST_PAGE = 200;
   type Load = { status: 'loading' } | { status: 'ready'; history: RepositoryHistory } | { status: 'error'; message: string };
 
-  let { path, active = $bindable(null), inline = false, onloaded }: { path: string; active?: GraphRow | null; inline?: boolean; onloaded?: () => void } = $props();
+  let { path, active = $bindable(null), onpick, onloaded }: { path: string; active?: GraphRow | null; onpick?: (row: GraphRow, opener: Element) => void; onloaded?: () => void } = $props();
   let load = $state<Load>({ status: 'loading' });
   let limit = $state(FIRST_PAGE);
   let activeId = $state<string | null>(null);
@@ -73,7 +72,7 @@
       <Alert kind="warn" role="status">Local and origin share no history, so the rails do not join.</Alert>
     {/if}
     {#if layout.rows.length}
-      <HistoryGraph {layout} {shownId} bind:activeId />
+      <HistoryGraph {layout} {shownId} bind:activeId {onpick} />
       {#if canLoadMore(history)}
         <div class="history-more">
           {#if limit < LAST_PAGE}<button class="btn small" aria-disabled={busy} onclick={() => read(LAST_PAGE)}>{busy ? 'Loading…' : `Show up to ${LAST_PAGE} per rail`}</button>
@@ -83,6 +82,5 @@
     {:else}
       <EmptyState icon="commit" title="No commits yet" hint="Commit your first change to start this history." />
     {/if}
-    {#if inline}<HistoryDetails row={shown} />{/if}
   {/if}
 </div>

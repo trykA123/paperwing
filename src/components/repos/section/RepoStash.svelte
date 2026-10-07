@@ -8,5 +8,5 @@
 </script>
 
 <SectionCard label="Stash">
-  <StashSection path={app.dest(entry.item)} name={app.folderOf(entry.item)} />
+  <StashSection path={app.dest(entry.item)} name={app.folderOf(entry.item)} drawer />
 </SectionCard>

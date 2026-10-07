@@ -1,6 +1,6 @@
 import type { SetItem } from './api';
 import type { NextActionKind, RowFacts } from './formation';
-import { historyDrawer } from './history-drawer.svelte';
+import { detailsDrawer } from './details-drawer.svelte';
 import { isRemoteItem } from './repositories';
 import { app } from './state.svelte';
 
@@ -29,5 +29,5 @@ export function runNextAction(item: SetItem, kind: NextActionKind): void {
 }
 
 export function openHistory(item: SetItem, opener?: Element | null): void {
-  historyDrawer.open({ path: app.dest(item), name: app.folderOf(item) }, opener);
+  detailsDrawer.openHistory(app.dest(item), app.folderOf(item), opener);
 }

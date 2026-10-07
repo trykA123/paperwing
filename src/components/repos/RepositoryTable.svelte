@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, untrack, type Snippet } from 'svelte';
   import { app } from '../../lib/state.svelte';
+  import { detailsDrawer } from '../../lib/details-drawer.svelte';
   import type { SetItem } from '../../lib/api';
   import { clearRange, selectionOffer, shiftRange } from '../../lib/selection';
   import { describeRow } from '../../lib/formation-row';
@@ -116,7 +117,8 @@
     else if (event.key === 'PageUp') void focusRow(at - PAGE_STEP, event.shiftKey);
     else if (event.key === 'Home') void focusRow(0, event.shiftKey);
     else if (event.key === 'End') void focusRow(rows.length - 1, event.shiftKey);
-    else if (event.key === ' ') { activeRow.on = !activeRow.on; anchorAt(activeRow.id); }
+    else if (event.key === ' ' && !control) detailsDrawer.open({ kind: 'repository', item: activeRow }, event.target as Element);
+    else if (event.key === ' ' || event.key.toLowerCase() === 'x') { activeRow.on = !activeRow.on; anchorAt(activeRow.id); }
     else if (event.key === 'Enter') store.openRepository(activeRow.repoId);
     else return;
     event.preventDefault();
@@ -137,7 +139,7 @@
       } else { item.on = on; anchorAt(item.id); }
     },
     activate: () => { activeId = item.id; },
-    inspect: () => { app.inspectedId = item.id; },
+    inspect: () => detailsDrawer.open({ kind: 'repository', item }),
     open: () => store.openRepository(item.repoId),
     pickRef: (anchor: HTMLElement) => bulk?.pickRef([item], anchor.getBoundingClientRect()),
     next: (kind: Parameters<typeof runNextAction>[1]) => runNextAction(item, kind),
