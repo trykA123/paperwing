@@ -18,7 +18,7 @@ test('Uncommitted files come first and name their count', () => {
 
 test('A repository on another branch is asked to switch before it pulls or pushes', () => {
   const action = nextAction(facts(repo({ behind: 2 }), { onRef: false, refLabel: 'release/2.4' }));
-  expect(action).toMatchObject({ kind: 'switch', label: 'Switch to release/2.4' });
+  expect(action).toMatchObject({ kind: 'switch', label: 'Switch', title: 'Fetch and check out release/2.4', aria: 'Switch to release/2.4' });
 });
 
 test('Diverged history is not pulled or pushed; History is the suggested action', () => {

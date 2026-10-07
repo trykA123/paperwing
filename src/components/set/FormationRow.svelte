@@ -76,11 +76,11 @@
       <span class="fm-busy" role="status"><span class="spin"></span>{row.busy}…</span>
     {:else if row.next}
       {@const kind = row.next.kind}
-      <button class="btn small fm-action" tabindex={stop} disabled={!row.canAct} title={row.next.title} onclick={() => handlers.next(kind)}>
-        <Icon name={ICONS[kind].icon} tone={ICONS[kind].tone} />{row.next.label}
+      <button class="btn small fm-action" tabindex={stop} disabled={!row.canAct} title={row.next.title} aria-label={row.next.aria} onclick={() => handlers.next(kind)}>
+        <Icon name={ICONS[kind].icon} tone={ICONS[kind].tone} /><span class="fm-action-label">{row.next.label}</span>
       </button>
     {:else if row.sync.kind === 'unavailable'}
-      <button class="btn small fm-action" tabindex={stop} title="Read the status of this folder again" onclick={handlers.retryStatus}><Icon name="refresh" />Retry</button>
+      <button class="btn small fm-action" tabindex={stop} title="Read the status of this folder again" onclick={handlers.retryStatus}><Icon name="refresh" /><span class="fm-action-label">Retry</span></button>
     {/if}
   </div>
   <div class="fm-cell fm-more" role="gridcell">
