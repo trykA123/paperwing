@@ -90,3 +90,19 @@ Every module (Sets, Changes, Branches & tags, Compare, Search, Pull requests, Ac
 ## Stop and report if
 - A width target cannot be met without restyling rows.
 - Removing the right panel loses a function that has no home in the drawer or the popover.
+
+## Repo-first (owner pick 2026-10-07: direction 1, contextual sidebar)
+Prototype: `/mnt/Sabrent/homelab/.alt/repo-first/index.html` (direction 1) and its screenshots in `shots/A-*`. Artifact: https://claude.ai/artifact/Gzr3YKgSVKCnhSf2hUEX3m.
+- **Repositories module.** It is home and Ctrl+1. It lists all known repositories: cloned ones plus remote-only ones from configured orgs.
+  - Filter chips: All, Cloned, Has changes, Behind, Favorites.
+  - A set chip ("Any set ▾") filters to a set and shows a set bar: Fetch, Pull, Push, Clone, Compare set, Edit, Delete. Deleting a set keeps its repositories.
+  - Host and org filters live in the sidebar tree. Remote-only rows show "remote" and a Clone next action.
+  - Sets leave the rail. They become a sub-state of Repositories. Create a set from the sidebar or from the bulk bar ("Add to set").
+- **Repository page.** A name click, a favorite, Enter on a row, or the drawer's "Open repository page" opens it.
+  - The sidebar turns into that repository's sections: Overview, Changes, History, Branches & tags, Stash, Pull requests, Actions, Compare. Each shows a count. Sections that need a clone are disabled with "Needs a clone". Favorites stay below.
+  - The main area shows one section at a time. Overview has tiles plus small cards.
+  - Header: crumbs (Repositories › host › org), star, cloned or remote-only tag, path, branch picker, sync, the next action as the primary button, Fetch, "Open in ▾" and more.
+  - Back: the sidebar back button, the crumb, or Alt+Left. Back restores filters and scroll.
+- **Drawer.** A row click or Space opens the quick look: status, next action, 3 changes, mini history, PRs and failing runs, plus "Open repository page". Inside a page, the same drawer shows a commit, PR, run or stash.
+- **Deletes.** Every delete confirmation states "Local only. Nothing on <host> changes."
+- **Code.** In `modules.ts`, a `repos` module replaces `sets` as home. Favorites (`Sidebar.svelte:58`) call `openRepository(id)`; set membership moves to the star and row menu. New `RepositoryPage.svelte` and `RepositorySidebar.svelte`, routed through a `repo` view kind in `workspace.ts`, which stores the last repository and section. `SetHeader.svelte` becomes the set bar. `HistoryDrawer.svelte` becomes `DetailsDrawer.svelte`. Reuse `HistoryGraph`, the stash, tags and pulls flows, and the local-only delete flows.
