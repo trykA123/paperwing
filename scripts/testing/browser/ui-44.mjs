@@ -20,7 +20,7 @@ const check = (label, ok, detail = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}
 
 async function open(name, extra = {}) {
   const page = await (await browser.newContext({ viewport: { width: Number(width), height: 900 }, colorScheme: theme })).newPage();
-  page.on('pageerror', error => { console.log('PAGE ERROR', error.message); process.exitCode = 1; });
+  page.on('pageerror', error => { console.log('PAGE ERROR', error.stack); process.exitCode = 1; });
   await page.addInitScript(`window.__AUDIT=${JSON.stringify({ theme, bigSet: true, sources: sources[name], ...extra })};`);
   await page.addInitScript(mock);
   await page.goto(url);
@@ -276,6 +276,61 @@ await repos.click('dialog[open] button:has-text("Cancel")');
 await repos.click('.rf-setbar button[aria-label="Leave this set"]');
 await repos.waitForTimeout(300);
 check('leaving the set returns to every repository', (await repos.locator('.shell-tab.on').innerText()).includes('Repositories') && (await chipN('All')) === 806);
+
+await repos.fill('.rf-search input', 'gateway');
+await repos.waitForTimeout(300);
+await repos.click('.fm-chip:has-text("Cloned")');
+await repos.waitForTimeout(300);
+const clonedShown = await chipN('Cloned');
+await repos.locator('.fm-row .fm-name').first().click();
+await repos.waitForSelector('.rf-head h1');
+check('a name click opens the repository page in its own tab', (await repos.locator('.shell-tab.on').innerText()).trim().length > 0 && (await repos.locator('.rf-head h1').innerText()).includes('cloned') && (await brand(repos)) === 'REPOSITORY', await brand(repos));
+const sections = await repos.locator('.side .sec:has(h6:has-text("This repository")) .nav').allInnerTexts();
+check('the sidebar lists the eight sections with counts', sections.length === 8 && sections[0].includes('Overview') && sections[7].includes('Compare'), JSON.stringify(sections));
+check('the header has crumbs, a star, the next action, Fetch and Open in', (await repos.locator('.rf-crumbs button').count()) === 3 && (await repos.locator('.rf-star').count()) === 1 && (await repos.locator('.rf-head .btn:has-text("Fetch")').count()) === 1 && (await repos.locator('.rf-head .btn:has-text("Open in")').count()) === 1);
+await shot(repos, 'repo-overview');
+for (const [name, probe] of [['Changes', '.rf-files'], ['History', '.history-graph'], ['Branches', '.rf-refs'], ['Stash', '.stash-section'], ['Pull requests', '.pull-section'], ['Actions', '.rf-card:has-text("Actions")'], ['Compare', '.rf-actions-list']]) {
+  await repos.click(`.side .sec .nav:has-text("${name}")`);
+  await repos.waitForSelector(probe, { timeout: 8000 }).catch(() => {});
+  check(`the ${name} section shows its content`, (await repos.locator(probe).count()) > 0, probe);
+  if (name === 'History' || name === 'Changes') await shot(repos, `repo-${name.toLowerCase()}`);
+}
+check('the sidebar marks the open section', (await repos.locator('.side .nav[aria-current="page"]').first().innerText()).includes('Compare'));
+await repos.keyboard.press('Alt+ArrowLeft');
+await repos.waitForSelector('.fm-chip');
+check('Alt+Left returns to the list with its filters', (await repos.locator('.rf-search input').inputValue()) === 'gateway' && (await repos.locator('.fm-chip.on:has-text("Cloned")').count()) === 1 && (await chipN('Cloned')) === clonedShown && (await repos.locator('.shell-tab.on').innerText()).includes('Repositories'));
+await repos.fill('.rf-search input', '');
+await repos.click('.fm-chip:has-text("All")');
+await repos.locator('.fm-table .vbox').evaluate(box => { box.scrollTop = 600; });
+await repos.waitForTimeout(200);
+await repos.locator('.fm-row .fm-name').nth(5).click();
+await repos.waitForSelector('.rf-head h1');
+await repos.click('.rf-back');
+await repos.waitForSelector('.fm-chip');
+await repos.waitForTimeout(300);
+check('Back restores the scroll position', (await repos.locator('.fm-table .vbox').evaluate(box => box.scrollTop)) === 600, String(await repos.locator('.fm-table .vbox').evaluate(box => box.scrollTop)));
+await repos.click('.side .nav.fav >> nth=0');
+await repos.waitForSelector('.rf-head h1');
+check('a favorite in the sidebar opens its page', (await repos.locator('.rf-star.on').count()) === 1);
+await repos.waitForTimeout(500);
+const saved = await repos.evaluate(() => window.__saved?.settings?.workspace?.shell?.lastRepo ?? window.__saved?.workspace?.shell?.lastRepo);
+check('the last repository and section are saved with the workspace', !!saved && saved.section === 'overview', JSON.stringify(saved));
+await repos.click('.rf-back');
+await repos.fill('.rf-search input', 'sdk');
+await repos.waitForTimeout(300);
+await repos.locator('.fm-row:has(.fm-remote) .fm-name').first().click();
+await repos.waitForSelector('.rf-head h1');
+check('a remote-only page says so and offers Clone', (await repos.locator('.rf-tag.remote').count()) === 1 && (await repos.locator('.rf-head .btn.dark').innerText()).includes('Clone'));
+check('sections that need a clone are disabled with a reason', (await repos.locator('.side .nav:disabled').count()) === 5 && (await repos.locator('.side .nav:disabled').first().getAttribute('title')) === 'Needs a clone');
+await shot(repos, 'repo-remote');
+await repos.click('.side .sec .nav:has-text("Branches")');
+await repos.waitForTimeout(1200);
+check('a remote-only repository lists its remote branches read only', (await repos.locator('.rf-refs li').count()) > 0 && (await repos.locator('.rf-refs .btn').count()) === 0);
+
+const resumed = await open('two', { bigSet: false, section: 'repos', lastRepo: { repoId: 's1:payments/gateway-etl', section: 'history' } });
+await resumed.waitForSelector('.rf-head h1', { timeout: 15000 });
+await resumed.waitForFunction(() => document.querySelector('.rf-page')?.getAttribute('aria-label') === 'History', null, { timeout: 8000 }).catch(() => {});
+check('a saved repository page opens again at launch, on its section', (await resumed.locator('.rf-page').getAttribute('aria-label')) === 'History', await resumed.locator('.rf-page').getAttribute('aria-label'));
 
 const github = await open('github');
 check('one GitHub host shows one section', (await (async () => { await provider(github).click(); return github.locator('.rail-flyout [role="group"]').count(); })()) === 1);

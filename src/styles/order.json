@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 8542,
-  "normalizedSourceSHA256": "24e4eefabde16fb38463de687eb7e9ba4403ae8374bba75fbc0055d0361445b1",
+  "originalLineCount": 8855,
+  "normalizedSourceSHA256": "a6fedc653feb1d143f180ba2bfa90561c67fbf0c163177ccfe93e0a401c41c0d",
   "chapters": [
     {
       "path": "comparison.css",
@@ -92,7 +92,7 @@
       "path": "history.css",
       "firstLine": 5827,
       "lastLine": 6107,
-      "normalizedSHA256": "cd25b614a37e8a0e76ec79bed31a8b3c54d88e835b5dd1b79fe4b8a729665d6d"
+      "normalizedSHA256": "2b38200a90edf962001c28a87dcf5c0874afd06cadc29f800afd452c8728b504"
     },
     {
       "path": "formation.css",
@@ -133,8 +133,8 @@
     {
       "path": "repositories.css",
       "firstLine": 8279,
-      "lastLine": 8542,
-      "normalizedSHA256": "a02153187ebf37ba7a48e7da9be881caebd469a25a6e28c3d89c9b3d67c4230b"
+      "lastLine": 8855,
+      "normalizedSHA256": "b0770622f23289916bf41149b84212c02d7cd4b73ff2c4b05af2f5492edf7399"
     }
   ]
 }

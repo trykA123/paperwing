@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Ref, SetItem } from '../../lib/api';
   import { bulkTargets } from '../../lib/formation';
-  import { plural } from '../../lib/plural';
+  import { applyRef } from '../../lib/ref-apply';
   import { pullFlow, pullable } from '../../lib/pull-flow.svelte';
   import { isRemoteItem } from '../../lib/repositories';
   import { needsClone, pushTarget, rowFacts } from '../../lib/row-actions';
@@ -28,15 +28,7 @@
   function pick(ref: Ref) {
     const chosen = picker!.items;
     picker = null;
-    if (chosen.length === 1) return app.setRef(chosen[0], ref);
-    const ok = chosen.filter(item => {
-      const refs = app.refs[item.url];
-      return !!refs && (ref.type === 'branch' ? refs.branches : refs.tags).includes(ref.name);
-    });
-    ok.forEach(item => app.setRef(item, ref));
-    const miss = chosen.filter(item => !ok.includes(item)).map(item => item.name);
-    const tail = miss.length ? ` (not in ${miss.slice(0, 4).join(', ')}${miss.length > 4 ? ` +${miss.length - 4} more` : ''})` : '';
-    app.toast(`${app.refLabel({ ...chosen[0], ref })} applied to ${ok.length} of ${plural(chosen.length, 'repository', 'repositories')}${tail}`, miss.length ? 'warn' : 'success');
+    applyRef(chosen, ref);
   }
 
   async function checkRefs() {

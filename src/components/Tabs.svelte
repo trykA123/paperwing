@@ -31,8 +31,8 @@
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"
           tabindex={tab.id === app.activeTabId ? 0 : -1} title={app.temporary.find(tab.setId) ? `${app.tabTitle(tab)} (temporary, not saved)` : app.tabTitle(tab)}
           onclick={() => app.activateTab(tab.id)} onkeydown={event => navigate(event, index)}>
-          <Icon name={tab.view.kind === 'module' ? moduleById(tab.view.module).icon : tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'copy' : tab.view.kind === 'fileDiff' ? 'code' : tab.view.kind === 'settings' ? 'gear' : tab.view.kind === 'search' || tab.view.kind === 'codeSearch' || tab.view.kind === 'org' ? 'search' : 'folder'}
-            tone={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'brand' : tab.view.kind === 'fileDiff' ? 'file' : tab.view.kind === 'set' || tab.view.kind === 'item' ? 'folder' : undefined} />
+          <Icon name={tab.view.kind === 'module' ? moduleById(tab.view.module).icon : tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'copy' : tab.view.kind === 'fileDiff' ? 'code' : tab.view.kind === 'settings' ? 'gear' : tab.view.kind === 'repo' ? 'repo' : tab.view.kind === 'search' || tab.view.kind === 'codeSearch' || tab.view.kind === 'org' ? 'search' : 'folder'}
+            tone={tab.view.kind === 'compare' || tab.view.kind === 'setCompare' ? 'brand' : tab.view.kind === 'fileDiff' ? 'file' : tab.view.kind === 'set' || tab.view.kind === 'item' || tab.view.kind === 'repos' ? 'folder' : undefined} />
           <span>{app.tabTitle(tab)}</span>
         </button>
         <button class="tab-close" title="Close {app.tabTitle(tab)} (Ctrl+W)" aria-label="Close {app.tabTitle(tab)}" onclick={() => app.closeTab(tab.id)}><Icon name="close" size={12} /></button>

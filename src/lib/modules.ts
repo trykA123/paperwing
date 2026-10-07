@@ -102,7 +102,7 @@ export function moduleShortcut(key: string): ModuleId | undefined {
   return MODULES.find(module => module.shortcutKey === lower)?.id;
 }
 
-const REPO_VIEWS: readonly View['kind'][] = ['repos', 'set', 'item', 'org', 'search'];
+const REPO_VIEWS: readonly View['kind'][] = ['repos', 'repo', 'set', 'item', 'org', 'search'];
 const COMPARE_VIEWS: readonly View['kind'][] = ['compare', 'setCompare', 'fileDiff'];
 
 export function moduleOfView(view: View): RailSection | undefined {

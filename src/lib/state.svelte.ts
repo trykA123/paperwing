@@ -201,7 +201,7 @@ class AppState {
     return view.kind === 'item' ? this.set.items.find(item => item.id === view.itemId) : undefined;
   });
   /** Settings, code search and module pages have nothing for the details panel to describe. */
-  get detailsAvailable() { return !['settings', 'codeSearch', 'module', 'repos'].includes(this.view.kind); }
+  get detailsAvailable() { return !['settings', 'codeSearch', 'module', 'repos', 'repo'].includes(this.view.kind); }
   paletteOpen = $state(false);
   get query() { return this.activeTab?.query ?? ''; }
   set query(value: string) { if (this.activeTab) this.activeTab.query = value; }
@@ -351,7 +351,7 @@ class AppState {
       tab = { id, setId, view, query: query ?? '', page: 0, filter: '' };
       this.tabs.push(tab);
     } else {
-      if (view.kind === 'fileDiff') tab.view = view;
+      if (view.kind === 'fileDiff' || view.kind === 'repo') tab.view = view;
       if (query !== undefined) tab.query = query;
     }
     this.activateTab(id);
@@ -408,6 +408,7 @@ class AppState {
     const view = tab.view;
     switch (view.kind) {
       case 'repos': return 'Repositories';
+      case 'repo': return this.repositories.resolve(view.repoId)?.name ?? view.repoId.split('/').at(-1) ?? 'Repository';
       case 'set': return set?.name ?? 'Set';
       case 'item': return set?.items.find(item => item.id === view.itemId)?.folder
         ?? set?.items.find(item => item.id === view.itemId)?.name ?? 'Repository';
@@ -427,8 +428,8 @@ class AppState {
     const comparisonId = uid();
     this.comparisons[comparisonId] = new CompareState();
     this.openView({ kind: 'compare', comparisonId, readOnly,
-      left: { setId: this.set.id, itemId: item.id, reference: { kind: 'head' } },
-      right: { setId: this.set.id, itemId: item.id, reference: { kind: readOnly ? 'head' : 'workingTree' } } });
+      left: { setId: this.repositories.setIdOf(item), itemId: item.id, reference: { kind: 'head' } },
+      right: { setId: this.repositories.setIdOf(item), itemId: item.id, reference: { kind: readOnly ? 'head' : 'workingTree' } } });
   }
 
   #disposeSearch(id: string) {
@@ -554,9 +555,7 @@ class AppState {
     else delete item.folder;
   }
 
-  toggleStar(id: string) {
-    this.ws.stars = this.ws.stars.includes(id) ? this.ws.stars.filter(s => s !== id) : [...this.ws.stars, id];
-  }
+  toggleStar(id: string) { this.ws.stars = this.ws.stars.includes(id) ? this.ws.stars.filter(s => s !== id) : [...this.ws.stars, id]; }
 
   setRef(item: SetItem, ref: Ref) {
     item.ref = ref;

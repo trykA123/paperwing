@@ -22,7 +22,7 @@
     stars: [repos[1].id, repos[5].id], activeSet: 'a', root: platform === 'windows' ? 'C:\\Dev\\repos' : '/home/dev/repos', layout: 'flat',
     pathTemplate: '{org}\\{folder}', cols: { repo: 210, checkout: 190, local: 220, status: 170 }, shallow: false, parallel: 4, onExisting: 'fetch', pageSize: 25, rightWidth: 380,
     theme: cfg.theme || 'system', uiFont: 'geist', codeFont: 'geist-mono',
-    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: cfg.section || 'sets' },
+    shell: { version: 1, sidebarWidth: 250, sidebarVisible: true, rightVisible: true, section: cfg.section || 'repos', ...(cfg.lastRepo ? { lastRepo: cfg.lastRepo } : {}) },
   };
   const cap = { supported: true, reason: null };
   const caps = { readCompare: cap, edit: cap, copy: cap, recovery: cap, trash: cap };
@@ -40,7 +40,7 @@
     probe_root: ({ root }) => ({ root, valid: true, reason: null, identity: 'id1', casePolicy: 'insensitive', capabilities: caps }),
     path_identities: ({ paths }) => paths.map(path => ({ path, identity: null, exists: true, reason: null })),
     load_settings: () => ({ sources, workspace }),
-    save_settings: () => null,
+    save_settings: args => { window.__saved = args; return null; },
     source_revision: () => 1, has_token: () => true, credential_status: ({ sourceId }) => ({ sourceId, backend: 'windowsCredentialManager', state: cfg.credMissing ? 'missing' : 'saved', revision: 1, reason: null }),
     list_cached_repos: () => null,
     list_repos: async ({ source }) => { await sleep(cfg.listDelay ?? 300); if (cfg.listError) throw 'HTTP 401 Unauthorized: token rejected by git.acme.example'; return source.id === 's1' ? { repos, fetchedAt: Date.now(), errors: [], warnings: [] } : { repos: ossRepos, fetchedAt: Date.now(), errors: [] }; },

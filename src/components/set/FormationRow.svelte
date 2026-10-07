@@ -2,7 +2,7 @@
   import type { NextActionKind } from '../../lib/formation';
 
   export type RowHandlers = {
-    toggle: (on: boolean, range: boolean) => void; activate: () => void; inspect: () => void; pickRef: (anchor: HTMLElement) => void;
+    toggle: (on: boolean, range: boolean) => void; activate: () => void; inspect: () => void; open: () => void; pickRef: (anchor: HTMLElement) => void;
     next: (kind: NextActionKind) => void; menu: (anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) => void;
     rename: (value: string | null) => void; retryStatus: () => void;
   };
@@ -49,7 +49,7 @@
       <input class="fname-edit" value={row.folder} use:focus spellcheck="false" aria-label="Folder name" onblur={event => handlers.rename(event.currentTarget.value)}
         onkeydown={event => { if (event.key === 'Enter') event.currentTarget.blur(); else if (event.key === 'Escape') handlers.rename(null); }} />
     {:else}
-      <span class="fm-namerow"><button class="fm-name" title="{row.item.org}/{row.item.name} · show details" tabindex={stop} onclick={handlers.inspect}>{row.folder}</button>{#if row.favorite}<span class="fm-fav" role="img" aria-label="Favorite" title="Favorite"><Icon name="star" size={12} /></span>{/if}</span>
+      <span class="fm-namerow"><button class="fm-name" title="{row.item.org}/{row.item.name} · open the repository page" tabindex={stop} onclick={handlers.open}>{row.folder}</button>{#if row.favorite}<span class="fm-fav" role="img" aria-label="Favorite" title="Favorite"><Icon name="star" size={12} /></span>{/if}</span>
     {/if}
     <small class="fm-sub">
       {#if row.problem}<span class="fm-problem" title={row.problem}><Icon name="alert" size={12} tone="err" />{row.problem}</span>

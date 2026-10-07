@@ -1,5 +1,6 @@
 import type { LocalStatus, Repo, RepoSet, SetItem, Source, Workspace } from '../api';
 import { collectEntries, hostOfItem, hostTree, isRemoteItem, matchesRepoFilter, matchesScope, repoFilterCounts, setEntries, type RepoEntry, type RepoFilter } from '../repositories';
+import { usableSection, type RepoSection } from '../repo-sections';
 import type { View } from '../workspace';
 
 export type RepositoriesHost = {
@@ -11,6 +12,11 @@ export type RepositoriesHost = {
   readonly set: RepoSet;
   dest: (item: SetItem, setId?: string) => string;
   collisionKey: (path: string) => string;
+  readonly activeTabId: string;
+  readonly tabs: readonly { id: string }[];
+  openView: (view: View, setId?: string) => void;
+  activateTab: (id: string) => void;
+  closeTab: (id: string) => Promise<void>;
   addRepo: (repo: Repo, notify: boolean, set: RepoSet) => SetItem | undefined;
   startClone: (items: SetItem[], mode: 'clone') => Promise<void>;
   checkExists: (paths: string[]) => Promise<unknown>;
@@ -28,7 +34,10 @@ export class Repositories {
   org = $state('');
   query = $state('');
   page = $state(0);
+  /** Scroll offset of the table; filters and paging reset it, Back restores it. */
   scroll = 0;
+  /** The tab a repository page was opened from; Back returns to it with its filters and scroll. */
+  private origin: string | null = null;
   private remote = new Map<string, SetItem>();
   private checkTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -71,11 +80,37 @@ export class Repositories {
     return item ? hostOfItem(item, this.app.sources) : '';
   }
 
+  /** The entry a repository page shows: the folder on disk when there is one, else the first. */
+  resolve(repoId: string): RepoEntry | undefined {
+    const known = this.everything.filter(entry => entry.repoId === repoId);
+    return known.find(entry => !entry.remoteOnly && this.localOf(entry)?.repo) ?? known[0];
+  }
+
+  setIdOf(item: SetItem): string { return this.app.ws.sets.find(set => set.items.some(entry => entry.id === item.id))?.id ?? this.app.set.id; }
+
+  openRepository(repoId: string, section: RepoSection = 'overview') {
+    const entry = this.resolve(repoId);
+    if (!entry) { this.app.toast('That repository is not in any source or set', 'warn'); return; }
+    if (this.app.view.kind !== 'repo') this.origin = this.app.activeTabId;
+    const cloned = !entry.remoteOnly && !!this.localOf(entry)?.repo;
+    this.app.openView({ kind: 'repo', repoId, section: usableSection(section, cloned) }, entry.setIds[0]);
+  }
+
+  /** Leaves a repository page for the list it came from and closes the page. */
+  back() {
+    const page = this.app.activeTabId;
+    if (this.app.view.kind !== 'repo') return;
+    if (this.origin && this.app.tabs.some(tab => tab.id === this.origin)) this.app.activateTab(this.origin);
+    else this.app.openView({ kind: 'repos' });
+    void this.app.closeTab(page);
+  }
+
   entryOf(itemId: string): RepoEntry | undefined { return this.everything.find(entry => entry.item.id === itemId); }
 
   filter(patch: Partial<{ chip: RepoFilter; hostFilter: string; org: string; query: string }>) {
     Object.assign(this, patch);
     this.page = 0;
+    this.scroll = 0;
   }
 
   clearFilters() { this.filter({ chip: 'all', hostFilter: '', org: '', query: '' }); }

@@ -37,6 +37,8 @@
   const selected = $derived(store.selected);
   const allOn = $derived(rows.length > 0 && rows.every(item => item.on));
   const offer = $derived(selectionOffer(rows, items));
+  const listKey = $derived(`${scopeKey}|${store.chip}|${store.query}|${store.hostFilter}|${store.org}|${cur}|${size}`);
+  const firstKey = untrack(() => listKey), firstScroll = untrack(() => store.scroll);
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing);
 
   $effect(() => { pulls.pin(selected.flatMap(item => pullKey(item) ?? [])); });
@@ -115,7 +117,7 @@
     else if (event.key === 'Home') void focusRow(0, event.shiftKey);
     else if (event.key === 'End') void focusRow(rows.length - 1, event.shiftKey);
     else if (event.key === ' ') { activeRow.on = !activeRow.on; anchorAt(activeRow.id); }
-    else if (event.key === 'Enter') app.inspectedId = activeRow.id;
+    else if (event.key === 'Enter') store.openRepository(activeRow.repoId);
     else return;
     event.preventDefault();
   }
@@ -136,6 +138,7 @@
     },
     activate: () => { activeId = item.id; },
     inspect: () => { app.inspectedId = item.id; },
+    open: () => store.openRepository(item.repoId),
     pickRef: (anchor: HTMLElement) => bulk?.pickRef([item], anchor.getBoundingClientRect()),
     next: (kind: Parameters<typeof runNextAction>[1]) => runNextAction(item, kind),
     menu: (anchor: HTMLElement | { x: number; y: number; opener?: HTMLElement }) => openMenu(item, anchor),
@@ -146,8 +149,8 @@
 
 <div class="fm-wrap">
   <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
-    {#key `${scopeKey}|${store.chip}|${store.query}|${store.hostFilter}|${store.org}|${cur}|${size}`}
-      <VirtualList bind:this={list} role="grid" activeKey={activeRow?.id} {label} onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id}>
+    {#key listKey}
+      <VirtualList bind:this={list} role="grid" activeKey={activeRow?.id} {label} onkeydown={gridKey} items={rows} rowHeight={density === 'compact' ? 40 : 56} key={i => i.id} initialScroll={listKey === firstKey ? firstScroll : 0} onscrolled={top => (store.scroll = top)}>
         {#snippet header()}
           <div class="fm-row fm-head" role="row">
             <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && rows.some(item => item.on)}

@@ -9,6 +9,7 @@
   import { commands, execute, shortcut } from './lib/commands';
   import { applyAppearance, onSystemThemeChange } from './lib/appearance';
   import RepositoriesView from './components/repos/RepositoriesView.svelte';
+  import RepositoryPage from './components/repos/RepositoryPage.svelte';
   import RepoList from './components/RepoList.svelte';
   import RightPanel from './components/RightPanel.svelte';
   import Settings from './components/Settings.svelte';
@@ -67,6 +68,11 @@
       event.preventDefault();
       app.paletteOpen = !app.paletteOpen;
       event.stopPropagation();
+      return;
+    }
+    if (event.altKey && !event.ctrlKey && !event.shiftKey && event.key === 'ArrowLeft' && app.view.kind === 'repo' && !(event.target as Element).closest('input, textarea, select')) {
+      event.preventDefault();
+      app.repositories.back();
       return;
     }
     const id = shortcut(event);
@@ -161,16 +167,18 @@
 <div id="shell" class:noright={!rightVisible} class:noside={!app.ws.shell.sidebarVisible} class:panels-moving={panelsMoving}
   style:--lw="{app.ws.shell.sidebarVisible ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
   <ActivityRail {gitBusy} />
-  <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{moduleById(app.ws.shell.section).label}</span></div>
+  <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{app.view.kind === 'repo' && app.ws.shell.section === 'repos' ? 'Repository' : moduleById(app.ws.shell.section).label}</span></div>
   <Tabs />
   <div class="shell-side" inert={!app.ws.shell.sidebarVisible} aria-hidden={!app.ws.shell.sidebarVisible} style:--panel-width="{app.ws.shell.sidebarWidth}px">
     {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
   </div>
-  <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings'}>
+  <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings' || app.view.kind === 'repo'}>
     {#if !app.ready}
       <div class="empty"><span class="spin"></span></div>
     {:else if app.view.kind === 'repos' || app.view.kind === 'set' || app.view.kind === 'item'}
       {#key app.activeTabId}<RepositoriesView />{/key}
+    {:else if app.view.kind === 'repo'}
+      {#key app.activeTabId}<RepositoryPage view={app.view} />{/key}
     {:else if app.view.kind === 'org'}
       {#key app.activeTabId}
         <RepoList mode="org" source={app.view.source} org={app.view.org} />
