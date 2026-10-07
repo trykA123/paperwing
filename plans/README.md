@@ -5,6 +5,7 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 ## Ready now
 | Packet | What | Size |
 |---|---|---|
+| [46](packets/46-languages.md) | Syntax colouring for automotive and embedded files | M |
 | [42](packets/42-backend-hardening.md) | Backend hardening from the architecture audit | M |
 | [40](packets/40-github-compare.md) | Compare on GitHub without cloning (GHES-aware) | L |
 | [41](packets/41-windows-diagnostics.md) | Anonymous diagnostics export, test builds only | M |
