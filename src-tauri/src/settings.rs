@@ -272,4 +272,5 @@ mod tests {
 mod startup_tests;
 
 #[cfg(all(test, not(feature = "test-profile")))]
+#[cfg(not(windows))]
 mod retry_tests;

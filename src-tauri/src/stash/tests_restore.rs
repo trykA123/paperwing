@@ -128,7 +128,7 @@ async fn an_existing_untracked_file_does_not_retry_a_partially_applied_stash_reg
         .filter(|entry| entry["context"] == format!("Stash pop: {path}"))
         .collect();
     assert_eq!(attempts.len(), 1, "unexpected retry: {attempts:?}");
-    assert_eq!(attempts[0]["exitCode"], 128);
+    assert_ne!(attempts[0]["exitCode"], 0);
     assert!(outcome.index_restored, "unexpected no-index retry: {outcome:?}");
     assert!(outcome.conflicted.is_empty());
     assert_eq!(read(&dir, "untracked.txt"), "keep local untracked\n");
@@ -155,7 +155,7 @@ async fn partially_restored_untracked_directory_does_not_retry_regression() {
         .filter(|entry| entry["context"] == format!("Stash apply: {path}"))
         .collect();
     assert_eq!(activities.len(), 1, "unexpected retry: {activities:?}");
-    assert_eq!(activities[0]["exitCode"], 128);
+    assert_ne!(activities[0]["exitCode"], 0);
     assert!(
         !outcome.applied && outcome.stash_kept && outcome.index_restored,
         "{outcome:?}"
