@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 7891,
-  "normalizedSourceSHA256": "3f86cbe857450be9bad4fa7f4bc87e7733346756e89d08f9be67017174a0b141",
+  "originalLineCount": 7892,
+  "normalizedSourceSHA256": "c6ac4a72700ce8346cb89a8b9d5671ad42a26456949c6852a340a378dafb848f",
   "chapters": [
     {
       "path": "comparison.css",
@@ -97,25 +97,25 @@
     {
       "path": "formation.css",
       "firstLine": 6102,
-      "lastLine": 7084,
-      "normalizedSHA256": "1d38fbf28c458afe395a8a43aec62e86f86d1324a24844e29221d04cc711e1bc"
+      "lastLine": 7085,
+      "normalizedSHA256": "bb84ce99f25dfd8353c1582ea38c045177b1235f692281cb50b7b4222721c6c0"
     },
     {
       "path": "cleanup-search.css",
-      "firstLine": 7085,
-      "lastLine": 7402,
+      "firstLine": 7086,
+      "lastLine": 7403,
       "normalizedSHA256": "54a5eb4c409bd5ee5aa001c33d2895accec9edd9956cf28539752be4ea3e2459"
     },
     {
       "path": "stash.css",
-      "firstLine": 7403,
-      "lastLine": 7663,
+      "firstLine": 7404,
+      "lastLine": 7664,
       "normalizedSHA256": "a3fc7ee4fae89a665bdf4816e98c6d483204008859fbe8162ef0d653af3423e8"
     },
     {
       "path": "pulls.css",
-      "firstLine": 7664,
-      "lastLine": 7891,
+      "firstLine": 7665,
+      "lastLine": 7892,
       "normalizedSHA256": "a9d2ff0dfc8af370dc93e65043912a7bb366058fada779797e128641c9cb6682"
     }
   ]

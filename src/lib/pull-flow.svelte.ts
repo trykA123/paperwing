@@ -12,6 +12,9 @@ export function pullKey(item: SetItem): PullKey | null {
   return isCloned(local) && local?.branch ? { path, branch: local.branch } : null;
 }
 
+/** The listing carries no fork flag yet, so every repository is unknown and the backend decides. */
+export const forkStatus = (_item: SetItem): 'fork' | 'not-fork' | 'unknown' => 'unknown';
+
 export const pullable = (items: SetItem[]) => items.filter(item => pullKey(item));
 
 class PullFlow {

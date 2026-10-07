@@ -5,7 +5,7 @@
   import { plural } from '../../lib/plural';
   import { mapLimit, preparePull } from '../../lib/pull-defaults';
   import { initialRows, openPullRequests, planBulkOpen, type BulkInput, type BulkRow } from '../../lib/pull-bulk';
-  import { pullFlow, pullKey } from '../../lib/pull-flow.svelte';
+  import { forkStatus, pullFlow, pullKey } from '../../lib/pull-flow.svelte';
   import { openPull, pulls } from '../../lib/pulls.svelte';
   import { withBusy } from '../../lib/stash-switch';
   import { app } from '../../lib/state.svelte';
@@ -26,16 +26,21 @@
   const LABEL = { pending: 'Waiting', skipped: 'Skipped', created: 'Opened', failed: 'Failed', stopped: 'Not attempted' } as const;
 
   async function load() {
+    const keys = items.flatMap(item => pullKey(item) ?? []);
     const reads = { tree: (path: string) => app.readTree(path), history: (path: string) => api.repositoryHistory(path, 1) };
     inputs = await mapLimit(items, 4, async (item): Promise<BulkInput> => {
       const key = pullKey(item)!;
       const local = app.local[key.path];
       const prepared = await preparePull(key.path, key.branch, reads);
-      const entry = pulls.entry(key);
       return {
         id: item.id, path: key.path, name: app.folderOf(item), head: key.branch, ahead: local?.ahead ?? 0, hasRemoteBranch: !!local?.upstream,
-        base: prepared.base, title: prepared.title, existing: entry?.status === 'ready' ? entry.pull : undefined,
+        base: prepared.base, title: prepared.title, existing: undefined, checked: false, notFork: forkStatus(item) === 'not-fork',
       };
+    });
+    await pulls.ensure(keys);
+    inputs = inputs.map(input => {
+      const entry = pulls.entry({ path: input.path, branch: input.head! });
+      return { ...input, checked: !!entry && entry.status !== 'loading', existing: entry?.status === 'ready' ? entry.pull : undefined };
     });
     phase = 'review';
   }
@@ -44,7 +49,7 @@
     if (phase !== 'review' || !runnable.length) return;
     phase = 'running';
     rows = initialRows(plans);
-    const guarded = await withBusy(app, () => openPullRequests(plans, api, { draft, pushFirst }, (index, row) => { rows[index] = row; }));
+    const guarded = await withBusy(app, () => openPullRequests(plans, { ...api, currentBranch: path => app.local[path]?.branch ?? null }, { draft, pushFirst }, (index, row) => { rows[index] = row; }));
     if (!guarded.ran) { phase = 'review'; app.toast('A Git operation is already running', 'warn'); return; }
     rows = guarded.value;
     phase = 'done';
@@ -71,7 +76,7 @@
   </header>
 
   {#if phase === 'loading'}
-    <p class="stash-lead" role="status"><span class="spin"></span> Reading the default branch of each repository…</p>
+    <p class="stash-lead" role="status"><span class="spin"></span> Checking {plural(items.length, 'repository', 'repositories')}…</p>
   {:else}
     <p class="stash-lead" role="status" aria-live="polite">
       {#if phase === 'running'}<span class="spin"></span> Opening pull requests…
@@ -88,7 +93,7 @@
             <td class="pull-result">
               {#if row.result === 'created'}<button class="btn small" onclick={() => void openPull(row.created.url)} title={row.created.url}><Icon name="remote" />#{row.created.number}</button>
                 {#if row.created.hasUnpushedCommits}<span class="warn">Unpushed commits are not in it</span>{/if}
-              {:else if row.result === 'failed' || row.result === 'stopped'}<span class="err" role="alert">{LABEL[row.result]}: {row.message}</span>
+              {:else if row.result === 'failed' || row.result === 'stopped'}<span class="err">{LABEL[row.result]}: {row.message}</span>
               {:else if row.result === 'skipped'}<span class="mut">{LABEL.skipped}: {row.reason}</span>
               {:else}<span class="mut">{phase === 'running' ? LABEL.pending : row.action === 'push-open' ? row.reason : 'Ready'}</span>{/if}
             </td>

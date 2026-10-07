@@ -190,13 +190,34 @@ describe('defaults', () => {
 });
 
 describe('bulk open', () => {
-  const input = (name, patch = {}) => ({ id: name, path: `/r/${name}`, name, head: 'feature/login', ahead: 0, hasRemoteBranch: true, base: 'main', title: `Title ${name}`, existing: null, ...patch });
+  const input = (name, patch = {}) => ({ id: name, path: `/r/${name}`, name, head: 'feature/login', ahead: 0, hasRemoteBranch: true, base: 'main', title: `Title ${name}`, existing: null, checked: true, notFork: true, ...patch });
   const created = name => ({ number: 1, url: `https://x/${name}/pull/1`, targetRepo: `o/${name}`, hasUnpushedCommits: false });
   const fake = (handlers = {}) => {
     const calls = [];
-    return { calls, pushBranch: async path => { calls.push(['push', path]); await handlers.push?.(path); }, openPullRequest: async (path, request) => { calls.push(['open', path, request]); return handlers.open ? handlers.open(path) : created(path.split('/').pop()); } };
+    return { calls, currentBranch: () => handlers.branch ?? 'feature/login', pushBranch: async path => { calls.push(['push', path]); await handlers.push?.(path); }, openPullRequest: async (path, request) => { calls.push(['open', path, request]); return handlers.open ? handlers.open(path) : created(path.split('/').pop()); } };
   };
   const options = { draft: true, pushFirst: false };
+
+  test('on the base branch is skipped only for a repository known not to be a fork', () => {
+    const plans = planBulkOpen([input('a', { head: 'main' }), input('fork', { head: 'main', notFork: false })], { pushFirst: false });
+    expect(plans.map(plan => plan.action)).toEqual(['skip', 'open']);
+  });
+
+  test('a repository a rate limit left unchecked is skipped, not submitted', async () => {
+    const api = fake();
+    const plans = planBulkOpen([input('a', { checked: false }), input('b')], { pushFirst: false });
+    expect(plans[0].reason).toContain('Not checked (rate limited)');
+    await openPullRequests(plans, api, options);
+    expect(api.calls.map(call => call[1])).toEqual(['/r/b']);
+  });
+
+  test('a branch that changed since the preview is not pushed', async () => {
+    const api = fake({ branch: 'other' });
+    const rows = await openPullRequests(planBulkOpen([input('a', { ahead: 1 })], { pushFirst: true }), api, options);
+    expect(api.calls).toEqual([]);
+    expect(rows[0].result).toBe('skipped');
+    expect(rows[0].reason).toBe('Branch changed since preview.');
+  });
 
   test('skip rules: detached, on the base branch, existing pull request, unpublished', () => {
     const plans = planBulkOpen([
@@ -279,5 +300,56 @@ describe('selection', () => {
     loader.pin(Array.from({ length: 800 }, (_, index) => key(`r${index}`)));
     await waitFor(() => api.active === 50);
     expect(api.calls).toHaveLength(50);
+  });
+});
+
+describe('loader resume, refresh and ensure', () => {
+  test('a wanted row loads after the reset without a new want, and Paused clears', async () => {
+    let limited = true;
+    const resetAt = new Date(Date.now() + 60).toISOString();
+    const api = fakeApi(() => { if (limited) throw { kind: 'rateLimited', resetAt, message: 'limit' }; return pull(); });
+    const loader = new PullLoader(api);
+    loader.want(key('a'));
+    await waitFor(() => api.active === 1);
+    api.release();
+    await waitFor(() => loader.limit !== null);
+    expect(loader.entry(key('a'))).toBeUndefined();
+    limited = false;
+    await waitFor(() => loader.limit === null);
+    await waitFor(() => api.active === 1);
+    api.release();
+    await waitFor(() => loader.entry(key('a'))?.status === 'ready');
+    expect(api.calls).toHaveLength(2);
+    expect(loader.limit).toBeNull();
+    loader.dispose();
+  });
+
+  test('a stale answer never overwrites a refreshed row, and refresh does not duplicate an in-flight request', async () => {
+    const answers = [null, pull({ number: 9 })];
+    const api = fakeApi(() => answers.shift());
+    const loader = new PullLoader(api);
+    loader.want(key('a'));
+    await waitFor(() => api.active === 1);
+    loader.refresh([key('a')]);
+    loader.refresh([key('a')]);
+    expect(api.calls).toHaveLength(1);
+    api.release();
+    await waitFor(() => api.calls.length === 2);
+    api.release();
+    await waitFor(() => loader.entry(key('a'))?.status === 'ready');
+    expect(loader.entry(key('a')).pull.number).toBe(9);
+    expect(api.calls).toHaveLength(2);
+  });
+
+  test('ensure loads every key and resolves; a rate limit leaves the rest unasked', async () => {
+    const resetAt = new Date(Date.now() + 60_000).toISOString();
+    const api = fakeApi(path => { if (path.endsWith('c')) throw { kind: 'rateLimited', resetAt, message: 'limit' }; return pull(); });
+    const loader = new PullLoader(api, { concurrency: 1 });
+    const done = loader.ensure(['a', 'b', 'c', 'd'].map(key));
+    for (let tries = 0; tries < 50 && loader.limit === null; tries += 1) { api.release(); await settle(); }
+    await done;
+    const states = ['a', 'b', 'c', 'd'].map(name => loader.entry(key(name))?.status);
+    expect(states).toEqual(['ready', 'ready', undefined, undefined]);
+    loader.dispose();
   });
 });

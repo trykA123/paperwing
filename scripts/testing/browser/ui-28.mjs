@@ -184,6 +184,7 @@ check('focus returns to the More button', await page.evaluate(() => document.act
 
 // Rate limit: the batch stops, shows the reset time (Europe/Bucharest) and stops asking.
 pulls.limitAfter = pulls.calls.length;
+pulls.resetAt = new Date(Date.now() + 9000).toISOString();
 await scrollTo(rowH * 600);
 const noticed = await page.waitForSelector('.notice:has-text("rate limit")', { timeout: 5000 }).then(handle => handle.innerText(), () => '');
 await settle();
@@ -198,6 +199,31 @@ const paused = await page.locator('.pull-part:has-text("Paused")').count();
 check('rows still waiting show Paused with the reset time', paused > 0, String(paused));
 await page.evaluate(() => { document.querySelector('main').scrollTop = 0; });
 await shot('rate-limited');
+const beforeReset = pulls.calls.length;
+pulls.limitAfter = Infinity;
+await page.waitForFunction(() => !document.querySelector('.pull-part.warn'), null, { timeout: 15000 }).catch(() => {});
+await settle();
+check('after the reset the waiting rows load without scrolling and Paused disappears', pulls.calls.length > beforeReset && (await page.locator('.pull-part:has-text("Paused")').count()) === 0, `${beforeReset} -> ${pulls.calls.length}`);
+
+// Bulk with a rate limit: rows that could not be checked are not submitted.
+await page.click('.fm-bar .x');
+pulls.limitAfter = pulls.calls.length;
+pulls.resetAt = new Date(Date.now() + 30 * 60_000).toISOString();
+await scrollTo(rowH * 750);
+await page.waitForSelector('.pull-part:has-text("Paused")', { timeout: 8000 });
+const waiting = page.locator('.fm-row:has(.pull-part:has-text("Paused")) input[type=checkbox]');
+for (let at = 0; at < 3; at += 1) await waiting.nth(at).check();
+const opensBefore = pulls.opened.length;
+await page.click('.fm-bar .more');
+await page.click('[role=menuitem]:has-text("Open pull requests")');
+await page.waitForSelector('.pull-bulk[open] .pull-table');
+const unchecked = (await page.locator('.pull-bulk tbody').innerText()).match(/Not checked \(rate limited\)/g) ?? [];
+check('rate limit during the bulk check marks the rows Not checked and nothing can be submitted', unchecked.length === 3 && (await page.locator('.pull-bulk footer .btn.dark').isDisabled()), String(unchecked.length));
+await shot('bulk-not-checked');
+await page.keyboard.press('Escape');
+check('nothing was opened for unchecked rows', pulls.opened.length === opensBefore);
+check('rows carry no role=status or role=alert', (await page.locator('.fm-table [role=status], .fm-table [role=alert]').count()) === 0);
+check('<main> no longer scrolls from the table', await page.evaluate(() => document.querySelector('main').scrollHeight <= document.querySelector('main').clientHeight + 300));
 console.log(`total pull_for_branch calls: ${pulls.calls.length}`);
 console.log(unknown.size ? `UNMOCKED ${[...unknown].join(',')}` : 'no unmocked commands');
 await browser.close();

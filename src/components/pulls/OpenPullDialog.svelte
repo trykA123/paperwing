@@ -4,7 +4,7 @@
   import { redact } from '../../lib/errors';
   import { dialogOut } from '../../lib/motion';
   import { preparePull } from '../../lib/pull-defaults';
-  import { pullFlow, pullKey } from '../../lib/pull-flow.svelte';
+  import { forkStatus, pullFlow, pullKey } from '../../lib/pull-flow.svelte';
   import { rateLimitText, readPullsError } from '../../lib/pull-support';
   import { createPull, openPull, pulls } from '../../lib/pulls.svelte';
   import { withBusy } from '../../lib/stash-switch';
@@ -30,7 +30,7 @@
   const known = $derived.by(() => { const entry = key ? pulls.entry(key) : undefined; return entry?.status === 'ready' ? entry.pull : null; });
   const existing = $derived(known && (known.state === 'open' || known.state === 'draft') ? known : null);
   const unpublished = $derived(!local?.upstream);
-  const problem = $derived(!title.trim() ? 'Give the pull request a title.' : !base ? 'Choose the branch to merge into.' : head === base ? `${head} is the base branch. Check out another branch.` : unpublished && !pushFirst ? 'The branch is not on the remote. Tick “Push first”.' : '');
+  const problem = $derived(!title.trim() ? 'Give the pull request a title.' : !base ? 'Choose the branch to merge into.' : forkStatus(item) === 'not-fork' && head === base ? `${head} is the base branch. Check out another branch.` : unpublished && !pushFirst ? 'The branch is not on the remote. Tick “Push first”.' : '');
   const options = $derived(names.map(name => ({ value: name, label: name })));
 
   async function submit() {
@@ -81,7 +81,7 @@
   {#if created}
     <div class="pull-done" role="status">
       <p class="stash-lead"><Icon name="check" tone="ok" />Opened #{created.number} in <span class="mono">{created.targetRepo}</span></p>
-      {#if created.targetRepo.toLowerCase() !== `${item.org}/${item.name}`.toLowerCase()}<Alert kind="info">This repository is a fork. The pull request went to {created.targetRepo}.</Alert>{/if}
+      {#if created.targetRepo.toLowerCase() !== `${item.org}/${item.name}`.toLowerCase()}<Alert kind="info">The pull request went to {created.targetRepo}, not {item.org}/{item.name}.</Alert>{/if}
       {#if created.hasUnpushedCommits}<Alert kind="warn">The branch has commits that are not pushed, so the pull request does not show them yet. Push the branch to include them.</Alert>{/if}
     </div>
     <footer>
@@ -92,15 +92,14 @@
   {:else}
     <form class="stash-form" onsubmit={event => { event.preventDefault(); void submit(); }}>
       <p class="pull-target">
-        <span class="mut">Into</span><span class="mono">{item.org}/{item.name}</span>
+        <span class="mut">Into</span><span class="mono">{item.org}/{item.name}</span>{#if forkStatus(item) !== 'not-fork'}<span class="mut">or its parent repository</span>{/if}
         <span class="mut">from</span><span class="mono pull-head"><Icon name="branch" size={12} tone="branch" />{head}</span>
       </p>
-      <p class="stash-note-line mut">If this repository is a fork, GitHub sends the pull request to the repository it was forked from. The result shows where it went.</p>
       {#if existing}<Alert kind="warn">Pull request #{existing.number} is already open for this branch.</Alert>{/if}
       <label class="fld"><span>Title</span><input bind:this={titleInput} bind:value={title} spellcheck="false" autocomplete="off" disabled={busy || loading} required maxlength="256" /></label>
       <label class="fld"><span>Description <em class="mut">optional</em></span><textarea bind:value={body} rows="4" disabled={busy} maxlength="65000"></textarea></label>
       <div class="fld">
-        <span id="pull-base">Merge into</span>
+        <span id="pull-base">Base on the target repository <em class="mut">(the parent, for forks)</em></span>
         {#if options.length}<Select value={base} {options} label="Base branch" searchable={options.length > 8} disabled={busy} onchange={value => (base = value)} />
         {:else}<input bind:value={base} aria-labelledby="pull-base" spellcheck="false" autocomplete="off" disabled={busy || loading} />{/if}
       </div>

@@ -6,6 +6,10 @@ import { rateLimitText, readPullsError } from './pull-support';
 export type BulkInput = {
   id: string; path: string; name: string; head: string | null; ahead: number; hasRemoteBranch: boolean;
   base: string; title: string; existing: PullRequest | null | undefined;
+  /** False when a rate limit stopped the check, so a duplicate could not be ruled out. */
+  checked: boolean;
+  /** Only a repository known not to be a fork can be skipped for being on the base branch; a fork's base is its parent's. */
+  notFork: boolean;
 };
 export type BulkPlan = BulkInput & { action: 'open' | 'push-open' | 'skip'; reason: string | null };
 export type BulkRow = BulkPlan & (
@@ -18,13 +22,15 @@ export type BulkRow = BulkPlan & (
 export type BulkApi = {
   openPullRequest: (path: string, request: OpenPullRequest) => Promise<CreatedPullRequest>;
   pushBranch: (path: string) => Promise<unknown>;
+  currentBranch: (path: string) => string | null;
 };
 export type BulkOptions = { draft: boolean; pushFirst: boolean };
 
 function skipReason(input: BulkInput): string | null {
   if (!input.head) return 'Not on a branch. Check out a branch first.';
   if (!input.base) return 'Could not find the default branch on the remote.';
-  if (input.head === input.base) return `Already on ${input.base}, the branch pull requests target.`;
+  if (input.notFork && input.head === input.base) return `Already on ${input.base}, the branch pull requests target.`;
+  if (!input.checked) return 'Not checked (rate limited). Try again after the limit resets.';
   if (input.existing && (input.existing.state === 'open' || input.existing.state === 'draft')) return `Already has pull request #${input.existing.number}.`;
   return null;
 }
@@ -62,6 +68,7 @@ export async function openPullRequests(plans: readonly BulkPlan[], api: BulkApi,
 
 async function openOne(plan: BulkPlan, api: BulkApi, { draft }: BulkOptions): Promise<BulkRow> {
   if (plan.action === 'push-open') {
+    if (api.currentBranch(plan.path) !== plan.head) return { ...plan, action: 'skip', reason: 'Branch changed since preview.', result: 'skipped' };
     try { await api.pushBranch(plan.path); }
     catch (reason) { return { ...plan, result: 'failed', message: describeError(reason, `push ${plan.name}`) }; }
   }

@@ -216,6 +216,8 @@
 
 <FilterChips {counts} value={filter} onchange={setFilter} />
 
+<p class="sr-only" role="status" aria-live="polite">{pulls.limit ? pulls.limit.message : pulls.loading ? 'Loading pull requests' : ''}</p>
+
 <div class="fm-wrap">
   <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
     {#key `${set.id}|${filter}|${cur}|${size}`}

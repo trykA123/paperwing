@@ -33,10 +33,10 @@
     <span class="pull-none" title="No pull request for this branch">None</span>
   {:else if entry?.status === 'failed'}
     {@const failure = failureView(entry.message)}
-    <span class="pull-part warn" title={failure.title}>{failure.label}</span>
+    <span class="pull-part warn" title={failure.title}>{failure.label}<span class="sr-only">: {failure.title}</span></span>
   {:else if pulls.limit}
-    <span class="pull-part warn" title={pulls.limit.message}>Paused · {formatReset(pulls.limit.resetAt)}</span>
+    <span class="pull-part warn" title={pulls.limit.message}>Paused · {formatReset(pulls.limit.resetAt)}<span class="sr-only">: {pulls.limit.message}</span></span>
   {:else}
-    <span class="pull-none" role="status" aria-label="Loading pull request">Loading…</span>
+    <span class="pull-none">Loading…</span>
   {/if}
 </span>

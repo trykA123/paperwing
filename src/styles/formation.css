@@ -301,6 +301,7 @@
 }
 
 .fm-row {
+    position: relative;
     display: grid;
     grid-template-columns: var(--fm-cols);
     align-items: center;
