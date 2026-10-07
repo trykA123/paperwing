@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { RailSection } from '../lib/api';
-  import { RAIL_SECTIONS } from '../lib/rail';
+  import { railLayout, moduleById, shortcutLabel, type ModuleDef, type RailBadge } from '../lib/modules';
+  import { pulls } from '../lib/pulls.svelte';
   import { app } from '../lib/state.svelte';
   import BrandMark from './BrandMark.svelte';
   import Icon from './Icon.svelte';
@@ -8,28 +8,38 @@
   let { gitBusy }: { gitBusy: boolean } = $props();
 
   const comparisons = $derived(app.tabs.filter(tab => tab.view.kind === 'compare' || tab.view.kind === 'setCompare').length);
-  const failed = $derived(app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length);
-  const badges = $derived<Partial<Record<RailSection, { count: number; tone?: 'err' }>>>({
-    compare: { count: comparisons },
-    activity: failed ? { count: failed, tone: 'err' } : { count: app.activity.filter(entry => entry.state === 'running').length },
-  });
-  const KEYS = ['Ctrl+1', 'Ctrl+2', 'Ctrl+3', 'Ctrl+4'];
+  const layout = $derived(railLayout(app.sources, {
+    comparisons, awaitingReview: pulls.awaitingReview, failedRuns: 0,
+    gitFailed: app.activity.filter(entry => entry.state === 'failed' || entry.state === 'timedOut').length,
+    gitRunning: app.activity.filter(entry => entry.state === 'running').length,
+  }));
+  const isOn = (module: ModuleDef) => module.id === 'settings' ? app.view.kind === 'settings' : app.ws.shell.sidebarVisible && app.ws.shell.section === module.id;
+  const titleOf = (module: ModuleDef) => { const keys = shortcutLabel(module); return keys ? `${module.label} (${keys})` : module.label; };
 </script>
 
-<nav class="activity-rail" aria-label="Sections">
+{#snippet badgeOf(badge: RailBadge | undefined)}
+  {#if badge}<span class="rail-badge" class:err={badge.tone === 'err'}><span class="sr-only">{badge.count} </span><span aria-hidden="true">{badge.count > 99 ? '99+' : badge.count}</span></span>{/if}
+{/snippet}
+
+{#snippet moduleButton(module: ModuleDef, badge: RailBadge | undefined)}
+  {@const on = isOn(module)}
+  <button class="rail-btn" class:on title={titleOf(module)} aria-label={module.label} data-tip-side="right" aria-pressed={on} onclick={() => app.openModule(module.id)}>
+    <Icon name={module.icon} size={18} />{@render badgeOf(badge)}
+  </button>
+{/snippet}
+
+<nav class="activity-rail" aria-label="Modules">
   <span class="rail-mark" data-tauri-drag-region={app.platform.platform === 'windows' ? true : undefined}><BrandMark busy={gitBusy} size={28} /></span>
-  {#each RAIL_SECTIONS as entry, index (entry.id)}
-    {@const active = app.ws.shell.sidebarVisible && app.ws.shell.section === entry.id}
-    {@const badge = badges[entry.id]}
-    <button class="rail-btn" class:on={active} title="{entry.label} ({KEYS[index]})" aria-label={entry.label} data-tip-side="right"
-      aria-pressed={active} onclick={() => app.clickRail(entry.id)}>
-      <Icon name={entry.icon} size={18} />
-      {#if badge?.count}<span class="rail-badge" class:err={badge.tone === 'err'}><span class="sr-only">{badge.count} </span><span aria-hidden="true">{badge.count > 9 ? '9+' : badge.count}</span></span>{/if}
+  {#each layout.local as item (item.module.id)}{@render moduleButton(item.module, item.badge)}{/each}
+  {#if layout.providers.length}<span class="rail-sep" aria-hidden="true"></span>{/if}
+  {#each layout.providers as entry (entry.provider.id)}
+    {@const first = entry.items[0].module}
+    {@const on = entry.items.some(item => isOn(item.module))}
+    <button class="rail-btn" class:on title="{entry.provider.label} · {entry.hosts.map(host => host.host).join(', ')}" aria-label={entry.provider.label} data-tip-side="right"
+      aria-pressed={on} onclick={() => app.openModule(first.id)}>
+      <Icon name={entry.provider.icon} size={18} />{@render badgeOf(entry.badge)}
     </button>
   {/each}
   <span class="grow"></span>
-  <button class="rail-btn" class:on={app.view.kind === 'settings'} title="Settings (Ctrl+5)" aria-label="Settings" data-tip-side="right"
-    aria-pressed={app.view.kind === 'settings'} onclick={() => app.openView({ kind: 'settings' })}>
-    <Icon name="gear" size={18} />
-  </button>
+  {#each layout.system as item (item.module.id)}{@render moduleButton(item.module, item.badge)}{/each}
 </nav>

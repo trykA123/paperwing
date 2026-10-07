@@ -3,7 +3,7 @@ import type { SetItem } from './api';
 import { app } from './state.svelte';
 import { historyDrawer } from './history-drawer.svelte';
 import { paletteReturn } from './focus-trap';
-import { railShortcut } from './rail';
+import { moduleShortcut } from './modules';
 import { plural } from './plural';
 
 export type Command = { id: string; label: string; icon: IconName; tone?: IconTone; enabled: boolean; reason?: string | null; run: () => void | Promise<void> };
@@ -65,7 +65,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
     { id: 'settings', label: 'Settings', icon: 'gear', enabled: app.ready, run: () => app.openView({ kind: 'settings' }) },
     { id: 'sidebar', label: `${app.ws.shell.sidebarVisible ? 'Hide' : 'Show'} sidebar`, icon: 'panel', enabled: true,
       run: () => { app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible; } },
-    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.view.kind !== 'settings' && app.view.kind !== 'codeSearch',
+    { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.detailsAvailable,
       run: () => { app.ws.shell.rightVisible = !app.ws.shell.rightVisible; } },
     { id: 'theme', label: `Use ${app.ws.theme === 'dark' ? 'light' : 'dark'} theme`, icon: 'theme', enabled: true,
       run: () => { app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark'; } },
@@ -99,7 +99,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
 export function shortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): string | undefined {
   const control = event.ctrlKey || event.metaKey;
   if (control && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'f') return 'search-code';
-  if (control && !event.altKey && !event.shiftKey && railShortcut(event.key)) return `rail-${event.key}`;
+  if (control && !event.altKey && !event.shiftKey && moduleShortcut(event.key)) return `rail-${event.key}`;
   if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Tab') return event.shiftKey ? 'tab-previous' : 'tab-next';
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'w') return 'tab-close';
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') return 'editor-save';

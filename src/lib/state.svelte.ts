@@ -4,7 +4,7 @@ import { GitActivity } from './state/git-activity.svelte';
 import { RepositoryTrees } from './state/repository-trees.svelte';
 import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
-import { railClick } from './rail';
+import { isModuleVisible, moduleById, moduleOfView, railClick, viewOfModule, type ModuleId } from './modules';
 import { doingWord, RunNotices } from './state/run-notices';
 import { TemporarySets } from './state/temporary-sets.svelte';
 import { destination, folderOf, pathClashes, collisionKey, segments, uniqueFolder } from './workspace-paths';
@@ -15,7 +15,7 @@ import {
     api, type Activity,
     type GitAction, type LocalStatus, type Phase, type Progress, type Ref, type Repo,
     type Capability, type Capabilities, type CompareEndpoint, type PathIdentity, type PlatformInfo, type RootSupport,
-    type RailSection, type RepoSet, type SetItem, type Source, type Workspace,
+    type RepoSet, type SetItem, type Source, type Workspace,
 } from './api';
 import { CompareState, SetCompareState, type SetCompareRow } from './compare.svelte';
 import { confirm } from './confirm';
@@ -172,7 +172,21 @@ class AppState {
     if (open) { this.ws.shell.section = 'activity'; this.ws.shell.sidebarVisible = true; }
     else if (this.activityOpen) this.ws.shell.sidebarVisible = false;
   }
-  clickRail(section: RailSection) { Object.assign(this.ws.shell, railClick(this.ws.shell, section)); }
+  /** A rail click: fold the sidebar when its module is already showing, otherwise show the module and open its page. */
+  openModule(id: ModuleId) {
+    if (id === 'settings') { this.openView({ kind: 'settings' }); return; }
+    const shell = this.ws.shell;
+    const hasPage = id === 'search' || !!viewOfModule(id);
+    if (shell.sidebarVisible && shell.section === id && (!hasPage || moduleOfView(this.view) === id)) { Object.assign(shell, railClick(shell, id)); return; }
+    shell.section = id;
+    shell.sidebarVisible = true;
+    this.#showModulePage(id);
+  }
+  #showModulePage(id: ModuleId) {
+    if (id === 'search') { this.openCodeSearch(); return; }
+    const view = viewOfModule(id);
+    if (view) this.openView(view);
+  }
   private gitActivity = new GitActivity();
   get activity() { return this.gitActivity.activity; }
   set activity(value: Activity[]) { this.gitActivity.activity = value; }
@@ -192,6 +206,8 @@ class AppState {
     const view = this.view;
     return view.kind === 'item' ? this.set.items.find(item => item.id === view.itemId) : undefined;
   });
+  /** Settings, code search and module pages have nothing for the details panel to describe. */
+  get detailsAvailable() { return this.view.kind !== 'settings' && this.view.kind !== 'codeSearch' && this.view.kind !== 'module'; }
   paletteOpen = $state(false);
   get query() { return this.activeTab?.query ?? ''; }
   set query(value: string) { if (this.activeTab) this.activeTab.query = value; }
@@ -264,6 +280,7 @@ class AppState {
     await listen<Activity>('git-activity', event => this.mergeActivity(event.payload));
     await this.refreshActivity();
     this.ready = true;
+    this.#restoreModule();
     if (!this.sources.length) this.openView({ kind: 'settings' });
     await Promise.all(this.sources.map(s => this.loadRepos(s, false)));
     if (benchmarkEnabled) {
@@ -273,6 +290,14 @@ class AppState {
       this.comparisons[comparisonId] = new CompareState();
       this.openView({ kind: 'compare', comparisonId, left: plan.left, right: plan.right });
     }
+  }
+
+  /** Tabs are not saved, so a saved module with a page opens that page again; Search starts from Sets. */
+  #restoreModule() {
+    const shell = this.ws.shell;
+    if (shell.section === 'search' || !isModuleVisible(shell.section, this.sources)) shell.section = 'sets';
+    const view = viewOfModule(shell.section);
+    if (view && shell.section !== 'sets') this.openView(view);
   }
 
   toast(msg: string, kind: NoticeKind = 'info', action?: NoticeAction, options: NoticeOptions = {}) {
@@ -311,8 +336,10 @@ class AppState {
   activateTab(id: string) {
     const tab = this.tabs.find(tab => tab.id === id);
     if (!tab) return;
-    if (this.ws.sets.some(set => set.id === tab.setId) || this.temporary.find(tab.setId)) this.ws.activeSet = tab.setId;
+    if (tab.view.kind !== 'module' && (this.ws.sets.some(set => set.id === tab.setId) || this.temporary.find(tab.setId))) this.ws.activeSet = tab.setId;
     this.activeTabId = id;
+    const module = moduleOfView(tab.view);
+    if (module && this.ready) this.ws.shell.section = module;
   }
 
   cycleTab(direction: number) {
@@ -366,6 +393,7 @@ class AppState {
       case 'compare': return view.readOnly ? 'Compare (read-only)' : 'Compare';
       case 'setCompare': return `Compare ${set?.name ?? 'Set'}`;
       case 'fileDiff': return view.path.split('/').at(-1) ?? 'File diff';
+      case 'module': return moduleById(view.module).label;
       case 'settings': return 'Settings';
     }
   }

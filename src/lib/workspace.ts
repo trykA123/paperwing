@@ -1,4 +1,5 @@
-import type { CompareEndpoint, PlatformInfo, Workspace } from './api';
+import type { CompareEndpoint, PlatformInfo, RailSection, Workspace } from './api';
+import { isSection } from './modules';
 
 export type View =
   | { kind: 'set' }
@@ -9,6 +10,7 @@ export type View =
   | { kind: 'compare'; comparisonId: string; left: CompareEndpoint; right: CompareEndpoint; readOnly?: boolean }
   | { kind: 'setCompare'; comparisonId: string }
   | { kind: 'fileDiff'; comparisonId: string; fileId: string; path: string; sessionId: string; generation: number }
+  | { kind: 'module'; module: RailSection }
   | { kind: 'settings' };
 export type ShellTab = { id: string; setId: string; view: View; query: string; page: number; filter: string };
 
@@ -22,6 +24,7 @@ export function tabId(view: View, setId: string): string {
     case 'compare': return `compare:${view.comparisonId}`;
     case 'setCompare': return `setCompare:${view.comparisonId}`;
     case 'fileDiff': return `fileDiff:${view.comparisonId}:${view.fileId}`;
+    case 'module': return `module:${view.module}`;
     case 'settings': return 'settings';
   }
 }
@@ -51,7 +54,7 @@ export function migrateWorkspace(saved: Partial<Workspace> | null, platform: Pla
   }
   ws.cols = { ...defaults.cols, ...ws.cols };
   ws.shell = { ...defaults.shell, ...ws.shell };
-  if (!['sets', 'compare', 'recovery', 'activity'].includes(ws.shell.section)) ws.shell.section = 'sets';
+  if (!isSection(ws.shell.section)) ws.shell.section = 'sets';
   ws.shell.sidebarWidth = Math.round(Math.max(190, Math.min(360, ws.shell.sidebarWidth)));
   return ws;
 }

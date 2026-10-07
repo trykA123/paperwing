@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { moduleById } from '../lib/modules';
   import { app } from '../lib/state.svelte';
   import ActivityPanel from './panel/ActivityPanel.svelte';
   import ComparePanel from './panel/ComparePanel.svelte';
+  import PlaceholderPanel from './panel/PlaceholderPanel.svelte';
   import RecoveryEntry from './panel/RecoveryEntry.svelte';
   import Sidebar from './Sidebar.svelte';
 
@@ -23,7 +25,7 @@
   }
 </script>
 
-<aside class="side" aria-label="{app.ws.shell.section} panel">
+<aside class="side" aria-label="{moduleById(app.ws.shell.section).label} panel">
   <button class="side-resize" aria-label="Resize panel" title="Drag to resize; double-click to reset" onpointerdown={resize}
     ondblclick={() => (app.ws.shell.sidebarWidth = 250)} onkeydown={event => {
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -34,5 +36,6 @@
   {#if app.ws.shell.section === 'compare'}<ComparePanel />
   {:else if app.ws.shell.section === 'recovery'}<RecoveryEntry />
   {:else if app.ws.shell.section === 'activity'}<ActivityPanel />
-  {:else}<Sidebar />{/if}
+  {:else if app.ws.shell.section === 'sets'}<Sidebar />
+  {:else}<PlaceholderPanel module={app.ws.shell.section} />{/if}
 </aside>

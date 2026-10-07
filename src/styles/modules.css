@@ -1,0 +1,24 @@
+/* module rail separator and module pages */
+.rail-sep {
+    flex: none;
+    width: 24px;
+    height: 1px;
+    margin: var(--sp-1) 0;
+    background: var(--line);
+}
+
+.module-empty {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    padding: var(--sp-5);
+    color: var(--dim);
+    text-align: center;
+}
+
+.module-empty p {
+    max-width: 56ch;
+    margin: 0;
+}
