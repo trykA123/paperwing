@@ -59,7 +59,7 @@ export type SourceKind = 'github' | 'ghe' | 'manual';
 export type OnExisting = 'fetch' | 'skip' | 'reclone';
 export type PageSize = 10 | 25 | 50 | 'all';
 
-export type Source = { id: string; name: string; kind: SourceKind; host: string; orgs: string[]; urls: string[]; credentialManaged?: boolean };
+export type Source = { id: string; name: string; kind: SourceKind; host: string; orgs: string[]; urls: string[]; credentialManaged?: boolean; enabled?: boolean };
 export type Repo = {
   id: string; source: string; org: string; name: string; description: string;
   url: string; defaultBranch: string; pushedAt: string; archived: boolean;

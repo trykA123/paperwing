@@ -89,11 +89,11 @@ pub struct RefsResult {
     error: Option<String>,
 }
 
-fn failed_refs(url: String, error: String) -> RefsResult {
+pub(crate) fn failed_refs(url: String, error: String) -> RefsResult {
     RefsResult { url, branches: vec![], tags: vec![], branch_labels: vec![], tag_labels: vec![], branch_shas: vec![], tag_shas: vec![], error: Some(error) }
 }
 
-pub(super) async fn get_refs_many(urls: Vec<String>) -> Vec<RefsResult> {
+pub(crate) async fn get_refs_many(urls: Vec<String>) -> Vec<RefsResult> {
     let names = urls.clone();
     crate::ordered::map_bounded(
         urls,

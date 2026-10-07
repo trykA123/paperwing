@@ -1,3 +1,4 @@
+use crate::kernel::events::CoreEvent;
 #[path = "batch.rs"]
 mod batch;
 pub(crate) use batch::BatchReader;
@@ -9,7 +10,7 @@ use tokio::sync::Semaphore;
 use std::collections::VecDeque;
 use std::sync::{Mutex, OnceLock, atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering}};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinSet;
 
@@ -135,7 +136,7 @@ fn publish(activity: &Activity) {
     }
     drop(entries);
     if let Some(app) = APPLICATION.get() {
-        let _ = app.emit("git-activity", activity);
+        let _ = crate::events::publish_payload(app, CoreEvent::GitActivity, activity);
     }
 }
 

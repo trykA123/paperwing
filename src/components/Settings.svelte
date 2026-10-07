@@ -157,7 +157,7 @@
       app.sources = sources;
       draft = null;
       app.toast(`Saved ${s.name}, loading repositories…`, 'success');
-      await app.loadRepos(s, true);
+      if (s.enabled !== false) await app.loadRepos(s, true);
     } catch (e) { msg = { ok: false, text: String(e), where: 'form' }; }
     finally { busy = ''; }
   }
@@ -169,6 +169,27 @@
       if (isNew && draft && tokenAttempted) await app.credentials.mutate(draft.id);
       draft = null;
     } catch (e) { msg = { ok: false, text: `Could not remove the new source token. ${String(e)}`, where: 'form' }; }
+    finally { busy = ''; }
+  }
+
+  async function toggleProvider(s: Source, event: MouseEvent) {
+    event.preventDefault();
+    if (busy) return;
+    busy = 'form';
+    const enabled = s.enabled === false;
+    const updated = { ...$state.snapshot(s), enabled };
+    const sources = app.sources.map(source => source.id === s.id ? updated : $state.snapshot(source));
+    try {
+      await app.saveSettings({ sources, workspace: $state.snapshot(app.ws) });
+      app.sources = sources;
+      if (enabled) await app.loadRepos(updated, true);
+      else {
+        app.repos[s.id] = [];
+        app.repoErrors[s.id] = [];
+        delete app.staleRepos[s.id];
+      }
+      app.toast(`${s.name} ${enabled ? 'enabled' : 'disabled'}.`, 'success');
+    } catch (error) { app.toast(String(error), 'error'); }
     finally { busy = ''; }
   }
 
@@ -230,8 +251,12 @@
             {#if s.kind !== 'manual' && app.credentials.statuses[s.id]?.reason}<p class="hint">{app.credentials.statuses[s.id].reason} <button class="link" onclick={() => app.credentials.refresh(s.id)}>Check again</button></p>{/if}
             {#if app.repoErrors[s.id]?.length}<div class="err" style="font-size:var(--fs-sm);margin-top:4px">{app.repoErrors[s.id].join(' · ')}</div>{/if}
           </div>
+          <label class="btn">Enabled
+            <input type="checkbox" role="switch" aria-label={`${s.name} enabled`} checked={s.enabled !== false}
+              disabled={!!busy} onclick={(event) => toggleProvider(s, event)} />
+          </label>
           {#if s.kind !== 'manual'}
-            <button class="btn" disabled={!!busy || app.loadingRepos[s.id]} onclick={() => app.loadRepos(s, true)}><Icon name="refresh" /> Refresh</button>
+            <button class="btn" disabled={!!busy || s.enabled === false || app.loadingRepos[s.id]} onclick={() => app.loadRepos(s, true)}><Icon name="refresh" /> Refresh</button>
           {/if}
           <button class="btn" disabled={!!busy} onclick={() => edit(s)}>Edit</button>
           <button class="btn icon-only" disabled={!!busy} title="Remove" onclick={() => remove(s)}><Icon name="trash" /></button>

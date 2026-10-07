@@ -27,8 +27,14 @@ pub(super) fn remember(store: &Store, request: &Request, list: &[Commit]) {
         fetched_at: cache::now(),
         commits: list.to_vec(),
     };
+    let admission = store.clone();
     crate::credentials::if_current(&request.source.id, request.revision, || {
-        store.post(move |connection| commits::put(connection, &set));
+        store.post(move |connection| {
+            if crate::store::providers::disabled_sources(&admission)?.contains(&set.source_id) {
+                return Ok(());
+            }
+            commits::put(connection, &set)
+        });
     });
 }
 

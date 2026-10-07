@@ -23,7 +23,7 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use timings::collect as timings;
 
@@ -101,9 +101,10 @@ pub async fn diagnostics_preview(
     let denylist = leak::Denylist::from_settings(&settings, &paths);
     let progress_app = app.clone();
     let progress = Arc::new(move |completed, total| {
-        let _ = progress_app.emit(
-            "diagnostics-progress",
-            Progress {
+        let _ = crate::events::publish_payload(
+            &progress_app,
+            crate::kernel::events::CoreEvent::DiagnosticsProgress,
+            &Progress {
                 phase: "scale",
                 completed,
                 total,

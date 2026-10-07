@@ -17,7 +17,7 @@ fn common_windows_layout_exports_a_complete_document_with_exact_ram() {
             host: "github.example".into(),
             orgs: Vec::new(),
             urls: Vec::new(),
-            credential_managed: false,
+            enabled: true, credential_managed: false,
         }],
         workspace: serde_json::json!({
             "root": home,
@@ -97,7 +97,7 @@ async fn fixture_document_hides_set_repo_owner_and_path_strings() {
             host: "enterprise-secret.example".into(),
             orgs: vec!["account-secret".into()],
             urls: vec!["https://configured-owner.example/ConfiguredOwner/private-repo.git".into()],
-            credential_managed: false,
+            enabled: true, credential_managed: false,
         }],
         workspace: serde_json::json!({
             "root": workspace,

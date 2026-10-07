@@ -75,6 +75,7 @@ impl<'a> Http<'a> {
         token: impl std::future::Future<Output = Result<Option<String>, String>>,
         revision: impl Fn() -> u64,
     ) -> Result<Self, (u16, String)> {
+        crate::providers::ensure_enabled(connection.source).map_err(|reason| (0, reason))?;
         if revision() != connection.expected {
             return Err(changed());
         }
@@ -104,6 +105,7 @@ impl<'a> Http<'a> {
     }
 
     fn check_revision(&self) -> Result<(), (u16, String)> {
+        crate::providers::ensure_enabled(self.source).map_err(|reason| (0, reason))?;
         if crate::credentials::revision(&self.source.id) != self.revision {
             return Err(changed());
         }
@@ -147,15 +149,16 @@ impl Http<'_> {
         body: Option<serde_json::Value>,
     ) -> Result<reqwest::Response, Error> {
         let request = self.build_request(method, path, body)?;
-        self.dispatch_request(request, |request| async {
+        let lease = crate::providers::acquire(self.source, &self.api_host, None).map_err(Error::Message)?;
+        lease.run(self.dispatch_request(request, |request| async {
             let response = self
                 .client
                 .execute(request)
                 .await
                 .map_err(|_| self.connection_error())?;
             Ok((response.status().as_u16(), response))
-        })
-        .await
+        }))
+        .await.map_err(|error| Error::Message(error.to_string()))?
     }
 
     fn connection_error(&self) -> Error {

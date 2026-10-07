@@ -351,3 +351,23 @@ async fn bound_token_mismatch_stops_the_counting_transport() {
     assert_eq!(error, (0, "This token was saved for saved.invalid. Save a token for new.invalid first.".into()));
     assert_eq!(sends.get(), 0);
 }
+
+#[tokio::test]
+async fn disabled_source_never_acquires_credentials_or_reaches_the_counting_transport() {
+    let source: Source = serde_json::from_value(serde_json::json!({"id":"disabled-http-fixture","name":"admin","kind":"ghe","host":"enterprise.invalid","enabled":false})).unwrap();
+    let sends = std::cell::Cell::new(0);
+    let connection = Http::with_token(
+        Connection { source: &source, base: api_base(&source.host).unwrap(), host: &source.host, expected: 0 },
+        async { panic!("disabled provider must not acquire credentials") },
+        || 0,
+    ).await;
+    match connection {
+        Err((_, reason)) => assert!(reason.contains("disabled")),
+        Ok(http) => {
+            let request = http.build_request(Method::GET, "/user", None).unwrap();
+            http.dispatch_request(request, |_| async { sends.set(sends.get() + 1); Ok((200, ())) }).await.unwrap();
+            panic!("disabled provider must fail before dispatch");
+        }
+    }
+    assert_eq!(sends.get(), 0);
+}

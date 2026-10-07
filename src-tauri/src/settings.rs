@@ -22,7 +22,12 @@ pub struct Source {
     pub urls: Vec<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub credential_managed: bool,
+    #[serde(default = "enabled_by_default", skip_serializing_if = "is_true")]
+    pub enabled: bool,
 }
+
+fn enabled_by_default() -> bool { true }
+fn is_true(value: &bool) -> bool { *value }
 
 fn is_false(value: &bool) -> bool { !value }
 
@@ -134,6 +139,9 @@ fn save_settings<R: tauri::Runtime>(app: AppHandle<R>, settings: Settings) -> Re
 fn configure_sources<R: tauri::Runtime>(app: &AppHandle<R>, sources: &[Source], notify: bool) {
     crate::credentials::configure_sources(app, sources, notify);
     crate::git::configure_sources(redaction_sources(sources));
+    if let Some(runtime) = app.try_state::<crate::providers::Runtime>() {
+        if let Err(error) = runtime.configure(sources) { eprintln!("Provider configuration failed: {error}"); }
+    }
 }
 
 #[derive(Default)]
@@ -274,3 +282,6 @@ mod startup_tests;
 #[cfg(all(test, not(feature = "test-profile")))]
 #[cfg(not(windows))]
 mod retry_tests;
+
+#[cfg(all(test, not(windows), not(feature = "test-profile")))]
+mod provider_tests;

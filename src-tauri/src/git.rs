@@ -10,7 +10,7 @@ pub(crate) use runner::TEST_RUNNER_LOCK;
 #[cfg(test)]
 use runner::{ExitObserver, NEXT_ID, Observer, drain, execute_inner};
 
-mod remote_refs;
+pub(crate) mod remote_refs;
 pub use remote_refs::RefsResult;
 #[cfg(test)]
 use remote_refs::{ls_remote, natural_cmp};
@@ -44,7 +44,7 @@ pub async fn repository_tree(path: String) -> Result<RepositoryTree, String> {
 
 #[tauri::command]
 pub async fn get_refs_many(urls: Vec<String>) -> Vec<RefsResult> {
-    remote_refs::get_refs_many(urls).await
+    crate::providers::refs(urls).await
 }
 
 #[tauri::command]
