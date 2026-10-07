@@ -165,6 +165,7 @@ async fn tree_lists_gitlinks_declared_in_gitmodules_with_urls() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[cfg_attr(windows, ignore = "'*' is not a valid Windows path")]
 async fn gitmodules_glob_paths_match_only_the_literal_index_path() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
     let root = crate::test_support::tmp_root()
