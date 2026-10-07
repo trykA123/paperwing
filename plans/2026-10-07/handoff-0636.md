@@ -2,6 +2,17 @@
 
 Read this first, then `plans/README.md`. The overnight running log is `plans/2026-10-06/handoff-main.md`. The alt session (claude-alt, paperwing-c9) cannot see this session in ListAgents: talk through `plans/2026-10-06/parallel-claims.md`.
 
+## OWNER INSTRUCTION (2026-10-07, ~06:45): merge everything and produce a new build
+The owner said: "tell him to merge the remaining work into main so a new build will emerge."
+1. When each running fix finishes, verify the diff, rerun the gates outside the Codex sandbox and run the reviewer. Then merge into main:
+   - packet 42: `crew/api-builder-k5ts0`, base 5fad9ce
+   - packet 33: `crew/api-builder-k0exg`, base 0c38db7, which includes the tags UI
+   - packet 17: `crew/api-builder-j6wme`
+   Merge 42 and 33 first and 17 last. 17 and 42 both touch `git/runner.rs`.
+2. Run the full gates on main: `bun run --bun check`, `bun test src/lib`, `bun run --bun build`, `bun scripts/testing/css-order.ts`, and `cd src-tauri && cargo test --offline` (SKEIN_TEST_TMP absolute, no `..`). Also run `cargo test --offline --features diagnostics`.
+3. Push main to origin. The owner asked for a new build, and this is that authorization. CI builds the `skein-windows-nsis` and `skein-windows-diag-nsis` artifacts. Check the run, then give the owner the run link and both artifact names.
+4. If a fix fails review twice, or blocks for long, do not hold the build. Merge what is green, push, and leave the rest on its branch with a note.
+
 ## Owner decisions this session
 - Anonymous diagnostics export for Windows test builds (packet 41).
 - Proactive UI, backend and architecture improvements are allowed. New visual directions go behind a picker Artifact first.
@@ -29,7 +40,7 @@ Read this first, then `plans/README.md`. The overnight running log is `plans/202
 
 ## Waiting on the owner
 1. Pick a shell direction from round 2, when the alt session publishes it.
-2. Allow pushing main to origin. CI then builds `skein-windows-nsis` and `skein-windows-diag-nsis`. The auto-mode classifier blocked the CI check after the last push, so nothing has been pushed since e71de6c.
+2. Push allowed by the owner for the new build (see the owner instruction above).
 3. Packet 40 order: right after the speed work?
 4. Packet 27: snapshots in SQLite, fine?
 
