@@ -232,3 +232,38 @@ async fn large_lines_and_late_nul_bytes_preserve_git_results() {
         assert_eq!(actual.2[0].truncated, expected.2[0].truncated);
     }
 }
+
+#[tokio::test]
+async fn unicode_case_words_and_regex_ignore_the_process_locale() {
+    let _guard = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("builtin-unicode-locales");
+    let path = repo(
+        &fixture,
+        "a",
+        &[("Ș.txt", "ș\nȘ\nșș\nșx\nxș\néș\nșé\n(ș)\n😀Ș\n".as_bytes())],
+    );
+    struct Locale;
+    impl Drop for Locale {
+        fn drop(&mut self) {
+            *crate::git::CTYPE_OVERRIDE.lock().unwrap() = None;
+        }
+    }
+    let _restore = Locale;
+    for locale in ["C", "C.UTF-8", "skein-unavailable-locale"] {
+        *crate::git::CTYPE_OVERRIDE.lock().unwrap() = Some(locale.into());
+        for (pattern, mode) in [("ș", Mode::Fixed), ("[ș]", Mode::Basic)] {
+            let mut query = request(&[&path], pattern);
+            query.mode = mode;
+            query.ignore_case = true;
+            query.whole_word = true;
+            let result = run(query, Engine::BuiltIn, Arc::default()).await;
+            assert_eq!(result.0.failed, 0);
+            assert_eq!(
+                result.1.iter().map(|hit| hit.line).collect::<Vec<_>>(),
+                [1, 2, 8, 9],
+                "{locale}, {mode:?}"
+            );
+            assert_eq!(result.1[3].column, 3);
+        }
+    }
+}
