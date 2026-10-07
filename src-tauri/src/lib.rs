@@ -159,6 +159,7 @@ pub fn run() {
             github::get_commits,
             github::pulls::pull_for_branch,
             github::pulls::open_pull_request,
+            github::releases::create_github_release,
             git::get_refs_many,
             git::activity_snapshot,
             git::clear_activity,

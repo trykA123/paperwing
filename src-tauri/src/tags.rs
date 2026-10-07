@@ -83,7 +83,7 @@ fn valid_object_id(value: &str) -> bool {
     crate::object_id::valid(value)
 }
 
-async fn validate_name(path: &str, name: &str) -> Result<(), String> {
+pub(crate) async fn validate_name(path: &str, name: &str) -> Result<(), String> {
     valid_ref(name).map_err(|_| "Invalid tag name".to_string())?;
     if name.eq_ignore_ascii_case("head") {
         return Err("Invalid tag name".into());
@@ -114,7 +114,7 @@ async fn validate_remote(path: &str, remote: &str) -> Result<(), String> {
     Ok(())
 }
 
-async fn tag_object(path: &str, name: &str) -> Result<Option<String>, String> {
+pub(crate) async fn tag_object(path: &str, name: &str) -> Result<Option<String>, String> {
     let full = format!("refs/tags/{name}");
     let found = quick(
         path,
@@ -307,15 +307,21 @@ pub async fn delete_remote_tag(
     path: String,
     remote: String,
     name: String,
+    expected: Option<String>,
 ) -> Result<PushedTag, String> {
     valid_root(&path)?;
     idle_check()?;
     validate_name(&path, &name).await?;
     validate_remote(&path, &remote).await?;
+    let expected = expected.ok_or("Expected tag object required")?;
+    if !valid_object_id(&expected) {
+        return Err("Invalid expected tag object".into());
+    }
     let reference = format!("refs/tags/{name}");
+    let lease = format!("--force-with-lease={reference}:{expected}");
     run(
         &path,
-        &["push", &remote, "--delete", &reference],
+        &["push", &lease, &remote, "--delete", &reference],
         &format!("Delete remote tag: {path}"),
         &[0],
         OutputPolicy::Text,

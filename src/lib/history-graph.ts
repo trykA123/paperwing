@@ -1,4 +1,4 @@
-import type { HistoryCommit, RepositoryHistory } from './api';
+import type { HistoryCommit, RepositoryHistory, TagInfo } from './api';
 
 export const ROW_HEIGHT = 32;
 export const RAIL_X = { local: 14, origin: 34 } as const;
@@ -7,7 +7,7 @@ export const GRAPH_WIDTH = 48;
 export type RailName = keyof typeof RAIL_X;
 export type RowKind = 'uncommitted' | 'local' | 'origin' | 'base' | 'below' | 'more';
 export type GraphRow = {
-  id: string; kind: RowKind; rail: RailName; x: number; y: number; commit: HistoryCommit | null; label: string; tag: string | null; count: number;
+  id: string; kind: RowKind; rail: RailName; x: number; y: number; commit: HistoryCommit | null; label: string; tag: string | null; tags: string[]; count: number;
 };
 export type RailPath = { id: string; rail: RailName; d: string };
 export type GraphLayout = { rows: GraphRow[]; paths: RailPath[]; height: number; width: number };
@@ -15,27 +15,34 @@ export type GraphLayout = { rows: GraphRow[]; paths: RailPath[]; height: number;
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 const centre = (index: number) => index * ROW_HEIGHT + ROW_HEIGHT / 2;
 
-function commitRows(kind: RowKind, rail: RailName, commits: readonly HistoryCommit[], firstTag: string | null): Omit<GraphRow, 'y'>[] {
+function commitRows(kind: RowKind, rail: RailName, commits: readonly HistoryCommit[], firstTag: string | null, byCommit: ReadonlyMap<string, string[]>): Omit<GraphRow, 'y'>[] {
   return commits.map((commit, index) => ({
-    id: `${kind}:${commit.sha}`, kind, rail, x: RAIL_X[rail], commit, label: commit.subject, tag: index === 0 ? firstTag : null, count: 0,
+    id: `${kind}:${commit.sha}`, kind, rail, x: RAIL_X[rail], commit, label: commit.subject, tag: index === 0 ? firstTag : null, tags: byCommit.get(commit.sha) ?? [], count: 0,
   }));
 }
 
 function moreRow(rail: RailName, hidden: number, noun: string): Omit<GraphRow, 'y'>[] {
   if (hidden <= 0) return [];
-  return [{ id: `more:${rail}`, kind: 'more', rail, x: RAIL_X[rail], commit: null, label: `${plural(hidden, noun)} not shown`, tag: null, count: hidden }];
+  return [{ id: `more:${rail}`, kind: 'more', rail, x: RAIL_X[rail], commit: null, label: `${plural(hidden, noun)} not shown`, tag: null, tags: [], count: hidden }];
 }
 
-function buildRows(history: RepositoryHistory): GraphRow[] {
+/** Tag names by the full id of the commit they point at. */
+export function tagsByCommit(tags: readonly TagInfo[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const tag of tags) map.set(tag.commit, [...(map.get(tag.commit) ?? []), tag.name]);
+  return map;
+}
+
+function buildRows(history: RepositoryHistory, byCommit: ReadonlyMap<string, string[]>): GraphRow[] {
   const localTag = history.kind === 'tracking' ? 'local' : 'HEAD';
   const loose: Omit<GraphRow, 'y'>[] = [];
   if (history.uncommitted > 0) {
-    loose.push({ id: 'uncommitted', kind: 'uncommitted', rail: 'local', x: RAIL_X.local, commit: null, label: plural(history.uncommitted, 'uncommitted file'), tag: 'working tree', count: history.uncommitted });
+    loose.push({ id: 'uncommitted', kind: 'uncommitted', rail: 'local', x: RAIL_X.local, commit: null, label: plural(history.uncommitted, 'uncommitted file'), tag: 'working tree', tags: [], count: history.uncommitted });
   }
-  loose.push(...commitRows('local', 'local', history.local, localTag), ...moreRow('local', history.localTotal - history.local.length, 'local commit'));
-  loose.push(...commitRows('origin', 'origin', history.origin, 'origin'), ...moreRow('origin', history.originTotal - history.origin.length, 'origin commit'));
-  if (history.base) loose.push(...commitRows('base', 'local', [history.base], 'shared base'));
-  loose.push(...commitRows('below', 'local', history.below, null));
+  loose.push(...commitRows('local', 'local', history.local, localTag, byCommit), ...moreRow('local', history.localTotal - history.local.length, 'local commit'));
+  loose.push(...commitRows('origin', 'origin', history.origin, 'origin', byCommit), ...moreRow('origin', history.originTotal - history.origin.length, 'origin commit'));
+  if (history.base) loose.push(...commitRows('base', 'local', [history.base], 'shared base', byCommit));
+  loose.push(...commitRows('below', 'local', history.below, null, byCommit));
   return loose.map((row, index) => ({ ...row, y: centre(index) }));
 }
 
@@ -59,8 +66,8 @@ function railPaths(rows: readonly GraphRow[]): RailPath[] {
   return paths;
 }
 
-export function layoutHistory(history: RepositoryHistory): GraphLayout {
-  const rows = buildRows(history);
+export function layoutHistory(history: RepositoryHistory, tags: readonly TagInfo[] = []): GraphLayout {
+  const rows = buildRows(history, tagsByCommit(tags));
   return { rows, paths: railPaths(rows), height: rows.length * ROW_HEIGHT, width: GRAPH_WIDTH };
 }
 

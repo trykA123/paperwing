@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { canLoadMore, describeHistory, formatCommitDate, hasSharedBase, layoutHistory, nextRowIndex, ringLabel, ringRadius, ROW_HEIGHT } from './history-graph.ts';
+import { canLoadMore, describeHistory, formatCommitDate, hasSharedBase, layoutHistory, nextRowIndex, tagsByCommit, ringLabel, ringRadius, ROW_HEIGHT } from './history-graph.ts';
 
 const commit = (name) => ({ sha: `${name}`.padEnd(40, '0'), short: `${name}`.padEnd(8, '0').slice(0, 8), subject: `commit ${name}`, author: 'Test User', date: '2026-10-06T07:30:00+03:00' });
 const history = (patch = {}) => ({
@@ -89,4 +89,18 @@ test('arrow, home and end keys move the active row within bounds', () => {
   expect(nextRowIndex('End', 0, 3)).toBe(2);
   expect(nextRowIndex('Enter', 0, 3)).toBeNull();
   expect(nextRowIndex('ArrowDown', 0, 0)).toBeNull();
+});
+
+test('tags sit on the rows of the commits they point at, on every rail', () => {
+  const l1 = commit('l1'), o1 = commit('o1');
+  const tags = [
+    { name: 'v1', commit: l1.sha, object: 'x', annotated: false, subject: null },
+    { name: 'v1-rc', commit: l1.sha, object: 'y', annotated: true, subject: 'rc' },
+    { name: 'v0', commit: o1.sha, object: 'z', annotated: false, subject: null },
+    { name: 'elsewhere', commit: 'f'.repeat(40), object: 'w', annotated: false, subject: null },
+  ];
+  const layout = layoutHistory(history({ local: [l1], localTotal: 1, origin: [o1], originTotal: 1 }), tags);
+  expect(layout.rows.map((row) => row.tags)).toEqual([['v1', 'v1-rc'], ['v0'], []]);
+  expect(layoutHistory(history()).rows[0].tags).toEqual([]);
+  expect([...tagsByCommit(tags).keys()].length).toBe(3);
 });

@@ -12,7 +12,6 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 | [06](packets/06-windows-write-boundaries.md) | Split `files.rs` on Windows, no behaviour change | M |
 | [03b](packets/03b-rail-context-menus.md) | Activity rail panels and context menus | M |
 | [28](packets/28-pull-requests.md) | Pull request column, open dialog, bulk open | M |
-| [33](packets/33-tags.md) | Tags UI, set-wide tagging, GitHub release | M |
 | [29](packets/29-discard-partial-staging.md) | Discard changes and partial staging (backend first) | M |
 | [30](packets/30-auto-refresh.md) | File watcher refresh (timed fetch waits for 19) | M |
 | [24](packets/24-native-artifacts.md) | Native acceptance and honest docs (packaging done) | M |

@@ -96,7 +96,7 @@ async fn measure_repository_tree_on_large_repo() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(2_000);
-    let root = std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap())
+    let root = crate::test_support::tmp_root()
         .join(format!("big-tree-{files}-{branches}"));
     if !root.join(".git").exists() {
         big_repo(&root, files, branches);
@@ -119,7 +119,7 @@ async fn measure_repository_tree_on_large_repo() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn tree_with_many_tracked_files_still_lists_remote_branches() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
-    let root = std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap())
+    let root = crate::test_support::tmp_root()
         .join("big-tree-test-150000");
     let _ = std::fs::remove_dir_all(&root);
     big_repo(&root, 150_000, 3);
@@ -133,7 +133,7 @@ async fn tree_with_many_tracked_files_still_lists_remote_branches() {
 async fn tree_lists_gitlinks_declared_in_gitmodules_with_urls() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
     let root =
-        std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap()).join("tree-gitlinks");
+        crate::test_support::tmp_root().join("tree-gitlinks");
     let _ = std::fs::remove_dir_all(&root);
     big_repo(&root, 5, 1);
     let sha = "1111111111111111111111111111111111111111";
@@ -165,9 +165,10 @@ async fn tree_lists_gitlinks_declared_in_gitmodules_with_urls() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[cfg_attr(windows, ignore = "'*' is not a valid Windows path")]
 async fn gitmodules_glob_paths_match_only_the_literal_index_path() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
-    let root = std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap())
+    let root = crate::test_support::tmp_root()
         .join("tree-literal-path");
     let _ = std::fs::remove_dir_all(&root);
     big_repo(&root, 5, 1);
@@ -196,7 +197,7 @@ async fn gitmodules_glob_paths_match_only_the_literal_index_path() {
 async fn long_gitmodules_path_lists_are_chunked_and_merged() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
     let root =
-        std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap()).join("tree-path-chunks");
+        crate::test_support::tmp_root().join("tree-path-chunks");
     let _ = std::fs::remove_dir_all(&root);
     big_repo(&root, 0, 1);
     let paths: Vec<String> = (0..300)
@@ -229,7 +230,7 @@ async fn long_gitmodules_path_lists_are_chunked_and_merged() {
 async fn broken_optional_parts_keep_branches_and_report_a_warning() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
     let root =
-        std::path::PathBuf::from(std::env::var("SKEIN_TEST_TMP").unwrap()).join("tree-warning");
+        crate::test_support::tmp_root().join("tree-warning");
     let _ = std::fs::remove_dir_all(&root);
     big_repo(&root, 5, 2);
     std::fs::write(root.join(".gitmodules"), vec![b'#'; 300 * 1024]).unwrap();

@@ -14,7 +14,7 @@ use serde_json::Value;
 
 const PAGE_LIMIT: usize = 20;
 
-pub(super) trait Transport {
+pub(in crate::github) trait Transport {
     async fn send(
         &self,
         method: Method,

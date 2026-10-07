@@ -6,6 +6,7 @@
   import { pullFlow, pullKey } from '../../lib/pull-flow.svelte';
   import { openPull, pulls } from '../../lib/pulls.svelte';
   import { stashFlow } from '../../lib/stash-flow.svelte';
+  import { tagFlow } from '../../lib/tag-flow.svelte';
   import { app } from '../../lib/state.svelte';
   import { disabledReason, type MenuFacts, type Need } from '../../lib/menu-reason';
   import Icon from '../Icon.svelte';
@@ -35,6 +36,7 @@
   });
   const stashWhy = $derived(disabledReason(['cloned', 'dirty'], facts));
   const switchWhy = $derived(disabledReason(['managed', 'cloned', 'offRef'], facts) ?? (item.ref.type === 'branch' ? null : 'Only a branch can be switched to with a stash'));
+  const tagWhy = $derived(disabledReason(['cloned'], facts));
   const known = $derived.by(() => { const key = pullKey(item); const entry = key ? pulls.entry(key) : undefined; return entry?.status === 'ready' ? entry.pull : null; });
   const live = $derived(known && (known.state === 'open' || known.state === 'draft') ? known : null);
   const pullWhy = $derived(disabledReason(['cloned', 'branch'], facts) ?? (live ? `Pull request #${live.number} is already open` : null));
@@ -76,6 +78,8 @@
   {/each}
   <button role="menuitem" disabled={!!stashWhy} title={stashWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openPush([item], opener), true)}><Icon name="stash" tone="record" />Stash changes…</button>
   <button role="menuitem" disabled={!!switchWhy} title={switchWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openSwitch([item], opener), true)}><Icon name="stash" tone="record" />Switch with stash…</button>
+  <button role="menuitem" disabled={!!tagWhy} title={tagWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => tagFlow.openCreate([item], opener), true)}><Icon name="tag" tone="tag" />New tag…</button>
+  <button role="menuitem" disabled={!!tagWhy} title={tagWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => tagFlow.openDelete([item], opener), true)}><Icon name="tag" tone="tag" />Delete tag…</button>
   <button role="menuitem" disabled={!!pullWhy} title={pullWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => pullFlow.openFor(item, opener), true)}><Icon name="branch" tone="sync" />Open pull request…</button>
   {#if live}<button role="menuitem" data-tip-side="left" onclick={() => choose(() => void openPull(live.url))}><Icon name="remote" tone="inspect" />View pull request #{live.number}</button>{/if}
   <hr />
