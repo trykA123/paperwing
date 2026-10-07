@@ -197,3 +197,15 @@ fn a_saved_token_is_redacted_by_safe_before_any_git_call_and_old_secrets_stay() 
     let text = super::super::safe("a synthetic-new-secret b synthetic-old-secret c");
     assert_eq!(text, "a [redacted] b [redacted] c");
 }
+
+#[test]
+fn a_read_that_started_before_a_token_change_cannot_drop_the_new_token() {
+    use super::super::redaction::{remember_secrets, secret_key};
+    let ids = vec!["interleave-source".to_string()];
+    let key = secret_key(&ids);
+    crate::git::remember_secret("synthetic-interleave-new");
+    crate::credentials::advance_revision("interleave-source", || ());
+    remember_secrets(key, &["synthetic-interleave-old".to_string()]);
+    let text = super::super::safe("synthetic-interleave-new synthetic-interleave-old");
+    assert_eq!(text, "[redacted] [redacted]");
+}

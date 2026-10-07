@@ -16,7 +16,17 @@ pub(super) fn cached_secrets(key: &SecretKey) -> Option<Vec<String>> {
 }
 
 pub(super) fn remember_secrets(key: SecretKey, secrets: &[String]) {
-    *SECRET_CACHE.lock().unwrap() = Some((key, secrets.to_vec()));
+    let ids: Vec<String> = key.iter().map(|(id, _)| id.clone()).collect();
+    let mut cache = SECRET_CACHE.lock().unwrap();
+    if secret_key(&ids) == key {
+        *cache = Some((key, secrets.to_vec()));
+        return;
+    }
+    let (cached_key, merged) = cache.get_or_insert_with(|| (Vec::new(), Vec::new()));
+    *cached_key = key;
+    for secret in secrets {
+        if !merged.contains(secret) { merged.push(secret.clone()); }
+    }
 }
 
 pub(crate) fn remember_secret(secret: &str) {
