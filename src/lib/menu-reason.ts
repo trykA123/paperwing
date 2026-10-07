@@ -1,8 +1,8 @@
-export type Need = 'cloned' | 'managed' | 'behind' | 'unpushed' | 'offRef' | 'dirty';
+export type Need = 'cloned' | 'managed' | 'behind' | 'unpushed' | 'offRef' | 'dirty' | 'branch';
 
 export type MenuFacts = {
   ready: boolean; cloned: boolean; inPlace: boolean; idle: boolean; preparing: boolean;
-  behind: number; ahead: number; dirty: number; onRef: boolean;
+  behind: number; ahead: number; dirty: number; onRef: boolean; hasBranch: boolean;
 };
 
 /** Why a menu item is disabled, from what is true of the row; the first failing fact wins. */
@@ -16,5 +16,6 @@ export function disabledReason(needs: readonly Need[], facts: MenuFacts): string
   if (needs.includes('unpushed') && facts.ahead <= 0) return 'Nothing to push';
   if (needs.includes('offRef') && facts.onRef) return 'Already on the set’s branch';
   if (needs.includes('dirty') && facts.dirty <= 0) return 'No uncommitted changes';
+  if (needs.includes('branch') && !facts.hasBranch) return 'Not on a branch';
   return null;
 }

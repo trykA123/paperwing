@@ -3,6 +3,8 @@
   import type { SetItem } from '../../lib/api';
   import { commands, execute } from '../../lib/commands';
   import { needsClone, openHistory } from '../../lib/row-actions';
+  import { pullFlow, pullKey } from '../../lib/pull-flow.svelte';
+  import { openPull, pulls } from '../../lib/pulls.svelte';
   import { stashFlow } from '../../lib/stash-flow.svelte';
   import { app } from '../../lib/state.svelte';
   import { disabledReason, type MenuFacts, type Need } from '../../lib/menu-reason';
@@ -28,11 +30,14 @@
     const local = app.local[app.dest(item)];
     return {
       ready: app.ready, cloned, inPlace: !!item.path, idle: !gitBusy, preparing: app.clonePreparing,
-      behind: local?.behind ?? 0, ahead: local?.ahead ?? 0, dirty: local?.dirty ?? 0, onRef: app.onRef(item),
+      behind: local?.behind ?? 0, ahead: local?.ahead ?? 0, dirty: local?.dirty ?? 0, onRef: app.onRef(item), hasBranch: !!local?.branch,
     };
   });
   const stashWhy = $derived(disabledReason(['cloned', 'dirty'], facts));
   const switchWhy = $derived(disabledReason(['managed', 'cloned', 'offRef'], facts) ?? (item.ref.type === 'branch' ? null : 'Only a branch can be switched to with a stash'));
+  const known = $derived.by(() => { const key = pullKey(item); const entry = key ? pulls.entry(key) : undefined; return entry?.status === 'ready' ? entry.pull : null; });
+  const live = $derived(known && (known.state === 'open' || known.state === 'draft') ? known : null);
+  const pullWhy = $derived(disabledReason(['cloned', 'branch'], facts) ?? (live ? `Pull request #${live.number} is already open` : null));
   const why = (needs: Need[], fallback?: string | null) => disabledReason(needs, facts) ?? fallback ?? 'Not available right now';
   let menu: HTMLDivElement;
 
@@ -71,6 +76,8 @@
   {/each}
   <button role="menuitem" disabled={!!stashWhy} title={stashWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openPush([item], opener), true)}><Icon name="stash" tone="record" />Stash changes…</button>
   <button role="menuitem" disabled={!!switchWhy} title={switchWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => stashFlow.openSwitch([item], opener), true)}><Icon name="stash" tone="record" />Switch with stash…</button>
+  <button role="menuitem" disabled={!!pullWhy} title={pullWhy ?? undefined} data-tip-side="left" onclick={() => choose(() => pullFlow.openFor(item, opener), true)}><Icon name="branch" tone="sync" />Open pull request…</button>
+  {#if live}<button role="menuitem" data-tip-side="left" onclick={() => choose(() => void openPull(live.url))}><Icon name="remote" tone="inspect" />View pull request #{live.number}</button>{/if}
   <hr />
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => onrename(item.id), true)}>Rename folder</button>
   <button role="menuitem" disabled={!!item.path} title={disabledReason(['managed'], facts) ?? undefined} data-tip-side="left" onclick={() => choose(() => app.duplicateItem(item.id))}><Icon name="copy" />Duplicate into another folder</button>
