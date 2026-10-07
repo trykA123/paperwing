@@ -11,6 +11,7 @@
 <script lang="ts">
   import type { RowModel } from '../../lib/formation-row';
   import Icon, { type IconName, type IconTone } from '../Icon.svelte';
+  import PullCell from '../pulls/PullCell.svelte';
   import SyncRails from './SyncRails.svelte';
 
   let { row, editing, active, rowIndex, handlers }: { row: RowModel; editing: boolean; active: boolean; rowIndex: number; handlers: RowHandlers } = $props();
@@ -68,6 +69,7 @@
       {/if}
     {/if}
   </div>
+  <div class="fm-cell fm-pull" role="gridcell"><PullCell target={row.pull} /></div>
   <div class="fm-cell fm-syncc" role="gridcell"><SyncRails view={row.sync} /></div>
   <div class="fm-cell fm-next" role="gridcell">
     {#if row.busy}

@@ -22,7 +22,7 @@ export function pathFacts(path: string): MenuFacts {
   const local = app.local[path];
   return {
     ready: app.ready, cloned: !!local?.repo, inPlace: false, idle: !(app.running || app.gitBusy), preparing: app.clonePreparing,
-    behind: local?.behind ?? 0, ahead: local?.ahead ?? 0, dirty: local?.dirty ?? 0, onRef: true,
+    behind: local?.behind ?? 0, ahead: local?.ahead ?? 0, dirty: local?.dirty ?? 0, onRef: true, hasBranch: !!local?.branch,
   };
 }
 

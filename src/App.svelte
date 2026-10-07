@@ -35,6 +35,9 @@
   import SidePanel from './components/SidePanel.svelte';
   import StashPushDialog from './components/stash/StashPushDialog.svelte';
   import StashSwitchDialog from './components/stash/StashSwitchDialog.svelte';
+  import BulkPullDialog from './components/pulls/BulkPullDialog.svelte';
+  import OpenPullDialog from './components/pulls/OpenPullDialog.svelte';
+  import { pullFlow } from './lib/pull-flow.svelte';
   import { stashFlow } from './lib/stash-flow.svelte';
   import { RAIL_SECTIONS, railShortcut } from './lib/rail';
 
@@ -198,6 +201,7 @@
 {#if app.gitDialog?.kind === 'commit'}<CommitDialog request={app.gitDialog} />{:else if app.gitDialog?.kind === 'branch'}<BranchDialog request={app.gitDialog} />{/if}
 {#if app.cleanupDialog}<BranchCleanup request={app.cleanupDialog} />{/if}
 {#if stashFlow.dialog?.kind === 'push'}<StashPushDialog targets={stashFlow.dialog.targets} />{:else if stashFlow.dialog?.kind === 'switch'}<StashSwitchDialog targets={stashFlow.dialog.targets} />{/if}
+{#if pullFlow.dialog?.kind === 'open'}<OpenPullDialog item={pullFlow.dialog.item} />{:else if pullFlow.dialog?.kind === 'bulk'}<BulkPullDialog items={pullFlow.dialog.items} />{/if}
 {#if $confirmQueue.length}{#key $confirmQueue[0]}<ConfirmDialog request={$confirmQueue[0]} />{/key}{/if}
 <Notifications />
 <Tooltip />

@@ -7,6 +7,8 @@
   import { describeRow } from '../lib/formation-row';
   import { plural } from '../lib/plural';
   import { pushTarget, rowFacts, runNextAction } from '../lib/row-actions';
+  import { pullFlow, pullable, pullKey } from '../lib/pull-flow.svelte';
+  import { pulls } from '../lib/pulls.svelte';
   import { stashFlow, switchable } from '../lib/stash-flow.svelte';
   import VirtualList from './VirtualList.svelte';
   import Pager from './Pager.svelte';
@@ -51,6 +53,8 @@
   const targets = $derived(bulkTargets(selected, rowFacts));
   const dirty = $derived(targets.cloned.filter(item => (app.local[app.dest(item)]?.dirty ?? 0) > 0));
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing);
+
+  $effect(() => { pulls.pin(selected.flatMap(item => pullKey(item) ?? [])); });
 
   $effect(() => {
     app.ws.activeSet;
@@ -203,6 +207,7 @@
     commit: () => { if (dirty[0]) app.openGitDialog('commit', dirty[0]); },
     stash: () => stashFlow.openPush(dirty, moreButton()),
     switchStash: () => stashFlow.openSwitch(selected, moreButton()),
+    pulls: () => pullFlow.openBulk(selected, moreButton()),
     clear: () => app.setAllOn(false),
   };
 </script>
@@ -219,7 +224,9 @@
           <div class="fm-row fm-head" role="row">
             <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && rows.some(item => item.on)}
               onchange={e => { for (const item of rows) item.on = e.currentTarget.checked; }} aria-label="Select all repositories on this page" /></label></div>
-            <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div><div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
+            <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div>
+            <div class="fm-cell fm-pull-head" role="columnheader"><span>Pull request</span><button class="fm-menu-btn" aria-label="Refresh pull request status" title="Check pull requests again for the rows shown and selected" onclick={() => pulls.refresh()}><Icon name="refresh" size={12} /></button></div>
+            <div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
           </div>
         {/snippet}
         {#snippet empty()}
@@ -243,7 +250,7 @@
     {/key}
     {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} {density} ondensity={value => (app.ws.density = value)} />{/if}
   </div>
-  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} stashSwitch={switchable(selected).length} busy={gitBusy} {checking} handlers={bulk} />
+  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} stashSwitch={switchable(selected).length} pullable={pullable(selected).length} busy={gitBusy} {checking} handlers={bulk} />
 </div>
 
 {#if picker}
