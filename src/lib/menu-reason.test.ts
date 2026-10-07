@@ -2,7 +2,7 @@ const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
 import { disabledReason, type MenuFacts } from './menu-reason';
 
-const ok: MenuFacts = { ready: true, cloned: true, inPlace: false, idle: true, preparing: false, behind: 2, ahead: 1, dirty: 3, onRef: false };
+const ok: MenuFacts = { ready: true, cloned: true, inPlace: false, idle: true, preparing: false, behind: 2, ahead: 1, dirty: 3, onRef: false, hasBranch: true };
 
 describe('disabledReason', () => {
   test('returns null when every need is met', () => {
@@ -25,6 +25,7 @@ describe('disabledReason', () => {
     expect(disabledReason(['unpushed'], { ...ok, ahead: 0 })).toBe('Nothing to push');
     expect(disabledReason(['offRef'], { ...ok, onRef: true })).toBe('Already on the set’s branch');
     expect(disabledReason(['dirty'], { ...ok, dirty: 0 })).toBe('No uncommitted changes');
+    expect(disabledReason(['branch'], { ...ok, hasBranch: false })).toBe('Not on a branch');
   });
   test('an action with no needs is never disabled by row facts', () => {
     expect(disabledReason([], { ...ok, cloned: false, inPlace: true })).toBeNull();

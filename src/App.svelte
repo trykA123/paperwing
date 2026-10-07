@@ -37,6 +37,9 @@
   import StashSwitchDialog from './components/stash/StashSwitchDialog.svelte';
   import TagDeleteDialog from './components/tags/TagDeleteDialog.svelte';
   import TagDialog from './components/tags/TagDialog.svelte';
+  import BulkPullDialog from './components/pulls/BulkPullDialog.svelte';
+  import OpenPullDialog from './components/pulls/OpenPullDialog.svelte';
+  import { pullFlow } from './lib/pull-flow.svelte';
   import { stashFlow } from './lib/stash-flow.svelte';
   import { tagFlow } from './lib/tag-flow.svelte';
   import { RAIL_SECTIONS, railShortcut } from './lib/rail';
@@ -202,6 +205,7 @@
 {#if app.cleanupDialog}<BranchCleanup request={app.cleanupDialog} />{/if}
 {#if stashFlow.dialog?.kind === 'push'}<StashPushDialog targets={stashFlow.dialog.targets} />{:else if stashFlow.dialog?.kind === 'switch'}<StashSwitchDialog targets={stashFlow.dialog.targets} />{/if}
 {#if tagFlow.dialog?.kind === 'create'}<TagDialog targets={tagFlow.dialog.targets} />{:else if tagFlow.dialog?.kind === 'delete'}<TagDeleteDialog targets={tagFlow.dialog.targets} tag={tagFlow.dialog.tag} />{/if}
+{#if pullFlow.dialog?.kind === 'open'}<OpenPullDialog item={pullFlow.dialog.item} />{:else if pullFlow.dialog?.kind === 'bulk'}<BulkPullDialog items={pullFlow.dialog.items} />{/if}
 {#if $confirmQueue.length}{#key $confirmQueue[0]}<ConfirmDialog request={$confirmQueue[0]} />{/key}{/if}
 <Notifications />
 <Tooltip />

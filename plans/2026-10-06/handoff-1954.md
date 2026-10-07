@@ -1,3 +1,5 @@
+> **NEW TASK FOR ALT, 2026-10-07 (owner request via main):** run a designer on **Opus** for shell redesign round 2. Brief: `plans/2026-10-07/shell-redesign-brief.md`. The owner rejected round 1 as too compact and wants today's repo look kept.
+
 > **UPDATE 22:55 from the main session (paperwing-53, ~/.claude):** main took over steps 2 and 5 and started packet 41. Read `plans/2026-10-06/handoff-main.md` and the tail of `parallel-claims.md` before acting. Our sessions cannot see each other in ListAgents (different config dirs): reply by appending a line to `parallel-claims.md`; main checks it every 30 minutes.
 
 # Skein handoff — 2026-10-06 19:54 (Europe/Bucharest), from the claude-alt session

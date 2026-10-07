@@ -1,7 +1,7 @@
 <script lang="ts" module>
   export type BulkHandlers = {
     fetch: () => void; pull: () => void; push: () => void; switch: () => void; ref: (anchor: HTMLElement) => void;
-    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; stash: () => void; switchStash: () => void; tag: () => void; deleteTag: () => void; clear: () => void;
+    check: () => void; branch: () => void; cleanup: () => void; commit: () => void; stash: () => void; switchStash: () => void; tag: () => void; deleteTag: () => void; pulls: () => void; clear: () => void;
   };
 </script>
 
@@ -10,8 +10,8 @@
   import type { SetItem } from '../../lib/api';
   import Icon from '../Icon.svelte';
 
-  let { count, targets, dirty, busy, checking, refEligible, stashSwitch, handlers }: {
-    count: number; refEligible: number; stashSwitch: number; targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
+  let { count, targets, dirty, busy, checking, refEligible, stashSwitch, pullable, handlers }: {
+    count: number; refEligible: number; stashSwitch: number; pullable: number; targets: BulkTargets<SetItem>; dirty: number; busy: boolean; checking: boolean; handlers: BulkHandlers;
   } = $props();
 
   let open = $state(false);
@@ -72,6 +72,9 @@
           {#if checking}<span class="spin"></span>{:else}<Icon name="search" />{/if}Check which refs exist
         </button>
         <button role="menuitem" disabled={busy || !targets.cloned.length} title={targets.cloned.length ? undefined : reason('Clone the selected repositories first')} onclick={() => run(handlers.branch)}><Icon name="plus" />New branch…</button>
+        <button role="menuitem" disabled={busy || !pullable} title={pullable ? 'Open a pull request from each selected branch' : reason('No selected repository is on a branch')} onclick={() => run(handlers.pulls)}>
+          <Icon name="branch" />Open pull requests…{#if pullable}<small>{pullable}</small>{/if}
+        </button>
         <button role="menuitem" disabled={busy || !targets.cloned.length} title={targets.cloned.length ? undefined : reason('Clone the selected repositories first')} onclick={() => run(handlers.cleanup)}><Icon name="trash" />Clean up merged branches…</button>
         <button role="menuitem" disabled={busy || !dirty} title={dirty ? undefined : reason('No selected repository has changes')} onclick={() => run(handlers.commit)}>
           <Icon name="check" />Commit changes…{#if dirty > 1}<small>{dirty}</small>{/if}

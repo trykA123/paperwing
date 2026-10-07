@@ -7,6 +7,8 @@
   import { describeRow } from '../lib/formation-row';
   import { plural } from '../lib/plural';
   import { pushTarget, rowFacts, runNextAction } from '../lib/row-actions';
+  import { pullFlow, pullable, pullKey } from '../lib/pull-flow.svelte';
+  import { pulls } from '../lib/pulls.svelte';
   import { stashFlow, switchable } from '../lib/stash-flow.svelte';
   import { tagFlow } from '../lib/tag-flow.svelte';
   import VirtualList from './VirtualList.svelte';
@@ -20,7 +22,6 @@
   import BulkBar from './set/BulkBar.svelte';
   import RowMenu from './set/RowMenu.svelte';
 
-  const COMPACT_ABOVE = 100;
   const tab = untrack(() => app.activeTab);
   const isFilter = (value: string | undefined): value is FormationFilter => FILTERS.some(filter => filter.id === value);
   let page = $state(tab?.page ?? 0);
@@ -43,8 +44,7 @@
   const pages = $derived(size === 'all' ? 1 : Math.max(1, Math.ceil(shown.length / size)));
   const cur = $derived(Math.min(page, pages - 1));
   const rows = $derived(size === 'all' ? shown : shown.slice(cur * size, cur * size + size));
-  const autoDensity = $derived.by(() => { void set.id; return untrack(() => items.length) > COMPACT_ABOVE ? 'compact' : 'comfortable'; });
-  const density = $derived(app.ws.density ?? autoDensity);
+  const density = $derived(app.ws.density ?? 'comfortable');
   const activeRow = $derived(rows.find(item => item.id === activeId) ?? rows[0]);
   const selected = $derived(app.selected);
   const allOn = $derived(rows.length > 0 && rows.every(item => item.on));
@@ -52,6 +52,8 @@
   const targets = $derived(bulkTargets(selected, rowFacts));
   const dirty = $derived(targets.cloned.filter(item => (app.local[app.dest(item)]?.dirty ?? 0) > 0));
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing);
+
+  $effect(() => { pulls.pin(selected.flatMap(item => pullKey(item) ?? [])); });
 
   $effect(() => {
     app.ws.activeSet;
@@ -206,6 +208,7 @@
     switchStash: () => stashFlow.openSwitch(selected, moreButton()),
     tag: () => tagFlow.openCreate(targets.cloned, moreButton()),
     deleteTag: () => tagFlow.openDelete(targets.cloned, moreButton()),
+    pulls: () => pullFlow.openBulk(selected, moreButton()),
     clear: () => app.setAllOn(false),
   };
 </script>
@@ -213,6 +216,8 @@
 <SetHeader extend={offer ? { count: offer, run: () => { for (const item of shown) item.on = true; } } : null} />
 
 <FilterChips {counts} value={filter} onchange={setFilter} />
+
+<p class="sr-only" role="status" aria-live="polite">{pulls.limit ? pulls.limit.message : pulls.loading ? 'Loading pull requests' : ''}</p>
 
 <div class="fm-wrap">
   <div class="card fill repository-table fm-table" class:compact={density === 'compact'} class:running={app.running || app.clonePreparing}>
@@ -222,7 +227,9 @@
           <div class="fm-row fm-head" role="row">
             <div class="fm-cell fm-check" role="columnheader"><label class="fm-hit"><input type="checkbox" checked={allOn} indeterminate={!allOn && rows.some(item => item.on)}
               onchange={e => { for (const item of rows) item.on = e.currentTarget.checked; }} aria-label="Select all repositories on this page" /></label></div>
-            <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div><div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
+            <div class="fm-cell" role="columnheader">Repository</div><div class="fm-cell" role="columnheader">Branch</div>
+            <div class="fm-cell fm-pull-head" role="columnheader"><span>Pull request</span><button class="fm-menu-btn" aria-label="Refresh pull request status" title="Check pull requests again for the rows shown and selected" onclick={() => pulls.refresh()}><Icon name="refresh" size={12} /></button></div>
+            <div class="fm-cell" role="columnheader">Sync</div><div class="fm-cell" role="columnheader">Next action</div><div class="fm-cell" role="columnheader"><span class="sr-only">Actions</span></div>
           </div>
         {/snippet}
         {#snippet empty()}
@@ -246,7 +253,7 @@
     {/key}
     {#if shown.length}<Pager total={shown.length} bind:page bind:size={app.ws.pageSize} {density} ondensity={value => (app.ws.density = value)} />{/if}
   </div>
-  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} stashSwitch={switchable(selected).length} busy={gitBusy} {checking} handlers={bulk} />
+  <BulkBar count={selected.length} refEligible={selected.filter(item => !item.path).length} {targets} dirty={dirty.length} stashSwitch={switchable(selected).length} pullable={pullable(selected).length} busy={gitBusy} {checking} handlers={bulk} />
 </div>
 
 {#if picker}

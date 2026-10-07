@@ -7,7 +7,7 @@
     --bar-chip: oklch(33% 0.02 117);
     --bar-line: oklch(38% 0.017 117);
     --bar-focus: oklch(80% 0.1 248);
-    --fm-cols: 40px minmax(140px, 1.4fr) minmax(130px, 1fr) minmax(150px, 1.1fr) minmax(120px, 164px) 36px;
+    --fm-cols: 40px minmax(140px, 1.4fr) minmax(130px, 1fr) minmax(190px, 1.3fr) minmax(150px, 1.1fr) minmax(120px, 164px) 36px;
 }
 
 /* activity rail */
@@ -301,6 +301,7 @@
 }
 
 .fm-row {
+    position: relative;
     display: grid;
     grid-template-columns: var(--fm-cols);
     align-items: center;
