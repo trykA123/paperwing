@@ -42,3 +42,18 @@ async fn one_call_starts_exactly_one_git_child() {
     assert_eq!(output.code, Some(0));
     assert_eq!(lines(&log), 1);
 }
+
+#[tokio::test]
+async fn safe_redacts_without_reading_the_keyring() {
+    let _runner = TEST_RUNNER_LOCK.lock().await;
+    let fixture = CredentialFixture::new(std::collections::BTreeMap::from([(
+        "safe-owner".to_string(),
+        Ok(Some("synthetic-safe-token".to_string())),
+    )]));
+    buffered(&["--version"], "safe-warm", &[0]).await.unwrap();
+    drop(fixture);
+    configure_sources(vec!["safe-owner".into()]);
+    let _held = crate::credentials::hold_slot();
+    assert_eq!(super::super::safe("a synthetic-safe-token b"), "a [redacted] b");
+    configure_sources(Vec::new());
+}

@@ -16,7 +16,7 @@ use tauri::{AppHandle};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinSet;
 
-use super::{redact, redaction::Redaction};
+use super::{redact, redaction::{cached_secrets, remember_secrets, secret_key, Redaction}};
 
 #[cfg(target_os = "linux")]
 #[path = "linux_job.rs"]
@@ -82,10 +82,6 @@ async fn read_secret(source_id: String) -> Result<Option<String>, String> {
     crate::credentials::read(source_id).await
 }
 
-type SecretKey = Vec<(String, u64)>;
-
-static SECRET_CACHE: Mutex<Option<(SecretKey, Vec<String>)>> = Mutex::new(None);
-
 #[cfg(test)]
 pub(crate) static SECRET_READS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
@@ -94,10 +90,8 @@ async fn redaction_secrets(
     cancellation: &Option<Arc<AtomicBool>>,
     owner: &Option<Arc<AtomicBool>>,
 ) -> Result<(Vec<String>, bool), String> {
-    let key: SecretKey = ids.iter().map(|id| (id.clone(), crate::credentials::revision(id))).collect();
-    if let Some((cached, secrets)) = SECRET_CACHE.lock().unwrap().as_ref() {
-        if *cached == key { return Ok((secrets.clone(), false)); }
-    }
+    let key = secret_key(&ids);
+    if let Some(secrets) = cached_secrets(&key) { return Ok((secrets, false)); }
     let mut secrets = Vec::new();
     for source_id in ids {
         if is_cancelled(cancellation, owner) { return Err("Git command cancelled".into()); }
@@ -107,23 +101,12 @@ async fn redaction_secrets(
             Err(_) => return Ok((Vec::new(), true)),
         }
     }
-    *SECRET_CACHE.lock().unwrap() = Some((key, secrets.clone()));
+    remember_secrets(key, &secrets);
     Ok((secrets, false))
 }
 
-pub(super) fn configured_secrets() -> Result<Vec<String>, String> {
-    let ids = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
-    let mut secrets = Vec::new();
-    for id in ids {
-        #[cfg(test)]
-        let token = fixture_secret(&id).unwrap_or_else(|| crate::settings::get_token(&id));
-        #[cfg(not(test))]
-        let token = crate::settings::get_token(&id);
-        if let Some(token) = token? {
-            if !token.is_empty() { secrets.push(token); }
-        }
-    }
-    Ok(secrets)
+pub(super) fn configured_sources() -> Vec<String> {
+    SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone()
 }
 
 fn publish(activity: &Activity) {
@@ -462,8 +445,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     drop(queue);
     #[cfg(feature = "benchmark")]
     let _process = crate::benchmark::Span::new("git.process", operation);
-    let ids = SOURCES.get_or_init(|| Mutex::new(Vec::new())).lock().unwrap().clone();
-    let (secrets, quiet) = redaction_secrets(ids, &cancellation, &owner).await?;
+    let (secrets, quiet) = redaction_secrets(configured_sources(), &cancellation, &owner).await?;
     let redaction = if quiet { Redaction::Quiet } else { Redaction::Ready(secrets) };
     let observer = if quiet { None } else { observer };
     if is_cancelled(&cancellation, &owner) { return Err("Git command cancelled".into()); }

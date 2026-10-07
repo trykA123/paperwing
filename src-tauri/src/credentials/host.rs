@@ -312,6 +312,7 @@ mod regression_tests {
         let _credentials = crate::git::CredentialFixture::new(std::collections::BTreeMap::from([
             (source.id, token),
         ]));
+        crate::git::buffered(&["--version"], "legacy-redaction-warm", &[0]).await.unwrap();
         assert_eq!(crate::git::safe("fatal: rejected synthetic-legacy-secret"), "fatal: rejected [redacted]");
         assert!(!migrated);
         assert!(read_token("synthetic-legacy-secret".into(), "", Some("new.invalid"), |_| Ok(())).is_err());
@@ -354,10 +355,13 @@ mod direct_redaction_tests {
         let _raw =
             super::super::test_support::RawToken::new(&source.id, "synthetic-direct-legacy-secret");
         assert!(source.host.is_empty());
-        crate::git::configure_sources(vec![source.id.clone()]);
         let token = crate::credentials::get_token(&source.id);
+        let credentials = crate::git::CredentialFixture::new(std::collections::BTreeMap::from([
+            (source.id.clone(), token.clone()),
+        ]));
+        crate::git::buffered(&["--version"], "direct-redaction-warm", &[0]).await.unwrap();
         let output = crate::git::safe("fatal: rejected synthetic-direct-legacy-secret");
-        crate::git::configure_sources(Vec::new());
+        drop(credentials);
         assert_eq!(
             token.unwrap().as_deref(),
             Some("synthetic-direct-legacy-secret")

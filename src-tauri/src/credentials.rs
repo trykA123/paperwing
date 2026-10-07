@@ -102,6 +102,11 @@ fn admit() -> Result<OwnedSemaphorePermit, String> {
         .map_err(|_| "The credential store is busy. Retry when the current operation finishes.".into())
 }
 
+#[cfg(test)]
+pub(crate) fn hold_slot() -> OwnedSemaphorePermit {
+    admit().expect("credential slot is free")
+}
+
 async fn admit_async() -> Result<OwnedSemaphorePermit, String> {
     let _waiting = WAITERS.get_or_init(|| Arc::new(Semaphore::new(32))).clone().try_acquire_owned()
         .map_err(|_| "The credential store is busy. Retry when the current operation finishes.".to_string())?;

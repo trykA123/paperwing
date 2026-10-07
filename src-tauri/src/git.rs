@@ -4,7 +4,7 @@ pub(crate) use runner::BatchReader;
 mod runner;
 pub use runner::{Activity, Captured, ClearedActivity, OutputPolicy, Request, attach, buffered, configure_sources, execute, execute_cancellable, execute_cancellable_input, execute_streaming, filesystem_gate, StdoutSink};
 pub type ActivityOutput = runner::ActivityOutput;
-use runner::configured_secrets;
+use runner::configured_sources;
 #[cfg(test)]
 pub(crate) use runner::TEST_RUNNER_LOCK;
 #[cfg(test)]
