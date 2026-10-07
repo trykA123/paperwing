@@ -109,7 +109,7 @@ struct Context {
 
 #[derive(Clone)]
 struct Job {
-    rust_counts: bool,
+    rust_counts: Option<count_eligibility::EolMode>,
     count_root: Option<PathBuf>,
     readers: Arc<Mutex<Vec<git::BatchReader>>>,
     context: String,
@@ -667,7 +667,6 @@ async fn close_readers(readers: &Mutex<Vec<git::BatchReader>>) {
 
 #[derive(Default)]
 struct Fetch {
-    diff_config: Arc<tokio::sync::OnceCell<Vec<String>>>,
     epoch: u64,
     problem: Option<Problem>,
 }
@@ -675,9 +674,12 @@ struct Fetch {
 #[cfg(all(test, target_os = "linux"))]
 type WriteRootHook = Arc<dyn Fn() + Send + Sync>;
 
+type DiffConfigurations = HashMap<PathBuf, Arc<tokio::sync::OnceCell<Vec<String>>>>;
+
 pub struct Service {
     sessions: std::sync::Mutex<HashMap<String, Session>>,
     fetches: Mutex<HashMap<PathBuf, Arc<Mutex<Fetch>>>>,
+    diff_configs: std::sync::Mutex<DiffConfigurations>,
     slots: Semaphore,
     #[cfg(target_os = "linux")]
     diff: std::sync::OnceLock<Arc<crate::linux_diff::Storage>>,
@@ -700,6 +702,7 @@ impl Default for Service {
         Self {
             sessions: std::sync::Mutex::new(HashMap::new()),
             fetches: Mutex::new(HashMap::new()),
+            diff_configs: std::sync::Mutex::new(HashMap::new()),
             slots: Semaphore::new(4),
             #[cfg(target_os = "linux")]
             diff: std::sync::OnceLock::new(),
@@ -733,12 +736,20 @@ impl Service {
         self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    async fn reset_configuration(&self, contexts: &[Context]) -> Result<(), Problem> {
-        if let Some(counts) = self.counts.get() { counts.reset().await; }
-        for context in contexts {
-            self.fetch_state(&context.root).await?.lock().await.diff_config = Arc::default();
+    fn diff_configs(&self) -> std::sync::MutexGuard<'_, DiffConfigurations> {
+        self.diff_configs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn reset_configuration(&self, contexts: &[Context]) {
+        if let Some(counts) = self.counts.get() {
+            counts.reset();
         }
-        Ok(())
+        let mut configs = self.diff_configs();
+        for context in contexts {
+            configs.remove(&context.root);
+        }
     }
 
     #[cfg(target_os = "linux")]
@@ -767,7 +778,6 @@ impl Service {
     ) -> Result<Opened, Problem> {
         let left = bind(settings, left).map_err(|problem| problem.side("left"))?;
         let right = bind(settings, right).map_err(|problem| problem.side("right"))?;
-        self.reset_configuration(&[left.clone(), right.clone()]).await?;
         let mut sessions = self.sessions();
         if sessions.len() >= 16 {
             return Err(Problem::new(
@@ -775,6 +785,7 @@ impl Service {
                 "Close a comparison before opening another",
             ));
         }
+        self.reset_configuration(&[left.clone(), right.clone()]);
         let id = format!("comparison-{}", NEXT.fetch_add(1, Ordering::Relaxed));
         sessions.insert(
             id.clone(),
@@ -900,8 +911,9 @@ impl Service {
             fallback = count_eligibility::Eligibility::new(job.count_root.clone().ok_or_else(|| Problem::new("unavailable", "Count storage unavailable"))?);
             &fallback
         } else { eligibility.as_ref() };
-        count_job.rust_counts = eligibility.allows(&left_context.root, job).await?
-            && eligibility.allows(&right_context.root, job).await?;
+        let left_counts = eligibility.configuration(&left_context.root, job).await?;
+        let right_counts = eligibility.configuration(&right_context.root, job).await?;
+        count_job.rust_counts = left_counts.filter(|mode| Some(*mode) == right_counts);
         let job = &count_job;
         let contexts = [&left_context, &right_context];
         let roots = [&left_safe.path, &right_safe.path];
@@ -913,8 +925,14 @@ impl Service {
             states.push(state);
         }
         let mut diff_configs = Vec::new();
-        for (index, context) in contexts.iter().enumerate() {
-            let config = job.lock(&states[index]).await?.diff_config.clone();
+        for context in contexts {
+            let config = {
+                let mut configs = self.diff_configs();
+                if configs.len() >= 32 {
+                    configs.retain(|_, config| Arc::strong_count(config) > 1);
+                }
+                configs.entry(context.root.clone()).or_default().clone()
+            };
             let values = config.get_or_try_init(|| async {
                 let result = job.run(&context.root, &["config", "--get-regexp", "^diff\\.(algorithm|renamelimit)$"], &[0, 1]).await?;
                 let mut values = Vec::new();
@@ -1336,7 +1354,7 @@ impl Service {
                 [session.left.clone(), session.right.clone()],
                 session.generation,
                 Job {
-                rust_counts: false,
+                    rust_counts: None,
                     count_root: self.counts.get().and_then(|counts| counts.storage.clone()),
                     readers: session.readers.clone(),
                     context: format!("compare:{id}"),
@@ -1352,7 +1370,7 @@ impl Service {
             )
         };
         close_readers(&previous).await;
-        self.reset_configuration(&contexts).await?;
+        self.reset_configuration(&contexts);
         let _permit = job.slot(&self.slots).await?;
         let result = self.prepare(id, generation, contexts, options, &job).await;
         if result.is_err() {
@@ -1464,7 +1482,7 @@ impl Service {
         Ok((
             prepared,
             Job {
-                rust_counts: false,
+                rust_counts: None,
                 count_root: self.counts.get().and_then(|counts| counts.storage.clone()),
                 readers: session.readers.clone(),
                 context: format!("compare:{id}"),
@@ -1509,7 +1527,7 @@ pub async fn registered_write_root(settings: &crate::settings::Settings, root: &
                 registration::confined_destination(&context.workspace_root, root)?;
                 if root.exists() && crate::platform::same_destination(&context.root, root)? {
                     let job = Job {
-                        rust_counts: false,
+                        rust_counts: None,
                         count_root: None,
                         readers: Arc::default(),
                         context: "Recovery authorization".into(), cancel: Arc::new(AtomicBool::new(false)),
@@ -1735,7 +1753,7 @@ pub(crate) struct NativeDiffTest {
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) async fn native_diff_counts(input: NativeDiffTest) -> Result<serde_json::Value, String> {
     let job=Job{
-        rust_counts: false,
+        rust_counts: None,
         count_root: None,
         readers: Arc::default(),
         context:"native-diff-control".into(),cancel:input.cancel,diff:Some(input.storage),roots:input.roots,temporary_root:None,inventory_started:None};

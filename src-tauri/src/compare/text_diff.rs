@@ -103,7 +103,7 @@ pub(super) async fn line_counts(left: &[u8], right: &[u8], job: &Job) -> Result<
     if binary(left) || binary(right) {
         return Ok(None);
     }
-    if job.rust_counts {
+    if job.rust_counts.is_some() {
         let (left_owned, right_owned, count_job) = (left.to_vec(), right.to_vec(), job.clone());
         if let Some(lines) = tokio::task::spawn_blocking(move || {
             super::line_counts::count(&left_owned, &right_owned, &count_job)

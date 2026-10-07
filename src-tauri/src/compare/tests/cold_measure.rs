@@ -41,6 +41,13 @@ async fn measure_cold_comparison() {
             CompareRef::Commit { sha: base.into() },
             CompareRef::WorkingTree,
         ],
+        "working-crlf" => {
+            roots = [root.join("checkouts/crlf"), root.join("checkouts/crlf")];
+            [
+                CompareRef::Commit { sha: base.into() },
+                CompareRef::WorkingTree,
+            ]
+        }
         _ => panic!("Unknown measurement workload"),
     };
     let fixture = Fixture::new().await;

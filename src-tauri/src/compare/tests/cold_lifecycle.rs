@@ -214,7 +214,12 @@ async fn cancellation_and_dropped_reader_owners_reap_git_without_extra_reads() {
 async fn rust_line_counts_match_git_for_simple_edits_and_fall_back_for_shared_middle_lines() {
     let _guard = git::TEST_RUNNER_LOCK.lock().await;
     let fixture = Fixture::new().await;
-    let job = fixture.job();
+    let mut job = fixture.job();
+    let eligibility = count_eligibility::Eligibility::new(job.count_root.clone().unwrap());
+    job.rust_counts = eligibility
+        .configuration(&fixture.0.join("repo"), &job)
+        .await
+        .unwrap();
     for (left, right) in [
         (b"".as_slice(), b"added\n".as_slice()),
         (b"left\n", b"right\nextra\n"),
@@ -223,7 +228,10 @@ async fn rust_line_counts_match_git_for_simple_edits_and_fall_back_for_shared_mi
         (b"\xef\xbb\xbffirst\r\n", b"\xef\xbb\xbffirst\n"),
         (b"a\nb\na\nc\n", b"b\na\nc\na\n"),
     ] {
-        if let Some(rust) = super::super::line_counts::count(left, right, &job).unwrap() {
+        if let Some(rust) = job
+            .rust_counts
+            .and_then(|_| super::super::line_counts::count(left, right, &job).unwrap())
+        {
             assert_eq!(Some(rust), legacy::counts(left, right, &job).await.unwrap());
         }
         assert_eq!(

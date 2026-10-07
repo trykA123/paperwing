@@ -140,10 +140,12 @@ and selected row. The backend still validates the session, generation, source an
 
 Rust counts cover disjoint LF edits when a cached `git check-attr -a` probe finds no
 applicable attributes for `left` and `right` in the private storage root. The probe
-uses the same `core.attributesFile=` override as the legacy no-index diff. CR-bearing
-inputs retain Git counts: `core.autocrlf=true` and `input` normalize CRLF even when
-check-attr reports no attributes. Eligibility and diff configuration reset on open
-and refresh, before materialization. Storage ancestors with `.gitattributes` keep
+uses the same `core.attributesFile=` override as the legacy no-index diff. It also
+reads effective `core.autocrlf` once from the storage working directory. Rust counts
+preserve CR bytes under `false`; `true` and `input` convert CRLF when there is no lone
+CR or NUL in the first 8000 bytes. Other CR-bearing inputs retain Git counts.
+Eligibility and diff configuration reset on accepted open and refresh, before
+materialization. Open never waits for a fetch. Storage ancestors with `.gitattributes` keep
 the Git fallback because attributes can target generated child directories.
 Batch readers have twelve independent permits;
 same-Git-directory endpoints share one reader. Readers release after 30 seconds idle
@@ -155,7 +157,10 @@ Long-path inventories retain name-status metadata at the existing capture limit.
 The ignored `compare::tests::cold_measure::measure_cold_comparison` test provides a
 backend-only before/after harness with the `benchmark` feature. It requires
 `SKEIN_COLD_ROOT`, `SKEIN_COLD_ENGINE` (`old` or `new`),
-`SKEIN_COLD_WORKLOAD` (`refs`, `cross` or `working`) and `SKEIN_COLD_RESULT`.
+`SKEIN_COLD_WORKLOAD` (`refs`, `cross`, `working` or `working-crlf`) and `SKEIN_COLD_RESULT`.
+The CRLF workload uses `checkouts/crlf`, with CRLF text and `core.autocrlf=true`.
+Set `GIT_CONFIG_GLOBAL` to an isolated configuration with `core.autocrlf=true` so
+the private storage also uses automatic conversion.
 `SKEIN_COLD_NORMALIZE_EOL=false` disables EOL normalization; it defaults to `true`.
 Use fixtures with `.skein-disposable` containing `skein-disposable-fixture-v1` and output paths inside the owned worktree. Capture process-tree
 RSS only between its `MEASURE_BEGIN` and `MEASURE_END` markers. These measurements

@@ -12,7 +12,11 @@ async fn autocrlf_storage_counts_match_git_with_and_without_normalized_eol() {
         fixture.commit("base").await;
         fixture.git(&["config", "core.autocrlf", "false"]).await;
         let mut job = fixture.job();
-        job.rust_counts = true;
+        let eligibility = count_eligibility::Eligibility::new(job.count_root.clone().unwrap());
+        job.rust_counts = eligibility
+            .configuration(&fixture.0.join("repo"), &job)
+            .await
+            .unwrap();
         for (left, right) in [
             (b"same\r\n".as_slice(), b"same\n".as_slice()),
             (b"same\r\nlast", b"same\nlast"),
@@ -41,9 +45,10 @@ async fn autocrlf_storage_counts_match_git_with_and_without_normalized_eol() {
         let storage = fixture.0.join("repo/count-storage");
         let eligibility = count_eligibility::Eligibility::new(storage);
         assert!(eligibility
-            .allows(&fixture.0.join("repo"), &job)
+            .configuration(&fixture.0.join("repo"), &job)
             .await
-            .unwrap());
+            .unwrap()
+            .is_some());
         return;
     }
     let fixture = Fixture::new().await;
@@ -119,10 +124,10 @@ async fn unrelated_source_attributes_do_not_disable_storage_counts() {
     let eligibility = count_eligibility::Eligibility::new(storage);
     let mut job = fixture.job();
     job.rust_counts = eligibility
-        .allows(&fixture.0.join("repo"), &job)
+        .configuration(&fixture.0.join("repo"), &job)
         .await
         .unwrap();
-    assert!(job.rust_counts);
+    assert!(job.rust_counts.is_some());
     let before = git::activity_snapshot().len();
     assert_eq!(
         line_counts(b"old\n", b"new\n", &job).await.unwrap(),
@@ -133,9 +138,10 @@ async fn unrelated_source_attributes_do_not_disable_storage_counts() {
     );
     assert_eq!(git::activity_snapshot().len(), before);
     assert!(eligibility
-        .allows(&fixture.0.join("repo"), &job)
+        .configuration(&fixture.0.join("repo"), &job)
         .await
-        .unwrap());
+        .unwrap()
+        .is_some());
     assert_eq!(git::activity_snapshot().len(), before);
 }
 
@@ -156,7 +162,7 @@ async fn attributes_for_materialized_child_paths_keep_the_git_fallback() {
     let eligibility = count_eligibility::Eligibility::new(storage);
     let mut job = fixture.job();
     job.rust_counts = eligibility
-        .allows(&fixture.0.join("repo"), &job)
+        .configuration(&fixture.0.join("repo"), &job)
         .await
         .unwrap();
     let expected = legacy::counts(b"old\n", b"new\n", &job).await.unwrap();
@@ -256,7 +262,7 @@ async fn opening_a_comparison_invalidates_storage_attribute_eligibility() {
     let counts = service.counts.get().unwrap();
     let job = fixture.job();
     let root = fixture.0.join("repo");
-    assert!(counts.allows(&root, &job).await.unwrap());
+    assert!(counts.configuration(&root, &job).await.unwrap().is_some());
     let storage = fixture.diff_data();
     std::fs::create_dir_all(&storage).unwrap();
     std::fs::write(storage.join(".gitattributes"), b"* -diff\n").unwrap();
@@ -268,9 +274,9 @@ async fn opening_a_comparison_invalidates_storage_attribute_eligibility() {
         )
         .await
         .unwrap();
-    let allowed = counts.allows(&root, &job).await.unwrap();
+    let allowed = counts.configuration(&root, &job).await.unwrap();
     service.close(&opened.id).await;
-    assert!(!allowed);
+    assert!(allowed.is_none());
 }
 
 #[tokio::test]

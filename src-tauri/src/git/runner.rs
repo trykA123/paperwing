@@ -401,7 +401,14 @@ impl Streams {
 }
 
 fn write_root(args: &[&str]) -> Option<std::path::PathBuf> {
-    let mut root = std::env::current_dir().ok()?;
+    write_root_from(args, std::env::current_dir())
+}
+
+fn write_root_from(
+    args: &[&str],
+    cwd: std::io::Result<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
+    let mut root = cwd.unwrap_or_default();
     let mut index = 0;
     while let Some(arg) = args.get(index) {
         match *arg {
@@ -665,5 +672,23 @@ impl Drop for CredentialFixture {
         let ids: Vec<String> = FIXTURE_SECRETS.lock().unwrap().take().map(|secrets| secrets.into_keys().collect()).unwrap_or_default();
         bump(&ids);
         configure_sources(self.sources.clone());
+    }
+}
+
+#[cfg(test)]
+mod write_root_tests {
+    use super::*;
+
+    #[test]
+    fn absolute_fetch_and_pull_roots_survive_an_unreadable_cwd() {
+        let root = crate::test_support::tmp_root().join("write-root");
+        let path = root.to_str().unwrap();
+        for operation in ["fetch", "pull"] {
+            let cwd = Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+            assert_eq!(
+                write_root_from(&["-c", "alias.unrelated=pull", "-C", path, operation], cwd),
+                Some(root.clone())
+            );
+        }
     }
 }

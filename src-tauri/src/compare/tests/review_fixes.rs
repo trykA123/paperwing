@@ -10,10 +10,10 @@ async fn attribute_free_counts_skip_git_and_materialization_without_environment_
     let eligibility = count_eligibility::Eligibility::new(storage.clone());
     let mut job = fixture.job();
     job.rust_counts = eligibility
-        .allows(&fixture.0.join("repo"), &job)
+        .configuration(&fixture.0.join("repo"), &job)
         .await
         .unwrap();
-    assert!(job.rust_counts);
+    assert!(job.rust_counts.is_some());
     #[cfg(target_os = "linux")]
     {
         job.diff = None;
@@ -29,9 +29,10 @@ async fn attribute_free_counts_skip_git_and_materialization_without_environment_
     assert_eq!(git::activity_snapshot().len(), before);
     assert!(!storage.exists());
     assert!(eligibility
-        .allows(&fixture.0.join("repo"), &job)
+        .configuration(&fixture.0.join("repo"), &job)
         .await
-        .unwrap());
+        .unwrap()
+        .is_some());
     assert_eq!(git::activity_snapshot().len(), before);
 }
 
@@ -67,9 +68,10 @@ async fn only_applicable_storage_attributes_require_git_counts() {
         let eligibility = count_eligibility::Eligibility::new(storage);
         assert!(
             eligibility
-                .allows(&fixture.0.join("repo"), &job)
+                .configuration(&fixture.0.join("repo"), &job)
                 .await
                 .unwrap()
+                .is_some()
                 == (placement != "storage"),
             "{placement}"
         );
@@ -193,9 +195,10 @@ async fn attribute_probes_match_no_index_configuration() {
         let eligibility = count_eligibility::Eligibility::new(fixture.0.join("storage"));
         assert!(
             eligibility
-                .allows(&fixture.0.join("repo"), &fixture.job())
+                .configuration(&fixture.0.join("repo"), &fixture.job())
                 .await
                 .unwrap()
+                .is_some()
                 == (case != "system"),
             "{case}"
         );

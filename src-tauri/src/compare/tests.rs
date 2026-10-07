@@ -54,6 +54,7 @@ use super::*;
 
 mod review_fixes;
 mod review_round2;
+mod review_round3;
 mod count_config;
 mod cold_lifecycle;
 #[cfg(feature = "benchmark")]
@@ -99,7 +100,7 @@ impl Fixture {
     }
     fn job(&self) -> Job {
         Job {
-            rust_counts: false,
+            rust_counts: None,
             #[cfg(target_os = "linux")] count_root: Some(self.diff_data()),
             #[cfg(not(target_os = "linux"))] count_root: Some(std::env::temp_dir()),
             readers: Arc::default(),
@@ -339,7 +340,7 @@ async fn native_repository_trailing_space_and_backslash_paths_compare_without_wr
         root: repo.clone(), workspace_root: fixture.0.clone(),
     };
     let job = Job {
-        rust_counts: false,
+        rust_counts: None,
         count_root: None,
         readers: Arc::default(),
         context: "native-read".into(), cancel: Arc::new(AtomicBool::new(false)), diff: Some(Arc::new(crate::linux_diff::Storage::new(fixture.0.join("diff-data")).unwrap())), roots: vec![crate::linux_guard::Root::open(&repo, &[]).unwrap().value().unwrap()], temporary_root: None, inventory_started: None };
@@ -510,7 +511,7 @@ async fn scaled_working_inventory_is_lazy_bounded_and_cancellable() {
     let index = std::fs::read(fixture.0.join("repo/.git/index")).unwrap();
     let started = std::time::Instant::now();
     let job = Job {
-        rust_counts: false,
+        rust_counts: None,
         context: "scale-ready".into(),
         ..fixture.job()
     };
@@ -557,7 +558,7 @@ async fn scaled_working_inventory_is_lazy_bounded_and_cancellable() {
     );
     let inventory_started = Arc::new(tokio::sync::Notify::new());
     let cancel_job = Job {
-        rust_counts: false,
+        rust_counts: None,
         inventory_started: Some(inventory_started.clone()),
         ..fixture.job()
     };
@@ -1416,7 +1417,7 @@ async fn cross_repository_bytes_and_unrelated_shallow_history_are_honest() {
     let unsuitable = fixture.0.join("unsuitable-temp");
     std::fs::write(&unsuitable, b"not a directory").unwrap();
     let partial_job = Job {
-        rust_counts: false,
+        rust_counts: None,
         count_root: Some(unsuitable.clone()),
         #[cfg(target_os = "linux")] diff: Some(Arc::new(crate::linux_diff::Storage::new(unsuitable.clone()).unwrap())),
         temporary_root: Some(unsuitable),
