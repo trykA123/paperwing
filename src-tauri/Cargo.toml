@@ -17,7 +17,7 @@ benchmark = []
 diagnostics = ["benchmark"]
 test-profile = ["benchmark"]
 
-[dev-dependencies]
+[target.'cfg(not(windows))'.dev-dependencies]
 tauri = { version = "2", features = ["test"] }
 
 [dependencies]
