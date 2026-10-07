@@ -71,24 +71,57 @@ pub(super) fn from_exec_path(exec_path: &Path) -> GitBinary {
     }
 }
 
+#[cfg(any(windows, test))]
+pub(super) fn run_with_deadline(
+    mut command: std::process::Command,
+    deadline: std::time::Duration,
+    kill_tree: impl Fn(u32),
+) -> Option<Vec<u8>> {
+    use std::io::Read;
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    let mut child = command.spawn().ok()?;
+    let limit = std::time::Instant::now() + deadline;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if std::time::Instant::now() < limit => {
+                std::thread::sleep(std::time::Duration::from_millis(10))
+            }
+            _ => break None,
+        }
+    };
+    let Some(status) = status else {
+        kill_tree(child.id());
+        let _ = child.kill();
+        let _ = child.wait();
+        return None;
+    };
+    let mut stdout = Vec::new();
+    child.stdout.take()?.read_to_end(&mut stdout).ok()?;
+    status.success().then_some(stdout)
+}
+
 #[cfg(windows)]
 fn discover() -> GitBinary {
     use std::os::windows::process::CommandExt;
-    let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let output = std::process::Command::new("git")
-            .arg("--exec-path")
+    let mut command = std::process::Command::new("git");
+    command.arg("--exec-path").creation_flags(0x0800_0000);
+    let kill_tree = |pid: u32| {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .creation_flags(0x0800_0000)
-            .output();
-        let _ = sender.send(output);
-    });
-    let Ok(Ok(output)) = receiver.recv_timeout(DISCOVERY_TIMEOUT) else {
+            .status();
+    };
+    let Some(stdout) = run_with_deadline(command, DISCOVERY_TIMEOUT, kill_tree) else {
         return GitBinary::plain();
     };
-    if !output.status.success() {
-        return GitBinary::plain();
-    }
-    let text = String::from_utf8_lossy(&output.stdout);
+    let text = String::from_utf8_lossy(&stdout);
     let line = text.trim();
     if line.is_empty() {
         GitBinary::plain()
@@ -242,6 +275,32 @@ mod tests {
             binary.path_prefix,
             vec![root.join("Git/clangarm64/bin"), root.join("Git/usr/bin")]
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_slow_discovery_child_is_killed_and_reaped_within_the_deadline() {
+        let pid = std::sync::atomic::AtomicU32::new(0);
+        let mut command = std::process::Command::new("sleep");
+        command.arg("30");
+        let started = std::time::Instant::now();
+        let result = run_with_deadline(command, std::time::Duration::from_millis(200), |id| {
+            pid.store(id, std::sync::atomic::Ordering::SeqCst)
+        });
+        assert!(result.is_none());
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        let id = pid.load(std::sync::atomic::Ordering::SeqCst);
+        assert_ne!(id, 0);
+        assert!(!std::path::Path::new(&format!("/proc/{id}")).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_fast_discovery_child_returns_its_output() {
+        let mut command = std::process::Command::new("echo");
+        command.arg("/x/exec");
+        let output = run_with_deadline(command, std::time::Duration::from_secs(5), |_| ()).unwrap();
+        assert_eq!(String::from_utf8_lossy(&output).trim(), "/x/exec");
     }
 
     #[test]
