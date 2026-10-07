@@ -11,6 +11,10 @@ Check each with `cat ~/.cache/crew/api-builder-<id>.exit` (exists when done) and
 | `p29-stage` | `.crew/paperwing-api-builder-p29-stage`, `crew/api-builder-p29-stage` (commit 7eb5604) | Packet 29 backend, round 2. Decisions: use Git's own conversion (`hash-object --path`, `cat-file --filters`) for autocrlf/eol; refuse `filter` attribute (LFS) files; refuse a selection that splits a no-final-newline line; partial unstage keeps a rename; intent-to-add is untracked; 3-line context; index check per path entry. Windows untracked discard stays REFUSED (SHFileOperation can delete permanently). Then: reviewer, merge. |
 | `rename` | `.alt/cleanup`, `chore/skein-cleanup` (commit 20d80ba has the plans/docs pruning) | Remove every "paperwing" name, clean break: identifier `dev.skein.app`, test `dev.skein.testing`, keyring service `skein`, `.skein-` temp prefixes (stage-prefix length check derived from a const), no `PAPERWING_` env fallbacks, no legacy settings import. Then: gates, commit on the branch. |
 
+## Status update (after handoff)
+- `rename`: finished, 43 files, uncommitted in `.alt/cleanup`.
+- `p38-core` and `p29-stage` round 2: STOPPED on the Codex usage limit with partial uncommitted edits. Relaunch the same `.sh` when Codex is back, and tell the worker to continue from the partial edits. Do not commit them as-is.
+
 ## Ready to merge
 - **Packet 37 step 1** on `ui/37-editor` (`.alt/ui-37`; commits 80d049d, 3c1cab0, ac81bfe). Reviewed; fixes done; check 0, bun 482, build OK. It changes package.json/bun.lock (adds @codemirror/*, removes monaco-editor). Merge into main, run `bun install` in the main checkout (shared node_modules) when ui-44 is idle, then rebase or merge ui-44 onto main.
 
