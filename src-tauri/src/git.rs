@@ -10,6 +10,8 @@ pub(crate) use runner::TEST_RUNNER_LOCK;
 #[cfg(test)]
 pub(crate) use runner::binary::BinaryOverride;
 #[cfg(test)]
+pub(crate) use runner::locale::CTYPE_OVERRIDE;
+#[cfg(test)]
 use runner::{ExitObserver, NEXT_ID, Observer, drain, execute_inner};
 
 pub(crate) mod remote_refs;

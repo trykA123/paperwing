@@ -2,6 +2,8 @@
 mod batch;
 #[path = "activity.rs"]
 mod activity;
+#[path = "locale.rs"]
+pub(super) mod locale;
 #[path = "cancel.rs"]
 mod cancel;
 #[path = "binary.rs"]
@@ -584,8 +586,9 @@ fn git() -> tokio::process::Command {
     c.env("GIT_TERMINAL_PROMPT", "0").env("GCM_INTERACTIVE", "Never")
         .env("GIT_ASKPASS", "").env("SSH_ASKPASS", "")
         .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes -oConnectTimeout=15")
-        .env("GIT_OPTIONAL_LOCKS", "0").env("LC_ALL", "C").env("LANGUAGE", "").stdin(Stdio::null()).kill_on_drop(true);
+        .env("GIT_OPTIONAL_LOCKS", "0").stdin(Stdio::null()).kill_on_drop(true);
     c.env("GIT_NO_REPLACE_OBJECTS", "1");
+    locale::apply(&mut c);
     for variable in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG", "GIT_SHALLOW_FILE", "GIT_NAMESPACE", "GIT_EXTERNAL_DIFF", "GIT_DIFF_OPTS", "GIT_TRACE", "GIT_TRACE_CURL", "GIT_CURL_VERBOSE"] {
         c.env_remove(variable);
     }

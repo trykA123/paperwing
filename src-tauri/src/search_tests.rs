@@ -706,3 +706,53 @@ fn git_versions_gate_the_per_file_hint() {
     assert!(!version_allows_hint("git version 2.37.9"));
     assert!(!version_allows_hint("garbage"));
 }
+
+struct Utf8Locale;
+
+impl Utf8Locale {
+    fn enter() -> Option<Self> {
+        let is_utf8 = |name: &str| name.to_ascii_lowercase().replace('-', "").contains("utf8");
+        let inherited = ["LC_ALL", "LC_CTYPE", "LANG"].iter().find_map(|key| std::env::var(key).ok().filter(|value| !value.is_empty()));
+        let name = match inherited {
+            Some(value) if is_utf8(&value) => value,
+            _ => {
+                let listed = std::process::Command::new("locale").arg("-a").output().ok()?;
+                String::from_utf8_lossy(&listed.stdout).lines().find(|line| is_utf8(line))?.to_string()
+            }
+        };
+        *crate::git::CTYPE_OVERRIDE.lock().unwrap() = Some(name.into());
+        Some(Self)
+    }
+}
+
+impl Drop for Utf8Locale {
+    fn drop(&mut self) {
+        *crate::git::CTYPE_OVERRIDE.lock().unwrap() = None;
+    }
+}
+
+#[tokio::test]
+async fn case_insensitive_search_matches_non_ascii_letters_in_a_utf8_locale() {
+    let Some(_locale) = Utf8Locale::enter() else {
+        eprintln!("skipped: no UTF-8 locale is installed on this machine");
+        return;
+    };
+    let fixture = Fixture::new("search-utf8");
+    let path = repo(&fixture, "a", &[("f.txt", "Ștefan\nCAFÉ\n".as_bytes())]);
+    for (pattern, mode) in [("ștefan", Mode::Fixed), ("café", Mode::Basic)] {
+        let mut options = request(&[&path], pattern);
+        options.mode = mode;
+        options.ignore_case = true;
+        assert_eq!(only(&run(options, 4).await.1).status.matches, 1, "{pattern}");
+    }
+    let supported = {
+        let _runner = crate::test_support::git_runner().await;
+        perl_supported().await
+    };
+    if supported {
+        let mut options = request(&[&path], "ș.efan");
+        options.mode = Mode::Perl;
+        options.ignore_case = true;
+        assert_eq!(only(&run(options, 4).await.1).status.matches, 1);
+    }
+}

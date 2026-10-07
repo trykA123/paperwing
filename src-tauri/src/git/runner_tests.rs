@@ -164,11 +164,12 @@ async fn spawning_git_with_the_runner_lock_passes() {
 }
 
 #[test]
-fn every_git_child_gets_a_pinned_locale() {
+fn every_git_child_gets_pinned_messages_and_no_forced_ctype() {
     let command = git();
     let envs: std::collections::HashMap<_, _> = command.as_std().get_envs().collect();
+    assert_eq!(envs[std::ffi::OsStr::new("LC_ALL")], None);
     assert_eq!(
-        envs[std::ffi::OsStr::new("LC_ALL")],
+        envs[std::ffi::OsStr::new("LC_MESSAGES")],
         Some(std::ffi::OsStr::new("C"))
     );
     assert_eq!(
@@ -181,16 +182,9 @@ fn every_git_child_gets_a_pinned_locale() {
 #[tokio::test]
 async fn the_running_git_child_sees_the_pinned_locale() {
     let _runner = TEST_RUNNER_LOCK.lock().await;
-    let output = buffered(
-        &[
-            "-c",
-            "alias.skein-locale=!echo \"[$LC_ALL][$LANGUAGE]\"",
-            "skein-locale",
-        ],
-        "locale-pin",
-        &[0],
-    )
-    .await
-    .unwrap();
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "[C][]");
+    let script = "alias.skein-locale=!echo \"[$LC_ALL][$LC_MESSAGES][$LANGUAGE]\"";
+    let output = buffered(&["-c", script, "skein-locale"], "locale-pin", &[0])
+        .await
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "[][C][]");
 }
