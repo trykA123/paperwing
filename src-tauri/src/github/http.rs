@@ -3,6 +3,8 @@ use reqwest::Method;
 
 mod response;
 #[cfg(test)]
+mod raw;
+#[cfg(test)]
 pub(crate) mod fixture;
 pub(super) use response::{Error, Response};
 use serde::de::DeserializeOwned;

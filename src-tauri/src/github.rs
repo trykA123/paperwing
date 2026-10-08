@@ -3,6 +3,8 @@ use crate::store::Store;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+#[cfg(test)]
+mod blob;
 mod cache;
 #[cfg(test)]
 mod compare;
