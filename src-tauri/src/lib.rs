@@ -46,6 +46,7 @@ mod finder;
 mod finder_job;
 mod finder_service;
 mod search;
+mod search_attributes;
 mod search_builtin;
 mod search_engine;
 mod search_files;

@@ -19,19 +19,16 @@ impl SearchEngine for BuiltIn {
         search: RepoSearch<'a>,
     ) -> Pin<Box<dyn std::future::Future<Output = RepoResult> + Send + 'a>> {
         Box::pin(async move {
-            let files = crate::search_files::list(
-                crate::search_files::FilesRequest {
-                    root: &search.target.path,
-                    pathspecs: &search.plan.pathspecs,
-                    untracked: search.plan.untracked,
-                },
-                search.cancel.clone(),
-            )
-            .await;
-            let files = match files {
+            let (files, attributes) = match list_files(&search).await {
                 Ok(files) => files,
                 Err(error) => return failed(error, &search.cancel),
             };
+            if attributes {
+                let mut result = crate::search_engine::GitGrep.search(search).await;
+                result.status.engine_note =
+                    Some("Using Git grep: Git attributes require Git grep.".into());
+                return result;
+            }
             let target = search.target.clone();
             let plan = search.plan.clone();
             let cancel = search.cancel.clone();
@@ -54,6 +51,26 @@ impl SearchEngine for BuiltIn {
             })
         })
     }
+}
+
+async fn list_files(search: &RepoSearch<'_>) -> Result<(Vec<std::path::PathBuf>, bool), String> {
+    let files = crate::search_files::list(
+        crate::search_files::FilesRequest {
+            root: &search.target.path,
+            pathspecs: &search.plan.pathspecs,
+            untracked: search.plan.untracked,
+        },
+        search.cancel.clone(),
+    )
+    .await?;
+    let root = search.target.path.clone();
+    let cancel = search.cancel.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let attributes = crate::search_attributes::requires_git(Path::new(&root), &files, &cancel);
+        (files, attributes)
+    })
+    .await
+    .map_err(|_| "Could not inspect search attributes".into())
 }
 
 fn failed(error: String, cancel: &AtomicBool) -> RepoResult {

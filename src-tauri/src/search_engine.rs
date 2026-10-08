@@ -91,7 +91,9 @@ impl SearchEngine for Engine {
                 Self::GitGrep => GitGrep.search(search).await,
                 Self::BuiltIn => crate::search_builtin::BuiltIn.search(search).await,
             };
-            result.status.engine_note = reason.map(String::from);
+            if let Some(reason) = reason {
+                result.status.engine_note = Some(reason.into());
+            }
             result
         })
     }

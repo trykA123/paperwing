@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, PartialEq)]
 pub(crate) struct Repository {
     pub(crate) directory: PathBuf,
+    pub(crate) common: PathBuf,
     identity: [String; 3],
 }
 
@@ -50,5 +51,6 @@ pub(crate) fn resolve(root: &Path) -> Result<Repository, String> {
             crate::platform::physical_identity(&common)?,
         ],
         directory,
+        common,
     })
 }

@@ -365,3 +365,81 @@ async fn settings_changes_apply_to_the_next_search_and_fallbacks_are_explicit() 
         );
     }
 }
+
+#[tokio::test]
+async fn git_attributes_keep_binary_text_out_of_builtin_results() {
+    let _guard = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("builtin-attributes");
+    for (name, attributes) in [
+        ("root", ".gitattributes"),
+        ("nested", "src/.gitattributes"),
+        ("info", ".git/info/attributes"),
+        ("configured", "custom.attributes"),
+    ] {
+        let path = repo(
+            &fixture,
+            name,
+            &[("src/a.txt", b"needle\n"), ("b.txt", b"needle\n")],
+        );
+        let root = Path::new(&path);
+        std::fs::write(root.join(attributes), b"*.txt binary\n").unwrap();
+        if name == "configured" {
+            git(
+                root,
+                &["config", "core.attributesFile", "custom.attributes"],
+            );
+        }
+        let query = request(&[&path], "needle");
+        let expected = run(query.clone(), Engine::GitGrep, Arc::default()).await;
+        let actual = run(query, Engine::BuiltIn, Arc::default()).await;
+        assert_eq!(actual.1, expected.1, "{name}");
+        assert_eq!(actual.0, expected.0, "{name}");
+        assert!(actual.2[0]
+            .engine_note
+            .as_deref()
+            .unwrap()
+            .contains("attributes"));
+    }
+}
+
+#[tokio::test]
+async fn index_only_and_common_metadata_attributes_require_git() {
+    let _guard = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("builtin-linked-attributes");
+    let path = repo(
+        &fixture,
+        "indexed",
+        &[
+            ("a.txt", b"needle\n"),
+            (".gitattributes", b"*.txt binary\n"),
+        ],
+    );
+    std::fs::remove_file(Path::new(&path).join(".gitattributes")).unwrap();
+    let indexed = run(request(&[&path], "needle"), Engine::BuiltIn, Arc::default()).await;
+    assert!(indexed.1.is_empty());
+    assert!(indexed.2[0].engine_note.is_some());
+
+    let source = repo(&fixture, "source", &[("a.txt", b"needle\n")]);
+    let linked = fixture.0.join("linked");
+    git(
+        Path::new(&source),
+        &["worktree", "add", "--detach", linked.to_str().unwrap()],
+    );
+    std::fs::write(
+        Path::new(&source).join(".git/info/attributes"),
+        b"*.txt binary\n",
+    )
+    .unwrap();
+    assert!(crate::search_attributes::requires_git(
+        &linked,
+        &["a.txt".into()],
+        &AtomicBool::new(false),
+    ));
+    let query = request(&[linked.to_str().unwrap()], "needle");
+    let expected = run(query.clone(), Engine::GitGrep, Arc::default()).await;
+    let actual = run(query, Engine::BuiltIn, Arc::default()).await;
+    assert_eq!(actual.0, expected.0);
+    assert_eq!(actual.2[0].state, expected.2[0].state);
+    assert_eq!(actual.2[0].error, expected.2[0].error);
+    assert_eq!(actual.2[0].state, State::Failed);
+}
