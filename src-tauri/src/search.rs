@@ -76,6 +76,8 @@ pub struct RepoStatus {
     pub matches: usize,
     pub truncated: bool,
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine_note: Option<String>,
 }
 
 impl RepoStatus {
@@ -85,10 +87,12 @@ impl RepoStatus {
             matches: 0,
             truncated: false,
             error,
+            engine_note: None,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Plan {
     pub pattern: String,
     pub flags: Vec<&'static str>,

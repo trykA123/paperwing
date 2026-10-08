@@ -1,9 +1,7 @@
 use crate::kernel::events::CoreEvent;
 use crate::search::{plan, Mode, SearchRequest};
 use crate::search_grep::perl_supported;
-use crate::search_job::{
-    run_job, Capabilities, Emit, Job, Outbound,
-};
+use crate::search_job::{run_with_engine, Capabilities, Emit, Job, Outbound};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -19,7 +17,7 @@ pub struct Service {
 }
 
 impl Service {
-    fn register(&self) -> Result<(u64, Arc<AtomicBool>), String> {
+    pub(crate) fn register(&self) -> Result<(u64, Arc<AtomicBool>), String> {
         let mut active = self
             .active
             .lock()
@@ -31,6 +29,13 @@ impl Service {
         let flag = Arc::new(AtomicBool::new(false));
         active.insert(id, flag.clone());
         Ok((id, flag))
+    }
+
+    pub(crate) fn slot(&self, id: u64) -> Slot {
+        Slot {
+            active: self.active.clone(),
+            id,
+        }
     }
 
     fn cancel_all(&self) -> usize {
@@ -57,7 +62,7 @@ impl Service {
     }
 }
 
-struct Slot {
+pub(crate) struct Slot {
     active: Arc<Mutex<HashMap<u64, Arc<AtomicBool>>>>,
     id: u64,
 }
@@ -89,6 +94,14 @@ fn emit_outbound<R: tauri::Runtime>(app: &AppHandle<R>, cancel: &AtomicBool, out
     }
 }
 
+pub(crate) fn configure_request(
+    request: &mut SearchRequest,
+    options: crate::settings::SearchOptions,
+) -> crate::search_engine::Engine {
+    request.untracked |= options.search_files == crate::settings::SearchFiles::TrackedAndUntracked;
+    options.search_engine.into()
+}
+
 #[tauri::command]
 pub async fn search_capabilities() -> Capabilities {
     Capabilities {
@@ -100,8 +113,10 @@ pub async fn search_capabilities() -> Capabilities {
 pub async fn search_start(
     app: AppHandle,
     service: TauriState<'_, Service>,
-    request: SearchRequest,
+    mut request: SearchRequest,
 ) -> Result<u64, String> {
+    let options = crate::settings::search_options(&app).await?;
+    let engine = configure_request(&mut request, options);
     plan(&request)?;
     if request.mode == Mode::Perl && !perl_supported().await {
         return Err("This Git build has no Perl-compatible regex support".into());
@@ -123,7 +138,7 @@ pub async fn search_start(
             cancel,
             send,
         };
-        if let Err(error) = run_job(request, job).await {
+        if let Err(error) = run_with_engine(request, job, engine).await {
             eprintln!("search {id} failed: {error}");
         }
     });

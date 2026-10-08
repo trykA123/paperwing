@@ -43,6 +43,54 @@ pub struct Settings {
     pub workspace: serde_json::Value,
 }
 
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchEngine {
+    #[default]
+    BuiltIn,
+    GitGrep,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchFiles {
+    #[default]
+    Tracked,
+    TrackedAndUntracked,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum FinderMatching {
+    #[default]
+    Fuzzy,
+    ExactSubstring,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SearchOptions {
+    pub search_engine: SearchEngine,
+    pub search_files: SearchFiles,
+    pub finder_matching: FinderMatching,
+}
+
+impl Settings {
+    pub fn search_options(&self) -> Result<SearchOptions, String> {
+        if self.workspace.is_null() {
+            return Ok(SearchOptions::default());
+        }
+        serde_json::from_value(self.workspace.clone())
+            .map_err(|error| crate::git::safe(&format!("Invalid search settings: {error}")))
+    }
+}
+
+pub(crate) async fn search_options(app: &AppHandle) -> Result<SearchOptions, String> {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || load_settings(app)?.search_options())
+        .await
+        .map_err(|_| "Could not load search settings".to_string())?
+}
 pub fn valid_id(id: &str) -> Result<(), String> {
     let ok = !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     if ok {
@@ -246,6 +294,26 @@ pub async fn delete_token(app: AppHandle, source_id: String) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_settings_default_and_validate_explicit_workspace_values() {
+        let missing: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(missing.search_options().unwrap(), SearchOptions::default());
+        let old: Settings = serde_json::from_value(serde_json::json!({"workspace":{"theme":"dark"}})).unwrap();
+        assert_eq!(old.search_options().unwrap(), SearchOptions::default());
+        let saved: Settings = serde_json::from_value(serde_json::json!({"workspace":{
+            "searchEngine":"gitGrep", "searchFiles":"trackedAndUntracked", "finderMatching":"exactSubstring"
+        }})).unwrap();
+        assert_eq!(saved.search_options().unwrap(), SearchOptions {
+            search_engine: SearchEngine::GitGrep, search_files: SearchFiles::TrackedAndUntracked, finder_matching: FinderMatching::ExactSubstring,
+        });
+        for key in ["searchEngine", "searchFiles", "finderMatching"] {
+            for value in [serde_json::json!("invalid"), serde_json::json!(4)] {
+                let settings = Settings { workspace: serde_json::json!({key: value}), ..Settings::default() };
+                assert!(settings.search_options().is_err(), "{key}");
+            }
+        }
+    }
 
     #[test]
     fn redaction_owners_include_managed_manual_sources() {

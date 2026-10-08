@@ -18,6 +18,8 @@ pub enum CoreEvent {
     SearchMatches(EventPayload),
     SearchRepo(EventPayload),
     SearchDone(EventPayload),
+    FinderMatches(EventPayload),
+    FinderDone(EventPayload),
     CloneProgress(EventPayload),
     CloneFinished,
     LaunchRequest,
