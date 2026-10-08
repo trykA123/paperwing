@@ -69,7 +69,7 @@
       {/if}
     {/if}
   </div>
-  <div class="fm-cell fm-pull" role="gridcell"><PullCell target={row.pull} /></div>
+  <div class="fm-cell fm-pull" role="gridcell"><PullCell target={row.pull} disabled={row.sourceOff} /></div>
   <div class="fm-cell fm-syncc" role="gridcell"><SyncRails view={row.sync} /></div>
   <div class="fm-cell fm-next" role="gridcell">
     {#if row.busy}

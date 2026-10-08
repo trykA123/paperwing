@@ -5,6 +5,7 @@ import { AUTO_LOAD_LIMIT, inQueue, matchesText, queueCounts, shouldAutoLoad, typ
 import { pullable, pullKey } from './pull-flow.svelte';
 import type { PullKey } from './pull-support';
 import { pulls } from './pulls.svelte';
+import { isRepoDisabled } from './source-status';
 import { scopeItems, scopeOf } from './scope';
 import { app } from './state.svelte';
 
@@ -24,8 +25,8 @@ class PullQueue {
 
   hosts = $derived(providerHosts(PROVIDERS.find(provider => provider.id === 'github')!, app.sources));
 
-  /** The scope's repositories, narrowed to the host a flyout pick chose. */
-  scoped = $derived(scopeItems(this.mode, app.set, app.ws.sets, item => app.dest(item)).filter(item => !app.modules.host || hostOfRepoId(item.repoId, this.hosts) === app.modules.host));
+  /** The scope's repositories on enabled sources, narrowed to the host a flyout pick chose. */
+  scoped = $derived(scopeItems(this.mode, app.set, app.ws.sets, item => app.dest(item)).filter(item => !isRepoDisabled(item.repoId, app.sources)).filter(item => !app.modules.host || hostOfRepoId(item.repoId, this.hosts) === app.modules.host));
 
   keys = $derived(pullable(this.scoped).flatMap(item => pullKey(item) ?? []));
 

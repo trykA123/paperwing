@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { errorSummary } from '../../lib/source-status';
+  import { DISABLED_HINT, DISABLED_LABEL, errorSummary, isDisabled } from '../../lib/source-status';
   import { app } from '../../lib/state.svelte';
   import Icon from '../Icon.svelte';
   import FavoriteNav from './FavoriteNav.svelte';
@@ -7,8 +7,9 @@
   const store = app.repositories;
   const clonedCount = $derived(store.everything.filter(entry => store.localOf(entry)?.repo).length);
   const changedCount = $derived(store.everything.filter(entry => (store.localOf(entry)?.dirty ?? 0) > 0).length);
-  const failing = $derived(app.sources.filter(source => app.repoErrors[source.id]?.length));
-  const loading = $derived(app.sources.filter(source => app.loadingRepos[source.id]));
+  const off = $derived(app.sources.filter(isDisabled));
+  const failing = $derived(app.sources.filter(source => !isDisabled(source) && app.repoErrors[source.id]?.length));
+  const loading = $derived(app.sources.filter(source => !isDisabled(source) && app.loadingRepos[source.id]));
   const onList = $derived(app.view.kind === 'repos' && !store.hostFilter && !store.org && !store.query);
   const hostOn = (host: string) => store.hostFilter === host && !store.org;
 
@@ -56,7 +57,10 @@
       </button>
     {/each}
   {:else}
-    {#if !loading.length && !failing.length}<div class="nav ghost">No sources yet</div>{/if}
+    {#if !loading.length && !failing.length && !off.length}<div class="nav ghost">No sources yet</div>{/if}
+  {/each}
+  {#each off as source (source.id)}
+    <div class="nav rf-hostbtn ghost" title={DISABLED_HINT}><Icon name="server" /><span class="lbl mono">{source.host || source.name}</span><span class="cnt">{DISABLED_LABEL}</span></div>
   {/each}
 </div>
 
