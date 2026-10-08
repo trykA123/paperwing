@@ -190,6 +190,7 @@ export type SearchCapabilities = { perl: boolean };
 export const events = {
   launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done',
   searchMatches: 'search-matches', searchRepo: 'search-repo', searchDone: 'search-done',
+  repoChanged: 'repo-changed', watchFailed: 'watch-failed',
 } as const;
 
 export const api = {

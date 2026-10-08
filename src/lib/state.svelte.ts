@@ -14,7 +14,7 @@ import { pendingPlatform, unavailableRoot } from './platform';
 import { benchmarkEnabled, benchmarkPlan } from './benchmark';
 import { listen } from '@tauri-apps/api/event';
 import {
-    api, type Activity, type ActivityDelta,
+    api, events, type Activity, type ActivityDelta,
     type GitAction, type LocalStatus, type Phase, type Progress, type Ref, type Repo,
     type Capability, type Capabilities, type CompareEndpoint, type PathIdentity, type PlatformInfo, type RootSupport,
     type RepoSet, type SetItem, type Source, type Workspace,
@@ -27,6 +27,7 @@ import { defaultWorkspace, migrateWorkspace, tabId, type ShellTab, type View } f
 import { NotificationStore, type NoticeAction, type NoticeKind, type NoticeOptions } from './notifications.svelte';
 import { describeError } from './errors';
 import { localOnlyNote } from './local-only';
+import { AutoRefresh } from './auto-refresh';
 export { DEFAULT_COLS, DEFAULT_TEMPLATE, type View } from './workspace';
 
 export type { RefsEntry, CommitsEntry, RefState } from './state/repository-metadata.svelte';
@@ -269,6 +270,7 @@ class AppState {
     await listen('clone-finished', () => this.#finished());
     await listen<{ sourceId: string; revision: number }>('credential-changed', event => this.credentials.invalidate(event.payload.sourceId, event.payload.revision));
     await listen<ActivityDelta>('git-activity', event => this.gitActivity.applyDelta(event.payload));
+    await listen<{ path: string }>(events.repoChanged, event => this.autoRefresh.changed(event.payload.path));
     await this.refreshActivity();
     this.ready = true;
     this.modules.restore();
@@ -710,6 +712,16 @@ class AppState {
 
   openVscode(path: string) {
     api.openInVscode(path).catch(e => this.toast(describeError(e, 'open the folder in VS Code'), 'error'));
+  }
+
+  autoRefresh = new AutoRefresh({
+    refresh: paths => this.#refreshChanged(paths),
+  });
+
+  #refreshChanged(paths: string[]) {
+    const settling = new Set(this.running ? this.#runItems.map(item => this.dest(item)) : []);
+    const due = paths.filter(path => this.local[path] && !settling.has(path) && !this.pushing[path]);
+    if (due.length) void this.checkExists(due);
   }
 
   /** Refreshes "on disk" markers and the Local column (branch, ahead/behind, changes) for these folders. */
