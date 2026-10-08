@@ -272,7 +272,8 @@ class AppState {
     await listen<{ sourceId: string; revision: number }>('credential-changed', event => this.credentials.invalidate(event.payload.sourceId, event.payload.revision));
     await listen<ActivityDelta>('git-activity', event => this.gitActivity.applyDelta(event.payload));
     await listen<{ path: string }>(events.repoChanged, event => this.autoRefresh.changed(event.payload.path));
-    await listen<{ setId: string; reason: string }>(events.watchFailed, event => { void this.autoRefresh.failed(event.payload.setId, event.payload.reason); });
+    await listen<{ reason: string }>(events.watchFailed, event => { void this.autoRefresh.failed(event.payload.reason); });
+    await listen<{ path: string; reason: string }>(events.watchLost, event => this.autoRefresh.lost(event.payload.path, event.payload.reason));
     await this.refreshActivity();
     this.ready = true;
     this.modules.restore();
@@ -718,7 +719,7 @@ class AppState {
 
   autoRefresh = new AutoRefresh({
     refresh: paths => this.#refreshChanged(paths),
-    notice: message => { this.toast(message, 'warn'); },
+    notice: (message, kind) => { this.toast(message, kind); },
     watch: (setId, roots) => api.watchSet(setId, roots),
     unwatch: setId => api.unwatchSet(setId),
   });
@@ -727,10 +728,10 @@ class AppState {
     return watchTargets({ sets: [...this.ws.sets, ...this.temporary.sets], tabs: this.tabs, local: this.local, dest: (item, setId) => this.dest(item, setId) });
   }
 
-  #refreshChanged(paths: string[]) {
-    const settling = new Set(this.running ? this.#runItems.map(item => this.dest(item)) : []);
+  #refreshChanged(paths: string[]): Promise<unknown> | undefined {
+    const settling = new Set(this.running ? this.#runItems.map(item => this.dest(item, this.repositories.setIdOf(item))) : []);
     const due = paths.filter(path => this.local[path] && !settling.has(path) && !this.pushing[path]);
-    if (due.length) void this.checkExists(due);
+    return due.length ? this.checkExists(due) : undefined;
   }
 
   /** Refreshes "on disk" markers and the Local column (branch, ahead/behind, changes) for these folders. */
