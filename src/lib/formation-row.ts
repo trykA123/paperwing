@@ -40,7 +40,7 @@ function describeRemote(item: SetItem, state: RowState, sourceOff: boolean): Row
     refTitle: onDisk ? 'The branch this folder has checked out' : 'Default branch on the remote', localNote: null,
     local: onDisk ? local : undefined, sync: onDisk ? syncView(local) : { kind: 'missing' }, busy: app.rowBusy(item), fixed: true,
     next: onDisk ? { kind: 'adopt', label: 'Add to set', title: 'This folder is already on disk. Add it to a set to manage it.' } : { kind: 'clone', label: 'Clone', title: `Clone ${item.org}/${item.name}` },
-    selected: state.selected ?? item.on, focused: state.focused, canAct: state.canAct, pull: onDisk && !sourceOff ? pullKey(item) : null, remote: !onDisk, favorite: app.ws.stars.includes(item.repoId), sourceOff,
+    selected: state.selected ?? item.on, focused: state.focused, canAct: state.canAct, pull: onDisk ? pullKey(item) : null, remote: !onDisk, favorite: app.ws.stars.includes(item.repoId), sourceOff,
   };
 }
 
@@ -59,6 +59,6 @@ export function describeRow(item: SetItem, state: RowState): RowModel {
     refType: item.ref.type, refLabel: facts.refLabel, refBad: ref.bad, refTitle: ref.title,
     localNote: isCloned(local) && !facts.onRef && !item.path && localLabel ? `on ${localLabel}` : null,
     local, sync: syncView(local, app.statusFailures[app.dest(item)]), next: nextAction(facts), busy: app.rowBusy(item), fixed: !!item.path,
-    selected: state.selected ?? item.on, focused: state.focused, canAct: state.canAct, pull: sourceOff ? null : pullKey(item), remote: false, favorite: app.ws.stars.includes(item.repoId), sourceOff,
+    selected: state.selected ?? item.on, focused: state.focused, canAct: state.canAct, pull: pullKey(item), remote: false, favorite: app.ws.stars.includes(item.repoId), sourceOff,
   };
 }
