@@ -1,7 +1,7 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
 import type { SetItem, Workspace } from './api';
-import { cleanScope, scopeItems, scopeLabel, scopeOf, toggleScope, unreadPaths } from './scope';
+import { cleanScope, scopeItems, scopeLabel, scopeOf, takeUnrequested, toggleScope, unreadPaths } from './scope';
 import { defaultWorkspace, migrateWorkspace } from './workspace';
 
 const item = (id: string): SetItem => ({ id, repoId: `src:${id}`, name: id, org: 'o', url: `https://example.test/${id}`, ref: { type: 'branch', name: 'main' }, on: true });
@@ -39,6 +39,13 @@ describe('scope', () => {
     const other = { items: [item('far'), item('near'), item('broken')] };
     const paths = scopeItems('all', { items: [] }, [{ items: [] }, other], dest).map(dest);
     expect(unreadPaths(paths, { '/dev/near': {} }, { '/dev/broken': 'x' })).toEqual(['/dev/far']);
+  });
+
+  test('two publishes do not re-request folders still in flight', () => {
+    const requested = new Set<string>();
+    expect(takeUnrequested(['/a', '/b', '/c'], requested)).toEqual(['/a', '/b', '/c']);
+    expect(takeUnrequested(['/b', '/c'], requested)).toEqual([]);
+    expect(takeUnrequested(['/c', '/d'], requested)).toEqual(['/d']);
   });
 
   test('chip words name the set or all repositories', () => {

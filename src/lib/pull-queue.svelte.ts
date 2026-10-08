@@ -6,7 +6,7 @@ import { pullable, pullKey } from './pull-flow.svelte';
 import type { PullKey } from './pull-support';
 import { pulls } from './pulls.svelte';
 import { isRepoDisabled } from './source-status';
-import { scopeItems, scopeOf, unreadPaths } from './scope';
+import { scopeItems, scopeOf, takeUnrequested, unreadPaths } from './scope';
 import { app } from './state.svelte';
 
 export type PullRow = { item: SetItem; folder: string; key: PullKey; pull: PullRequest };
@@ -30,6 +30,15 @@ class PullQueue {
 
   /** Folders of the scope whose status nothing has read yet, so their branch is unknown. */
   unread = $derived(unreadPaths(this.scoped.map(item => app.dest(item)), app.local, app.statusFailures));
+
+  private requested = new Set<string>();
+  private requestedMode: string | null = null;
+
+  /** The unread folders not yet asked for; switching the scope starts over. */
+  claimUnread(): string[] {
+    if (this.requestedMode !== this.mode) { this.requested.clear(); this.requestedMode = this.mode; }
+    return takeUnrequested(this.unread, this.requested);
+  }
 
   keys = $derived(pullable(this.scoped).flatMap(item => pullKey(item) ?? []));
 

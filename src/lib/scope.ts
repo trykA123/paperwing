@@ -43,4 +43,11 @@ export function scopeItems(mode: ScopeMode, active: Pick<RepoSet, 'items'>, sets
 /** Folders no status read has answered or failed for; the "all" scope reads them so their branch is known. */
 export const unreadPaths = (paths: readonly string[], local: Record<string, unknown>, failures: Record<string, unknown>) => paths.filter(path => !local[path] && !failures[path]);
 
+/** The paths not asked for yet; they join `requested`, so a later chunk of results never re-asks folders still in flight. */
+export function takeUnrequested(paths: readonly string[], requested: Set<string>): string[] {
+  const fresh = paths.filter(path => !requested.has(path));
+  for (const path of fresh) requested.add(path);
+  return fresh;
+}
+
 export const scopeLabel = (mode: ScopeMode, setName: string) => (mode === 'set' ? `In ${setName}` : 'All repositories');

@@ -25,8 +25,9 @@
   });
 
   $effect(() => {
-    const paths = pullQueue.unread;
-    if (pullQueue.mode === 'all' && paths.length) void untrack(() => app.checkExists(paths));
+    if (pullQueue.mode !== 'all' || !pullQueue.unread.length) return;
+    const fresh = untrack(() => pullQueue.claimUnread());
+    if (fresh.length) void untrack(() => app.checkExists(fresh));
   });
 
   async function open(row: PullRow) {
