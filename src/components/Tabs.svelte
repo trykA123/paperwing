@@ -25,7 +25,7 @@
 </script>
 
 <header class="tabs-chrome" class:native-controls={titlebar} data-tauri-drag-region={titlebar}>
-  <div class="tabstrip" role="tablist" aria-label="Workspace tabs">
+  <div class="tabstrip" inert={app.sidebar.overlay} role="tablist" aria-label="Workspace tabs">
     {#each app.tabs as tab, index (tab.id)}
       <div class="shell-tab" class:on={tab.id === app.activeTabId} class:temp={!!app.temporary.find(tab.setId)}>
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"

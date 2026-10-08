@@ -149,6 +149,11 @@ if (narrow) {
   check('the toggle opens the sidebar as an overlay above the page with a scrim', (await two.locator('.shell-side.floating').count()) === 1 && (await two.locator('.side-scrim').count()) === 1 && (await toggle.getAttribute('aria-pressed')) === 'true');
   check('the table did not move under the overlay', (await tableWidth(two)) === (await available()));
   check('focus moves into the overlay', await two.evaluate(() => !!document.activeElement?.closest('.shell-side')));
+  check('the overlay is modal: the page and the tab strip are inert', (await two.locator('.shell-side .shell-panel-content').getAttribute('aria-modal')) === 'true' && (await two.locator('#workspace-view[inert]').count()) === 1 && (await two.locator('.tabstrip[inert]').count()) === 1);
+  let outside = 0;
+  for (let step = 0; step < 40; step++) { await two.keyboard.press(step % 2 ? 'Tab' : 'Shift+Tab'); if (!(await two.evaluate(() => !!document.activeElement?.closest('.shell-side')))) outside++; }
+  for (let step = 0; step < 40; step++) { await two.keyboard.press('Tab'); if (!(await two.evaluate(() => !!document.activeElement?.closest('.shell-side')))) outside++; }
+  check('Tab stays inside the sidebar', outside === 0, String(outside));
   await shot(two, 'overlay');
   await two.keyboard.press('Escape');
   await two.waitForTimeout(300);

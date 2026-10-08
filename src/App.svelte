@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { benchmarkEnabled } from './lib/benchmark';
   import { fade, fly } from 'svelte/transition';
+  import { trapTab } from './lib/focus-trap';
   import { isTauri } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { api, type Source, type Workspace } from './lib/api';
@@ -199,10 +200,10 @@
   <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{app.view.kind === 'repo' && app.ws.shell.section === 'repos' ? 'Repository' : moduleById(app.ws.shell.section).label}</span></div>
   <Tabs />
   {#if app.sidebar.overlay}<div class="side-scrim" role="presentation" onclick={() => app.sidebar.close()} transition:fade|global={{ duration: reducedMotion ? 0 : 180 }}></div>{/if}
-  <div class="shell-side" class:floating={app.sidebar.overlay} role="presentation" onclick={onSideClick} inert={!app.sidebar.shown} aria-hidden={!app.sidebar.shown} style:--panel-width="{app.ws.shell.sidebarWidth}px">
-    {#if app.sidebar.shown}<div class="shell-panel-content" tabindex="-1" role={app.sidebar.overlay ? 'dialog' : undefined} aria-label={app.sidebar.overlay ? 'Module sidebar' : undefined} transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
+  <div class="shell-side" class:floating={app.sidebar.overlay} role="presentation" onclick={onSideClick} onkeydown={event => { if (app.sidebar.overlay) { const panel = event.currentTarget.querySelector<HTMLElement>('.shell-panel-content'); if (panel) trapTab(event, panel); } }} inert={!app.sidebar.shown} aria-hidden={!app.sidebar.shown} style:--panel-width="{app.ws.shell.sidebarWidth}px">
+    {#if app.sidebar.shown}<div class="shell-panel-content" tabindex="-1" role={app.sidebar.overlay ? 'dialog' : undefined} aria-modal={app.sidebar.overlay ? 'true' : undefined} aria-label={app.sidebar.overlay ? 'Module sidebar' : undefined} transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
   </div>
-  <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings' || app.view.kind === 'repo'}>
+  <main id="workspace-view" class="main" inert={app.sidebar.overlay} class:scroll={app.view.kind === 'settings' || app.view.kind === 'repo'}>
     {#if !app.ready}
       <div class="empty"><span class="spin"></span></div>
     {:else if app.view.kind === 'repos' || app.view.kind === 'set' || app.view.kind === 'item'}
