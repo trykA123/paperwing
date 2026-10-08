@@ -36,7 +36,7 @@
 
 <section class="code-search" aria-label="Code search">
   <header class="mh"><div class="grow"><div class="crumb">Search</div><h1>Code search</h1><div class="mut">{set?.name ?? 'Set'} · {cloned.length} cloned {cloned.length === 1 ? 'repository' : 'repositories'}</div></div></header>
-  <SearchBar bind:form={session.form} perl={session.perl} active={session.active} {canSearch} {refsSet} onsearch={search} onstop={() => void session.cancel()} />
+  <SearchBar bind:form={() => session.form, form => { session.form = form; }} perl={session.perl} active={session.active} {canSearch} {refsSet} onsearch={search} onstop={() => void session.cancel()} />
   <SearchScope bind:scope {selected} {cloned} skipped={(set?.items.length ?? 0) - cloned.length} {refs} {setId} disabled={session.active} />
   {#if session.error}
     <Alert kind="err" role="alert">{session.error}

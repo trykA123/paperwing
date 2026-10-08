@@ -336,9 +336,10 @@ fn ignored_directories_never_get_a_watch() {
     assert!(calls.iter().all(|(_, recursive)| !recursive));
     assert!(watched.iter().any(|path| path.ends_with("src/inner")));
     assert!(watched.iter().any(|path| path.ends_with(".git/refs/heads")));
-    assert!(!watched.iter().any(|path| path.contains("node_modules")
-        || path.contains("/target")
-        || path.contains(".git/objects")));
+    assert!(!watched.iter().any(|path| {
+        let inside = path.strip_prefix(&root).unwrap_or(path);
+        inside.contains("node_modules") || inside.contains("/target") || inside.contains(".git/objects")
+    }));
     drop(calls);
     service.stop_all();
 }
