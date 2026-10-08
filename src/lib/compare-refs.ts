@@ -28,3 +28,7 @@ export function refChoices(kind: CompareRef['kind'], trees: Record<string, { dat
     note: uniquePaths.length > 1 ? `${entry.count}/${uniquePaths.length}` : kind === 'commit' ? entry.name : '',
   }));
 }
+
+export function missingTreePaths(paths: string[], trees: Record<string, unknown>): string[] {
+  return [...new Set(paths)].filter(path => path && !trees[path]);
+}

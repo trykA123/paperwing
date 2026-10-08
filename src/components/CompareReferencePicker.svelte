@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { CompareRef } from '../lib/api';
-  import { refChoices } from '../lib/compare-refs';
+  import { missingTreePaths, refChoices } from '../lib/compare-refs';
   import { app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
   import RefSelect, { type RefGroup } from './RefSelect.svelte';
@@ -39,6 +39,13 @@
     untrack(() => { for (const path of current) if (path) void app.loadTree(path, false, consumer.signal); });
     return () => consumer.abort();
   });
+  const missing = $derived(JSON.stringify(missingTreePaths(paths, app.trees)));
+  $effect(() => {
+    const lost: string[] = JSON.parse(missing);
+    untrack(() => { for (const path of lost) void app.loadTree(path, false); });
+  });
+  const empty = $derived(!loading && !errors.length && reference.kind !== 'head' && reference.kind !== 'workingTree' && groups[0]?.names.length === 0 && paths.every(path => app.trees[path]?.data));
+  const EMPTY = { branch: 'No local branches', remoteBranch: 'No remote branches yet. Fetch this repository.', tag: 'No tags', commit: '' };
   function changeKind(kind: CompareRef['kind']) {
     reference = kind === 'head' || kind === 'workingTree' ? { kind }
       : kind === 'commit' ? { kind, sha: '' } : { kind, name: '' };
@@ -59,4 +66,5 @@
 {:else}
   <span class="ref-field ref-fixed">{reference.kind === 'head' ? 'Whatever is checked out now' : 'Files on disk, including uncommitted changes'}</span>
 {/if}
+{#if empty && EMPTY[reference.kind as keyof typeof EMPTY]}<span class="hint">{EMPTY[reference.kind as keyof typeof EMPTY]}</span>{/if}
 {#if errors.length}<span class="warn" title={errors.join('\n')}>Refs unavailable</span>{/if}
