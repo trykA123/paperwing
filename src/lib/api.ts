@@ -86,6 +86,7 @@ export type LocalStatus = {
   path: string; exists: boolean; repo: boolean; branch: string | null; tag: string | null; branchLabel?: string | null; tagLabel?: string | null; sha: string;
   upstream: string | null; upstreamLabel?: string | null; ahead: number; behind: number; dirty: number; error: string | null;
 };
+export type WatchReport = { watched: number; skipped: { path: string; reason: string }[]; bestEffort: string[] };
 export type Theme = 'system' | 'light' | 'dark';
 export type GitAction = 'clone' | 'fetch' | 'pull' | 'switch';
 export type Activity = {
@@ -190,6 +191,7 @@ export type SearchCapabilities = { perl: boolean };
 export const events = {
   launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done',
   searchMatches: 'search-matches', searchRepo: 'search-repo', searchDone: 'search-done',
+  repoChanged: 'repo-changed', watchFailed: 'watch-failed', watchLost: 'watch-lost',
 } as const;
 
 export const api = {
@@ -224,6 +226,8 @@ export const api = {
   getRefsMany: (urls: string[]) => invoke<RefsResult[]>('get_refs_many', { urls }),
   startClone: (jobs: CloneJob[], opts: CloneOpts, mode: GitAction = 'clone') => invoke<void>('start_clone', { jobs, opts, mode }),
   localStatus: (paths: string[]) => invoke<LocalStatus[]>('local_status', { paths }),
+  watchSet: (setId: string, roots: string[]) => invoke<WatchReport>('watch_set', { setId, roots }),
+  unwatchSet: (setId: string) => invoke<void>('unwatch_set', { setId }),
   activitySnapshot: () => invoke<Activity[]>('activity_snapshot'),
   clearActivity: () => invoke<{ running: Activity[]; retained: string[]; through: number }>('clear_activity'),
   cancelActivity: (id: string) => invoke<boolean>('cancel_activity', { id }),

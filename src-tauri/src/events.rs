@@ -44,6 +44,9 @@ fn frontend_event(event: &CoreEvent) -> Option<(&'static str, Option<&EventPaylo
         CoreEvent::CredentialChanged(payload) => ("credential-changed", Some(payload)),
         CoreEvent::GitActivity(payload) => ("git-activity", Some(payload)),
         CoreEvent::DiagnosticsProgress(payload) => ("diagnostics-progress", Some(payload)),
+        CoreEvent::RepoChanged(payload) => ("repo-changed", Some(payload)),
+        CoreEvent::WatchFailed(payload) => ("watch-failed", Some(payload)),
+        CoreEvent::WatchLost(payload) => ("watch-lost", Some(payload)),
         _ => return None,
     };
     Some((name, payload))

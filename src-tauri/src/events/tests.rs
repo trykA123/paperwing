@@ -113,6 +113,21 @@ fn legacy_events() -> Vec<(&'static str, CoreEvent, Value)> {
         (
             "diagnostics-progress",
             CoreEvent::DiagnosticsProgress(payload.clone()),
+            value.clone(),
+        ),
+        (
+            "repo-changed",
+            CoreEvent::RepoChanged(payload.clone()),
+            value.clone(),
+        ),
+        (
+            "watch-failed",
+            CoreEvent::WatchFailed(payload.clone()),
+            value.clone(),
+        ),
+        (
+            "watch-lost",
+            CoreEvent::WatchLost(payload),
             value,
         ),
     ]

@@ -89,7 +89,7 @@ export class Repositories {
 
   /** The set whose name a folder path is built from; an item no set holds uses the set in view. */
   setNameOf(item: SetItem, setId?: string): string {
-    if (setId) return this.app.ws.sets.find(set => set.id === setId)?.name ?? this.app.set.name;
+    if (setId) return [...this.app.ws.sets, ...this.app.temporary.sets].find(set => set.id === setId)?.name ?? this.app.set.name;
     return this.setNames.get(item.id) ?? this.app.set.name;
   }
 
