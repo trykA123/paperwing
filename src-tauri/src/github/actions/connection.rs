@@ -41,7 +41,7 @@ impl Connection for StoredConnection {
         Box::pin(async move {
             pulls::connect(source, host)
                 .await
-                .map_err(|error| CiError::message(crate::git::safe(&error.to_string())))
+                .map_err(|error| CiError::message(error.to_string()))
         })
     }
 }

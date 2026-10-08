@@ -288,7 +288,7 @@ impl From<Error> for CiError {
                 reset_at: reset_at.to_rfc3339(),
                 message: format!("CI rate limit reached; retry after {reset_at}"),
             },
-            error => Self::message(crate::git::safe(&error.to_string())),
+            error => Self::message(error.to_string()),
         }
     }
 }

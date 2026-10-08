@@ -189,3 +189,19 @@ async fn disabling_a_ci_lease_stops_deferred_dispatch_before_any_http_request() 
         Err(RegistryError::Disabled(_))
     ));
 }
+
+#[tokio::test]
+async fn connection_failures_show_their_real_text_instead_of_the_quiet_credential_notice() {
+    let source = source("ci-cold-cache-source", false);
+    let error = match StoredConnection
+        .connect(&source, "enterprise.invalid")
+        .await
+    {
+        Err(error) => error,
+        Ok(_) => panic!("a disabled source must not connect"),
+    };
+    assert!(error.to_string().contains("is disabled"));
+    assert!(!error.to_string().contains("credential store"));
+    let converted = CiError::from(Error::Message("Cannot reach enterprise.invalid".into()));
+    assert_eq!(converted.to_string(), "Cannot reach enterprise.invalid");
+}
