@@ -139,6 +139,7 @@ pub fn run() {
             events::install(app.handle());
             app.manage(std::sync::Arc::new(watch::Service::new(watch::tauri_sink(app.handle().clone()))));
             let store = store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok());
+            app.state::<compare::Service>().configure_remote(app.path().app_cache_dir()?, store.clone())?;
             providers::install(app.handle(), store.clone());
             app.manage(store);
             let handle = app.handle().clone();

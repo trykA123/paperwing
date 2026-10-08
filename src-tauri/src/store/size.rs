@@ -1,5 +1,5 @@
 use super::error::Error;
-use super::{commits, listings, refs};
+use super::{commits, comparisons, listings, refs};
 use rusqlite::Connection;
 
 const TARGET_PERCENT: u64 = 90;
@@ -8,6 +8,7 @@ const BATCH: i64 = 8;
 enum Entry {
     Listing(String),
     Commits(i64),
+    Comparison(i64),
     Refs(String),
 }
 
@@ -35,6 +36,7 @@ pub fn enforce(connection: &mut Connection, max_bytes: u64) -> Result<(), Error>
             match entry {
                 Entry::Listing(source) => listings::remove(&transaction, source)?,
                 Entry::Commits(id) => commits::remove_set(&transaction, *id)?,
+                Entry::Comparison(id) => comparisons::remove_set(&transaction, *id)?,
                 Entry::Refs(url) => refs::remove(&transaction, url)?,
             }
         }
@@ -49,6 +51,7 @@ fn oldest_entries(connection: &Connection) -> Result<Vec<Entry>, Error> {
         "SELECT 'listing', source_id, fetched_at FROM github_listings
          UNION ALL SELECT 'commits', CAST(id AS TEXT), fetched_at FROM commit_sets
          UNION ALL SELECT 'refs', url, fetched_at FROM ref_sets
+         UNION ALL SELECT 'comparison', CAST(id AS TEXT), fetched_at FROM github_comparisons
          ORDER BY 3 ASC LIMIT ?1",
     )?;
     let rows = statement.query_map([BATCH], |row| {
@@ -56,6 +59,7 @@ fn oldest_entries(connection: &Connection) -> Result<Vec<Entry>, Error> {
         Ok(match kind.as_str() {
             "listing" => Entry::Listing(key),
             "commits" => Entry::Commits(key.parse().unwrap_or_default()),
+            "comparison" => Entry::Comparison(key.parse().unwrap_or_default()),
             _ => Entry::Refs(key),
         })
     })?;

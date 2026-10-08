@@ -418,6 +418,8 @@ pub(super) async fn prepare(
         history,
         file_count: rows.len(),
         options,
+        source: "local",
+        truncated: Default::default(),
     };
     Ok(Prepared {
         view,

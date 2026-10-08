@@ -50,7 +50,7 @@ fn an_empty_directory_migrates_to_the_latest_schema() {
     let fixture = Fixture::new("store-empty");
     let store = open(&fixture);
     assert!(store.recovered_from().is_none());
-    assert_eq!(pragma(&store, "user_version"), "3");
+    assert_eq!(pragma(&store, "user_version"), "4");
     assert_eq!(pragma(&store, "journal_mode"), "wal");
     assert_eq!(pragma(&store, "foreign_keys"), "1");
     assert_eq!(pragma(&store, "auto_vacuum"), "2");
@@ -59,13 +59,13 @@ fn an_empty_directory_migrates_to_the_latest_schema() {
             Ok(connection.query_row(
                 "SELECT count(*) FROM sqlite_master WHERE name IN
                  ('github_listings','repositories','commit_sets','commits','ref_sets','refs',
-                  'repository_search','commit_search')",
+                  'repository_search','commit_search','github_comparisons','github_comparison_scopes')",
                 [],
                 |row| row.get(0),
             )?)
         })
         .unwrap();
-    assert_eq!(tables, 8);
+    assert_eq!(tables, 10);
 }
 
 #[test]
