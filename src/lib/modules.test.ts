@@ -1,6 +1,6 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
-import { isModuleVisible, ownsPage, sectionOnActivate, isSection, moduleOfView, moduleShortcut, providerHosts, PROVIDERS, railClick, railLayout, viewOfModule, visibleProviders, type BadgeContext } from './modules';
+import { isModuleVisible, ownsPage, sectionOnActivate, isSection, moduleOfView, moduleShortcut, providerHosts, PROVIDERS, railLayout, viewOfModule, visibleProviders, type BadgeContext } from './modules';
 import { migrateWorkspace, tabId } from './workspace';
 import type { Workspace } from './api';
 
@@ -94,12 +94,6 @@ describe('shortcuts and clicks', () => {
     expect(moduleShortcut('J')).toBe('activity');
     expect(moduleShortcut(',')).toBe('settings');
     expect(moduleShortcut('a')).toBeUndefined();
-  });
-
-  test('clicking the active module folds the sidebar and any other click shows its module', () => {
-    expect(railClick({ section: 'repos', sidebarVisible: true }, 'repos')).toEqual({ section: 'repos', sidebarVisible: false });
-    expect(railClick({ section: 'repos', sidebarVisible: false }, 'repos')).toEqual({ section: 'repos', sidebarVisible: true });
-    expect(railClick({ section: 'repos', sidebarVisible: true }, 'activity')).toEqual({ section: 'activity', sidebarVisible: true });
   });
 });
 

@@ -88,14 +88,6 @@ export function railLayout(sources: readonly SourceFacts[], context: BadgeContex
   return { local: inGroup('local'), providers, system: inGroup('system') };
 }
 
-export type RailState = { section: RailSection; sidebarVisible: boolean };
-
-/** Clicking the active module folds the sidebar; any other click shows that module. */
-export function railClick(state: RailState, clicked: RailSection): RailState {
-  if (state.sidebarVisible && state.section === clicked) return { section: clicked, sidebarVisible: false };
-  return { section: clicked, sidebarVisible: true };
-}
-
 /** Ctrl+1..5 pick the Local Git modules, Ctrl+J opens Activity and Ctrl+, opens Settings. */
 export function moduleShortcut(key: string): ModuleId | undefined {
   const lower = key.toLowerCase();
