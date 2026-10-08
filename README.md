@@ -8,6 +8,13 @@
 
 </div>
 
+<p align="center">
+  <a href="docs/showreel.mp4" title="Watch the 25 second showreel (MP4)">
+    <img src="docs/images/showreel.webp" alt="Skein showreel: 800 repositories become one table, one next action each, compare with undo, a local cache that opens instantly" width="900" />
+  </a>
+  <br /><sub>25-second showreel. <a href="docs/showreel.mp4">Watch the full-quality MP4</a>. Source and renderer: <a href="docs/showreel/">docs/showreel</a>.</sub>
+</p>
+
 You do not work in one repository. You work in twenty, or eight hundred: a product split into
 services, a customer workspace, a release train, a GitHub Enterprise organization. Terminals and
 browser tabs handle that badly. Skein is built for it.

@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skein showreel</title>
+<style>
+@font-face { font-family: Geist; src: url(fonts/geist.woff2); font-weight: 100 900; }
+@font-face { font-family: "Geist Mono"; src: url(fonts/geist-mono.woff2); font-weight: 100 900; }
+:root {
+  --ink: #0a1017; --ink-2: #111b26; --line: #223142; --blue: #0a84d6; --blue-d: #006eb8;
+  --pale: #a7d4e4; --yel: #fff200; --ok: #2bc4a8; --warn: #f0a030; --err: #ef5350;
+  --mut: #6b7c8c; --tx: #eaf2f8;
+}
+html, body { margin: 0; background: #000; }
+#stage { position: relative; width: 1280px; height: 720px; overflow: hidden; background: var(--ink);
+  font-family: Geist, sans-serif; color: var(--tx); }
+#stage * { box-sizing: border-box; }
+.c { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; will-change: transform, opacity; }
+.fill { position: absolute; inset: 0; }
+#bg { background-image: radial-gradient(circle, #1a2a3a 1.4px, transparent 1.6px); background-size: 40px 40px; }
+#glow { width: 1100px; height: 1100px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(10,132,214,.30), rgba(10,132,214,0) 62%); }
+.h1 { font-weight: 650; letter-spacing: -0.045em; line-height: 1; white-space: nowrap; }
+.sub { font-weight: 450; color: var(--mut); letter-spacing: -0.01em; white-space: nowrap; }
+.mono { font-family: "Geist Mono", monospace; }
+.win { width: 1000px; height: 625px; border-radius: 14px; overflow: hidden; background: #fff;
+  box-shadow: 0 40px 120px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.08); }
+.win img { display: block; width: 1000px; height: 625px; }
+.pill { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 20px; border-radius: 22px;
+  font-weight: 600; font-size: 20px; letter-spacing: -0.01em; white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 19px;
+  border: 1px solid var(--line); background: var(--ink-2); font-weight: 550; font-size: 17px; white-space: nowrap; }
+.chip i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.code { width: 470px; height: 270px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
+  overflow: hidden; font-family: "Geist Mono", monospace; font-size: 17px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.code .bar { height: 36px; border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 14px;
+  color: var(--mut); font-size: 13px; gap: 8px; }
+.code .bar b { color: var(--tx); font-weight: 600; }
+.row { position: absolute; left: 0; width: 100%; height: 34px; line-height: 34px; white-space: pre; padding-left: 52px; }
+.row span.n { position: absolute; left: 14px; color: #3b4d5f; font-size: 13px; }
+.row .bgfx { position: absolute; inset: 0; transform-origin: 0 50%; }
+.row .t { position: relative; }
+.cyl-label { font-family: "Geist Mono", monospace; font-size: 15px; color: var(--pale); white-space: nowrap; }
+.tbl { width: 400px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.tbl .r { height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px;
+  border-bottom: 1px solid var(--line); font-size: 18px; font-weight: 520; position: relative; overflow: hidden; }
+.tbl .r:last-child { border-bottom: 0; }
+.tbl .tag { font-family: "Geist Mono", monospace; font-size: 13px; padding: 4px 10px; border-radius: 12px; position: relative; }
+.host { width: 250px; height: 56px; border-radius: 12px; border: 1px solid var(--line); background: var(--ink-2);
+  display: flex; align-items: center; gap: 12px; padding: 0 16px; font-weight: 550; font-size: 18px; }
+.host i { width: 12px; height: 12px; border-radius: 50%; background: var(--ok); display: block; }
+.tick { font-weight: 600; font-size: 21px; letter-spacing: -0.02em; color: #3b4d5f; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg" class="fill"></div>
+  <div id="glow" class="c"></div>
+  <canvas id="dots" class="fill" width="1280" height="720"></canvas>
+
+  <!-- A: logo -->
+  <div id="A">
+    <svg id="logo" class="c" width="384" height="384" viewBox="0 0 64 64" style="overflow:visible">
+      <rect id="a-rect" width="64" height="64" rx="15" fill="#006eb8"/>
+      <path id="a-path" d="M14 21H24C34 21 30 43 40 43H50" fill="none" stroke="#a7d4e4" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>
+      <circle id="a-c1" cx="14" cy="21" r="6" fill="#a7d4e4"/>
+      <circle id="a-c2" cx="50" cy="43" r="6.5" fill="#fff200"/>
+      <circle id="a-ring" cx="50" cy="43" r="6.5" fill="none" stroke="#fff200" stroke-width="1"/>
+    </svg>
+    <div id="a-word" class="c h1" style="font-size:150px"></div>
+    <div id="a-tag" class="c sub" style="font-size:30px">800 repositories. One thread.</div>
+  </div>
+
+  <!-- B: field + screenshot -->
+  <div id="B">
+    <div id="b-count" class="c h1" style="font-size:88px;left:50%;text-align:left"></div>
+    <div id="b-sub" class="c sub" style="font-size:26px">repositories across GitHub, Enterprise and plain Git</div>
+    <div id="b-chips" class="c" style="display:flex;gap:12px">
+      <span class="chip" id="chip-b"><i style="background:var(--ok)"></i>Behind <b id="cb">0</b></span>
+      <span class="chip" id="chip-a"><i style="background:var(--err)"></i>Ahead <b id="ca">0</b></span>
+      <span class="chip" id="chip-c"><i style="background:var(--warn)"></i>Changes <b id="cc">0</b></span>
+    </div>
+    <div id="b-persp" class="c" style="width:1000px;height:625px;perspective:1800px">
+      <div id="b-win" class="win" style="position:absolute;inset:0;transform-style:preserve-3d">
+        <img src="../images/repositories.png" alt="">
+        <div id="b-ring" style="position:absolute;left:684px;top:75px;width:120px;height:44px;margin:-22px 0 0 -60px;border-radius:12px;border:3px solid var(--yel)"></div>
+        <svg id="b-cur" width="28" height="28" viewBox="0 0 24 24" style="position:absolute;left:0;top:0;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45))">
+          <path d="M3 2l7 19 3-8 8-3z" fill="#fff" stroke="#0a1017" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    <div id="b-prog" class="c" style="width:360px">
+      <div class="sub" style="font-size:18px;margin-bottom:10px;color:var(--tx)">Fetch all · <span id="b-prog-n">0</span> / 800</div>
+      <div style="height:8px;border-radius:4px;background:var(--line);overflow:hidden"><div id="b-prog-bar" style="height:100%;width:0;background:var(--ok);border-radius:4px"></div></div>
+    </div>
+  </div>
+
+  <!-- C: one next action -->
+  <div id="C">
+    <div id="c-l1" class="c h1" style="font-size:132px">One next</div>
+    <div id="c-slot" class="c" style="width:760px;height:150px;overflow:hidden">
+      <div id="c-words" style="position:absolute;left:0;top:0;width:100%"></div>
+    </div>
+    <div id="c-l3" class="c h1" style="font-size:132px">per repository.</div>
+    <div id="c-pills" class="c" style="display:flex;gap:14px"></div>
+    <div id="c-sub" class="c sub" style="font-size:30px">Tick 711 rows. Run it for all of them.</div>
+  </div>
+
+  <!-- D: compare -->
+  <div id="D">
+    <div id="d-h" class="c h1" style="font-size:76px"></div>
+    <div id="d-h2" class="c h1" style="font-size:76px"></div>
+    <div id="d-L" class="c code"><div class="bar"><b>gateway-etl</b> @ HEAD · read-only</div><div id="d-Lc" style="position:absolute;left:0;top:36px;width:100%;height:234px"></div></div>
+    <div id="d-R" class="c code"><div class="bar"><b>gateway-etl</b> @ Working tree</div><div id="d-Rc" style="position:absolute;left:0;top:36px;width:100%;height:234px"></div></div>
+    <svg id="d-rib" class="c" width="110" height="300" viewBox="0 -36 110 300" style="overflow:visible"></svg>
+    <div id="d-sum" class="c chip" style="font-size:20px;height:46px"><span id="d-sum-t"></span></div>
+    <div id="d-safe" class="c chip" style="font-size:19px;height:46px;border-color:var(--ok)"><i style="background:var(--ok)"></i>Backup recorded · Undo ready</div>
+    <div id="d-fly" class="c code mono" style="width:420px;height:34px;border-radius:6px;border:0;background:rgba(43,196,168,.28);box-shadow:0 0 40px rgba(43,196,168,.45);font-size:17px;line-height:34px;padding-left:20px;white-space:pre;color:var(--tx)">    println!("a");</div>
+    <div id="d-c1" class="c" style="width:560px"><img src="../images/folder-compare.png" alt="" style="display:block;width:560px;border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.08)"></div>
+    <div id="d-c2" class="c" style="width:560px"><img src="../images/file-compare.png" alt="" style="display:block;width:560px;border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.08)"></div>
+    <div id="d-cap" class="c sub" style="font-size:28px">Folders, branches, commits. Copy a block, keep a backup.</div>
+  </div>
+
+  <!-- E: database -->
+  <div id="E">
+    <div id="e-h" class="c h1" style="font-size:76px">Opens from disk.</div>
+    <div id="e-h2" class="c h1" style="font-size:76px;color:var(--ok)">Then revalidates.</div>
+    <div id="e-hosts"></div>
+    <svg id="e-svg" class="c" width="1280" height="720" viewBox="-640 -360 1280 720" style="overflow:visible"></svg>
+    <div id="e-db" class="c" style="width:220px;height:240px"></div>
+    <div id="e-tables"></div>
+    <div id="e-tbl" class="c tbl"></div>
+    <div id="e-note" class="c sub" style="font-size:24px">A disposable SQLite cache. Delete it and nothing is lost.</div>
+  </div>
+
+  <!-- F: shell + finale -->
+  <div id="F">
+    <div id="f-persp" class="c" style="width:1000px;height:625px;perspective:1800px">
+      <div id="f-win" class="win" style="position:absolute;inset:0;transform-style:preserve-3d"><img src="../images/shell-target.png" alt=""></div>
+    </div>
+    <div id="f-ticks" class="c" style="display:flex;gap:26px"></div>
+    <div id="f-cap" class="c h1" style="font-size:72px">Every module. One rail.</div>
+    <svg id="f-logo" class="c" width="300" height="300" viewBox="0 0 64 64" style="overflow:visible">
+      <rect id="f-rect" width="64" height="64" rx="15" fill="#006eb8"/>
+      <path id="f-path" d="M14 21H24C34 21 30 43 40 43H50" fill="none" stroke="#a7d4e4" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>
+      <circle id="f-c1" cx="14" cy="21" r="6" fill="#a7d4e4"/>
+      <circle id="f-c2" cx="50" cy="43" r="6.5" fill="#fff200"/>
+    </svg>
+    <div id="f-word" class="c h1" style="font-size:132px"></div>
+    <div id="f-tag" class="c sub" style="font-size:32px">Every repository. One thread.</div>
+    <div id="f-meta" class="c mono" style="font-size:17px;color:var(--mut);letter-spacing:.04em">WINDOWS · LINUX · RUST + SVELTE</div>
+  </div>
+</div>
+
+<script>
+const DURATION = 25.5;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const E = {
+  lin: (t) => t,
+  out: (t) => 1 - Math.pow(1 - t, 4),
+  out3: (t) => 1 - Math.pow(1 - t, 3),
+  inout: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+  in: (t) => t * t * t,
+  back: (t) => { const c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); },
+  expo: (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)),
+};
+const p = (t, a, b, e = E.out) => e(clamp((t - a) / (b - a)));
+const lerp = (a, b, k) => a + (b - a) * k;
+const put = (el, x = 0, y = 0, s = 1, o = 1, r = 0) => {
+  el.style.transform = `translate(-50%,-50%) translate(${x}px,${y}px) rotate(${r}deg) scale(${s})`;
+  el.style.opacity = o;
+  el.style.visibility = o <= 0.001 ? 'hidden' : 'visible';
+};
+const vis = (el, o) => { el.style.opacity = o; el.style.visibility = o <= 0.001 ? 'hidden' : 'visible'; };
+const window3 = (t, a, b, c, d) => Math.min(p(t, a, b, E.out3), 1 - p(t, c, d, E.inout));
+
+// ---------- build ----------
+const aWord = $('a-word');
+'Skein'.split('').forEach((ch) => { const s = document.createElement('span'); s.textContent = ch;
+  s.style.display = 'inline-block'; aWord.appendChild(s); });
+const fWord = $('f-word');
+'Skein'.split('').forEach((ch) => { const s = document.createElement('span'); s.textContent = ch;
+  s.style.display = 'inline-block'; fWord.appendChild(s); });
+
+const ACTIONS = [['Clone', '#0a84d6', '#fff'], ['Commit', '#2bc4a8', '#06231d'], ['Switch', '#a7d4e4', '#0a2530'],
+  ['Pull', '#f0a030', '#2a1800'], ['Push', '#fff200', '#2a2700']];
+const cWords = $('c-words');
+ACTIONS.forEach(([w, col]) => { const d = document.createElement('div'); d.className = 'h1'; d.textContent = w;
+  d.style.cssText = `height:150px;line-height:150px;font-size:132px;text-align:center;color:${col}`; cWords.appendChild(d); });
+const cPills = $('c-pills');
+ACTIONS.forEach(([w, col, fg]) => { const s = document.createElement('span'); s.className = 'pill'; s.textContent = w;
+  s.style.cssText = `background:${col};color:${fg}`; cPills.appendChild(s); });
+
+// compare rows
+const ROWS = [
+  ['fn main() {', 'fn main() {', 'same'],
+  ['    let cfg = load();', '    let cfg = load();', 'same'],
+  ['    println!("a");', '    println!("b");', 'mod'],
+  ['    sync(&cfg);', '    sync(&cfg, &cache);', 'mod'],
+  ['', '    run();', 'add'],
+  ['}', '}', 'same'],
+];
+const RED = 'rgba(239,83,80,.30)', GRN = 'rgba(43,196,168,.30)', NEUT = 'rgba(167,212,228,.0)';
+const buildRows = (host, side) => ROWS.map((r, i) => {
+  const d = document.createElement('div'); d.className = 'row'; d.style.top = i * 34 + 'px';
+  const txt = side === 0 ? r[0] : r[1];
+  d.innerHTML = `<div class="bgfx"></div><span class="n">${i + 1}</span><span class="t"></span>`;
+  d.querySelector('.t').textContent = txt;
+  host.appendChild(d); return d;
+});
+const Lrows = buildRows($('d-Lc'), 0), Rrows = buildRows($('d-Rc'), 1);
+const RIB = [2, 3, 4];
+const dRib = $('d-rib');
+dRib.innerHTML = RIB.map((i) => `<path id="rib${i}" fill="rgba(167,212,228,.16)" stroke="rgba(167,212,228,.45)" stroke-width="1.5"/>`).join('');
+const L_X = -290, R_X = 290, PANEL_Y = 40, CODE_TOP = PANEL_Y - 135 + 36; // stage-centre coords
+const ribbon = (i, k) => { // k 0..1 reveal
+  const y0 = 36 + i * 34 + 0, y1 = y0 + 34; // local to panel top
+  const top = 36 + i * 34; const x0 = 0, x1 = 110;
+  const yy = (v) => v - 0;
+  const pth = `M${x0} ${top} C ${x0 + 45} ${top}, ${x1 - 45} ${top}, ${x1} ${top} L ${x1} ${top + 34} C ${x1 - 45} ${top + 34}, ${x0 + 45} ${top + 34}, ${x0} ${top + 34} Z`;
+  $('rib' + i).setAttribute('d', pth); $('rib' + i).style.opacity = k;
+};
+
+// db
+$('e-db').innerHTML = `<svg width="220" height="240" viewBox="0 0 220 240" style="overflow:visible">
+  <defs><linearGradient id="cg" x1="0" x2="1"><stop offset="0" stop-color="#0b4d7d"/><stop offset=".5" stop-color="#0a84d6"/><stop offset="1" stop-color="#0b4d7d"/></linearGradient></defs>
+  <path d="M10 40V190C10 220 210 220 210 190V40" fill="url(#cg)" opacity=".92"/>
+  <ellipse cx="110" cy="190" rx="100" ry="24" fill="#0b4d7d" opacity=".0"/>
+  <path id="db-b1" d="M10 100C10 130 210 130 210 100" fill="none" stroke="#a7d4e4" stroke-opacity=".5" stroke-width="2"/>
+  <path id="db-b2" d="M10 150C10 180 210 180 210 150" fill="none" stroke="#a7d4e4" stroke-opacity=".5" stroke-width="2"/>
+  <ellipse cx="110" cy="40" rx="100" ry="26" fill="#a7d4e4"/>
+  <ellipse id="db-pulse" cx="110" cy="40" rx="100" ry="26" fill="none" stroke="#fff200" stroke-width="3" opacity="0"/>
+</svg>`;
+const hostEls = [['github.com', 'github.com', -250], ['git.company.com', 'Enterprise A', -170 + 0], ['git.company.com', 'Enterprise B', -90]];
+const eHosts = $('e-hosts');
+const HOST_Y = [-130, -10, 110];
+const HOST_NAMES = ['github.com', 'ghe.company.com', 'git.company.com'];
+const hostDivs = HOST_NAMES.map((n) => { const d = document.createElement('div'); d.className = 'c host';
+  d.innerHTML = `<i></i>${n}`; eHosts.appendChild(d); return d; });
+const TABLE_NAMES = ['github_listings', 'repositories', 'commits', 'refs', 'FTS5 search'];
+const eTables = $('e-tables');
+const tableDivs = TABLE_NAMES.map((n) => { const d = document.createElement('div'); d.className = 'c cyl-label'; d.style.textAlign = 'left'; d.style.width = '190px';
+  d.textContent = '▸ ' + n; eTables.appendChild(d); return d; });
+const REPOS = ['api-auth', 'gateway-etl', 'billing-queue', 'auth-ledger', 'ios-report'];
+$('e-tbl').innerHTML = REPOS.map((n) => `<div class="r"><span>${n}</span><span class="tag"><span class="tb" style="position:absolute;inset:0;border-radius:12px"></span><span class="tt" style="position:relative">stale</span></span></div>`).join('');
+const eSvg = $('e-svg');
+const HX = -335, DBX = -100; // path from host right edge to db
+const PATHS = HOST_Y.map((y, i) => `M${HX} ${y} C ${HX + 90} ${y}, ${DBX - 190} ${50 + (i - 1) * 40}, ${DBX - 112} ${50 + (i - 1) * 40}`);
+eSvg.innerHTML = PATHS.map((d, i) => `<path id="ep${i}" d="${d}" fill="none" stroke="#223142" stroke-width="2" stroke-dasharray="6 8"/>`).join('') +
+  Array.from({ length: 18 }, (_, i) => `<circle id="pk${i}" r="6" fill="${i % 6 === 0 ? '#fff200' : '#a7d4e4'}" opacity="0"/>`).join('');
+const pathEls = PATHS.map((_, i) => $('ep' + i));
+const pathLen = pathEls.map((e) => e.getTotalLength());
+
+$('f-ticks').innerHTML = ['Repositories', 'Changes', 'Branches', 'Compare', 'Search', 'Pull requests', 'Actions']
+  .map((n) => `<span class="tick">${n}</span>`).join('');
+const fTicks = $('f-ticks').children;
+
+// dot field
+const cv = $('dots'), cx = cv.getContext('2d');
+const COLS = 40, ROWSN = 20, GAP = 24;
+const COL = { sync: '#2a3b4c', changes: '#f0a030', behind: '#2bc4a8', ahead: '#ef5350', none: '#6b7c8c' };
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const dots = [];
+for (let r = 0; r < ROWSN; r++) for (let c = 0; c < COLS; c++) {
+  const x = (c - (COLS - 1) / 2) * GAP, y = (r - (ROWSN - 1) / 2) * GAP, v = rnd();
+  const st = v < 0.106 ? 'changes' : v < 0.264 ? 'behind' : v < 0.371 ? 'ahead' : v < 0.462 ? 'none' : 'sync';
+  dots.push({ x, y, st, d: Math.hypot(x, y) });
+}
+const counts = { behind: 126, ahead: 86, changes: 85 };
+
+// ---------- render ----------
+function render(t) {
+  // background
+  $('bg').style.backgroundPosition = `${-t * 18}px ${-t * 9}px`;
+  const gx = lerp(-200, 260, p(t, 0, 25)), gy = lerp(-120, 140, p(t, 0, 25));
+  put($('glow'), gx + Math.sin(t * 0.7) * 60, gy + Math.cos(t * 0.5) * 40, 1, 0.9);
+
+  // ---- A 0 - 3.9
+  const aOn = 1 - p(t, 3.3, 3.9, E.inout);
+  vis($('A'), t < 4 ? 1 : 0);
+  const logoS = lerp(0.9, 1, p(t, 0, 2.4, E.out3)) * lerp(1, 0.34, p(t, 1.9, 2.7, E.inout));
+  const logoX = lerp(0, -330, p(t, 1.9, 2.7, E.inout));
+  put($('logo'), logoX, 0, logoS * (1 + 0.04 * Math.sin(t * 2)) * lerp(0.3, 1, p(t, 0, 0.6, E.back)), aOn * p(t, 0, 0.25));
+  $('a-rect').style.transformOrigin = '32px 32px';
+  $('a-rect').style.transform = `scale(${p(t, 0.05, 0.7, E.back)})`;
+  $('a-path').setAttribute('stroke-dashoffset', 1 - p(t, 0.5, 1.5, E.inout));
+  $('a-c1').setAttribute('r', 6 * p(t, 0.4, 0.8, E.back));
+  const c2k = p(t, 1.4, 1.8, E.back);
+  $('a-c2').setAttribute('r', 6.5 * c2k);
+  const ringK = p(t, 1.5, 2.3, E.out);
+  $('a-ring').setAttribute('r', 6.5 + 40 * ringK); $('a-ring').setAttribute('opacity', (1 - ringK) * 0.9);
+  aWord.querySelectorAll('span').forEach((s, i) => {
+    const k = p(t, 2.0 + i * 0.07, 2.7 + i * 0.07, E.out);
+    s.style.transform = `translateY(${(1 - k) * 90}px)`; s.style.opacity = k; });
+  put(aWord, 120, -6, 1, aOn);
+  put($('a-tag'), 120, 88, 1, p(t, 2.6, 3.1) * aOn);
+
+  // ---- B 3.4 - 9.0 (dots 3.4-6.9, screenshot 6.6-9.0)
+  const bOn = t > 3.2 && t < 9.1;
+  vis($('B'), bOn ? 1 : 0);
+  const zoom = lerp(1, 5, p(t, 6.4, 7.3, E.in)), dotsFade = 1 - p(t, 6.5, 7.2, E.lin);
+  cx.clearRect(0, 0, 1280, 720);
+  const field = t > 3.2 && t < 7.4;
+  if (field) {
+    const scale = zoom * lerp(0.9, 1, p(t, 3.3, 5));
+    cx.save(); cx.translate(640, 380); cx.scale(scale, scale);
+    const act = t < 5.0 ? null : t < 5.5 ? 'behind' : t < 6.0 ? 'ahead' : t < 6.5 ? 'changes' : null;
+    for (const d of dots) {
+      const k = p(t, 3.5 + d.d * 0.0021, 3.9 + d.d * 0.0021, E.back);
+      if (k <= 0) continue;
+      const colK = p(t, 4.3 + d.d * 0.0012, 4.7 + d.d * 0.0012, E.out);
+      let r = 7.2 * k, a = 1;
+      if (act) { if (d.st === act) { r *= 1.45; } else { a = 0.22; } }
+      const col = colK > 0.5 ? COL[d.st] : COL.sync;
+      cx.globalAlpha = a * dotsFade; cx.fillStyle = col;
+      if (act && d.st === act) { cx.shadowColor = col; cx.shadowBlur = 16; } else cx.shadowBlur = 0;
+      cx.beginPath(); cx.arc(d.x, d.y, Math.max(0, r), 0, 6.283); cx.fill();
+    }
+    cx.restore(); cx.shadowBlur = 0; cx.globalAlpha = 1;
+  }
+  const n800 = Math.round(800 * p(t, 3.7, 4.7, E.out));
+  const bHead = p(t, 3.6, 4.1) * (1 - p(t, 6.2, 6.7, E.inout));
+  $('b-count').textContent = n800; put($('b-count'), 0, -292 + (1 - p(t, 3.6, 4.2)) * 20, 1, bHead);
+  put($('b-sub'), 0, -238, 1, p(t, 4.1, 4.6) * (1 - p(t, 6.2, 6.7, E.inout)));
+  const chipsO = p(t, 4.7, 5.1) * (1 - p(t, 6.3, 6.8, E.inout));
+  put($('b-chips'), 0, 288, 1, chipsO);
+  const activeChip = t < 5 ? '' : t < 5.5 ? 'b' : t < 6 ? 'a' : t < 6.5 ? 'c' : '';
+  ['b', 'a', 'c'].forEach((k) => { const el = $('chip-' + k);
+    el.style.borderColor = activeChip === k ? '#a7d4e4' : '#223142';
+    el.style.transform = activeChip === k ? 'scale(1.12)' : 'scale(1)'; el.style.transition = 'none'; });
+  const cn = p(t, 4.8, 5.4, E.out);
+  $('cb').textContent = Math.round(counts.behind * cn); $('ca').textContent = Math.round(counts.ahead * cn); $('cc').textContent = Math.round(counts.changes * cn);
+
+  // screenshot
+  const wk = p(t, 6.6, 7.7, E.out);
+  const wOn = wk * (1 - p(t, 8.7, 9.1, E.inout));
+  put($('b-persp'), lerp(60, 0, wk), lerp(40, -6, wk), lerp(0.7, 0.93, wk) * lerp(1, 1.12, p(t, 8.0, 9.1, E.inout)), wOn);
+  $('b-win').style.transform = `rotateY(${lerp(-22, -5, wk) + Math.sin(t * 1.3) * 1.2}deg) rotateX(${lerp(10, 3, wk)}deg)`;
+  // cursor path
+  const ck = p(t, 7.2, 7.95, E.inout);
+  const cxp = lerp(420, 684, ck), cyp = lerp(470, 80, ck) - Math.sin(ck * Math.PI) * 60;
+  $('b-cur').style.transform = `translate(${cxp}px,${cyp}px) scale(${t > 7.95 && t < 8.08 ? 0.85 : 1})`;
+  vis($('b-cur'), p(t, 7.1, 7.3));
+  const clickK = p(t, 7.98, 8.5, E.out);
+  $('b-ring').style.opacity = t > 7.98 ? (1 - clickK) : 0;
+  $('b-ring').style.transform = `scale(${1 + clickK * 0.8})`;
+  const prog = p(t, 8.05, 8.9, E.inout);
+  put($('b-prog'), 0, 0, 1, 0); // hidden: progress shown inline instead
+  vis($('b-prog'), 0);
+
+  // ---- C 8.9 - 12.3
+  const cOn = t > 8.7 && t < 12.5; vis($('C'), cOn ? 1 : 0);
+  const cIn = p(t, 8.9, 9.5, E.out), cOut = 1 - p(t, 11.9, 12.4, E.inout);
+  put($('c-l1'), 0, -190 + (1 - cIn) * 40, 1, cIn * cOut);
+  put($('c-slot'), 0, -45, 1, cIn * cOut);
+  // slot index
+  const STEP = 0.52, T0 = 9.6; let idx = 0;
+  for (let i = 1; i < 5; i++) idx += p(t, T0 + (i - 1) * STEP, T0 + (i - 1) * STEP + 0.28, E.inout);
+  $('c-words').style.transform = `translateY(${-idx * 150}px)`;
+  $('c-words').style.paddingLeft = '0px';
+  put($('c-l3'), 0, 100 + (1 - cIn) * 40, 1, cIn * cOut * p(t, 9.3, 9.9));
+  put($('c-pills'), 0, 215, 1, p(t, 10.0, 10.6) * cOut);
+  [...cPills.children].forEach((el, i) => { const lit = idx >= i - 0.25; el.style.opacity = lit ? 1 : 0.22;
+    el.style.transform = `scale(${lit && Math.abs(idx - i) < 0.5 ? 1.12 : 1})`; });
+  put($('c-sub'), 0, 280, 1, p(t, 11.0, 11.5) * cOut);
+
+  // ---- D 12.2 - 17.4
+  const dOn = t > 12.1 && t < 17.7; vis($('D'), dOn ? 1 : 0);
+  const dIn = p(t, 12.3, 13.0, E.out), dOutPanels = 1 - p(t, 16.0, 16.5, E.inout);
+  const dHead = p(t, 12.3, 12.8) * (1 - p(t, 14.5, 14.9, E.inout));
+  $('d-h').textContent = 'Compare anything.'; put($('d-h'), 0, -240 + (1 - p(t, 12.3, 12.9)) * 30, 1, dHead);
+  $('d-h2').textContent = 'Copy with a safety net.'; put($('d-h2'), 0, -240 + (1 - p(t, 14.7, 15.3)) * 30, 1, p(t, 14.7, 15.2) * (1 - p(t, 16.0, 16.4, E.inout)));
+  const pY = PANEL_Y + 40;
+  put($('d-L'), lerp(-700, L_X, dIn), pY, 1, dIn * dOutPanels);
+  put($('d-R'), lerp(700, R_X, dIn), pY, 1, dIn * dOutPanels);
+  // typed lines
+  [Lrows, Rrows].forEach((rows, side) => rows.forEach((row, i) => {
+    const k = p(t, 12.9 + i * 0.07, 13.3 + i * 0.07);
+    row.style.opacity = k; row.style.transform = `translateX(${(1 - k) * (side ? 20 : -20)}px)`; }));
+  // diff highlights + copy progress
+  const diffAt = 13.5, copyAt = [15.0, 15.45, 15.9];
+  const copied = copyAt.map((c) => p(t, c + 0.5, c + 0.7, E.out));
+  const hl = p(t, diffAt, diffAt + 0.5, E.out);
+  ROWS.forEach((r, i) => {
+    const ri = RIB.indexOf(i); const l = Lrows[i].querySelector('.bgfx'), rr = Rrows[i].querySelector('.bgfx');
+    if (ri < 0) return;
+    const done = copied[ri];
+    const type = r[2];
+    const lc = type === 'add' ? 'rgba(107,124,140,.18)' : RED, rc = GRN;
+    l.style.background = lc; r_ = rr; rr.style.background = rc;
+    l.style.transform = `scaleX(${hl * (1 - done)})`; rr.style.transform = `scaleX(${hl * (1 - done)})`;
+    // copied: right text becomes left text
+    const txt = Rrows[i].querySelector('.t');
+    const target = ROWS[i][0];
+    if (done >= 1 && txt.textContent !== target) txt.textContent = target;
+    if (done < 1 && txt.textContent !== ROWS[i][1]) txt.textContent = ROWS[i][1];
+  });
+  // ribbons
+  RIB.forEach((i, ri) => ribbon(i, p(t, diffAt + 0.2, diffAt + 0.8) * (1 - copied[ri])));
+  put(dRib, 0, pY, 1, dIn * dOutPanels);
+  // summary
+  const remaining = RIB.reduce((n, _, ri) => n + (copied[ri] >= 1 ? 0 : 1), 0);
+  $('d-sum-t').innerHTML = t < diffAt + 0.4 ? '' : remaining ? `<b style="color:var(--warn)">${remaining}</b> differences` : `<b style="color:var(--ok)">✓</b> 0 differences`;
+  put($('d-sum'), 0, 205, 1, p(t, diffAt + 0.3, diffAt + 0.8) * dOutPanels);
+  // flying block
+  const flyOpacity = copyAt.map((c) => (t > c && t < c + 0.55 ? 1 : 0)).reduce((a, b) => Math.max(a, b), 0);
+  let fi = -1; copyAt.forEach((c, k) => { if (t > c && t < c + 0.55) fi = k; });
+  if (fi >= 0) {
+    const k = p(t, copyAt[fi], copyAt[fi] + 0.5, E.inout);
+    const row = RIB[fi]; const yy = pY - 135 + 36 + row * 34 + 17;
+    const label = ROWS[row][0] || '    run();';
+    $('d-fly').textContent = fi === 2 ? '    // removed' : label;
+    put($('d-fly'), lerp(L_X, R_X, k), yy - Math.sin(k * Math.PI) * 28 + 0, 1 + Math.sin(k * Math.PI) * 0.06, 1);
+  } else put($('d-fly'), 0, 0, 1, 0);
+  put($('d-safe'), 0, 262, 1, p(t, 16.3 - 0.1, 16.3 + 0.0, E.out) * 0);
+  // cards
+  const c1 = p(t, 16.2, 17.0, E.out), c2 = p(t, 16.4, 17.2, E.out);
+  const dFinal = 1 - p(t, 17.5, 17.9, E.inout);
+  put($('d-c1'), lerp(-900, -300, c1), lerp(60, -20, c1) + Math.sin(t * 1.5) * 4, 0.95, c1 * dFinal, -2.5);
+  put($('d-c2'), lerp(900, 300, c2), lerp(-40, 40, c2) + Math.cos(t * 1.4) * 4, 0.95, c2 * dFinal, 2.5);
+  put($('d-cap'), 0, 262, 1, p(t, 16.7, 17.2) * dFinal);
+  put($('d-safe'), 0, 215, 1, p(t, 15.95, 16.3, E.back) * (1 - p(t, 16.35, 16.6, E.inout)));
+
+  // ---- E 17.5 - 21.5
+  const eOn = t > 17.4 && t < 21.9; vis($('E'), eOn ? 1 : 0);
+  const eOut = 1 - p(t, 21.2, 21.7, E.inout);
+  put($('e-h'), 0, -270 + (1 - p(t, 17.7, 18.3)) * 30, 1, p(t, 17.7, 18.2) * eOut);
+  put($('e-h2'), 0, -190 + (1 - p(t, 18.6, 19.2)) * 30, 1, p(t, 18.6, 19.1) * eOut);
+  hostDivs.forEach((d, i) => put(d, -460 + (1 - p(t, 17.8 + i * 0.12, 18.4 + i * 0.12)) * -80, HOST_Y[i], 1, p(t, 17.8 + i * 0.12, 18.3 + i * 0.12) * eOut));
+  const dbK = p(t, 17.9, 18.7, E.back);
+  put($('e-db'), -100, 50, dbK, dbK * eOut);
+  put($('e-svg'), 0, 0, 1, eOn ? eOut : 0);
+  eSvg.setAttribute('viewBox', '-640 -360 1280 720');
+  // paths drawn
+  pathEls.forEach((el, i) => { el.style.strokeDashoffset = -t * 40; });
+  // packets
+  for (let i = 0; i < 18; i++) {
+    const path = i % 3, lane = Math.floor(i / 3);
+    const t0 = 18.4 + lane * 0.34 + path * 0.1, k = (t - t0) / 0.8;
+    const el = $('pk' + i);
+    if (k < 0 || k > 1) { el.setAttribute('opacity', 0); continue; }
+    const pt = pathEls[path].getPointAtLength(E.inout(k) * pathLen[path]);
+    el.setAttribute('cx', pt.x); el.setAttribute('cy', pt.y);
+    el.setAttribute('opacity', Math.sin(k * Math.PI) * 1);
+  }
+  // pulse of db
+  const pulse = (t - 18.9) % 0.34;
+  const pk = t > 18.9 && t < 20.7 ? pulse / 0.34 : 1;
+  $('db-pulse').setAttribute('opacity', (1 - pk) * 0.9); $('db-pulse').setAttribute('rx', 100 + pk * 18); $('db-pulse').setAttribute('ry', 26 + pk * 8);
+  tableDivs.forEach((d, i) => { const k = p(t, 19.1 + i * 0.1, 19.6 + i * 0.1);
+    put(d, 105 + (1 - k) * 24, -30 + i * 34, 1, k * eOut); });
+  // right-hand repo table
+  const tk = p(t, 18.9, 19.6, E.out);
+  put($('e-tbl'), 430 + (1 - tk) * 80, 40, 1, tk * eOut);
+  const sweep = p(t, 19.9, 20.9, E.inout);
+  [...$('e-tbl').children].forEach((row, i) => {
+    const tag = row.querySelector('.tag'), tb = row.querySelector('.tb'), tt = row.querySelector('.tt');
+    const k = clamp(sweep * 6 - i * 0.9);
+    const fresh = k > 0.5;
+    tt.textContent = fresh ? 'fresh' : 'stale'; tt.style.color = fresh ? '#06231d' : '#2a1800';
+    tb.style.background = fresh ? '#2bc4a8' : '#f0a030';
+  });
+  put($('e-note'), 0, 290, 1, p(t, 20.3, 20.9) * eOut);
+
+  // ---- F 21.3 - 25.5
+  const fOn = t > 21.2; vis($('F'), fOn ? 1 : 0);
+  const fk = p(t, 21.4, 22.4, E.out), fOut = 1 - p(t, 23.3, 23.9, E.inout);
+  put($('f-persp'), lerp(-80, 0, fk), lerp(40, 25, fk) + Math.sin(t * 1.2) * 4, lerp(0.55, 0.7, fk) * lerp(1, 1.18, p(t, 22.8, 23.9, E.in)), fk * fOut);
+  $('f-win').style.transform = `rotateY(${lerp(25, 6, fk) + Math.sin(t * 1.1) * 1.5}deg) rotateX(${lerp(8, 3, fk)}deg)`;
+  put($('f-ticks'), 0, 285, 1, p(t, 22.0, 22.4) * fOut);
+  [...fTicks].forEach((el, i) => { const a = 22.0 + i * 0.16; const k = p(t, a, a + 0.25);
+    el.style.color = k > 0 && t < a + 0.55 ? '#a7d4e4' : (k > 0 ? '#6b7c8c' : '#2a3a4a'); });
+  put($('f-cap'), 0, -285, 1, p(t, 21.6, 22.2) * fOut);
+  // finale lockup
+  const lk = p(t, 23.7, 24.7, E.out);
+  put($('f-logo'), lerp(0, -330, p(t, 24.0, 24.7, E.inout)), -10, lerp(0.5, 1, lk) * lerp(1, 0.46, p(t, 24.0, 24.7, E.inout)), p(t, 23.6, 23.9));
+  $('f-rect').style.transformOrigin = '32px 32px'; $('f-rect').style.transform = `scale(${p(t, 23.6, 24.2, E.back)})`;
+  $('f-path').setAttribute('stroke-dashoffset', 1 - p(t, 23.8, 24.5, E.inout));
+  $('f-c1').setAttribute('r', 6 * p(t, 23.7, 24.0, E.back)); $('f-c2').setAttribute('r', 6.5 * p(t, 24.3, 24.6, E.back));
+  fWord.querySelectorAll('span').forEach((s, i) => { const k = p(t, 24.3 + i * 0.06, 24.9 + i * 0.06, E.out);
+    s.style.transform = `translateY(${(1 - k) * 80}px)`; s.style.opacity = k; });
+  put(fWord, 100, -30, 1, 1);
+  put($('f-tag'), 100, 56, 1, p(t, 24.7, 25.2));
+  put($('f-meta'), 100, 112, 1, p(t, 24.9, 25.4));
+  vis($('f-logo'), p(t, 23.6, 23.9));
+}
+window.render = render;
+window.DURATION = DURATION;
+document.fonts.ready.then(() => { window.READY = true; render(0); });
+if (location.hash.startsWith('#t=')) { document.fonts.ready.then(() => render(parseFloat(location.hash.slice(3)))); }
+</script>
+</body>
+</html>
