@@ -124,6 +124,16 @@ describe('notices', () => {
     expect(notices).toEqual([{ message: 'Automatic refresh stopped: inotify queue overflowed. Refresh local status still works.', kind: 'warn' }]);
   });
 
+  test('after a watcher error the next sync restarts every set together', async () => {
+    const { refresh, watched } = fixture();
+    const targets = new Map([['a', ['/w/1']], ['b', ['/w/2']]]);
+    await refresh.sync(targets);
+    await refresh.failed('overflow');
+    expect(watched.size).toBe(0);
+    await refresh.sync(targets);
+    expect([...watched.keys()].sort()).toEqual(['a', 'b']);
+  });
+
   test('skipped folders and best-effort locations are one informational note each', async () => {
     const report = { watched: 1, skipped: [{ path: '/w/gone', reason: 'x' }], bestEffort: ['C:\\Users\\a\\OneDrive\\r'] };
     const { refresh, notices } = fixture({ watch: async () => report });
@@ -139,6 +149,9 @@ describe('notices', () => {
     refresh.lost('/w/gone', 'the folder is gone');
     refresh.lost('/w/gone', 'the folder is gone');
     expect(notices).toHaveLength(1);
+    refresh.changed('/w/gone');
+    refresh.lost('/w/gone', 'the folder is gone');
+    expect(notices).toHaveLength(2);
   });
 });
 

@@ -38,6 +38,7 @@ export class AutoRefresh {
   get watching() { return this.#active.size; }
 
   changed(path: string) {
+    this.#noted.delete(`lost:${path}`);
     this.#pending.add(path);
     clearTimeout(this.#trailing);
     this.#trailing = setTimeout(() => this.#flush(), this.#host.trailingMs ?? REFRESH_TRAILING_MS);
@@ -52,6 +53,7 @@ export class AutoRefresh {
   failed(reason: string): Promise<void> {
     this.#queue = this.#queue.then(async () => {
       for (const setId of [...this.#active]) await this.#drop(setId);
+      this.#applied.clear();
       this.#warn(ALL, `Automatic refresh stopped: ${reason}.`);
     });
     return this.#queue;
