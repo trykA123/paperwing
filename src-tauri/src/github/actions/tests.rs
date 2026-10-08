@@ -440,3 +440,13 @@ async fn dispatch_configuration_denial_names_contents_read_permission() {
         .contains("Contents read permission"));
     transport.complete();
 }
+
+#[test]
+fn download_commands_take_no_path_from_the_webview() {
+    let source = include_str!("commands.rs");
+    for name in ["ci_download_artifact", "ci_download_run_logs"] {
+        let start = source.find(&format!("pub async fn {name}(")).unwrap();
+        let signature = &source[start..source[start..].find(") ->").unwrap() + start];
+        assert!(!signature.contains("destination") && !signature.contains("path"));
+    }
+}
