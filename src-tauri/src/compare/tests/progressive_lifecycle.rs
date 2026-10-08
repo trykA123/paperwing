@@ -364,3 +364,61 @@ async fn content_memory_bounds_reserve_interactive_capacity_and_release_cancelle
     drop(second_row);
     assert!(flight::idle());
 }
+
+#[test]
+fn closing_during_producer_registration_joins_every_owned_generation() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .unwrap();
+    let _guard = runtime.block_on(git::TEST_RUNNER_LOCK.lock());
+    let fixture = runtime.block_on(Fixture::new());
+    fixture.write("file", b"old\n");
+    runtime.block_on(fixture.commit("base"));
+    let service = Arc::new(fixture.service());
+    let (started, _) = runtime.block_on(deferred(&fixture, &service));
+    let control = Arc::new(producer::RegistrationControl {
+        arrived: std::sync::Barrier::new(2),
+        release: std::sync::Barrier::new(2),
+    });
+    *service.registration_control.lock().unwrap() = Some(control.clone());
+    let returned_early = std::thread::scope(|scope| {
+        let runtime = &runtime;
+        let service = &service;
+        let id = &started.id;
+        let starting = scope.spawn(|| {
+            runtime.block_on(service.start(
+                &fixture.settings(),
+                &started.id,
+                Options::default(),
+                None,
+                None,
+            ))
+        });
+        control.arrived.wait();
+        let (entered, ready) = std::sync::mpsc::channel();
+        let (closed, completed) = std::sync::mpsc::channel();
+        let closing = scope.spawn(move || {
+            entered.send(()).unwrap();
+            let result = runtime.block_on(service.close(id));
+            closed.send(result).unwrap();
+        });
+        ready.recv().unwrap();
+        let early = completed.recv_timeout(Duration::from_millis(100));
+        control.release.wait();
+        starting.join().unwrap().unwrap();
+        closing.join().unwrap();
+        let returned_early = early.is_ok();
+        assert!(early.unwrap_or_else(|_| completed.recv().unwrap()));
+        returned_early
+    });
+    assert!(
+        !returned_early,
+        "close returned before producer ownership was registered"
+    );
+    assert_eq!(service.slots.available_permits(), 4);
+    assert!(flight::idle());
+    #[cfg(target_os = "linux")]
+    assert!(git::runner_idle());
+}

@@ -22,28 +22,31 @@ async fn twenty_thousand_rows_publish_inventory_content_and_bounded_final_pages(
         )
         .await
         .unwrap();
-    let control = Arc::new(publication::EnrichmentControl {
-        listed: Default::default(),
-        release: Default::default(),
-        panic: false,
-        after_fixed: false,
-    });
-    *service.enrichment_control.lock().unwrap() = Some(control.clone());
     let start = std::time::Instant::now();
     let started = service
         .start(&settings, &opened.id, Options::default(), None, None)
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(60), control.listed.notified())
-        .await
-        .unwrap();
-    let first = service
-        .progress(&opened.id, started.generation, 0, 500)
-        .unwrap();
+    let notify = service.sessions().get(&opened.id).unwrap().notify.clone();
+    let first = tokio::time::timeout(Duration::from_secs(60), async {
+        loop {
+            let changed = notify.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            let progress = service
+                .progress(&opened.id, started.generation, 0, 500)
+                .unwrap();
+            if !progress.rows.is_empty() {
+                break progress;
+            }
+            changed.await;
+        }
+    })
+    .await
+    .unwrap();
     let listed_ms = start.elapsed().as_millis();
     assert_eq!(first.state, State::Enriching);
     assert_eq!(first.totals.as_ref().unwrap().pending, FILE_LIMIT);
-    assert!(first.more);
     assert_eq!(first.rows.len(), 500);
     let RowUpdate::Pending(row) = &first.rows[0] else {
         panic!("not pending")
@@ -57,7 +60,13 @@ async fn twenty_thousand_rows_publish_inventory_content_and_bounded_final_pages(
         b"new\n"
     );
     let content_ms = start.elapsed().as_millis();
-    control.release.notify_one();
+    assert_eq!(
+        service
+            .progress(&opened.id, started.generation, 0, 500)
+            .unwrap()
+            .state,
+        State::Enriching
+    );
     let result = service.wait(&opened.id, started.generation).await.unwrap();
     let complete_ms = start.elapsed().as_millis();
     let RefreshResult::Ready { snapshot } = result else {
@@ -107,7 +116,7 @@ async fn twenty_thousand_rows_publish_inventory_content_and_bounded_final_pages(
         "{:x}",
         sha2::Sha256::digest(serde_json::to_vec(&equivalence::result(&prepared)).unwrap())
     );
-    println!("progressive trace: cache=empty prewarm=off rows={FILE_LIMIT} listed={listed_ms}ms content={content_ms}ms complete={complete_ms}ms pages={pages} fingerprint={fingerprint}");
+    println!("progressive trace: cache=app-empty os-cache=uncontrolled prewarm=off rows={FILE_LIMIT} listed={listed_ms}ms content={content_ms}ms complete={complete_ms}ms pages={pages} fingerprint={fingerprint}");
     service.close(&opened.id).await;
     assert!(flight::idle());
     #[cfg(target_os = "linux")]

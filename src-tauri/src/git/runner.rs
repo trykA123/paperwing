@@ -460,8 +460,8 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     #[cfg(feature = "benchmark")]
     let queue = crate::benchmark::Span::new("git.queue", operation);
     let _watch = cancel::watch(cancellation.as_ref(), &stop);
-    let _filesystem = cancel::admitted(filesystem_gate().read(), &cancellation, &stop).await?;
     let _permit = cancel::admitted(SLOTS.get_or_init(admission::Admission::default).acquire(admission::current()), &cancellation, &stop).await?;
+    let _filesystem = cancel::admitted(filesystem_gate().read(), &cancellation, &stop).await?;
     if is_cancelled(&cancellation, &stop) { return Err("Git command cancelled".into()); }
     #[cfg(feature = "benchmark")]
     drop(queue);

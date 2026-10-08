@@ -34,6 +34,8 @@ impl Service {
             });
             progress.listed = Some(listed.clone());
             progress.state = State::Enriching;
+            #[cfg(feature = "benchmark")]
+            drop(progress.listed_timer.take());
             progress.emit(id, generation);
             session.notify.notify_waiters();
         }

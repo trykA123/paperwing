@@ -1,0 +1,1861 @@
+{
+  "baseline": "da2e5ce",
+  "source": "src-tauri/src/commands/*.rs domain! registrations; unique names across all platform/feature conditions",
+  "before": [
+    "activity_snapshot",
+    "benchmark_finish",
+    "benchmark_plan",
+    "benchmark_record",
+    "benchmark_snapshot",
+    "cancel_activity",
+    "change_content",
+    "change_hunks",
+    "ci_artifacts",
+    "ci_cancel",
+    "ci_dispatch",
+    "ci_dispatch_inputs",
+    "ci_download_artifact",
+    "ci_download_run_logs",
+    "ci_job_log",
+    "ci_jobs",
+    "ci_rerun",
+    "ci_runs",
+    "clear_activity",
+    "commit_staged",
+    "comparison_cancel",
+    "comparison_close",
+    "comparison_commits",
+    "comparison_content",
+    "comparison_files",
+    "comparison_open",
+    "comparison_refresh",
+    "copy_apply",
+    "copy_cancel",
+    "copy_preview",
+    "create_branch",
+    "create_github_release",
+    "create_tag",
+    "credential_status",
+    "delete_branch",
+    "delete_merged_branches",
+    "delete_tag",
+    "delete_token",
+    "diagnostics_cancel",
+    "diagnostics_export",
+    "diagnostics_preview",
+    "diagnostics_status",
+    "discard_files",
+    "discard_hunk",
+    "discover_cancel",
+    "discover_cancel_all",
+    "discover_start",
+    "file_edit_close",
+    "file_edit_open",
+    "file_save",
+    "finder_start",
+    "get_commits",
+    "get_refs_many",
+    "has_token",
+    "launch_request",
+    "list_cached_repos",
+    "list_repos",
+    "list_tags",
+    "list_user_orgs",
+    "load_settings",
+    "local_status",
+    "merged_branches",
+    "open_in_vscode",
+    "open_pull_request",
+    "path_identities",
+    "platform_info",
+    "probe_root",
+    "pull_for_branch",
+    "push_branch",
+    "push_tag",
+    "recovery_cleanup",
+    "recovery_list",
+    "recovery_resolve",
+    "recovery_undo",
+    "repo_changes",
+    "repository_history",
+    "repository_tree",
+    "save_settings",
+    "search_cancel",
+    "search_cancel_all",
+    "search_capabilities",
+    "search_start",
+    "set_token",
+    "source_revision",
+    "stage_hunks",
+    "stage_paths",
+    "start_clone",
+    "stash_apply",
+    "stash_drop",
+    "stash_list",
+    "stash_pop",
+    "stash_push",
+    "stash_show",
+    "switch_with_stash",
+    "test_source",
+    "trash_set_folders",
+    "unstage_hunks",
+    "unstage_paths",
+    "unwatch_set",
+    "watch_set"
+  ],
+  "after": [
+    "activity_snapshot",
+    "benchmark_finish",
+    "benchmark_plan",
+    "benchmark_record",
+    "benchmark_snapshot",
+    "cancel_activity",
+    "change_content",
+    "change_hunks",
+    "ci_artifacts",
+    "ci_cancel",
+    "ci_dispatch",
+    "ci_dispatch_inputs",
+    "ci_download_artifact",
+    "ci_download_run_logs",
+    "ci_job_log",
+    "ci_jobs",
+    "ci_rerun",
+    "ci_runs",
+    "clear_activity",
+    "commit_staged",
+    "comparison_cancel",
+    "comparison_close",
+    "comparison_commits",
+    "comparison_content",
+    "comparison_files",
+    "comparison_open",
+    "comparison_progress",
+    "comparison_refresh",
+    "comparison_start",
+    "copy_apply",
+    "copy_cancel",
+    "copy_preview",
+    "create_branch",
+    "create_github_release",
+    "create_tag",
+    "credential_status",
+    "delete_branch",
+    "delete_merged_branches",
+    "delete_tag",
+    "delete_token",
+    "diagnostics_cancel",
+    "diagnostics_export",
+    "diagnostics_preview",
+    "diagnostics_status",
+    "discard_files",
+    "discard_hunk",
+    "discover_cancel",
+    "discover_cancel_all",
+    "discover_start",
+    "file_edit_close",
+    "file_edit_open",
+    "file_save",
+    "finder_start",
+    "get_commits",
+    "get_refs_many",
+    "has_token",
+    "launch_request",
+    "list_cached_repos",
+    "list_repos",
+    "list_tags",
+    "list_user_orgs",
+    "load_settings",
+    "local_status",
+    "merged_branches",
+    "open_in_vscode",
+    "open_pull_request",
+    "path_identities",
+    "platform_info",
+    "probe_root",
+    "pull_for_branch",
+    "push_branch",
+    "push_tag",
+    "recovery_cleanup",
+    "recovery_list",
+    "recovery_resolve",
+    "recovery_undo",
+    "repo_changes",
+    "repository_history",
+    "repository_tree",
+    "save_settings",
+    "search_cancel",
+    "search_cancel_all",
+    "search_capabilities",
+    "search_start",
+    "set_token",
+    "source_revision",
+    "stage_hunks",
+    "stage_paths",
+    "start_clone",
+    "stash_apply",
+    "stash_drop",
+    "stash_list",
+    "stash_pop",
+    "stash_push",
+    "stash_show",
+    "switch_with_stash",
+    "test_source",
+    "trash_set_folders",
+    "unstage_hunks",
+    "unstage_paths",
+    "unwatch_set",
+    "watch_set"
+  ],
+  "added": [
+    "comparison_progress",
+    "comparison_start"
+  ],
+  "removed": [],
+  "defaultBefore": [
+    "activity_snapshot",
+    "cancel_activity",
+    "change_content",
+    "change_hunks",
+    "ci_artifacts",
+    "ci_cancel",
+    "ci_dispatch",
+    "ci_dispatch_inputs",
+    "ci_download_artifact",
+    "ci_download_run_logs",
+    "ci_job_log",
+    "ci_jobs",
+    "ci_rerun",
+    "ci_runs",
+    "clear_activity",
+    "commit_staged",
+    "comparison_cancel",
+    "comparison_close",
+    "comparison_commits",
+    "comparison_content",
+    "comparison_files",
+    "comparison_open",
+    "comparison_refresh",
+    "copy_apply",
+    "copy_cancel",
+    "copy_preview",
+    "create_branch",
+    "create_github_release",
+    "create_tag",
+    "credential_status",
+    "delete_branch",
+    "delete_merged_branches",
+    "delete_tag",
+    "delete_token",
+    "discard_files",
+    "discard_hunk",
+    "discover_cancel",
+    "discover_cancel_all",
+    "discover_start",
+    "file_edit_close",
+    "file_edit_open",
+    "file_save",
+    "finder_start",
+    "get_commits",
+    "get_refs_many",
+    "has_token",
+    "launch_request",
+    "list_cached_repos",
+    "list_repos",
+    "list_tags",
+    "list_user_orgs",
+    "load_settings",
+    "local_status",
+    "merged_branches",
+    "open_in_vscode",
+    "open_pull_request",
+    "path_identities",
+    "platform_info",
+    "probe_root",
+    "pull_for_branch",
+    "push_branch",
+    "push_tag",
+    "recovery_cleanup",
+    "recovery_list",
+    "recovery_resolve",
+    "recovery_undo",
+    "repo_changes",
+    "repository_history",
+    "repository_tree",
+    "save_settings",
+    "search_cancel",
+    "search_cancel_all",
+    "search_capabilities",
+    "search_start",
+    "set_token",
+    "source_revision",
+    "stage_hunks",
+    "stage_paths",
+    "start_clone",
+    "stash_apply",
+    "stash_drop",
+    "stash_list",
+    "stash_pop",
+    "stash_push",
+    "stash_show",
+    "switch_with_stash",
+    "test_source",
+    "trash_set_folders",
+    "unstage_hunks",
+    "unstage_paths",
+    "unwatch_set",
+    "watch_set"
+  ],
+  "defaultAfter": [
+    "activity_snapshot",
+    "cancel_activity",
+    "change_content",
+    "change_hunks",
+    "ci_artifacts",
+    "ci_cancel",
+    "ci_dispatch",
+    "ci_dispatch_inputs",
+    "ci_download_artifact",
+    "ci_download_run_logs",
+    "ci_job_log",
+    "ci_jobs",
+    "ci_rerun",
+    "ci_runs",
+    "clear_activity",
+    "commit_staged",
+    "comparison_cancel",
+    "comparison_close",
+    "comparison_commits",
+    "comparison_content",
+    "comparison_files",
+    "comparison_open",
+    "comparison_progress",
+    "comparison_refresh",
+    "comparison_start",
+    "copy_apply",
+    "copy_cancel",
+    "copy_preview",
+    "create_branch",
+    "create_github_release",
+    "create_tag",
+    "credential_status",
+    "delete_branch",
+    "delete_merged_branches",
+    "delete_tag",
+    "delete_token",
+    "discard_files",
+    "discard_hunk",
+    "discover_cancel",
+    "discover_cancel_all",
+    "discover_start",
+    "file_edit_close",
+    "file_edit_open",
+    "file_save",
+    "finder_start",
+    "get_commits",
+    "get_refs_many",
+    "has_token",
+    "launch_request",
+    "list_cached_repos",
+    "list_repos",
+    "list_tags",
+    "list_user_orgs",
+    "load_settings",
+    "local_status",
+    "merged_branches",
+    "open_in_vscode",
+    "open_pull_request",
+    "path_identities",
+    "platform_info",
+    "probe_root",
+    "pull_for_branch",
+    "push_branch",
+    "push_tag",
+    "recovery_cleanup",
+    "recovery_list",
+    "recovery_resolve",
+    "recovery_undo",
+    "repo_changes",
+    "repository_history",
+    "repository_tree",
+    "save_settings",
+    "search_cancel",
+    "search_cancel_all",
+    "search_capabilities",
+    "search_start",
+    "set_token",
+    "source_revision",
+    "stage_hunks",
+    "stage_paths",
+    "start_clone",
+    "stash_apply",
+    "stash_drop",
+    "stash_list",
+    "stash_pop",
+    "stash_push",
+    "stash_show",
+    "switch_with_stash",
+    "test_source",
+    "trash_set_folders",
+    "unstage_hunks",
+    "unstage_paths",
+    "unwatch_set",
+    "watch_set"
+  ],
+  "beforeDeclarations": [
+    {
+      "command": "start_clone",
+      "implementation": "clone::start_clone",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "local_status",
+      "implementation": "local::local_status",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "platform_info",
+      "implementation": "platform::platform_info",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "probe_root",
+      "implementation": "platform::probe_root",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "path_identities",
+      "implementation": "platform::path_identities",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "open_in_vscode",
+      "implementation": "open_in_vscode",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "launch_request",
+      "implementation": "launch::launch_request",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "repo_changes",
+      "implementation": "commit::repo_changes",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "change_content",
+      "implementation": "commit::change_content",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "change_hunks",
+      "implementation": "commit::change_hunks",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stage_hunks",
+      "implementation": "commit::stage_hunks",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "unstage_hunks",
+      "implementation": "commit::unstage_hunks",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "discard_files",
+      "implementation": "commit::discard_files",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "discard_hunk",
+      "implementation": "commit::discard_hunk",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stage_paths",
+      "implementation": "commit::stage_paths",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "unstage_paths",
+      "implementation": "commit::unstage_paths",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "commit_staged",
+      "implementation": "commit::commit_staged",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "create_branch",
+      "implementation": "commit::create_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "push_branch",
+      "implementation": "commit::push_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "delete_branch",
+      "implementation": "commit::delete_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "list_tags",
+      "implementation": "tags::list_tags",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "create_tag",
+      "implementation": "tags::create_tag",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "push_tag",
+      "implementation": "tags::push_tag",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "delete_tag",
+      "implementation": "tags::delete_tag",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_list",
+      "implementation": "stash::stash_list",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_push",
+      "implementation": "stash::stash_push",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_apply",
+      "implementation": "stash::stash_apply",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_pop",
+      "implementation": "stash::stash_pop",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_drop",
+      "implementation": "stash::stash_drop",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_show",
+      "implementation": "stash::stash_show",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "switch_with_stash",
+      "implementation": "stash::switch_with_stash",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "merged_branches",
+      "implementation": "branch_cleanup::merged_branches",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "delete_merged_branches",
+      "implementation": "branch_cleanup::delete_merged_branches",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "trash_set_folders",
+      "implementation": "trash::trash_set_folders",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "ci_runs",
+      "implementation": "commands::ci_runs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_jobs",
+      "implementation": "commands::ci_jobs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_job_log",
+      "implementation": "commands::ci_job_log",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_artifacts",
+      "implementation": "commands::ci_artifacts",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_download_artifact",
+      "implementation": "commands::ci_download_artifact",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_download_run_logs",
+      "implementation": "commands::ci_download_run_logs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_rerun",
+      "implementation": "commands::ci_rerun",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_cancel",
+      "implementation": "commands::ci_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_dispatch_inputs",
+      "implementation": "commands::ci_dispatch_inputs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_dispatch",
+      "implementation": "commands::ci_dispatch",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "comparison_open",
+      "implementation": "compare::comparison_open",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_refresh",
+      "implementation": "compare::comparison_refresh",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_close",
+      "implementation": "compare::comparison_close",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_cancel",
+      "implementation": "compare::comparison_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_files",
+      "implementation": "compare::comparison_files",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_content",
+      "implementation": "compare::comparison_content",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_commits",
+      "implementation": "compare::comparison_commits",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "file_edit_open",
+      "implementation": "files::file_edit_open",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_open",
+      "implementation": "linux_files::file_edit_open",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_open",
+      "implementation": "unsupported_files::file_edit_open",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_close",
+      "implementation": "files::file_edit_close",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_close",
+      "implementation": "linux_files::file_edit_close",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_close",
+      "implementation": "unsupported_files::file_edit_close",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_save",
+      "implementation": "files::file_save",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_save",
+      "implementation": "linux_files::file_save",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_save",
+      "implementation": "unsupported_files::file_save",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_preview",
+      "implementation": "files::copy_preview",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_preview",
+      "implementation": "linux_files::copy_preview",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_preview",
+      "implementation": "unsupported_files::copy_preview",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_apply",
+      "implementation": "files::copy_apply",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_apply",
+      "implementation": "linux_files::copy_apply",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_apply",
+      "implementation": "unsupported_files::copy_apply",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_cancel",
+      "implementation": "files::copy_cancel",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_cancel",
+      "implementation": "linux_files::copy_cancel",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_cancel",
+      "implementation": "unsupported_files::copy_cancel",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_list",
+      "implementation": "files::recovery_list",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_list",
+      "implementation": "linux_files::recovery_list",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_list",
+      "implementation": "unsupported_files::recovery_list",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_undo",
+      "implementation": "files::recovery_undo",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_undo",
+      "implementation": "linux_files::recovery_undo",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_undo",
+      "implementation": "unsupported_files::recovery_undo",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_cleanup",
+      "implementation": "files::recovery_cleanup",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_cleanup",
+      "implementation": "linux_files::recovery_cleanup",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_cleanup",
+      "implementation": "unsupported_files::recovery_cleanup",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_resolve",
+      "implementation": "files::recovery_resolve",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_resolve",
+      "implementation": "linux_files::recovery_resolve",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_resolve",
+      "implementation": "unsupported_files::recovery_resolve",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "get_refs_many",
+      "implementation": "git::get_refs_many",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "activity_snapshot",
+      "implementation": "git::activity_snapshot",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "clear_activity",
+      "implementation": "git::clear_activity",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "cancel_activity",
+      "implementation": "git::cancel_activity",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "repository_tree",
+      "implementation": "git::repository_tree",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "repository_history",
+      "implementation": "history::repository_history",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "diagnostics_status",
+      "implementation": "diagnostics::diagnostics_status",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "diagnostics_preview",
+      "implementation": "diagnostics::diagnostics_preview",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "diagnostics_cancel",
+      "implementation": "diagnostics::diagnostics_cancel",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "diagnostics_export",
+      "implementation": "diagnostics::diagnostics_export",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_record",
+      "implementation": "benchmark::benchmark_record",
+      "condition": "#[cfg(feature = \"benchmark\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_snapshot",
+      "implementation": "benchmark::benchmark_snapshot",
+      "condition": "#[cfg(feature = \"benchmark\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_plan",
+      "implementation": "test_profile::benchmark_plan",
+      "condition": "#[cfg(feature = \"test-profile\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_finish",
+      "implementation": "test_profile::benchmark_finish",
+      "condition": "#[cfg(feature = \"test-profile\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "discover_start",
+      "implementation": "discover_job::discover_start",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "discover_cancel",
+      "implementation": "discover_job::discover_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "discover_cancel_all",
+      "implementation": "discover_job::discover_cancel_all",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "finder_start",
+      "implementation": "finder_service::finder_start",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_start",
+      "implementation": "search_service::search_start",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_cancel",
+      "implementation": "search_service::search_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_cancel_all",
+      "implementation": "search_service::search_cancel_all",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_capabilities",
+      "implementation": "search_service::search_capabilities",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "test_source",
+      "implementation": "github::test_source",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "list_user_orgs",
+      "implementation": "github::list_user_orgs",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "list_repos",
+      "implementation": "github::list_repos",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "list_cached_repos",
+      "implementation": "github::list_cached_repos",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "get_commits",
+      "implementation": "github::get_commits",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "pull_for_branch",
+      "implementation": "github::pulls::pull_for_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "open_pull_request",
+      "implementation": "github::pulls::open_pull_request",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "create_github_release",
+      "implementation": "github::releases::create_github_release",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "load_settings",
+      "implementation": "settings::commands::load_settings",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "save_settings",
+      "implementation": "settings::commands::save_settings",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "set_token",
+      "implementation": "settings::set_token",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "has_token",
+      "implementation": "settings::has_token",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "delete_token",
+      "implementation": "settings::delete_token",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "credential_status",
+      "implementation": "credentials::credential_status",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "source_revision",
+      "implementation": "credentials::source_revision",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "watch_set",
+      "implementation": "watch::watch_set",
+      "condition": null,
+      "file": "src-tauri/src/commands/watch.rs"
+    },
+    {
+      "command": "unwatch_set",
+      "implementation": "watch::unwatch_set",
+      "condition": null,
+      "file": "src-tauri/src/commands/watch.rs"
+    }
+  ],
+  "afterDeclarations": [
+    {
+      "command": "start_clone",
+      "implementation": "clone::start_clone",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "local_status",
+      "implementation": "local::local_status",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "platform_info",
+      "implementation": "platform::platform_info",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "probe_root",
+      "implementation": "platform::probe_root",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "path_identities",
+      "implementation": "platform::path_identities",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "open_in_vscode",
+      "implementation": "open_in_vscode",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "launch_request",
+      "implementation": "launch::launch_request",
+      "condition": null,
+      "file": "src-tauri/src/commands/application.rs"
+    },
+    {
+      "command": "repo_changes",
+      "implementation": "commit::repo_changes",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "change_content",
+      "implementation": "commit::change_content",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "change_hunks",
+      "implementation": "commit::change_hunks",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stage_hunks",
+      "implementation": "commit::stage_hunks",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "unstage_hunks",
+      "implementation": "commit::unstage_hunks",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "discard_files",
+      "implementation": "commit::discard_files",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "discard_hunk",
+      "implementation": "commit::discard_hunk",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stage_paths",
+      "implementation": "commit::stage_paths",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "unstage_paths",
+      "implementation": "commit::unstage_paths",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "commit_staged",
+      "implementation": "commit::commit_staged",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "create_branch",
+      "implementation": "commit::create_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "push_branch",
+      "implementation": "commit::push_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "delete_branch",
+      "implementation": "commit::delete_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "list_tags",
+      "implementation": "tags::list_tags",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "create_tag",
+      "implementation": "tags::create_tag",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "push_tag",
+      "implementation": "tags::push_tag",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "delete_tag",
+      "implementation": "tags::delete_tag",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_list",
+      "implementation": "stash::stash_list",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_push",
+      "implementation": "stash::stash_push",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_apply",
+      "implementation": "stash::stash_apply",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_pop",
+      "implementation": "stash::stash_pop",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_drop",
+      "implementation": "stash::stash_drop",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "stash_show",
+      "implementation": "stash::stash_show",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "switch_with_stash",
+      "implementation": "stash::switch_with_stash",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "merged_branches",
+      "implementation": "branch_cleanup::merged_branches",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "delete_merged_branches",
+      "implementation": "branch_cleanup::delete_merged_branches",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "trash_set_folders",
+      "implementation": "trash::trash_set_folders",
+      "condition": null,
+      "file": "src-tauri/src/commands/changes.rs"
+    },
+    {
+      "command": "ci_runs",
+      "implementation": "commands::ci_runs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_jobs",
+      "implementation": "commands::ci_jobs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_job_log",
+      "implementation": "commands::ci_job_log",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_artifacts",
+      "implementation": "commands::ci_artifacts",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_download_artifact",
+      "implementation": "commands::ci_download_artifact",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_download_run_logs",
+      "implementation": "commands::ci_download_run_logs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_rerun",
+      "implementation": "commands::ci_rerun",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_cancel",
+      "implementation": "commands::ci_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_dispatch_inputs",
+      "implementation": "commands::ci_dispatch_inputs",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "ci_dispatch",
+      "implementation": "commands::ci_dispatch",
+      "condition": null,
+      "file": "src-tauri/src/commands/ci.rs"
+    },
+    {
+      "command": "comparison_open",
+      "implementation": "compare::comparison_open",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_refresh",
+      "implementation": "compare::comparison_refresh",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_start",
+      "implementation": "compare::comparison_start",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_progress",
+      "implementation": "compare::comparison_progress",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_close",
+      "implementation": "compare::comparison_close",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_cancel",
+      "implementation": "compare::comparison_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_files",
+      "implementation": "compare::comparison_files",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_content",
+      "implementation": "compare::comparison_content",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "comparison_commits",
+      "implementation": "compare::comparison_commits",
+      "condition": null,
+      "file": "src-tauri/src/commands/compare.rs"
+    },
+    {
+      "command": "file_edit_open",
+      "implementation": "files::file_edit_open",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_open",
+      "implementation": "linux_files::file_edit_open",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_open",
+      "implementation": "unsupported_files::file_edit_open",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_close",
+      "implementation": "files::file_edit_close",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_close",
+      "implementation": "linux_files::file_edit_close",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_edit_close",
+      "implementation": "unsupported_files::file_edit_close",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_save",
+      "implementation": "files::file_save",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_save",
+      "implementation": "linux_files::file_save",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "file_save",
+      "implementation": "unsupported_files::file_save",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_preview",
+      "implementation": "files::copy_preview",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_preview",
+      "implementation": "linux_files::copy_preview",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_preview",
+      "implementation": "unsupported_files::copy_preview",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_apply",
+      "implementation": "files::copy_apply",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_apply",
+      "implementation": "linux_files::copy_apply",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_apply",
+      "implementation": "unsupported_files::copy_apply",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_cancel",
+      "implementation": "files::copy_cancel",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_cancel",
+      "implementation": "linux_files::copy_cancel",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "copy_cancel",
+      "implementation": "unsupported_files::copy_cancel",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_list",
+      "implementation": "files::recovery_list",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_list",
+      "implementation": "linux_files::recovery_list",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_list",
+      "implementation": "unsupported_files::recovery_list",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_undo",
+      "implementation": "files::recovery_undo",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_undo",
+      "implementation": "linux_files::recovery_undo",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_undo",
+      "implementation": "unsupported_files::recovery_undo",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_cleanup",
+      "implementation": "files::recovery_cleanup",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_cleanup",
+      "implementation": "linux_files::recovery_cleanup",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_cleanup",
+      "implementation": "unsupported_files::recovery_cleanup",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_resolve",
+      "implementation": "files::recovery_resolve",
+      "condition": "#[cfg(windows)]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_resolve",
+      "implementation": "linux_files::recovery_resolve",
+      "condition": "#[cfg(target_os = \"linux\")]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "recovery_resolve",
+      "implementation": "unsupported_files::recovery_resolve",
+      "condition": "#[cfg(not(any(windows, target_os = \"linux\")))]",
+      "file": "src-tauri/src/commands/files.rs"
+    },
+    {
+      "command": "get_refs_many",
+      "implementation": "git::get_refs_many",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "activity_snapshot",
+      "implementation": "git::activity_snapshot",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "clear_activity",
+      "implementation": "git::clear_activity",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "cancel_activity",
+      "implementation": "git::cancel_activity",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "repository_tree",
+      "implementation": "git::repository_tree",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "repository_history",
+      "implementation": "history::repository_history",
+      "condition": null,
+      "file": "src-tauri/src/commands/git.rs"
+    },
+    {
+      "command": "diagnostics_status",
+      "implementation": "diagnostics::diagnostics_status",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "diagnostics_preview",
+      "implementation": "diagnostics::diagnostics_preview",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "diagnostics_cancel",
+      "implementation": "diagnostics::diagnostics_cancel",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "diagnostics_export",
+      "implementation": "diagnostics::diagnostics_export",
+      "condition": "#[cfg(feature = \"diagnostics\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_record",
+      "implementation": "benchmark::benchmark_record",
+      "condition": "#[cfg(feature = \"benchmark\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_snapshot",
+      "implementation": "benchmark::benchmark_snapshot",
+      "condition": "#[cfg(feature = \"benchmark\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_plan",
+      "implementation": "test_profile::benchmark_plan",
+      "condition": "#[cfg(feature = \"test-profile\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "benchmark_finish",
+      "implementation": "test_profile::benchmark_finish",
+      "condition": "#[cfg(feature = \"test-profile\")]",
+      "file": "src-tauri/src/commands/instrumentation.rs"
+    },
+    {
+      "command": "discover_start",
+      "implementation": "discover_job::discover_start",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "discover_cancel",
+      "implementation": "discover_job::discover_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "discover_cancel_all",
+      "implementation": "discover_job::discover_cancel_all",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "finder_start",
+      "implementation": "finder_service::finder_start",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_start",
+      "implementation": "search_service::search_start",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_cancel",
+      "implementation": "search_service::search_cancel",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_cancel_all",
+      "implementation": "search_service::search_cancel_all",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "search_capabilities",
+      "implementation": "search_service::search_capabilities",
+      "condition": null,
+      "file": "src-tauri/src/commands/jobs.rs"
+    },
+    {
+      "command": "test_source",
+      "implementation": "github::test_source",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "list_user_orgs",
+      "implementation": "github::list_user_orgs",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "list_repos",
+      "implementation": "github::list_repos",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "list_cached_repos",
+      "implementation": "github::list_cached_repos",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "get_commits",
+      "implementation": "github::get_commits",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "pull_for_branch",
+      "implementation": "github::pulls::pull_for_branch",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "open_pull_request",
+      "implementation": "github::pulls::open_pull_request",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "create_github_release",
+      "implementation": "github::releases::create_github_release",
+      "condition": null,
+      "file": "src-tauri/src/commands/repositories.rs"
+    },
+    {
+      "command": "load_settings",
+      "implementation": "settings::commands::load_settings",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "save_settings",
+      "implementation": "settings::commands::save_settings",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "set_token",
+      "implementation": "settings::set_token",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "has_token",
+      "implementation": "settings::has_token",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "delete_token",
+      "implementation": "settings::delete_token",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "credential_status",
+      "implementation": "credentials::credential_status",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "source_revision",
+      "implementation": "credentials::source_revision",
+      "condition": null,
+      "file": "src-tauri/src/commands/settings.rs"
+    },
+    {
+      "command": "watch_set",
+      "implementation": "watch::watch_set",
+      "condition": null,
+      "file": "src-tauri/src/commands/watch.rs"
+    },
+    {
+      "command": "unwatch_set",
+      "implementation": "watch::unwatch_set",
+      "condition": null,
+      "file": "src-tauri/src/commands/watch.rs"
+    }
+  ]
+}

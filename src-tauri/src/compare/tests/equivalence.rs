@@ -60,8 +60,10 @@ async fn equivalent(left: &Fixture, right: &Fixture, references: [CompareRef; 2]
             )
             .await;
             let new = service
-                .prepare("equivalence", 1, contexts, options, &job)
+                .prepare("equivalence", 1, contexts, options.clone(), &job)
                 .await;
+            let progressive =
+                progressive_result(left, right, references.clone(), options.clone()).await;
             match (old, new) {
                 (Ok(old), Ok(new)) => {
                     assert_eq!(
@@ -69,6 +71,7 @@ async fn equivalent(left: &Fixture, right: &Fixture, references: [CompareRef; 2]
                         serde_json::to_value(&old.view).unwrap()
                     );
                     assert_eq!(result(&new), result(&old));
+                    assert_eq!(result(&progressive.unwrap()), result(&old));
                     for (old_side, new_side) in [(&old.left, &new.left), (&old.right, &new.right)] {
                         for (path, old_entry) in &old_side.files {
                             if old_entry.kind == Kind::Directory {
@@ -90,17 +93,23 @@ async fn equivalent(left: &Fixture, right: &Fixture, references: [CompareRef; 2]
                     }
                     new.close_readers().await;
                 }
-                (Err(old), Err(new)) => assert_eq!(
-                    serde_json::to_value(new).unwrap(),
-                    serde_json::to_value(old).unwrap()
-                ),
+                (Err(old), Err(new)) => {
+                    assert_eq!(
+                        serde_json::to_value(new).unwrap(),
+                        serde_json::to_value(&old).unwrap()
+                    );
+                    assert_eq!(
+                        serde_json::to_value(progressive.err().unwrap()).unwrap(),
+                        serde_json::to_value(old).unwrap()
+                    );
+                }
                 _ => panic!("Comparison availability changed"),
             }
         }
     }
 }
 
-async fn adversarial(format: &str) -> (Fixture, String) {
+pub(super) async fn adversarial(format: &str) -> (Fixture, String) {
     let fixture = Fixture::with_format(Some(format)).await;
     fixture.git(&["config", "core.autocrlf", "false"]).await;
     fixture
@@ -279,4 +288,158 @@ async fn in_process_blob_ids_match_git_hash_object_without_filters() {
             );
         }
     }
+}
+
+async fn progressive_result(
+    left: &Fixture,
+    right: &Fixture,
+    references: [CompareRef; 2],
+    options: Options,
+) -> Result<Prepared, Problem> {
+    let settings = crate::settings::Settings {
+        sources: Vec::new(),
+        workspace: serde_json::json!({
+            "root": crate::test_support::tmp_root(), "layout":"flat", "sets":[{"id":"set", "name":"Fixture", "items":[
+                {"id":"left", "name":"left", "path":left.0.join("repo")},
+                {"id":"right", "name":"right", "path":right.0.join("repo")}
+            ]}]
+        }),
+    };
+    let endpoint = |index: usize, name: &str| Endpoint {
+        set_id: "set".into(),
+        item_id: name.into(),
+        reference: references[index].clone(),
+    };
+    let service = left.service();
+    let opened = service
+        .open(&settings, endpoint(0, "left"), endpoint(1, "right"))
+        .await?;
+    let started = service
+        .start(
+            &settings,
+            &opened.id,
+            options,
+            Some(CompareSource::Local),
+            None,
+        )
+        .await?;
+    let result = match service.wait(&opened.id, started.generation).await {
+        Ok(RefreshResult::Ready { .. }) => {
+            let prepared = service
+                .snapshot(&settings, &opened.id, started.generation)
+                .await?
+                .0;
+            let mut after = 0;
+            let mut rows = Vec::new();
+            loop {
+                let progress = service.progress(&opened.id, started.generation, after, 500)?;
+                assert_eq!(progress.state, State::Complete);
+                assert_eq!(
+                    serde_json::to_value(&progress.totals.as_ref().unwrap().raw).unwrap(),
+                    serde_json::to_value(&prepared.view.raw).unwrap()
+                );
+                assert_eq!(
+                    serde_json::to_value(&progress.totals.as_ref().unwrap().display).unwrap(),
+                    serde_json::to_value(&prepared.view.display).unwrap()
+                );
+                rows.extend(progress.rows.into_iter().filter_map(|row| match row {
+                    RowUpdate::Final(row) => Some(row),
+                    _ => None,
+                }));
+                after = progress.sequence;
+                if !progress.more {
+                    break;
+                }
+            }
+            rows.sort_by(|left, right| left.path.cmp(&right.path));
+            assert_eq!(
+                serde_json::to_value(rows).unwrap(),
+                serde_json::to_value(&prepared.rows).unwrap()
+            );
+            Ok((*prepared).clone())
+        }
+        Ok(
+            RefreshResult::Unavailable { problem }
+            | RefreshResult::InvalidRef { problem }
+            | RefreshResult::MissingLeft { problem }
+            | RefreshResult::MissingRight { problem }
+            | RefreshResult::NetworkError { problem },
+        )
+        | Err(problem) => Err(problem),
+    };
+    service.close(&opened.id).await;
+    result
+}
+
+#[tokio::test]
+async fn progressive_budget_prechecks_postchecks_and_fixed_rows_match_every_option() {
+    let _guard = git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new().await;
+    let mut left = vec![b'x'; paths::CONTENT_LIMIT];
+    left[0] = 0;
+    let mut right = vec![b'y'; paths::CONTENT_LIMIT];
+    right[0] = 0;
+    for index in 0..16 {
+        fixture.write(&format!("a-file-{index:02}"), &left);
+    }
+    fixture.write("zz-empty", b"");
+    fixture.write("zzz-fixed", b"same\n");
+    let first = fixture.commit("initial").await;
+    fixture
+        .git(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            "160000",
+            &first,
+            "m-link",
+        ])
+        .await;
+    let base = fixture.commit_staged("base").await;
+    for index in 0..16 {
+        fixture.write(&format!("a-file-{index:02}"), &right);
+    }
+    fixture.write("n-rejected", b"new\n");
+    fixture.git(&["add", "."]).await;
+    fixture
+        .git(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            "160000",
+            &base,
+            "m-link",
+        ])
+        .await;
+    fixture
+        .git(&["update-index", "--chmod=+x", "zz-empty"])
+        .await;
+    fixture.commit_staged("head").await;
+    equivalent(
+        &fixture,
+        &fixture,
+        [CompareRef::Commit { sha: base }, CompareRef::Head],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn progressive_opaque_and_unicode_paths_match_legacy_for_every_option() {
+    let _guard = git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new().await;
+    fixture.write("folder with space/日本語.txt", b"same\n");
+    fixture.commit("base").await;
+    let nested = fixture.0.join("repo/nested");
+    std::fs::create_dir(&nested).unwrap();
+    fixture
+        .job()
+        .output(&nested, &["init", "--initial-branch=main"])
+        .await
+        .unwrap();
+    equivalent(
+        &fixture,
+        &fixture,
+        [CompareRef::WorkingTree, CompareRef::WorkingTree],
+    )
+    .await;
 }

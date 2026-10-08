@@ -77,6 +77,8 @@ pub(super) struct Retained {
     pub snapshot: Option<Snapshot>,
     pub problem: Option<Problem>,
     pub events: progress_events::Events,
+    #[cfg(feature = "benchmark")]
+    pub listed_timer: Option<crate::benchmark::Span>,
 }
 
 impl Retained {
@@ -90,6 +92,8 @@ impl Retained {
             snapshot: None,
             problem: None,
             events: progress_events::Events::new(app),
+            #[cfg(feature = "benchmark")]
+            listed_timer: Some(crate::benchmark::Span::new("compare.listed", "other")),
         }
     }
 

@@ -43,6 +43,18 @@ export type CompareSnapshot = {
 export type CompareResult =
   | { status: 'ready'; snapshot: CompareSnapshot }
   | { status: 'unavailable' | 'invalidRef' | 'missingLeft' | 'missingRight' | 'networkError'; problem: CompareProblem };
+export type CompareHint = 'unavailable' | 'opaque' | 'typeConflict' | 'leftOnly' | 'rightOnly' | 'sameId' | 'changedId' | 'folder';
+export type ComparePendingRow = {
+  id: string; path: string; left: CompareSide | null; right: CompareSide | null; hint: CompareHint;
+};
+export type CompareRowUpdate = ({ phase: 'pending' } & ComparePendingRow) | ({ phase: 'final' } & CompareFile);
+export type CompareProgressState = 'resolving' | 'listing' | 'enriching' | 'complete' | 'failed';
+export type CompareTotals = { raw: CompareSummary; display: CompareSummary; pending: number; rows: number };
+export type CompareProgress = {
+  id: string; generation: number; state: CompareProgressState; sequence: number; rows: CompareRowUpdate[]; more: boolean;
+  totals: CompareTotals | null; history: CompareHistory | null; snapshot: CompareSnapshot | null;
+  outcome: Exclude<CompareResult['status'], 'ready'> | null; problem: CompareProblem | null;
+};
 export type Capability = { supported: boolean; reason: string | null };
 export type Capabilities = { readCompare: Capability; edit: Capability; copy: Capability; recovery: Capability; trash: Capability };
 export type CredentialBackend = 'windowsCredentialManager' | 'secretService' | 'unsupported';
@@ -261,6 +273,10 @@ export const api = {
   openComparison: (left: CompareEndpoint, right: CompareEndpoint) =>
     invoke<{ id: string; generation: number }>('comparison_open', { left, right }),
   refreshComparison,
+  startComparison: (id: string, options: CompareOptions) =>
+    invoke<{ id: string; generation: number }>('comparison_start', { id, options }),
+  comparisonProgress: (id: string, generation: number, after = 0, limit = 500) =>
+    invoke<CompareProgress>('comparison_progress', { id, generation, after, limit }),
   closeComparison: (id: string) => invoke<boolean>('comparison_close', { id }),
   cancelComparison: (id: string) => invoke<boolean>('comparison_cancel', { id }),
   comparisonFiles: (id: string, generation: number, offset = 0, limit = 512) =>

@@ -16,6 +16,7 @@ mod listing;
 mod ordered_commit;
 mod publication;
 mod resolving;
+mod ref_resolution;
 mod access;
 mod progressive;
 mod producer;
@@ -706,6 +707,8 @@ pub struct ServiceState {
     remote_store: std::sync::OnceLock<crate::store::Store>,
     #[cfg(test)]
     enrichment_control: std::sync::Mutex<Option<Arc<publication::EnrichmentControl>>>,
+    #[cfg(test)]
+    registration_control: std::sync::Mutex<Option<Arc<producer::RegistrationControl>>>,
     #[cfg(all(test, target_os = "linux"))]
     fresh_write_root_hook: std::sync::Mutex<Option<WriteRootHook>>,
 }
@@ -749,6 +752,8 @@ impl Default for ServiceState {
             remote_store: std::sync::OnceLock::new(),
             #[cfg(test)]
             enrichment_control: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            registration_control: std::sync::Mutex::new(None),
             #[cfg(all(test, target_os = "linux"))]
             fresh_write_root_hook: std::sync::Mutex::new(None),
         }
@@ -1000,6 +1005,7 @@ impl Service {
         self.refresh_with_source(settings, id, options, None).await
     }
 
+    #[cfg(test)]
     async fn refresh_with_source(
         &self,
         settings: &crate::settings::Settings,
@@ -1007,7 +1013,7 @@ impl Service {
         options: Options,
         source: Option<CompareSource>,
     ) -> Result<RefreshResult, Problem> {
-        let opened = self.start(settings, id, options, source, None).await?;
+        let opened = self.start_request(settings, producer::Start { id, options, source, app: None }).await?;
         self.wait(id, opened.generation).await
     }
 
@@ -1215,7 +1221,9 @@ pub async fn comparison_refresh(
 ) -> Result<RefreshResult, Problem> {
     #[cfg(feature = "benchmark")]
     let _span = crate::benchmark::Span::new("ipc.refresh", "other");
-    service.refresh_with_source(&saved(&app)?, &id, options, source).await
+    let settings = saved(&app)?;
+    let opened = service.start_request(&settings, producer::Start { id: &id, options, source, app: Some(app) }).await?;
+    service.wait(&id, opened.generation).await
 }
 
 #[tauri::command]
@@ -1395,9 +1403,8 @@ pub async fn comparison_start(
     id: String,
     options: Options,
 ) -> Result<Opened, Problem> {
-    service
-        .start(&saved(&app)?, &id, options, None, Some(app))
-        .await
+    let settings = saved(&app)?;
+    service.start_request(&settings, producer::Start { id: &id, options, source: None, app: Some(app) }).await
 }
 
 #[tauri::command]

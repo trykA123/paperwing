@@ -25,7 +25,7 @@ fn counts() -> std::sync::MutexGuard<'static, Counts> {
 }
 
 pub(super) struct Reservation {
-    comparison: usize,
+    comparison: Arc<AtomicBool>,
     bytes: usize,
     enrichment: bool,
 }
@@ -35,10 +35,15 @@ impl Drop for Reservation {
         let mut counts = counts();
         counts.bytes -= self.bytes;
         counts.enrichment -= usize::from(self.enrichment) * self.bytes;
-        if let Some(bytes) = counts.comparisons.get_mut(&self.comparison) {
+        if let Some(bytes) = counts
+            .comparisons
+            .get_mut(&(Arc::as_ptr(&self.comparison) as usize))
+        {
             *bytes -= self.bytes;
             if *bytes == 0 {
-                counts.comparisons.remove(&self.comparison);
+                counts
+                    .comparisons
+                    .remove(&(Arc::as_ptr(&self.comparison) as usize));
             }
         }
         drop(counts);
@@ -68,7 +73,7 @@ pub(super) async fn acquire(
             "Content window exceeds comparison limit",
         ));
     }
-    let comparison = Arc::as_ptr(&job.cancel) as usize;
+
     if !enrichment {
         counts().waiting += 1;
     }
@@ -78,14 +83,15 @@ pub(super) async fn acquire(
         let changed = CHANGED.notified();
         tokio::pin!(changed);
         changed.as_mut().enable();
-        if let Some(reservation) = try_acquire(comparison, enrichment, bytes) {
+        if let Some(reservation) = try_acquire(&job.cancel, enrichment, bytes) {
             return Ok(reservation);
         }
         tokio::select! { _ = &mut changed => {}, _ = tokio::time::sleep(Duration::from_millis(25)) => {} }
     }
 }
 
-fn try_acquire(comparison: usize, enrichment: bool, bytes: usize) -> Option<Reservation> {
+fn try_acquire(cancel: &Arc<AtomicBool>, enrichment: bool, bytes: usize) -> Option<Reservation> {
+    let comparison = Arc::as_ptr(cancel) as usize;
     let mut counts = counts();
     if counts.bytes + bytes > GLOBAL_BYTES
         || counts.comparisons.get(&comparison).copied().unwrap_or(0) + bytes > COMPARISON_BYTES
@@ -98,7 +104,7 @@ fn try_acquire(comparison: usize, enrichment: bool, bytes: usize) -> Option<Rese
     counts.enrichment += usize::from(enrichment) * bytes;
     *counts.comparisons.entry(comparison).or_default() += bytes;
     Some(Reservation {
-        comparison,
+        comparison: cancel.clone(),
         enrichment,
         bytes,
     })

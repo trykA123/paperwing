@@ -23,6 +23,7 @@ impl Service {
         }
     }
 
+    #[cfg(test)]
     pub(super) async fn start(
         &self,
         settings: &crate::settings::Settings,
@@ -31,91 +32,126 @@ impl Service {
         source: Option<CompareSource>,
         app: Option<tauri::AppHandle>,
     ) -> Result<Opened, Problem> {
-        let (contexts, generation, job, previous, producer) = {
-            let mut sessions = self.sessions();
-            let session = sessions
-                .get_mut(id)
-                .ok_or_else(|| Problem::new("unknownSession", "Unknown comparison"))?;
-            Self::rebind(settings, &session.left)?;
-            Self::rebind(settings, &session.right)?;
-            session.cancel.store(true, Ordering::Relaxed);
-            session.notify.notify_waiters();
-            session.cancel = Arc::new(AtomicBool::new(false));
-            session.notify = Arc::default();
-            session.generation += 1;
-            session.prepared = None;
-            session.remote = None;
-            session.progress = Some(progressive::Retained::new(app));
-            if let Some(progress) = &mut session.progress {
-                progress.emit(id, session.generation);
-            }
-            let previous = std::mem::take(&mut session.readers);
-            let job = self.session_job(id, session);
-            (
-                [session.left.clone(), session.right.clone()],
-                session.generation,
-                job,
-                previous,
-                session.producer.take(),
-            )
-        };
-        let service = self.worker();
-        let settings = crate::settings::Settings {
-            sources: settings.sources.clone(),
-            workspace: settings.workspace.clone(),
-        };
-        let id_owned = id.to_owned();
-        let supervisor = tokio::spawn(async move {
-            close_readers(&previous).await;
-            if let Some(producer) = producer {
-                let _ = producer.await;
-            }
-            service.reset_configuration(&contexts);
-            let worker = service.worker();
-            let worker_id = id_owned.clone();
-            let cleanup = job.readers.clone();
-            let event_service = service.worker();
-            let event_id = id_owned.clone();
-            let events = tokio::spawn(async move {
-                event_service.send_events(&event_id, generation).await;
-            });
-            let task = tokio::spawn(async move {
-                let _permit = job.slot(&worker.slots).await?;
-                let produce = worker.prepare_source(
-                    &settings,
-                    remote::Refresh {
-                        id: &worker_id,
-                        generation,
-                        endpoints: [contexts[0].endpoint.clone(), contexts[1].endpoint.clone()],
-                        options,
-                        job: &job,
-                    },
-                    contexts,
-                    source,
-                );
+        self.start_request(
+            settings,
+            Start {
+                id,
+                options,
+                source,
+                app,
+            },
+        )
+        .await
+    }
 
-                produce.await
-            });
-            let result = task
-                .await
-                .unwrap_or_else(|_| Err(Problem::new("internal", "Comparison producer failed")));
-            if result.is_err() {
-                close_readers(&cleanup).await;
-            }
-            service.finish(&id_owned, generation, result).await;
-            let _ = events.await;
-        });
+    pub(super) async fn start_request(
+        &self,
+        settings: &crate::settings::Settings,
+        request: Start<'_>,
+    ) -> Result<Opened, Problem> {
         let mut sessions = self.sessions();
-        if let Some(session) = sessions
-            .get_mut(id)
-            .filter(|session| session.generation == generation)
-        {
-            session.producer = Some(supervisor);
+        let session = sessions
+            .get_mut(request.id)
+            .ok_or_else(|| Problem::new("unknownSession", "Unknown comparison"))?;
+        let (production, previous) = self.begin(settings, request, session)?;
+        let opened = Opened {
+            id: production.id.clone(),
+            generation: production.generation,
+        };
+        #[cfg(test)]
+        if let Some(control) = self.registration_control.lock().unwrap().clone() {
+            control.arrived.wait();
+            control.release.wait();
         }
-        Ok(Opened {
-            id: id.into(),
-            generation,
-        })
+        let service = self.worker();
+        let supervisor = tokio::spawn(async move {
+            service.supervise(production, previous).await;
+        });
+        session.producer = Some(supervisor);
+        Ok(opened)
+    }
+
+    fn begin(
+        &self,
+        settings: &crate::settings::Settings,
+        request: Start<'_>,
+        session: &mut Session,
+    ) -> Result<(Production, Previous), Problem> {
+        Self::rebind(settings, &session.left)?;
+        Self::rebind(settings, &session.right)?;
+        session.cancel.store(true, Ordering::Relaxed);
+        session.notify.notify_waiters();
+        session.cancel = Arc::new(AtomicBool::new(false));
+        session.notify = Arc::default();
+        session.generation += 1;
+        session.prepared = None;
+        session.remote = None;
+        session.progress = Some(progressive::Retained::new(request.app));
+        if let Some(progress) = &mut session.progress {
+            progress.emit(request.id, session.generation);
+        }
+        let previous = Previous {
+            readers: std::mem::take(&mut session.readers),
+            task: session.producer.take(),
+        };
+        let production = Production {
+            id: request.id.into(),
+            generation: session.generation,
+            contexts: [session.left.clone(), session.right.clone()],
+            options: request.options,
+            source: request.source,
+            settings: crate::settings::Settings {
+                sources: settings.sources.clone(),
+                workspace: settings.workspace.clone(),
+            },
+            job: self.session_job(request.id, session),
+        };
+        Ok((production, previous))
+    }
+
+    async fn supervise(&self, production: Production, previous: Previous) {
+        close_readers(&previous.readers).await;
+        if let Some(task) = previous.task {
+            let _ = task.await;
+        }
+        self.reset_configuration(&production.contexts);
+        let (id, generation) = (production.id.clone(), production.generation);
+        let cleanup = production.job.readers.clone();
+        let event_service = self.worker();
+        let event_id = id.clone();
+        let events = tokio::spawn(async move {
+            event_service.send_events(&event_id, generation).await;
+        });
+        let worker = self.worker();
+        let task = tokio::spawn(async move { worker.produce(production).await });
+        let result = task
+            .await
+            .unwrap_or_else(|_| Err(Problem::new("internal", "Comparison producer failed")));
+        if result.is_err() {
+            close_readers(&cleanup).await;
+        }
+        self.finish(&id, generation, result).await;
+        let _ = events.await;
+    }
+
+    async fn produce(&self, production: Production) -> Result<SourcePrepared, Problem> {
+        let _permit = production.job.slot(&self.slots).await?;
+        self.prepare_source(
+            &production.settings,
+            remote::Refresh {
+                id: &production.id,
+                generation: production.generation,
+                endpoints: production
+                    .contexts
+                    .each_ref()
+                    .map(|context| context.endpoint.clone()),
+                options: production.options,
+                job: &production.job,
+            },
+            production.contexts,
+            production.source,
+        )
+        .await
     }
 
     pub(super) fn session_job(&self, id: &str, session: &Session) -> Job {
@@ -269,8 +305,37 @@ impl Drop for Service {
     }
 }
 
+#[cfg(test)]
 pub(super) async fn wait_cancel(cancel: &AtomicBool) {
     while !cancel.load(Ordering::Relaxed) {
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
+}
+
+pub(super) struct Start<'a> {
+    pub id: &'a str,
+    pub options: Options,
+    pub source: Option<CompareSource>,
+    pub app: Option<tauri::AppHandle>,
+}
+
+struct Production {
+    id: String,
+    generation: u64,
+    contexts: [Context; 2],
+    options: Options,
+    source: Option<CompareSource>,
+    settings: crate::settings::Settings,
+    job: Job,
+}
+
+struct Previous {
+    readers: Arc<Mutex<Vec<git::BatchReader>>>,
+    task: Option<tokio::task::JoinHandle<()>>,
+}
+
+#[cfg(test)]
+pub(super) struct RegistrationControl {
+    pub arrived: std::sync::Barrier,
+    pub release: std::sync::Barrier,
 }
