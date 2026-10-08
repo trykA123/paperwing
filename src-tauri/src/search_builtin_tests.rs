@@ -443,3 +443,59 @@ async fn index_only_and_common_metadata_attributes_require_git() {
     assert_eq!(actual.2[0].error, expected.2[0].error);
     assert_eq!(actual.2[0].state, State::Failed);
 }
+
+#[tokio::test]
+async fn indexed_attributes_apply_to_filtered_builtin_queries() {
+    let _guard = crate::git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new("builtin-filtered-attributes");
+    for (name, selected, attributes) in [
+        ("root", "selected.txt", ".gitattributes"),
+        (
+            "nested",
+            "nested space/selected.txt",
+            "nested space/.gitattributes",
+        ),
+    ] {
+        let path = repo(
+            &fixture,
+            name,
+            &[
+                (selected, b"needle\n"),
+                (attributes, b"selected.txt binary\n"),
+                ("outside.txt", b"needle\n"),
+            ],
+        );
+        std::fs::remove_file(Path::new(&path).join(attributes)).unwrap();
+        let mut query = request(&[&path], "needle");
+        query.pathspecs = vec![selected.into()];
+        let expected = run(query.clone(), Engine::GitGrep, Arc::default()).await;
+        assert!(expected.1.is_empty());
+        crate::git::clear_activity();
+        let actual = run(query, Engine::BuiltIn, Arc::default()).await;
+        assert_eq!(actual.1, expected.1, "{name}");
+        assert_eq!(actual.0, expected.0, "{name}");
+        assert!(actual.2[0]
+            .engine_note
+            .as_deref()
+            .unwrap()
+            .contains("attributes"));
+        let activity: Vec<_> = crate::git::activity_snapshot()
+            .into_iter()
+            .map(|event| serde_json::to_value(event).unwrap())
+            .collect();
+        let count = |command: &str| {
+            activity
+                .iter()
+                .filter(|event| {
+                    event["argv"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|arg| arg == command)
+                })
+                .count()
+        };
+        assert_eq!(count("ls-files"), 1);
+        assert_eq!(count("grep"), 1);
+    }
+}

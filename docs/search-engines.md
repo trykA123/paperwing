@@ -22,6 +22,6 @@ Git grep remains available as the selected engine. Built-in requests also use Gi
 
 Fuzzy matching treats query words as subsequences with Nucleo's path scoring. Exact substring matching treats the entire query literally, including spaces. Both modes ignore case. File names use forward slashes on every platform.
 
-Attribute detection checks working-tree ancestors, listed index paths, repository and common metadata, HOME/XDG user locations, configured global/system Git config paths, and common system installation locations. It does not resolve arbitrary Git installation prefixes or inspect index-only attribute files omitted by a path filter. These cases remain a parity boundary; select `gitGrep` when they apply.
+Attribute detection checks working-tree ancestors, listed index paths, repository and common metadata, HOME/XDG user locations, configured global/system Git config paths, and common system installation locations. Filtered code-search listings also admit top-level and nested attribute paths from the index; detected attributes trigger fallback before scanning, using the original filters. Detection does not resolve arbitrary Git installation prefixes; select `gitGrep` when such system attributes apply.
 
 Benchmark builds record complete search jobs as `ipc.content/search-code` and finder jobs as `ipc.files/find-file`. The baseline trace parser accepts both operations. These timings do not increment Git command counts.

@@ -54,10 +54,14 @@ impl SearchEngine for BuiltIn {
 }
 
 async fn list_files(search: &RepoSearch<'_>) -> Result<(Vec<std::path::PathBuf>, bool), String> {
+    let mut pathspecs = search.plan.pathspecs.clone();
+    if !pathspecs.is_empty() {
+        pathspecs.push(":(top,glob)**/.gitattributes".into());
+    }
     let files = crate::search_files::list(
         crate::search_files::FilesRequest {
             root: &search.target.path,
-            pathspecs: &search.plan.pathspecs,
+            pathspecs: &pathspecs,
             untracked: search.plan.untracked,
         },
         search.cancel.clone(),
