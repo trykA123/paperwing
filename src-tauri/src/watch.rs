@@ -4,10 +4,11 @@ mod hub;
 mod tests;
 
 use crate::kernel::events::CoreEvent;
-use hub::{Factory, Hub, Timing};
+use hub::{Factory, Hub, Prepared, Timing};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, Prefix};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Runtime, State};
@@ -74,6 +75,10 @@ struct Registry {
 }
 
 impl Registry {
+    fn held(&self) -> HashSet<String> {
+        self.sets.values().flatten().cloned().collect()
+    }
+
     fn is_held(&self, path: &str) -> bool {
         self.sets
             .values()
@@ -94,11 +99,14 @@ impl Registry {
 
 pub struct Service {
     state: Mutex<Registry>,
+    generation: AtomicU64,
     factory: Factory,
     sink: Sink,
     debounce: Duration,
     health: Duration,
 }
+
+type Candidate = Option<Result<Prepared, String>>;
 
 impl Service {
     pub(crate) fn new(sink: Sink) -> Self {
@@ -108,6 +116,7 @@ impl Service {
     fn with_parts(sink: Sink, factory: Factory, debounce: Duration, health: Duration) -> Self {
         Self {
             state: Mutex::default(),
+            generation: AtomicU64::new(0),
             factory,
             sink,
             debounce,
@@ -116,6 +125,10 @@ impl Service {
     }
 
     pub(crate) fn watch(&self, set: &str, paths: &[String]) -> Result<Report, WatchError> {
+        self.watch_in(set, paths, self.generation.load(Ordering::SeqCst))
+    }
+
+    fn watch_in(&self, set: &str, paths: &[String], generation: u64) -> Result<Report, WatchError> {
         let mut seen = HashSet::new();
         let unique: Vec<&String> = paths
             .iter()
@@ -128,23 +141,32 @@ impl Service {
                 limit: MAX_ROOTS,
             });
         }
-        let mut state = self.lock();
-        let previous = state.sets.remove(set).unwrap_or_default();
+        let held = self.lock().held();
+        let mut candidates: Vec<Candidate> = unique
+            .iter()
+            .map(|path| (!held.contains(path.as_str())).then(|| prepare_root(path)))
+            .collect();
+        let mut registry = self.lock();
+        if self.generation.load(Ordering::SeqCst) != generation {
+            return Ok(Report::default());
+        }
+        let previous = registry.sets.remove(set).unwrap_or_default();
         let mut report = Report::default();
         let mut kept: Vec<String> = Vec::new();
-        for path in unique {
-            if let Err(reason) = self.attach(&mut state, &previous, path) {
-                match reason {
-                    Attach::Refused(reason) => report.skipped.push(Skipped {
+        for (path, candidate) in unique.into_iter().zip(candidates.drain(..)) {
+            match self.attach(&mut registry, &previous, path, candidate) {
+                Ok(()) => {}
+                Err(Attach::Refused(reason)) => {
+                    report.skipped.push(Skipped {
                         path: path.clone(),
                         reason,
-                    }),
-                    Attach::Broken(reason) => {
-                        state.release(&previous);
-                        return Err(WatchError::Start(reason));
-                    }
+                    });
+                    continue;
                 }
-                continue;
+                Err(Attach::Broken(reason)) => {
+                    registry.release(&previous);
+                    return Err(WatchError::Start(reason));
+                }
             }
             if is_best_effort_location(Path::new(path)) {
                 report.best_effort.push(path.clone());
@@ -153,45 +175,52 @@ impl Service {
         }
         report.watched = kept.len();
         if !kept.is_empty() {
-            state.sets.insert(set.to_string(), kept);
+            registry.sets.insert(set.to_string(), kept);
         }
-        state.release(&previous);
+        registry.release(&previous);
         Ok(report)
     }
 
-    fn attach(&self, state: &mut Registry, previous: &[String], path: &str) -> Result<(), Attach> {
-        if let Some(reason) = refusal(path) {
-            return Err(Attach::Refused(reason));
-        }
-        if previous.iter().any(|known| known == path) || state.is_held(path) {
+    fn attach(
+        &self,
+        registry: &mut Registry,
+        previous: &[String],
+        path: &str,
+        candidate: Candidate,
+    ) -> Result<(), Attach> {
+        if previous.iter().any(|known| known == path) || registry.is_held(path) {
             return Ok(());
         }
-        if state.hub.is_none() {
+        let prepared = candidate
+            .unwrap_or_else(|| prepare_root(path))
+            .map_err(Attach::Refused)?;
+        if registry.hub.is_none() {
             let timing = Timing {
                 debounce: self.debounce,
                 health: self.health,
             };
             let hub = Hub::new(&self.factory, timing, self.sink.clone()).map_err(Attach::Broken)?;
-            state.hub = Some(hub);
+            registry.hub = Some(hub);
         }
-        let hub = state
+        let hub = registry
             .hub
             .as_ref()
             .ok_or_else(|| Attach::Broken("watcher missing".into()))?;
-        hub.add(path).map_err(Attach::Refused)
+        hub.commit(prepared).map_err(Attach::Refused)
     }
 
     pub(crate) fn unwatch(&self, set: &str) {
-        let mut state = self.lock();
-        let previous = state.sets.remove(set).unwrap_or_default();
-        state.release(&previous);
+        let mut registry = self.lock();
+        let previous = registry.sets.remove(set).unwrap_or_default();
+        registry.release(&previous);
     }
 
     pub(crate) fn stop_all(&self) {
-        let mut state = self.lock();
-        state.sets.clear();
-        let hub = state.hub.take();
-        drop(state);
+        let mut registry = self.lock();
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        registry.sets.clear();
+        let hub = registry.hub.take();
+        drop(registry);
         drop(hub);
     }
 
@@ -209,6 +238,13 @@ impl Service {
         self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+fn prepare_root(path: &str) -> Result<Prepared, String> {
+    match refusal(path) {
+        Some(reason) => Err(reason),
+        None => hub::prepare(path),
     }
 }
 

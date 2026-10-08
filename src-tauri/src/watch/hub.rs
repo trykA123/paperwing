@@ -1,10 +1,11 @@
 use super::filter::{is_relevant, is_watchable_dir, Root};
 use super::{Signal, Sink};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -45,19 +46,75 @@ pub(super) struct Timing {
     pub health: Duration,
 }
 
+pub(super) struct Spec {
+    path: PathBuf,
+    recursive: bool,
+}
+
+pub(super) struct Prepared {
+    root: Arc<Root>,
+    plan: Vec<Spec>,
+}
+
 enum Message {
     Changed(Arc<Root>),
     Everything,
     NewDirectory(Arc<Root>, PathBuf),
+    Removed(PathBuf),
     Stop,
 }
 
 type Roots = Arc<RwLock<Vec<Arc<Root>>>>;
-type Shared = Arc<Mutex<Box<dyn Backend>>>;
+
+struct Core {
+    backend: Box<dyn Backend>,
+    counts: HashMap<PathBuf, usize>,
+}
+
+impl Core {
+    fn acquire(&mut self, spec: &Spec) -> Result<(), String> {
+        if let Some(count) = self.counts.get_mut(&spec.path) {
+            *count += 1;
+            return Ok(());
+        }
+        self.backend.watch(&spec.path, spec.recursive)?;
+        self.counts.insert(spec.path.clone(), 1);
+        Ok(())
+    }
+
+    fn release(&mut self, path: &Path) {
+        let Some(count) = self.counts.get_mut(path) else {
+            return;
+        };
+        *count -= 1;
+        if *count == 0 {
+            self.counts.remove(path);
+            self.backend.unwatch(path);
+        }
+    }
+
+    fn forget(&mut self, path: &Path) {
+        if self.counts.remove(path).is_some() {
+            self.backend.unwatch(path);
+        }
+    }
+
+    fn rewatch(&mut self, path: &Path) {
+        if self.counts.contains_key(path) {
+            let _ = self.backend.watch(path, false);
+        }
+    }
+}
+
+struct Shared {
+    core: Mutex<Core>,
+    roots: Roots,
+    structure: Mutex<()>,
+    sink: Sink,
+}
 
 pub(super) struct Hub {
-    backend: Shared,
-    roots: Roots,
+    shared: Arc<Shared>,
     sender: Sender<Message>,
     thread: Option<JoinHandle<()>>,
 }
@@ -66,16 +123,70 @@ fn own_walk() -> bool {
     cfg!(target_os = "linux")
 }
 
+fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+impl Shared {
+    fn snapshot(&self) -> Vec<Arc<Root>> {
+        self.roots
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    fn is_member(&self, root: &Arc<Root>) -> bool {
+        self.snapshot().iter().any(|known| Arc::ptr_eq(known, root))
+    }
+
+    fn acquire_all(&self, root: &Root, plan: &[Spec]) -> Result<(), String> {
+        let mut core = locked(&self.core);
+        let mut dirs = locked(&root.dirs);
+        for spec in plan {
+            if let Err(reason) = core.acquire(spec) {
+                if spec.path != root.path && !spec.path.exists() {
+                    continue;
+                }
+                dirs.drain(..).for_each(|path| core.release(&path));
+                return Err(format!("{}: {reason}", spec.path.display()));
+            }
+            dirs.push(spec.path.clone());
+        }
+        *locked(&root.identity) = identity(&root.path);
+        Ok(())
+    }
+
+    fn detach(&self, root: &Root) {
+        let dirs = std::mem::take(&mut *locked(&root.dirs));
+        let mut core = locked(&self.core);
+        dirs.iter().for_each(|path| core.release(path));
+    }
+}
+
+pub(super) fn prepare(label: &str) -> Result<Prepared, String> {
+    let root = Arc::new(Root::new(label, git_dirs(Path::new(label))));
+    let plan = plan(&root)?;
+    Ok(Prepared { root, plan })
+}
+
 impl Hub {
     pub(super) fn new(factory: &Factory, timing: Timing, sink: Sink) -> Result<Self, String> {
         let roots: Roots = Roots::default();
         let (sender, receiver) = channel();
         let handler = handler(roots.clone(), sender.clone(), sink.clone());
-        let backend: Shared = Arc::new(Mutex::new(factory(handler)?));
-        let worker = Worker {
-            backend: backend.clone(),
-            roots: roots.clone(),
+        let shared = Arc::new(Shared {
+            core: Mutex::new(Core {
+                backend: factory(handler)?,
+                counts: HashMap::new(),
+            }),
+            roots,
+            structure: Mutex::new(()),
             sink,
+        });
+        let worker = Worker {
+            shared: shared.clone(),
             timing,
         };
         let thread = std::thread::Builder::new()
@@ -83,40 +194,44 @@ impl Hub {
             .spawn(move || worker.run(&receiver))
             .map_err(|error| error.to_string())?;
         Ok(Self {
-            backend,
-            roots,
+            shared,
             sender,
             thread: Some(thread),
         })
     }
 
-    pub(super) fn add(&self, label: &str) -> Result<(), String> {
-        let root = Arc::new(Root::new(label, git_dirs(Path::new(label))));
-        attach(&mut **lock(&self.backend), &root)?;
-        self.roots
+    pub(super) fn commit(&self, prepared: Prepared) -> Result<(), String> {
+        let _structure = locked(&self.shared.structure);
+        self.shared.acquire_all(&prepared.root, &prepared.plan)?;
+        self.shared
+            .roots
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .push(root);
+            .push(prepared.root);
         Ok(())
     }
 
     pub(super) fn remove(&self, label: &str) {
-        let mut roots = self
-            .roots
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(index) = roots.iter().position(|root| root.label == label) {
-            let root = roots.remove(index);
-            detach(&mut **lock(&self.backend), &root);
+        let _structure = locked(&self.shared.structure);
+        let taken = {
+            let mut roots = self
+                .shared
+                .roots
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            roots
+                .iter()
+                .position(|root| root.label == label)
+                .map(|index| roots.remove(index))
+        };
+        if let Some(root) = taken {
+            self.shared.detach(&root);
         }
     }
 
     #[cfg(test)]
     pub(super) fn len(&self) -> usize {
-        self.roots
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .len()
+        self.shared.snapshot().len()
     }
 }
 
@@ -127,12 +242,6 @@ impl Drop for Hub {
             let _ = thread.join();
         }
     }
-}
-
-fn lock(backend: &Shared) -> std::sync::MutexGuard<'_, Box<dyn Backend>> {
-    backend
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn handler(roots: Roots, sender: Sender<Message>, sink: Sink) -> Handler {
@@ -154,25 +263,67 @@ fn route(roots: &Roots, sender: &Sender<Message>, event: &notify::Event) {
     let roots = roots
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let may_add_directory = own_walk()
-        && matches!(
-            event.kind,
-            EventKind::Create(_) | EventKind::Modify(notify::event::ModifyKind::Name(_))
-        );
+    let created = matches!(
+        event.kind,
+        EventKind::Create(_) | EventKind::Modify(notify::event::ModifyKind::Name(_))
+    );
+    let vanished = matches!(
+        event.kind,
+        EventKind::Remove(_) | EventKind::Modify(notify::event::ModifyKind::Name(_))
+    );
     for path in &event.paths {
         for root in roots.iter() {
             if is_relevant(root, path) {
                 let _ = sender.send(Message::Changed(root.clone()));
             }
-            if may_add_directory && is_watchable_dir(root, path) && is_real_directory(path) {
+            if own_walk() && created && is_watchable_dir(root, path) && is_real_directory(path) {
                 let _ = sender.send(Message::NewDirectory(root.clone(), path.clone()));
             }
+        }
+        if own_walk() && vanished && roots.iter().any(|root| is_watchable_dir(root, path)) {
+            let _ = sender.send(Message::Removed(path.clone()));
         }
     }
 }
 
 fn is_real_directory(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
+}
+
+#[cfg(unix)]
+fn identity(path: &Path) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(path)
+        .ok()
+        .map(|meta| (meta.dev(), meta.ino()))
+}
+
+#[cfg(windows)]
+fn identity(path: &Path) -> Option<(u64, u64)> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+    let handle = std::fs::OpenOptions::new()
+        .access_mode(0)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .ok()?;
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: the handle is open for the whole call and `info` is a valid out pointer.
+    if unsafe { GetFileInformationByHandle(handle.as_raw_handle().cast(), &mut info) } == 0 {
+        return None;
+    }
+    let index = u64::from(info.nFileIndexHigh) << 32 | u64::from(info.nFileIndexLow);
+    Some((u64::from(info.dwVolumeSerialNumber), index))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn identity(_: &Path) -> Option<(u64, u64)> {
+    None
 }
 
 fn git_dirs(root: &Path) -> Vec<PathBuf> {
@@ -182,8 +333,7 @@ fn git_dirs(root: &Path) -> Vec<PathBuf> {
     let Some(target) = text.trim().strip_prefix("gitdir:") else {
         return Vec::new();
     };
-    let gitdir = root.join(target.trim());
-    let Ok(gitdir) = gitdir.canonicalize() else {
+    let Ok(gitdir) = root.join(target.trim()).canonicalize() else {
         return Vec::new();
     };
     let common = std::fs::read_to_string(gitdir.join("commondir"))
@@ -215,71 +365,46 @@ fn collect_directories(root: &Root, start: &Path) -> std::io::Result<Vec<PathBuf
     Ok(found)
 }
 
-fn attach(backend: &mut dyn Backend, root: &Root) -> Result<(), String> {
-    let mut added: Vec<PathBuf> = Vec::new();
-    let result = attach_into(backend, root, &mut added);
-    if result.is_err() {
-        added.iter().for_each(|path| backend.unwatch(path));
-        return result;
-    }
-    *root
-        .dirs
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = added;
-    Ok(())
-}
-
-fn attach_into(
-    backend: &mut dyn Backend,
-    root: &Root,
-    added: &mut Vec<PathBuf>,
-) -> Result<(), String> {
+fn plan(root: &Root) -> Result<Vec<Spec>, String> {
     let describe = |path: &Path, reason: String| format!("{}: {reason}", path.display());
+    let mut specs = vec![];
     if !own_walk() {
-        backend
-            .watch(&root.path, true)
-            .map_err(|reason| describe(&root.path, reason))?;
-        added.push(root.path.clone());
+        specs.push(Spec {
+            path: root.path.clone(),
+            recursive: true,
+        });
         for dir in &root.git_dirs {
-            backend
-                .watch(dir, false)
-                .map_err(|reason| describe(dir, reason))?;
-            added.push(dir.clone());
+            specs.push(Spec {
+                path: dir.clone(),
+                recursive: false,
+            });
             let refs = dir.join("refs");
-            if refs.is_dir() && backend.watch(&refs, true).is_ok() {
-                added.push(refs);
+            if refs.is_dir() {
+                specs.push(Spec {
+                    path: refs,
+                    recursive: true,
+                });
             }
         }
-        return Ok(());
+        return Ok(specs);
     }
+    let mut seen = HashSet::new();
     let starts = std::iter::once(root.path.clone()).chain(root.git_dirs.iter().cloned());
     for start in starts {
-        for dir in collect_directories(root, &start)
-            .map_err(|error| describe(&start, error.to_string()))?
-        {
-            backend
-                .watch(&dir, false)
-                .map_err(|reason| describe(&dir, reason))?;
-            added.push(dir);
+        let found = collect_directories(root, &start)
+            .map_err(|error| describe(&start, error.to_string()))?;
+        for path in found.into_iter().filter(|path| seen.insert(path.clone())) {
+            specs.push(Spec {
+                path,
+                recursive: false,
+            });
         }
     }
-    Ok(())
-}
-
-fn detach(backend: &mut dyn Backend, root: &Root) {
-    let dirs = std::mem::take(
-        &mut *root
-            .dirs
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()),
-    );
-    dirs.iter().for_each(|path| backend.unwatch(path));
+    Ok(specs)
 }
 
 struct Worker {
-    backend: Shared,
-    roots: Roots,
-    sink: Sink,
+    shared: Arc<Shared>,
     timing: Timing,
 }
 
@@ -302,7 +427,7 @@ impl Worker {
             if deadline.is_some_and(|due| now >= due) {
                 deadline = None;
                 for root in pending.drain(..) {
-                    (self.sink)(Signal::Changed(root.label.clone()));
+                    (self.shared.sink)(Signal::Changed(root.label.clone()));
                 }
             }
             if now >= next_check {
@@ -312,17 +437,11 @@ impl Worker {
         }
     }
 
-    fn snapshot(&self) -> Vec<Arc<Root>> {
-        self.roots
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-    }
-
     fn collect(&self, message: Message, pending: &mut Vec<Arc<Root>>) {
         match message {
             Message::Changed(root) => remember(pending, &root),
             Message::Everything => self
+                .shared
                 .snapshot()
                 .iter()
                 .for_each(|root| remember(pending, root)),
@@ -330,42 +449,90 @@ impl Worker {
                 self.watch_new_directory(&root, &path);
                 remember(pending, &root);
             }
+            Message::Removed(path) => self.prune(&path),
             Message::Stop => {}
         }
     }
 
-    fn watch_new_directory(&self, root: &Root, path: &Path) {
+    fn watch_new_directory(&self, root: &Arc<Root>, path: &Path) {
+        let _structure = locked(&self.shared.structure);
+        if !self.shared.is_member(root) {
+            return;
+        }
         let Ok(found) = collect_directories(root, path) else {
             return;
         };
-        let mut backend = lock(&self.backend);
-        let mut dirs = root
-            .dirs
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut core = locked(&self.shared.core);
+        let mut dirs = locked(&root.dirs);
         for dir in found {
-            if !dirs.contains(&dir) && backend.watch(&dir, false).is_ok() {
+            if dirs.contains(&dir) {
+                core.rewatch(&dir);
+                continue;
+            }
+            let spec = Spec {
+                path: dir.clone(),
+                recursive: false,
+            };
+            if core.acquire(&spec).is_ok() {
                 dirs.push(dir);
             }
         }
     }
 
+    fn prune(&self, path: &Path) {
+        let _structure = locked(&self.shared.structure);
+        let mut core = locked(&self.shared.core);
+        for root in self.shared.snapshot() {
+            let mut dirs = locked(&root.dirs);
+            dirs.retain(|dir| {
+                let gone = dir.starts_with(path) && !dir.exists();
+                if gone {
+                    core.forget(dir);
+                }
+                !gone
+            });
+        }
+    }
+
     fn check_health(&self, pending: &mut Vec<Arc<Root>>) {
-        for root in self.snapshot() {
-            let present = root.path.is_dir();
+        for root in self.shared.snapshot() {
+            let _structure = locked(&self.shared.structure);
+            if !self.shared.is_member(&root) {
+                continue;
+            }
             let lost = root.lost.load(Ordering::Relaxed);
-            if !present && !lost {
-                root.lost.store(true, Ordering::Relaxed);
-                detach(&mut **lock(&self.backend), &root);
-                (self.sink)(Signal::Lost {
-                    path: root.label.clone(),
-                    reason: "the folder is gone".into(),
-                });
-            } else if present && lost && attach(&mut **lock(&self.backend), &root).is_ok() {
-                root.lost.store(false, Ordering::Relaxed);
-                remember(pending, &root);
+            if !root.path.is_dir() {
+                if !lost {
+                    self.lose(&root, "the folder is gone");
+                }
+                continue;
+            }
+            let replaced = identity(&root.path) != *locked(&root.identity);
+            if !lost && !replaced {
+                continue;
+            }
+            self.shared.detach(&root);
+            let attached = plan(&root).and_then(|plan| self.shared.acquire_all(&root, &plan));
+            match attached {
+                Ok(()) => {
+                    root.lost.store(false, Ordering::Relaxed);
+                    remember(pending, &root);
+                }
+                Err(reason) if !lost => {
+                    self.lose(&root, &format!("it could not be watched again ({reason})"))
+                }
+                Err(_) => {}
             }
         }
+    }
+
+    fn lose(&self, root: &Root, reason: &str) {
+        root.lost.store(true, Ordering::Relaxed);
+        self.shared.detach(root);
+        (self.shared.sink)(Signal::Lost {
+            path: root.label.clone(),
+            reason: reason.into(),
+        });
     }
 }
 

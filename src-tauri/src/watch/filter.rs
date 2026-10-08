@@ -11,6 +11,7 @@ pub(super) struct Root {
     pub git_dirs: Vec<PathBuf>,
     pub dirs: Mutex<Vec<PathBuf>>,
     pub lost: AtomicBool,
+    pub identity: Mutex<Option<(u64, u64)>>,
 }
 
 impl Root {
@@ -21,6 +22,7 @@ impl Root {
             git_dirs,
             dirs: Mutex::default(),
             lost: AtomicBool::new(false),
+            identity: Mutex::default(),
         }
     }
 }

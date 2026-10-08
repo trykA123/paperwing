@@ -1,7 +1,7 @@
 use super::hub::{Backend, Factory, Handler};
 use super::*;
 use crate::platform::Fixture;
-use notify::event::{EventKind, Flag};
+use notify::event::{EventKind, Flag, ModifyKind};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::OnceLock;
@@ -435,4 +435,212 @@ fn a_root_that_disappears_is_reported_once_and_rewatched_when_it_returns() {
     write(&root, "src/a.txt", "x");
     assert_eq!(receiver.recv_timeout(WAIT).unwrap(), Signal::Changed(root));
     service.stop_all();
+}
+
+fn linked_worktree(fixture: &Fixture, main: &str, name: &str) -> (String, PathBuf) {
+    let tree = fixture.0.join(name);
+    std::fs::create_dir_all(&tree).unwrap();
+    let gitdir = Path::new(main).join(".git/worktrees").join(name);
+    std::fs::create_dir_all(&gitdir).unwrap();
+    std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
+    std::fs::write(tree.join(".git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
+    (tree.to_str().unwrap().to_string(), gitdir)
+}
+
+fn changed_for(receiver: &Receiver<Signal>, expected: &[&String]) {
+    let mut seen = Vec::new();
+    while seen.len() < expected.len() {
+        match receiver.recv_timeout(WAIT).unwrap() {
+            Signal::Changed(path) => seen.push(path),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+    seen.sort();
+    let mut wanted: Vec<String> = expected.iter().map(|path| (*path).clone()).collect();
+    wanted.sort();
+    assert_eq!(seen, wanted);
+}
+
+#[test]
+fn worktrees_of_one_repository_share_watches_and_keep_them_when_one_goes() {
+    let _guard = serial();
+    let fixture = Fixture::new("watch-siblings");
+    let main = repository(&fixture, "main");
+    let (first, _) = linked_worktree(&fixture, &main, "one");
+    let (second, second_gitdir) = linked_worktree(&fixture, &main, "two");
+    let (service, receiver) = service(hub::recommended());
+    service.watch("a", std::slice::from_ref(&first)).unwrap();
+    service.watch("b", std::slice::from_ref(&second)).unwrap();
+    write(&main, ".git/refs/heads/x", "0\n");
+    changed_for(&receiver, &[&first, &second]);
+    service.unwatch("a");
+    drain(&receiver, QUIET);
+    write(&main, ".git/refs/heads/y", "0\n");
+    changed_for(&receiver, &[&second]);
+    drain(&receiver, QUIET);
+    std::fs::write(second_gitdir.join("HEAD"), "ref: refs/heads/y\n").unwrap();
+    changed_for(&receiver, &[&second]);
+    service.stop_all();
+}
+
+#[test]
+fn a_repository_and_its_worktree_share_the_common_git_directory() {
+    let _guard = serial();
+    let fixture = Fixture::new("watch-main-and-tree");
+    let main = repository(&fixture, "main");
+    let (tree, _) = linked_worktree(&fixture, &main, "wt");
+    let (service, receiver) = service(hub::recommended());
+    service.watch("a", &[main.clone(), tree.clone()]).unwrap();
+    write(&main, ".git/refs/heads/x", "0\n");
+    changed_for(&receiver, &[&main, &tree]);
+    service.watch("a", std::slice::from_ref(&main)).unwrap();
+    drain(&receiver, QUIET);
+    write(&main, ".git/refs/heads/y", "0\n");
+    changed_for(&receiver, &[&main]);
+    service.stop_all();
+}
+
+struct Reentrant(Arc<Mutex<Handler>>);
+
+impl Backend for Reentrant {
+    fn watch(&mut self, _: &Path, _: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn unwatch(&mut self, path: &Path) {
+        let handler = self.0.clone();
+        let path = path.to_path_buf();
+        std::thread::spawn(move || {
+            let event = notify::Event::new(EventKind::Modify(ModifyKind::Any)).add_path(path);
+            (handler.lock().unwrap())(Ok(event));
+        })
+        .join()
+        .unwrap();
+    }
+}
+
+#[test]
+fn removing_a_root_never_blocks_on_the_event_thread() {
+    let _guard = serial();
+    let fixture = Fixture::new("watch-reentrant");
+    let root = repository(&fixture, "repo");
+    let factory: Factory = Arc::new(|handler| {
+        Ok(Box::new(Reentrant(Arc::new(Mutex::new(handler)))) as Box<dyn Backend>)
+    });
+    let (service, _receiver) = service(factory);
+    let service = Arc::new(service);
+    service.watch("set", &[root]).unwrap();
+    let (done, finished) = channel();
+    let worker = service.clone();
+    std::thread::spawn(move || {
+        worker.unwatch("set");
+        let _ = done.send(());
+    });
+    finished
+        .recv_timeout(Duration::from_secs(10))
+        .expect("unwatch hung");
+    assert_eq!(service.count(), 0);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_directory_deleted_and_created_again_is_watched_again() {
+    let _guard = serial();
+    let fixture = Fixture::new("watch-recreate");
+    let root = repository(&fixture, "repo");
+    std::fs::create_dir(Path::new(&root).join("src/sub")).unwrap();
+    let (service, receiver) = service(hub::recommended());
+    service.watch("set", std::slice::from_ref(&root)).unwrap();
+    write(&root, "src/sub/a.txt", "x");
+    receiver.recv_timeout(WAIT).unwrap();
+    drain(&receiver, QUIET);
+    std::fs::remove_dir_all(Path::new(&root).join("src/sub")).unwrap();
+    drain(&receiver, QUIET);
+    std::fs::create_dir(Path::new(&root).join("src/sub")).unwrap();
+    drain(&receiver, QUIET);
+    write(&root, "src/sub/b.txt", "x");
+    assert_eq!(receiver.recv_timeout(WAIT).unwrap(), Signal::Changed(root));
+    service.stop_all();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_root_replaced_by_another_folder_is_watched_again() {
+    let _guard = serial();
+    let fixture = Fixture::new("watch-replaced");
+    let root = repository(&fixture, "repo");
+    let (service, receiver) = service_with(hub::recommended(), Duration::from_millis(100));
+    service.watch("set", std::slice::from_ref(&root)).unwrap();
+    std::fs::rename(&root, format!("{root}.old")).unwrap();
+    repository(&fixture, "repo");
+    let deadline = std::time::Instant::now() + WAIT;
+    let mut seen = false;
+    let mut round = 0;
+    while !seen && std::time::Instant::now() < deadline {
+        drain(&receiver, Duration::from_millis(250));
+        round += 1;
+        write(&root, "src/a.txt", &round.to_string());
+        seen = matches!(receiver.recv_timeout(Duration::from_millis(400)), Ok(Signal::Changed(path)) if path == root);
+    }
+    assert!(seen);
+    service.stop_all();
+    std::fs::remove_dir_all(format!("{root}.old")).unwrap();
+}
+
+type Script = Arc<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
+
+struct Scripted(Script);
+
+impl Backend for Scripted {
+    fn watch(&mut self, path: &Path, _: bool) -> Result<(), String> {
+        (self.0)(path)
+    }
+
+    fn unwatch(&mut self, _: &Path) {}
+}
+
+fn scripted(
+    script: impl Fn(&Path) -> Result<(), String> + Send + Sync + 'static,
+) -> (Factory, Arc<Mutex<Option<Handler>>>) {
+    let slot: Arc<Mutex<Option<Handler>>> = Arc::default();
+    let held = slot.clone();
+    let script: Script = Arc::new(script);
+    let factory: Factory = Arc::new(move |handler| {
+        *held.lock().unwrap() = Some(handler);
+        Ok(Box::new(Scripted(script.clone())) as Box<dyn Backend>)
+    });
+    (factory, slot)
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_subdirectory_that_vanishes_during_the_walk_does_not_skip_the_root() {
+    let _guard = serial();
+    let fixture = Fixture::new("watch-vanish");
+    let root = repository(&fixture, "repo");
+    std::fs::create_dir(Path::new(&root).join("src/vanish")).unwrap();
+    let (factory, _slot) = scripted(|path| {
+        if path.ends_with("vanish") {
+            std::fs::remove_dir(path).unwrap();
+            return Err("No such file or directory".into());
+        }
+        Ok(())
+    });
+    let (service, _receiver) = service(factory);
+    let report = service.watch("set", &[root]).unwrap();
+    assert_eq!((report.watched, report.skipped.len()), (1, 0));
+    service.stop_all();
+}
+
+#[test]
+fn a_watch_that_finishes_after_stop_all_leaves_nothing_behind() {
+    let _guard = serial();
+    let fixture = Fixture::new("watch-generation");
+    let root = repository(&fixture, "repo");
+    let (service, _receiver) = service(hub::recommended());
+    let started = service.generation.load(Ordering::SeqCst);
+    service.stop_all();
+    let report = service.watch_in("set", &[root], started).unwrap();
+    assert_eq!(report.watched, 0);
+    assert_eq!((service.count(), service.root_count()), (0, 0));
 }
