@@ -1,4 +1,6 @@
 use super::{client::Client, transport::Transport};
+use std::path::Path;
+
 use crate::kernel::{
     capabilities::{CiProvider, ProviderFuture},
     ci::*,
@@ -49,14 +51,16 @@ impl<T: Transport> CiProvider for Client<'_, T> {
     fn download_artifact<'a>(
         &'a self,
         artifact: &'a str,
+        destination: &'a Path,
     ) -> ProviderFuture<'a, Result<CiDownload, CiError>> {
-        Box::pin(self.download_artifact(artifact))
+        Box::pin(self.download_artifact(artifact, destination))
     }
     fn download_logs<'a>(
         &'a self,
         run: &'a str,
+        destination: &'a Path,
     ) -> ProviderFuture<'a, Result<CiDownload, CiError>> {
-        Box::pin(self.download_logs(run))
+        Box::pin(self.download_logs(run, destination))
     }
     fn dispatch_form<'a>(
         &'a self,

@@ -2,6 +2,7 @@ use crate::github::http::{Error, Http, Response};
 use crate::kernel::capabilities::ProviderFuture;
 use reqwest::Method;
 use serde_json::Value;
+use std::path::Path;
 
 pub(super) enum Request<'a> {
     Metadata {
@@ -18,6 +19,10 @@ pub(super) enum Request<'a> {
     Download {
         path: &'a str,
     },
+    Save {
+        path: &'a str,
+        destination: &'a Path,
+    },
 }
 
 pub(super) trait Transport: Send + Sync {
@@ -32,6 +37,7 @@ impl Transport for Http<'_> {
                 Request::Write { path, body } => self.send(Method::POST, path, body).await,
                 Request::Raw { path } => self.raw(path).await,
                 Request::Download { path } => self.download(path).await,
+                Request::Save { path, destination } => self.download_to(path, destination).await,
             }
         })
     }

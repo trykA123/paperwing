@@ -10,6 +10,7 @@ use crate::github::{
 use crate::kernel::ci::*;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use std::path::Path;
 
 pub(super) struct Client<'a, T> {
     pub(super) transport: &'a T,
@@ -177,41 +178,52 @@ impl<T: Transport> Client<'_, T> {
         })
     }
 
-    pub(super) async fn download_artifact(&self, artifact: &str) -> Result<CiDownload, CiError> {
+    pub(super) async fn download_artifact(
+        &self,
+        artifact: &str,
+        destination: &Path,
+    ) -> Result<CiDownload, CiError> {
         model::validate_id(artifact)?;
         let path = format!("{}/actions/artifacts/{artifact}/zip", self.repo.api_path());
-        let response = checked(
-            self.transport
-                .send(Request::Download { path: &path })
-                .await
-                .map_err(CiError::from)?,
-            false,
-        )?;
-        Ok(CiDownload {
-            provider: model::PROVIDER.into(),
-            host: self.repo.host.clone(),
-            filename: format!("artifact-{artifact}.zip"),
-            media_type: "application/zip".into(),
-            bytes: response.body,
-        })
+        self.save(&path, destination, format!("artifact-{artifact}.zip"))
+            .await
     }
 
-    pub(super) async fn download_logs(&self, run: &str) -> Result<CiDownload, CiError> {
+    pub(super) async fn download_logs(
+        &self,
+        run: &str,
+        destination: &Path,
+    ) -> Result<CiDownload, CiError> {
         model::validate_id(run)?;
         let path = format!("{}/actions/runs/{run}/logs", self.repo.api_path());
-        let response = checked(
+        self.save(&path, destination, format!("run-{run}-logs.zip"))
+            .await
+    }
+
+    async fn save(
+        &self,
+        path: &str,
+        destination: &Path,
+        filename: String,
+    ) -> Result<CiDownload, CiError> {
+        checked(
             self.transport
-                .send(Request::Download { path: &path })
+                .send(Request::Save { path, destination })
                 .await
                 .map_err(CiError::from)?,
             false,
         )?;
+        let size_bytes = tokio::fs::metadata(destination)
+            .await
+            .map_err(|_| CiError::message("Cannot read the saved CI download"))?
+            .len();
         Ok(CiDownload {
             provider: model::PROVIDER.into(),
             host: self.repo.host.clone(),
-            filename: format!("run-{run}-logs.zip"),
+            filename,
             media_type: "application/zip".into(),
-            bytes: response.body,
+            path: destination.to_string_lossy().into_owned(),
+            size_bytes,
         })
     }
 

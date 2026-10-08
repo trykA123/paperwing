@@ -2,7 +2,7 @@ use super::ci::{
     CiActionResult, CiArtifact, CiDispatch, CiDispatchForm, CiDownload, CiError, CiJob, CiLog,
     CiPage, CiQuery, CiRun,
 };
-use std::{future::Future, pin::Pin};
+use std::{future::Future, path::Path, pin::Pin};
 
 pub type ProviderFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -103,6 +103,7 @@ pub trait CiProvider: Send + Sync {
     fn download_artifact<'a>(
         &'a self,
         _artifact: &'a str,
+        _destination: &'a Path,
     ) -> ProviderFuture<'a, Result<CiDownload, Self::Error>>
     where
         Self::Error: From<CiError>,
@@ -112,6 +113,7 @@ pub trait CiProvider: Send + Sync {
     fn download_logs<'a>(
         &'a self,
         _run: &'a str,
+        _destination: &'a Path,
     ) -> ProviderFuture<'a, Result<CiDownload, Self::Error>>
     where
         Self::Error: From<CiError>,

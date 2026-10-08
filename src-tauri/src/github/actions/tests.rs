@@ -58,11 +58,16 @@ impl Transport for Recorded {
                 .unwrap()
                 .pop_front()
                 .expect("recorded CI request");
+            let destination = match &request {
+                Request::Save { destination, .. } => Some(*destination),
+                _ => None,
+            };
             let (kind, path, etag, body) = match request {
                 Request::Metadata { path, etag } => ("metadata", path, etag, None),
                 Request::Write { path, body } => ("write", path, None, body),
                 Request::Raw { path } => ("raw", path, None, None),
                 Request::Download { path } => ("download", path, None, None),
+                Request::Save { path, .. } => ("download", path, None, None),
             };
             assert_eq!(kind, exchange.kind);
             assert_eq!(path, exchange.path);
@@ -77,13 +82,17 @@ impl Transport for Recorded {
                     HeaderValue::from_str(&value).unwrap(),
                 );
             }
+            let mut body = exchange
+                .raw
+                .map(String::into_bytes)
+                .unwrap_or_else(|| serde_json::to_vec(&exchange.body).unwrap());
+            if let Some(destination) = destination {
+                std::fs::write(destination, std::mem::take(&mut body)).unwrap();
+            }
             Ok(Response {
                 status: exchange.status,
                 headers,
-                body: exchange
-                    .raw
-                    .map(String::into_bytes)
-                    .unwrap_or_else(|| serde_json::to_vec(&exchange.body).unwrap()),
+                body,
                 next: exchange.next,
             })
         })
@@ -215,18 +224,22 @@ async fn jobs_steps_logs_and_artifacts_use_neutral_records_without_persistence()
     assert!(
         matches!(CiProvider::artifacts(&provider, "31", &CiQuery::default()).await.unwrap(), CiPage::Updated { items, .. } if items[0].size_bytes == 4)
     );
-    let artifact = CiProvider::download_artifact(&provider, "33")
+    let dir = crate::test_support::tmp_root().join(format!("ci-save-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let target = dir.join("artifact.zip");
+    let artifact = CiProvider::download_artifact(&provider, "33", &target)
         .await
         .unwrap();
-    assert_eq!(artifact.bytes, b"PKfixture");
+    assert_eq!(std::fs::read(&target).unwrap(), b"PKfixture");
+    assert_eq!(artifact.size_bytes, 9);
+    assert_eq!(artifact.path, target.to_string_lossy());
     assert_eq!(artifact.filename, "artifact-33.zip");
-    assert_eq!(
-        CiProvider::download_logs(&provider, "31")
-            .await
-            .unwrap()
-            .bytes,
-        b"PKlogs"
-    );
+    let logs = CiProvider::download_logs(&provider, "31", &target)
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), b"PKlogs");
+    assert_eq!(logs.size_bytes, 6);
+    std::fs::remove_dir_all(&dir).unwrap();
     transport.complete();
 }
 

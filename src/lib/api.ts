@@ -279,8 +279,8 @@ export const api = {
   ciJobs: (target: CiRepositoryRequest, runId: string, query: CiQuery = {}) => invoke<CiPage<CiJob>>('ci_jobs', { target, runId, query }),
   ciJobLog: (target: CiRepositoryRequest, jobId: string) => invoke<CiLog>('ci_job_log', { target, jobId }),
   ciArtifacts: (target: CiRepositoryRequest, runId: string, query: CiQuery = {}) => invoke<CiPage<CiArtifact>>('ci_artifacts', { target, runId, query }),
-  ciDownloadArtifact: (target: CiRepositoryRequest, artifactId: string) => invoke<CiDownload>('ci_download_artifact', { target, artifactId }),
-  ciDownloadRunLogs: (target: CiRepositoryRequest, runId: string) => invoke<CiDownload>('ci_download_run_logs', { target, runId }),
+  ciDownloadArtifact: (target: CiRepositoryRequest, artifactId: string, destination: string) => invoke<CiDownload>('ci_download_artifact', { target, artifactId, destination }),
+  ciDownloadRunLogs: (target: CiRepositoryRequest, runId: string, destination: string) => invoke<CiDownload>('ci_download_run_logs', { target, runId, destination }),
   ciRerun: (target: CiRepositoryRequest, request: { runId: string; failedOnly: boolean; confirmed: boolean }) => invoke<CiActionResult>('ci_rerun', { target, request }),
   ciCancel: (target: CiRepositoryRequest, request: { runId: string; confirmed: boolean }) => invoke<CiActionResult>('ci_cancel', { target, request }),
   ciDispatchInputs: (target: CiRepositoryRequest, request: CiDispatch) => invoke<CiDispatchForm>('ci_dispatch_inputs', { target, request }),
@@ -303,7 +303,7 @@ export type CiStep = { provider: string; host: string; number: number; name: str
 export type CiJob = { provider: string; host: string; id: string; runId: string; name: string; status: CiStatus; url: string; startedAt: string | null; completedAt: string | null; durationSeconds: number | null; steps: CiStep[] };
 export type CiLog = { provider: string; host: string; jobId: string; text: string };
 export type CiArtifact = { provider: string; host: string; id: string; name: string; sizeBytes: number; expired: boolean; createdAt: string; expiresAt: string | null };
-export type CiDownload = { provider: string; host: string; filename: string; mediaType: string; bytes: number[] };
+export type CiDownload = { provider: string; host: string; filename: string; mediaType: string; path: string; sizeBytes: number };
 export type CiPage<T> = { state: 'updated'; items: T[]; etag: string | null; nextPage: number | null } | { state: 'notModified'; etag: string | null };
 export type CiDispatch = { pipelineId: string; reference: string; inputs: Record<string, string | number | boolean> };
 export type CiInput = { name: string; description: string; kind: 'string' | 'boolean' | 'number' | 'choice'; required: boolean; default: string | number | boolean | null; options: string[] };

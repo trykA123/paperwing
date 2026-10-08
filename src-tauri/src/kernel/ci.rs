@@ -99,7 +99,8 @@ pub struct CiDownload {
     pub host: String,
     pub filename: String,
     pub media_type: String,
-    pub bytes: Vec<u8>,
+    pub path: String,
+    pub size_bytes: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -31,7 +31,7 @@ serde_yaml_ng = "=0.10.0"
 thiserror = "=2.0.21"
 chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-tokio = { version = "1", features = ["process", "sync", "io-util", "time", "macros", "net"] }
+tokio = { version = "1", features = ["process", "sync", "io-util", "time", "macros", "net", "fs"] }
 sha1 = "=0.10.7"
 sha2 = "=0.10.9"
 reqwest = { version = "0.12", features = ["json"] }

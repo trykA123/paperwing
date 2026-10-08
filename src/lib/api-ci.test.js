@@ -14,16 +14,16 @@ test('CI reads pass targets and conditional page validators through IPC', async 
     await api.ciJobs(target, '31', query);
     await api.ciArtifacts(target, '31');
     await api.ciJobLog(target, '32');
-    await api.ciDownloadArtifact(target, '33');
-    await api.ciDownloadRunLogs(target, '31');
+    await api.ciDownloadArtifact(target, '33', '/tmp/a.zip');
+    await api.ciDownloadRunLogs(target, '31', '/tmp/l.zip');
   });
   expect(calls).toEqual([
     { command: 'ci_runs', args: { target, query } },
     { command: 'ci_jobs', args: { target, runId: '31', query } },
     { command: 'ci_artifacts', args: { target, runId: '31', query: {} } },
     { command: 'ci_job_log', args: { target, jobId: '32' } },
-    { command: 'ci_download_artifact', args: { target, artifactId: '33' } },
-    { command: 'ci_download_run_logs', args: { target, runId: '31' } },
+    { command: 'ci_download_artifact', args: { target, artifactId: '33', destination: '/tmp/a.zip' } },
+    { command: 'ci_download_run_logs', args: { target, runId: '31', destination: '/tmp/l.zip' } },
   ]);
 });
 

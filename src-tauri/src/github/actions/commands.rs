@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use serde::Deserialize;
+use std::path::Path;
 use tauri::AppHandle;
 
 #[derive(Deserialize)]
@@ -132,9 +133,14 @@ pub async fn ci_download_artifact(
     app: AppHandle,
     target: CiRepositoryRequest,
     artifact_id: String,
+    destination: String,
 ) -> Result<CiDownload, CiError> {
     with_provider(app, target, |provider| {
-        Box::pin(async move { provider.download_artifact(&artifact_id).await })
+        Box::pin(async move {
+            provider
+                .download_artifact(&artifact_id, Path::new(&destination))
+                .await
+        })
     })
     .await
 }
@@ -144,9 +150,14 @@ pub async fn ci_download_run_logs(
     app: AppHandle,
     target: CiRepositoryRequest,
     run_id: String,
+    destination: String,
 ) -> Result<CiDownload, CiError> {
     with_provider(app, target, |provider| {
-        Box::pin(async move { provider.download_logs(&run_id).await })
+        Box::pin(async move {
+            provider
+                .download_logs(&run_id, Path::new(&destination))
+                .await
+        })
     })
     .await
 }

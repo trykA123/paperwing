@@ -2,6 +2,7 @@ use super::{api_base, Source};
 use reqwest::Method;
 
 mod response;
+mod streaming;
 mod transfers;
 pub(super) use response::{Error, Response};
 use serde::de::DeserializeOwned;
