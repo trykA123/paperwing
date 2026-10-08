@@ -18,6 +18,60 @@ pub(in crate::github) async fn load(
     .map_err(|_| "Cannot resolve the stored GitHub source".to_string())?
 }
 
+pub(in crate::github) async fn load_remote(
+    app: AppHandle,
+    source_id: String,
+    url: String,
+) -> Result<(Source, Repository), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let settings = crate::settings::load_settings(app)?;
+        for_remote(&settings, &source_id, &url)
+    })
+    .await
+    .map_err(|_| "Cannot resolve the stored GitHub source".to_string())?
+}
+
+pub(in crate::github) fn for_remote(
+    settings: &Settings,
+    source_id: &str,
+    url: &str,
+) -> Result<(Source, Repository), String> {
+    crate::settings::valid_id(source_id)?;
+    let source = settings
+        .sources
+        .iter()
+        .find(|source| source.id == source_id)
+        .ok_or("Configured GitHub source is missing")?;
+    let host = super::repository::remote_host(url).map_err(|error| error.to_string())?;
+    if !matches!(source.kind.as_str(), "github" | "ghe" | "manual")
+        || source.kind != "manual" && !source.host.eq_ignore_ascii_case(&host)
+    {
+        return Err("CI repository does not match the configured GitHub source host".into());
+    }
+    let repo = parse_remote(url, &host).map_err(|error| error.to_string())?;
+    let registered = settings
+        .workspace
+        .get("sets")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|set| {
+            set.get("items")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .any(|item| for_item(settings, item, &repo).is_ok_and(|resolved| resolved.id == source_id));
+    let manual = source.kind == "manual"
+        && source.urls.iter().any(|url| {
+            parse_remote(url, &host).is_ok_and(|registered| registered.same_repo(&repo))
+        });
+    if !registered && !manual {
+        return Err("CI repository is not registered; add it to a set or manual source".into());
+    }
+    Ok((source.clone(), repo))
+}
+
 pub(in crate::github) fn for_path(
     settings: &Settings,
     path: &Path,

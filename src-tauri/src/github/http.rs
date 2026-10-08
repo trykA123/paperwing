@@ -2,6 +2,8 @@ use super::{api_base, Source};
 use reqwest::Method;
 
 mod response;
+mod streaming;
+mod transfers;
 pub(super) use response::{Error, Response};
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -149,16 +151,23 @@ impl Http<'_> {
         body: Option<serde_json::Value>,
     ) -> Result<reqwest::Response, Error> {
         let request = self.build_request(method, path, body)?;
-        let lease = crate::providers::acquire(self.source, &self.api_host, None).map_err(Error::Message)?;
-        lease.run(self.dispatch_request(request, |request| async {
-            let response = self
-                .client
-                .execute(request)
-                .await
-                .map_err(|_| self.connection_error())?;
-            Ok((response.status().as_u16(), response))
-        }))
-        .await.map_err(|error| Error::Message(error.to_string()))?
+        self.dispatch_built(request).await
+    }
+
+    async fn dispatch_built(&self, request: reqwest::Request) -> Result<reqwest::Response, Error> {
+        let lease =
+            crate::providers::acquire(self.source, &self.api_host, None).map_err(Error::Message)?;
+        lease
+            .run(self.dispatch_request(request, |request| async {
+                let response = self
+                    .client
+                    .execute(request)
+                    .await
+                    .map_err(|_| self.connection_error())?;
+                Ok((response.status().as_u16(), response))
+            }))
+            .await
+            .map_err(|error| Error::Message(error.to_string()))?
     }
 
     fn connection_error(&self) -> Error {
@@ -171,6 +180,9 @@ impl Http<'_> {
         path: &str,
         body: Option<serde_json::Value>,
     ) -> Result<reqwest::Request, Error> {
+        if !path.starts_with('/') || path.starts_with("//") || path.chars().any(char::is_control) {
+            return Err(Error::Message("Invalid GitHub API path".into()));
+        }
         let mut request = self
             .client
             .request(method, format!("{}{path}", self.base))
@@ -223,7 +235,16 @@ impl Http<'_> {
     async fn read_response(
         &self,
         url: &str,
+        response: reqwest::Response,
+    ) -> Result<Response, Error> {
+        self.read_bounded(url, response, 8 * 1024 * 1024).await
+    }
+
+    async fn read_bounded(
+        &self,
+        url: &str,
         mut response: reqwest::Response,
+        limit: usize,
     ) -> Result<Response, Error> {
         let status = response.status().as_u16();
         let headers = response.headers().clone();
@@ -241,10 +262,12 @@ impl Http<'_> {
             .await
             .map_err(|_| Error::Message("Cannot read GitHub response".into()))?
         {
-            if body.len() + chunk.len() > 8 * 1024 * 1024 {
-                return Err(Error::Message(
-                    "GitHub response exceeds metadata limit".into(),
-                ));
+            if body.len() + chunk.len() > limit {
+                return Err(Error::Message(if limit == 8 * 1024 * 1024 {
+                    "GitHub response exceeds metadata limit".into()
+                } else {
+                    "GitHub response exceeds download limit".into()
+                }));
             }
             body.extend_from_slice(&chunk);
         }

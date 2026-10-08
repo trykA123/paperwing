@@ -1,0 +1,5 @@
+[
+  {"kind":"metadata","path":"/repos/admin/repo/actions/runs?per_page=100&page=1","status":403,"headers":{"x-ratelimit-remaining":"0","x-ratelimit-reset":"1791388800"},"body":{"message":"API rate limit exceeded"}},
+  {"kind":"metadata","path":"/repos/admin/repo/actions/runs?per_page=100&page=1","status":403,"body":{"message":"Resource not accessible"}},
+  {"kind":"write","path":"/repos/admin/repo/actions/runs/31/rerun-failed-jobs","status":403,"raw":"malicious-secret"}
+]

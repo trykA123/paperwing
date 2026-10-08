@@ -20,6 +20,7 @@ macro_rules! domain {
 
 mod application;
 mod changes;
+mod ci;
 mod compare;
 mod files;
 mod git;
@@ -33,6 +34,7 @@ pub(crate) fn compose() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
     let domains = [
         application::handler(),
         changes::handler(),
+        ci::handler(),
         compare::handler(),
         files::handler(),
         git::handler(),
