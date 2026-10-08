@@ -175,7 +175,7 @@ await shot('push-dialog');
 await page.click('.stash-dialog footer .btn.dark');
 await page.waitForSelector('.stash-entry:has-text("Second tweak")');
 await page.waitForTimeout(900);
-check('focus stays inside the drawer after stashing', await page.evaluate(() => !!document.activeElement?.closest('.history-drawer')), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 60)));
+check('focus stays inside the drawer after stashing', await page.evaluate(() => !!document.activeElement?.closest('.details-drawer')), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 60)));
 check('new stash listed and tree cleaned', stashes('gamma').length === 3 && git(repos.gamma, 'status', '--porcelain').trim() === '');
 await page.click('.stash-entry:has-text("Second tweak") button:has-text("Pop")');
 await page.waitForTimeout(700);

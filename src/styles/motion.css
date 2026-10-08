@@ -21,7 +21,6 @@
 .pi,
 .kind,
 .link,
-.tree-toggle,
 .palette-command,
 .row-menu button,
 .activity-entry summary {
@@ -53,8 +52,7 @@ input[type="checkbox"]::before {
     transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
-.compare-twisty,
-.tree-toggle svg {
+.compare-twisty {
     transition: transform var(--dur-fast) var(--ease-out);
 }
 

@@ -12,7 +12,7 @@
   const open = () => openPull(pull.url).catch(() => app.toast('Could not open the browser. Copy the link instead.', 'error'));
 </script>
 
-<div class="history-body">
+<div class="details-body">
   <PullChip view={pullChip(pull)} onopen={() => void open()} />
   <dl class="drawer-facts">
     <dt>Into</dt><dd class="mono">{pull.base}</dd>

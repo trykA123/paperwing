@@ -1,12 +1,12 @@
 /* ---------- repository drawer: history as two rails ---------- */
-.history-scrim {
+.details-scrim {
     position: fixed;
     inset: 0;
     z-index: var(--z-scrim);
     background: var(--scrim);
 }
 
-.history-drawer {
+.details-drawer {
     --history-details-h: 9.5rem;
     position: fixed;
     inset-block: 0;
@@ -22,7 +22,7 @@
     outline: none;
 }
 
-.history-head {
+.details-head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -31,11 +31,11 @@
     border-bottom: 1px solid var(--line);
 }
 
-.history-title {
+.details-title {
     min-width: 0;
 }
 
-.history-title h2 {
+.details-title h2 {
     margin: 0;
     font-size: var(--fs-lg);
     font-weight: 600;
@@ -44,7 +44,7 @@
     white-space: nowrap;
 }
 
-.history-branch {
+.details-branch {
     display: inline-flex;
     align-items: center;
     gap: var(--sp-1);
@@ -53,7 +53,7 @@
     font-size: var(--fs-sm);
 }
 
-.history-body {
+.details-body {
     display: flex;
     flex: 1;
     flex-direction: column;

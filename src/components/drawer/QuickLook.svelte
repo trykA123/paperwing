@@ -27,7 +27,7 @@
 
 <svelte:window onkeydown={event => { if (event.key === 'Enter' && !event.defaultPrevented && !(event.target as Element).closest('button, a, input, textarea, select, [contenteditable]')) { event.preventDefault(); open(); } }} />
 
-<div class="history-body">
+<div class="details-body">
   <section class="ql-block" aria-label="Status">
     <p class="ql-status"><b>{remote ? 'Not cloned' : dirty ? plural(dirty, 'uncommitted file') : row.sync.kind === 'rails' ? row.sync.label : 'Checking…'}</b></p>
     {#if !remote}<SyncRails view={row.sync} />{/if}

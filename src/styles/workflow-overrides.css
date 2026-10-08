@@ -327,8 +327,7 @@
     border-bottom: 1px solid var(--line);
 }
 
-.rsec>h3,
-.rsec>.item-details h3 {
+.rsec>h3 {
     margin: 0;
 }
 
@@ -336,11 +335,6 @@
     margin-left: 4px;
     color: var(--faint-text);
     font-weight: 600;
-}
-
-.rsec.item-details {
-    margin: 0;
-    gap: var(--sp-1);
 }
 
 .rsec p {
@@ -443,66 +437,6 @@
 
 .rfoot .sum {
     margin: 0;
-}
-
-/* ---------- sidebar tree: the caret is part of the row, and the guide line grows out of it ---------- */
-.repo-nav {
-    padding-left: 2px;
-}
-
-.tree-toggle {
-    align-self: center;
-    width: 22px;
-    height: 22px;
-    margin-right: 2px;
-    border-radius: 6px;
-    color: var(--dim);
-}
-
-.tree-toggle:hover {
-    background: color-mix(in oklch, var(--text) 10%, transparent);
-    color: var(--text);
-}
-
-.repo-nav:hover .tree-toggle,
-.tree-toggle.expanded {
-    color: var(--text);
-}
-
-.repo-nav .nav,
-.repo-nav .nav:hover {
-    gap: var(--sp-2);
-    padding-left: var(--sp-1);
-}
-
-.repo-subtree {
-    margin: 2px 0 var(--sp-2) 13px;
-    padding-left: var(--sp-3);
-    border-left: 1px solid var(--line);
-}
-
-.repo-subtree summary {
-    gap: 6px;
-    padding: 3px 0;
-}
-
-.repo-subtree summary>svg {
-    width: 12px;
-    color: var(--dim);
-}
-
-.repo-subtree .tree-url {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: var(--mono);
-}
-
-.tree-entry .tree-meta {
-    flex: none;
-    margin-left: auto;
-    color: var(--faint-text);
-    font-size: var(--fs-xs);
 }
 
 /* ---------- action colours: one hue per kind of action, shared by icons and chips ---------- */
@@ -659,29 +593,6 @@ svg.i.tone-danger {
 [data-theme="dark"] .btn.danger:hover:not(:disabled) {
     border-color: color-mix(in oklch, var(--err) 85%, white);
     background: color-mix(in oklch, var(--err) 85%, white);
-}
-
-.tree-entry .tree-delete {
-    display: grid;
-    place-items: center;
-    flex: none;
-    align-self: center;
-    width: 20px;
-    height: 20px;
-    margin-left: auto;
-    border-radius: 6px;
-    color: var(--faint-text);
-    opacity: 0;
-}
-
-.tree-entry:hover .tree-delete,
-.tree-entry .tree-delete:focus-visible {
-    opacity: 1;
-}
-
-.tree-entry .tree-delete:hover:not(:disabled) {
-    background: var(--err-bg);
-    color: var(--err-text);
 }
 
 .branch-targets {

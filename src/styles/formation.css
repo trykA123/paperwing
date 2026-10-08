@@ -893,31 +893,6 @@ button.fm-ref:hover {
 }
 
 /* right panel */
-.item-details .path {
-    overflow-wrap: anywhere;
-}
-
-.tree-block {
-    margin-top: var(--sp-3);
-}
-
-.tree-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: var(--sp-1) 0;
-    font-size: var(--fs-sm);
-    font-weight: 600;
-}
-
-.tree-chev {
-    display: grid;
-    transition: transform var(--dur-fast) var(--ease-out);
-}
-
-.tree-chev.open {
-    transform: rotate(90deg);
-}
 
 .activity-filters input {
     height: var(--ctl-h);
@@ -964,29 +939,6 @@ button.fm-ref:hover {
 
 [data-theme="dark"] .rail-badge.err {
     color: oklch(18% 0.03 27);
-}
-
-.set-summary dl {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--sp-1) var(--sp-3);
-    margin: var(--sp-3) 0 0;
-    font-size: var(--fs-sm);
-}
-
-.set-summary dt {
-    color: var(--dim);
-}
-
-.set-summary dd {
-    margin: 0;
-    font: 600 12px var(--mono);
-    text-align: right;
-}
-
-.set-summary dd.zero {
-    color: var(--faint-text);
-    font-weight: 400;
 }
 
 .err-line {

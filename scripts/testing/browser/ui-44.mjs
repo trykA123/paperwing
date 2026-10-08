@@ -350,7 +350,7 @@ await repos.click('.rf-back');
 await repos.fill('.rf-search input', 'gateway');
 await repos.click('.fm-chip:has-text("Cloned")');
 await repos.waitForTimeout(300);
-const drawer = repos.locator('.history-drawer');
+const drawer = repos.locator('.details-drawer');
 await repos.locator('.fm-row[data-id] .fm-sub').first().click();
 await drawer.waitFor();
 await repos.waitForTimeout(800);

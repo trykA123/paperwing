@@ -55,12 +55,12 @@
   const slide = () => ({ x: '100%', opacity: 1, duration: motionMs(220), easing: cubicOut });
 </script>
 
-<div class="history-scrim" role="presentation" onclick={() => detailsDrawer.close()} transition:fade|global={{ duration: motionMs(180) }}></div>
-<div class="history-drawer" role="dialog" aria-modal="true" aria-label={words.label} tabindex="-1" bind:this={panel} transition:fly|global={slide()} onkeydown={onKey}>
-  <header class="history-head">
-    <div class="history-title">
+<div class="details-scrim" role="presentation" onclick={() => detailsDrawer.close()} transition:fade|global={{ duration: motionMs(180) }}></div>
+<div class="details-drawer" role="dialog" aria-modal="true" aria-label={words.label} tabindex="-1" bind:this={panel} transition:fly|global={slide()} onkeydown={onKey}>
+  <header class="details-head">
+    <div class="details-title">
       <h2 title={words.title}>{words.title}</h2>
-      {#if words.sub}<span class="history-branch mono">{#if target.kind === 'history'}<Icon name="branch" tone="branch" />{/if}{words.sub}</span>{/if}
+      {#if words.sub}<span class="details-branch mono">{#if target.kind === 'history'}<Icon name="branch" tone="branch" />{/if}{words.sub}</span>{/if}
     </div>
     {#if target.kind === 'history'}<button class="btn small" title="Delete branches that are already merged" onclick={() => { app.cleanupDialog ??= { targets: [{ path: target.path, name: target.name }] }; }}><Icon name="trash" />Clean up branches</button>{/if}
     <button class="shell-control" title="Close" aria-label="Close" onclick={() => detailsDrawer.close()}><Icon name="close" /></button>

@@ -236,7 +236,7 @@ await page.waitForSelector('.tag-lead:has-text("Tagged")');
 await page.click('.tag-dialog footer .btn.dark');
 await page.waitForSelector('.tag-entry:has-text("v2.5.0-rc")');
 await page.waitForTimeout(700);
-check('drawer refreshed with the lightweight tag and focus stayed in the drawer', (await page.locator('.tag-entry').count()) === 2 && await page.evaluate(() => !!document.activeElement?.closest('.history-drawer')), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 60)));
+check('drawer refreshed with the lightweight tag and focus stayed in the drawer', (await page.locator('.tag-entry').count()) === 2 && await page.evaluate(() => !!document.activeElement?.closest('.details-drawer')), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 60)));
 check('rails now show two tag chips', (await page.locator('.history-row:has(.history-tagref)').count()) >= 1 && (await page.locator('.history-tagref').count()) === 2);
 await shot('drawer-two-tags');
 

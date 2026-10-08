@@ -158,7 +158,7 @@ await page.waitForSelector('.pull-section .pull-chip');
 check('drawer shows the pull request with base and target', (await page.locator('.pull-section').innerText()).includes('org/repo-4'));
 await shot('drawer');
 await page.keyboard.press('Escape');
-await page.waitForSelector('.history-drawer', { state: 'detached' });
+await page.waitForSelector('.details-drawer', { state: 'detached' });
 
 // Bulk open: 11 opens, 9 is unpublished and skipped until Push first, 10 fails at GitHub.
 for (const index of [11, 9, 10]) await row(index).locator('input[type=checkbox]').check();
