@@ -9,6 +9,12 @@ use std::sync::{
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 
+mod classification;
+mod listing;
+mod ordered_commit;
+mod publication;
+mod resolving;
+mod access;
 mod progressive;
 mod producer;
 pub use progressive::{Hint, PendingRow, Progress, RowUpdate, State, Totals};
@@ -182,23 +188,10 @@ impl Job {
         let root = root
             .to_str()
             .ok_or_else(|| Problem::new("unsafePath", "Unsupported root encoding"))?;
-        let mut argv = vec![
-            "--no-pager",
-            "--no-optional-locks",
-            "-c",
-            "color.ui=false",
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "core.untrackedCache=false",
-            "-c",
-            "diff.external=",
-            "-c",
-            "core.hooksPath=",
-            "-C",
-            root,
-        ];
-        argv.extend_from_slice(args);
+        let mut argv = vec!["--no-pager"];
+        argv.extend(git::repo_command::RepoGit::at(root).no_optional_locks()
+            .config("color.ui=false").config("core.untrackedCache=false")
+            .config("diff.external=").config("core.hooksPath=").argv(args));
         let request = git::Request {
             args: &argv,
             context: &self.context,
@@ -709,6 +702,8 @@ pub struct ServiceState {
     counts: std::sync::OnceLock<Arc<count_eligibility::Eligibility>>,
     remote_cache: std::sync::OnceLock<Arc<crate::github::blob::Cache>>,
     remote_store: std::sync::OnceLock<crate::store::Store>,
+    #[cfg(test)]
+    enrichment_control: std::sync::Mutex<Option<Arc<publication::EnrichmentControl>>>,
     #[cfg(all(test, target_os = "linux"))]
     fresh_write_root_hook: std::sync::Mutex<Option<WriteRootHook>>,
 }
@@ -750,6 +745,8 @@ impl Default for ServiceState {
             counts: std::sync::OnceLock::new(),
             remote_cache: std::sync::OnceLock::new(),
             remote_store: std::sync::OnceLock::new(),
+            #[cfg(test)]
+            enrichment_control: std::sync::Mutex::new(None),
             #[cfg(all(test, target_os = "linux"))]
             fresh_write_root_hook: std::sync::Mutex::new(None),
         }
@@ -802,7 +799,7 @@ impl Service {
         id: &str,
         generation: u64,
     ) -> Result<Arc<AtomicBool>, String> {
-        let (_, job) = self.snapshot(settings, id, generation).await.map_err(|problem| problem.message)?;
+        let (_, job) = self.available(settings, id, generation).map_err(|problem| problem.message)?;
         job.check().map_err(|problem| problem.message)?;
         Ok(job.cancel)
     }
@@ -935,423 +932,24 @@ impl Service {
     ) -> Result<Prepared, Problem> {
         #[cfg(feature = "benchmark")]
         let _span = crate::benchmark::Span::new("compare.prepare", "other");
-        let [left_context, right_context] = contexts;
-        let left_safe = read_root(&left_context, job)
-            .await
-            .map_err(|problem| problem.side("left"))?;
-        let right_safe = read_root(&right_context, job)
-            .await
-            .map_err(|problem| problem.side("right"))?;
-        #[cfg(target_os = "linux")]
-        let storage_job = {
-            let mut captured = job.clone();
-            if let Some(storage) = &captured.diff {
-                captured.roots = storage.capture(vec![left_safe.clone(), right_safe.clone()], &captured.cancel).await
-                    .map_err(|error| {
-                        Problem::new(if error.cancelled { "cancelled" } else { "unavailable" }, error.message)
-                    })?;
-            }
-            captured
-        };
-        #[cfg(target_os = "linux")]
-        let job = &storage_job;
-        let mut count_job = job.clone();
-        let eligibility = self.counts.get_or_init(|| {
-            #[cfg(target_os = "linux")]
-            let eligibility = count_eligibility::Eligibility::default();
-            #[cfg(not(target_os = "linux"))]
-            let eligibility = count_eligibility::Eligibility::new(std::env::temp_dir());
-            Arc::new(eligibility)
-        });
-        let fallback;
-        let eligibility = if job.count_root.as_ref().is_some_and(|root| Some(root) != eligibility.storage.as_ref()) {
-            fallback = count_eligibility::Eligibility::new(job.count_root.clone().ok_or_else(|| Problem::new("unavailable", "Count storage unavailable"))?);
-            &fallback
-        } else { eligibility.as_ref() };
-        let left_counts = eligibility.configuration(&left_context.root, job).await?;
-        let right_counts = eligibility.configuration(&right_context.root, job).await?;
-        count_job.rust_counts = left_counts.filter(|mode| Some(*mode) == right_counts);
-        let job = &count_job;
-        let contexts = [&left_context, &right_context];
-        let roots = [&left_safe.path, &right_safe.path];
-        let mut states = Vec::new();
-        let mut epochs = Vec::new();
-        for root in roots {
-            let state = self.fetch_state(root).await?;
-            epochs.push(job.lock(&state).await?.epoch);
-            states.push(state);
-        }
-        let mut diff_configs = Vec::new();
-        for context in contexts {
-            let config = {
-                let mut configs = self.diff_configs();
-                if configs.len() >= 32 {
-                    configs.retain(|_, config| Arc::strong_count(config) > 1);
-                }
-                configs.entry(context.root.clone()).or_default().clone()
-            };
-            let values = config.get_or_try_init(|| async {
-                let result = job.run(&context.root, &["config", "--get-regexp", "^diff\\.(algorithm|renamelimit)$"], &[0, 1]).await?;
-                let mut values = Vec::new();
-                for line in decode(&result.stdout)?.lines() {
-                    if let Some((key, value)) = line.split_once(' ') {
-                        values.extend(["-c".into(), format!("{key}={value}")]);
-                    }
-                }
-                Ok::<_, Problem>(values)
-            }).await?;
-            diff_configs.push(values.clone());
-        }
-        let mut commits = Vec::new();
-        for (index, context) in contexts.iter().enumerate() {
-            commits.push(
-                resolve(context, job)
-                    .await
-                    .map_err(|problem| problem.side(if index == 0 { "left" } else { "right" }))?,
-            );
-        }
-        let mut attempted = BTreeSet::new();
-        for index in 0..2 {
-            if commits[index].is_some() {
-                continue;
-            }
-            let side = if index == 0 { "left" } else { "right" };
-            let mut state = job.lock(&states[index]).await?;
-            if state.epoch == epochs[index]
-                && attempted.insert(roots[index].clone())
-                && resolve(contexts[index], job).await?.is_none()
-            {
-                let result = job
-                    .run(
-                        &contexts[index].root,
-                        &[
-                            "-c",
-                            "gc.auto=0",
-                            "-c",
-                            "maintenance.auto=false",
-                            "-c",
-                            "protocol.ext.allow=never",
-                            "-c",
-                            "fetch.prune=false",
-                            "-c",
-                            "fetch.pruneTags=false",
-                            "-c",
-                            "remote.origin.prune=false",
-                            "-c",
-                            "remote.origin.pruneTags=false",
-                            "fetch",
-                            "--no-prune",
-                            "--no-write-fetch-head",
-                            "--no-auto-maintenance",
-                            "--no-recurse-submodules",
-                            "--",
-                            "origin",
-                        ],
-                        &[0],
-                    )
-                    .await;
-                state.epoch += 1;
-                state.problem = match result {
-                    Ok(result) if result.code == Some(0) => None,
-                    Ok(result) => Some(Problem::new(
-                        "networkError",
-                        &result.last_error(),
-                    )),
-                    Err(problem) if problem.kind == "cancelled" => return Err(problem),
-                    Err(problem) => Some(Problem::new("networkError", &problem.message)),
-                };
-            }
-            commits[index] = resolve(contexts[index], job)
-                .await
-                .map_err(|problem| problem.side(side))?;
-            if commits[index].is_none() {
-                if let Some(problem) = &state.problem {
-                    return Err(problem.clone().side(side));
-                }
-                return Err(Problem::new(
-                    if index == 0 {
-                        "missingLeft"
-                    } else {
-                        "missingRight"
-                    },
-                    "Reference is missing after one origin fetch",
-                )
-                .side(side));
-            }
-        }
-        let left_format = ObjectFormat::read(&left_context.root, job).await?;
-        let right_format = ObjectFormat::read(&right_context.root, job).await?;
-        let left_reader = git::BatchReader::new(left_context.root.clone(), job.cancel.clone());
-        let right_reader = if left_context.root == right_context.root
-            || left_reader.shares_directory(right_context.root.clone()).await {
-            left_reader.clone()
-        } else {
-            git::BatchReader::new(right_context.root.clone(), job.cancel.clone())
-        };
-        {
-            let mut readers = job.readers.lock().await;
-            job.check()?;
-            readers.extend([left_reader.clone(), right_reader.clone()]);
-        }
-        let mut left = Resolved {
-            object_format: left_format,
-            diff_config: diff_configs[0].clone(),
-            reader: left_reader,
-            context: left_context,
-            safe: left_safe,
-            commit: commits[0].take().unwrap(),
-            files: BTreeMap::new(),
-        };
-        let mut right = Resolved {
-            object_format: right_format,
-            diff_config: diff_configs[1].clone(),
-            reader: right_reader,
-            context: right_context,
-            safe: right_safe,
-            commit: commits[1].take().unwrap(),
-            files: BTreeMap::new(),
-        };
+        let (mut left, mut right, job) = self.resolve_comparison(contexts, job).await?;
         self.transition(id, generation, State::Listing);
-        left.files = inventory(&left, job).await.map_err(|problem| problem.side("left"))?;
-        right.files = inventory(&right, job).await.map_err(|problem| problem.side("right"))?;
-        let metadata = diff_metadata(&left, &right, job).await?;
-        let paths: BTreeSet<_> = left
-            .files
-            .keys()
-            .chain(right.files.keys())
-            .cloned()
-            .collect();
-        if paths.len() > FILE_LIMIT {
-            return Err(Problem::new(
-                "limitExceeded",
-                "Comparison exceeds inventory limit",
-            ));
+        left.files = inventory(&left, &job).await.map_err(|problem| problem.side("left"))?;
+        right.files = inventory(&right, &job).await.map_err(|problem| problem.side("right"))?;
+        let paths: BTreeSet<_> = left.files.keys().chain(right.files.keys()).cloned().collect();
+        let over_limit = paths.len() > FILE_LIMIT;
+        if over_limit {
+            git::enrichment(diff_metadata(&left, &right, &job)).await?;
+            return Err(Problem::new("limitExceeded", "Comparison exceeds inventory limit"));
         }
-        let mut rows = Vec::new();
-        let mut used = 0;
-        for path in paths {
-            job.check()?;
-            let left_entry = left.files.get(&path);
-            let right_entry = right.files.get(&path);
-            let raw_status = match (left_entry, right_entry) {
-                (left, right)
-                    if [left, right]
-                        .into_iter()
-                        .flatten()
-                        .any(|entry| entry.reason.is_some()) =>
-                {
-                    Status::Unavailable
-                }
-                (Some(left), Some(right)) if left.kind != right.kind => Status::TypeConflict,
-                (Some(_), None) => Status::LeftOnly,
-                (None, Some(_)) => Status::RightOnly,
-                _ => Status::Same,
-            };
-            let mut row = FileRow {
-                id: format!("file-{}", NEXT.fetch_add(1, Ordering::Relaxed)),
-                path: path.clone(),
-                left: left_entry.map(SideInfo::from),
-                right: right_entry.map(SideInfo::from),
-                display_status: raw_status.clone(),
-                raw_status,
-                raw_lines: None,
-                display_lines: None,
-                binary: None,
-                rename: metadata.renames.get(&path).cloned(),
-                reason: metadata.reason.clone(),
-            };
-            let leaves = [left_entry, right_entry]
-                .into_iter()
-                .flatten()
-                .all(|entry| entry.kind != Kind::Directory);
-            if [left_entry, right_entry]
-                .into_iter()
-                .flatten()
-                .any(|entry| entry.source == "untrackedRepository")
-            {
-                row.reason = Some("Untracked nested repository; contents are opaque".into());
-                if left_entry.is_some() && right_entry.is_some() && row.raw_status == Status::Same {
-                    row.raw_status = Status::Unavailable;
-                    row.display_status = Status::Unavailable;
-                }
-                rows.push(row);
-                continue;
-            }
-            if leaves && row.raw_status != Status::TypeConflict {
-                let identical_oid = matches!((left_entry, right_entry), (Some(left), Some(right)) if left.reason.is_none() && right.reason.is_none() && left.oid.is_some() && left.blob_id == right.blob_id && left.oid == right.oid && left.mode == right.mode)
-                    && left.safe.path == right.safe.path;
-                if !identical_oid {
-                    let cost = [left_entry, right_entry]
-                        .into_iter()
-                        .flatten()
-                        .map(|entry| entry.size.unwrap_or(0) as usize)
-                        .sum::<usize>();
-                    if cost > BYTE_LIMIT.saturating_sub(used) {
-                        row.reason = Some("Comparison diff content budget exceeded".into());
-                        row.raw_status = Status::Unavailable;
-                        row.display_status = Status::Unavailable;
-                        rows.push(row);
-                        continue;
-                    }
-                    let mut bytes = Vec::new();
-                    for (side, entry) in [(&left, left_entry), (&right, right_entry)] {
-                        match entry {
-                            Some(entry) => match content(side, &path, entry, job).await {
-                                Ok(content) => {
-                                    used += content.len();
-                                    bytes.push(content);
-                                }
-                                Err(problem) if problem.kind == "cancelled" => return Err(problem),
-                                Err(problem) => {
-                                    row.reason = Some(problem.message);
-                                    row.raw_status = Status::Unavailable;
-                                    row.display_status = Status::Unavailable;
-                                    break;
-                                }
-                            },
-                            None => bytes.push(Vec::new()),
-                        }
-                    }
-                    if used > BYTE_LIMIT {
-                        row.reason = Some("Comparison diff content budget exceeded".into());
-                        row.raw_status = Status::Unavailable;
-                        row.display_status = Status::Unavailable;
-                        rows.push(row);
-                        continue;
-                    }
-                    if bytes.len() == 2 {
-                        let opaque = [left_entry, right_entry]
-                            .into_iter()
-                            .flatten()
-                            .any(|entry| entry.kind == Kind::Gitlink);
-                        let is_binary = binary(&bytes[0]) || binary(&bytes[1]);
-                        row.binary = Some(is_binary);
-                        if let (Some(left), Some(right)) = (left_entry, right_entry) {
-                            let mode_same = left.mode == right.mode;
-                            row.raw_status = if bytes[0] == bytes[1] && mode_same {
-                                Status::Same
-                            } else {
-                                Status::Different
-                            };
-                            row.display_status = if normalized(&bytes[0], &options)
-                                == normalized(&bytes[1], &options)
-                                && mode_same
-                            {
-                                Status::Same
-                            } else {
-                                Status::Different
-                            };
-                        }
-                        if !opaque && !is_binary {
-                            row.raw_lines = if row.raw_status == Status::Same {
-                                Some(Lines {
-                                    added: 0,
-                                    removed: 0,
-                                })
-                            } else if !matches!(
-                                left.context.endpoint.reference,
-                                CompareRef::WorkingTree
-                            ) && !matches!(
-                                right.context.endpoint.reference,
-                                CompareRef::WorkingTree
-                            ) && metadata.lines.contains_key(&path)
-                            {
-                                metadata.lines[&path].clone()
-                            } else {
-                                count_result(
-                                    line_counts(&bytes[0], &bytes[1], job).await,
-                                    &mut row.reason,
-                                )?
-                            };
-                            row.display_lines = if row.display_status == Status::Same {
-                                Some(Lines {
-                                    added: 0,
-                                    removed: 0,
-                                })
-                            } else if options.normalize_eol || options.ignore_whitespace {
-                                count_result(
-                                    line_counts(
-                                        &normalized(&bytes[0], &options),
-                                        &normalized(&bytes[1], &options),
-                                        job,
-                                    )
-                                    .await,
-                                    &mut row.reason,
-                                )?
-                            } else {
-                                row.raw_lines.clone()
-                            };
-                        }
-                    }
-                }
-            }
-            rows.push(row);
-        }
-        for index in (0..rows.len()).rev() {
-            if ![rows[index].left.as_ref(), rows[index].right.as_ref()]
-                .into_iter()
-                .flatten()
-                .any(|side| side.kind == Kind::Directory)
-            {
-                continue;
-            }
-            let prefix = format!("{}/", rows[index].path);
-            let children: Vec<_> = rows
-                .iter()
-                .filter(|row| {
-                    row.path.starts_with(&prefix) && !row.path[prefix.len()..].contains('/')
-                })
-                .cloned()
-                .collect();
-            if rows[index].raw_status == Status::Same {
-                rows[index].raw_status = if children
-                    .iter()
-                    .any(|row| row.raw_status == Status::Unavailable)
-                {
-                    Status::Unavailable
-                } else if children.iter().all(|row| row.raw_status == Status::Same) {
-                    Status::Same
-                } else {
-                    Status::Different
-                };
-                rows[index].display_status = if children
-                    .iter()
-                    .any(|row| row.display_status == Status::Unavailable)
-                {
-                    Status::Unavailable
-                } else if children
-                    .iter()
-                    .all(|row| row.display_status == Status::Same)
-                {
-                    Status::Same
-                } else {
-                    Status::Different
-                };
-            }
-            for is_left in [true, false] {
-                let info = if is_left {
-                    &mut rows[index].left
-                } else {
-                    &mut rows[index].right
-                };
-                if let Some(info) = info.as_mut().filter(|side| side.kind == Kind::Directory) {
-                    let sides: Vec<_> = children
-                        .iter()
-                        .filter_map(|row| {
-                            if is_left {
-                                row.left.as_ref()
-                            } else {
-                                row.right.as_ref()
-                            }
-                        })
-                        .collect();
-                    info.size = sides.iter().try_fold(0u64, |sum, side| {
-                        side.size.and_then(|size| sum.checked_add(size))
-                    });
-                    info.modified_ms = sides.iter().filter_map(|side| side.modified_ms).max();
-                }
-            }
-        }
+        let listed = Arc::new(listing::Listed::new(left, right, paths));
+        self.publish_inventory((id, generation), listed.clone())?;
+        #[cfg(test)]
+        self.defer_enrichment(&job).await?;
+        let metadata = git::enrichment(diff_metadata(&listed.left, &listed.right, &job)).await?;
+        let classifier = classification::Classifier { left: &listed.left, right: &listed.right,
+            metadata: &metadata, options: &options, job: &job };
+        let rows = git::enrichment(ordered_commit::commit(self, (id, generation), &listed, classifier)).await?;
         let mut raw = Summary::default();
         let mut display = Summary::default();
         for row in &rows {
@@ -1364,7 +962,7 @@ impl Service {
                 display.add(&row.display_status);
             }
         }
-        let (history, history_source) = history(&left, &right, job).await?;
+        let (history, history_source) = git::enrichment(history(&listed.left, &listed.right, &job)).await?;
         let endpoint = |side: &Resolved, basis: String| ResolvedEndpoint {
             endpoint: side.context.endpoint.clone(),
             commit: side.commit.clone(),
@@ -1373,8 +971,8 @@ impl Service {
         let view = Snapshot {
             id: id.into(),
             generation,
-            left: endpoint(&left, history.left_basis.clone()),
-            right: endpoint(&right, history.right_basis.clone()),
+            left: endpoint(&listed.left, history.left_basis.clone()),
+            right: endpoint(&listed.right, history.right_basis.clone()),
             raw,
             display,
             history,
@@ -1385,8 +983,8 @@ impl Service {
         };
         Ok(Prepared {
             view,
-            left,
-            right,
+            left: listed.left.clone(),
+            right: listed.right.clone(),
             rows,
             history_source,
         })
@@ -1409,9 +1007,12 @@ impl Service {
     }
 
     pub async fn copy_source_context(&self, settings: &crate::settings::Settings, id: &str, generation: u64, file_id: &str, side: &str) -> Result<Option<WriteContext>, String> {
-        let (prepared, job) = self.snapshot(settings, id, generation).await.map_err(|problem| problem.message)?;
+        let (available, job) = self.available(settings, id, generation).map_err(|problem| problem.message)?;
         job.check().map_err(|problem| problem.message)?;
-        let resolved = match side { "left" => &prepared.left, "right" => &prepared.right, _ => return Err("Unknown side".into()) };
+        if !available.selection(file_id).map_err(|problem| problem.message)?.1 {
+            return Err("Wait until this file finishes checking".into());
+        }
+        let resolved = available.side(side).map_err(|problem| problem.message)?;
         if resolved.context.endpoint.reference != CompareRef::WorkingTree { return Ok(None); }
         self.write_context(settings, id, generation, file_id, side, true).await.map(Some)
     }
@@ -1425,12 +1026,13 @@ impl Service {
         side: &str,
         fresh: bool,
     ) -> Result<WriteContext, String> {
-        let (prepared, job) = self.snapshot(settings, id, generation).await.map_err(|problem| problem.message)?;
+        let (available, job) = self.available(settings, id, generation).map_err(|problem| problem.message)?;
         job.check().map_err(|problem| problem.message)?;
-        let row = prepared.rows.iter().find(|row| row.id == file_id).ok_or("Unknown file identity")?;
-        let resolved = match side { "left" => &prepared.left, "right" => &prepared.right, _ => return Err("Unknown side".into()) };
+        let (path, final_row) = available.selection(file_id).map_err(|problem| problem.message)?;
+        if !final_row { return Err("Wait until this file finishes checking".into()); }
+        let resolved = available.side(side).map_err(|problem| problem.message)?;
         if resolved.context.endpoint.reference != CompareRef::WorkingTree { return Err("Historical references are read-only".into()); }
-        if resolved.files.get(&row.path).is_some_and(|entry| entry.kind != Kind::File || entry.reason.is_some()) {
+        if resolved.files.get(path).is_some_and(|entry| entry.kind != Kind::File || entry.reason.is_some()) {
             return Err("Only regular, available working-tree files are writable".into());
         }
         #[cfg(target_os = "linux")]
@@ -1445,25 +1047,32 @@ impl Service {
         if safe.linux_value()? != expected_root {
             return Err("Repository root changed during validation; reopen the comparison".into());
         }
-        safe.resolve_cached(&row.path, false, &mut paths::ReadCache::default())?;
-        Ok(WriteContext { root: resolved.context.root.clone(), path: row.path.clone(), safe })
+        safe.resolve_cached(path, false, &mut paths::ReadCache::default())?;
+        job.check().map_err(|problem| problem.message)?;
+        self.available(settings, id, generation).map_err(|problem| problem.message)?;
+        Ok(WriteContext { root: resolved.context.root.clone(), path: path.to_string(), safe })
     }
 
     pub async fn copy_ids(&self, settings: &crate::settings::Settings, id: &str, generation: u64, file_id: &str, source: &str) -> Result<(Vec<String>, usize), String> {
-        let (prepared, job) = self.snapshot(settings, id, generation).await.map_err(|problem| problem.message)?;
+        let (available, job) = self.available(settings, id, generation).map_err(|problem| problem.message)?;
         job.check().map_err(|problem| problem.message)?;
-        let selected = prepared.rows.iter().find(|row| row.id == file_id).ok_or("Unknown file identity")?;
-        let resolved = match source { "left" => &prepared.left, "right" => &prepared.right, _ => return Err("Unknown side".into()) };
-        let entry = resolved.files.get(&selected.path).ok_or("Source is absent; copy never deletes destination files")?;
-        let prefix = format!("{}/", selected.path);
+        let (path, _) = available.selection(file_id).map_err(|problem| problem.message)?;
+        let resolved = available.side(source).map_err(|problem| problem.message)?;
+        let entry = resolved.files.get(path).ok_or("Source is absent; copy never deletes destination files")?;
+        let prefix = format!("{path}/");
+        let rows: Vec<_> = available.rows().into_iter().filter(|(_, candidate, _)| *candidate == path
+            || (entry.kind == Kind::Directory && candidate.starts_with(&prefix))).collect();
+        if rows.iter().any(|(_, _, final_row)| !final_row) {
+            return Err(if entry.kind == Kind::Directory { "Wait until this folder finishes checking" }
+                else { "Wait until this file finishes checking" }.into());
+        }
         let mut ids = Vec::new(); let mut retained = 0;
-        for row in &prepared.rows {
-            if row.path != selected.path && !(entry.kind == Kind::Directory && row.path.starts_with(&prefix)) { continue; }
-            let Some(source) = resolved.files.get(&row.path) else { retained += 1; continue; };
+        for (file_id, path, _) in rows {
+            let Some(source) = resolved.files.get(path) else { retained += 1; continue; };
             if source.kind == Kind::Directory { continue; }
-            if source.kind != Kind::File || source.reason.is_some() { return Err(format!("Copy refuses linked, unavailable or submodule content: {}", row.path)); }
+            if source.kind != Kind::File || source.reason.is_some() { return Err(format!("Copy refuses linked, unavailable or submodule content: {path}")); }
             if ids.len() >= 128 { return Err("Copy scope exceeds 128 files; select a smaller folder".into()); }
-            ids.push(row.id.clone());
+            ids.push(file_id.to_string());
         }
         if ids.is_empty() { return Err("No regular source files in this scope".into()); }
         Ok((ids, retained))
@@ -1667,27 +1276,7 @@ pub async fn comparison_content(
         service.remote_snapshot(&saved(&app)?, &id, generation).await?;
         return Ok(content);
     }
-    let (prepared, job) = service.snapshot(&settings, &id, generation).await?;
-    let _permit = job.slot(&service.interactive_slots).await?;
-    let row = prepared
-        .rows
-        .iter()
-        .find(|row| row.id == file_id)
-        .ok_or_else(|| Problem::new("unknownFile", "Unknown file identity"))?;
-    let resolved = match side.as_str() {
-        "left" => &prepared.left,
-        "right" => &prepared.right,
-        _ => return Err(Problem::new("invalidContext", "Unknown side")),
-    };
-    read_root(&resolved.context, &job).await?;
-    let entry = resolved
-        .files
-        .get(&row.path)
-        .ok_or_else(|| Problem::new("unavailable", "File absent on selected side"))?;
-    let bytes = content(resolved, &row.path, entry, &job).await?;
-    job.check()?;
-    service.snapshot(&settings, &id, generation).await?;
-    Ok(Content { bytes })
+    service.selected_content(&settings, &id, generation, &file_id, &side).await
 }
 
 #[tauri::command]

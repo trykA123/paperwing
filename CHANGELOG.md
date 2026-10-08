@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add generation-tagged comparison start and progress commands with session-owned supervised producers (packet 19 step 1).
+- Add generation-tagged comparison start and progress commands with supervised producers, early selectable inventory, final-row write authority, ordered classification and interactive Git admission (packet 19 backend).
 
 - Add provider-neutral CI backend commands and a foreground GitHub Actions/Enterprise client for conditional runs, jobs, completed logs, bounded artifact downloads and confirmed rerun, cancel and typed dispatch actions (packet 31 backend).
 

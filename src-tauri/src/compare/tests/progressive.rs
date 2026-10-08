@@ -95,7 +95,7 @@ async fn progressive_completion_returns_the_legacy_refresh_payload() {
     );
     assert_eq!(progress.totals.unwrap().pending, 0);
     assert_eq!(progress.rows.len(), 4);
-    let pending_ids: Vec<_> = progress
+    let mut pending_ids: Vec<_> = progress
         .rows
         .iter()
         .filter_map(|row| match row {
@@ -103,7 +103,7 @@ async fn progressive_completion_returns_the_legacy_refresh_payload() {
             _ => None,
         })
         .collect();
-    let final_ids: Vec<_> = progress
+    let mut final_ids: Vec<_> = progress
         .rows
         .iter()
         .filter_map(|row| match row {
@@ -111,6 +111,100 @@ async fn progressive_completion_returns_the_legacy_refresh_payload() {
             _ => None,
         })
         .collect();
+    pending_ids.sort();
+    final_ids.sort();
     assert_eq!(pending_ids, final_ids);
+    service.close(&opened.id).await;
+}
+
+#[tokio::test]
+async fn inventory_and_selected_content_are_ready_before_deferred_enrichment() {
+    let _guard = git::TEST_RUNNER_LOCK.lock().await;
+    let fixture = Fixture::new().await;
+    fixture.write("folder/file", b"before\n");
+    fixture.commit("base").await;
+    fixture.write("folder/file", b"after\n");
+    let service = fixture.service();
+    let settings = fixture.settings();
+    let control = Arc::new(publication::EnrichmentControl {
+        listed: Default::default(),
+        release: Default::default(),
+        panic: false,
+    });
+    *service.enrichment_control.lock().unwrap() = Some(control.clone());
+    let opened = service
+        .open(
+            &settings,
+            fixture.context(CompareRef::Head).endpoint,
+            fixture.context(CompareRef::WorkingTree).endpoint,
+        )
+        .await
+        .unwrap();
+    let started_at = std::time::Instant::now();
+    let started = service
+        .start(&settings, &opened.id, Options::default(), None, None)
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(10), control.listed.notified())
+        .await
+        .unwrap();
+    let listed_ms = started_at.elapsed().as_millis();
+    let progress = service
+        .progress(&opened.id, started.generation, 0, 500)
+        .unwrap();
+    assert_eq!(progress.state, State::Enriching);
+    assert!(progress.snapshot.is_none());
+    assert_eq!(progress.totals.as_ref().unwrap().pending, 1);
+    assert_eq!(progress.totals.as_ref().unwrap().raw.total, 0);
+    let row = progress
+        .rows
+        .iter()
+        .find_map(|row| match row {
+            RowUpdate::Pending(row) if row.path == "folder/file" => Some(row),
+            _ => None,
+        })
+        .unwrap();
+    assert!(service
+        .snapshot(&settings, &opened.id, started.generation)
+        .await
+        .is_err());
+    assert!(service
+        .write_context(
+            &settings,
+            &opened.id,
+            started.generation,
+            &row.id,
+            "right",
+            true
+        )
+        .await
+        .err()
+        .unwrap()
+        .contains("finishes checking"));
+    assert!(service
+        .copy_source_context(&settings, &opened.id, started.generation, &row.id, "left")
+        .await
+        .err()
+        .unwrap()
+        .contains("finishes checking"));
+    let content = service
+        .selected_content(&settings, &opened.id, started.generation, &row.id, "right")
+        .await
+        .unwrap();
+    assert_eq!(content.bytes, b"after\n");
+    let content_ms = started_at.elapsed().as_millis();
+    assert_eq!(
+        service
+            .progress(&opened.id, started.generation, 0, 500)
+            .unwrap()
+            .state,
+        State::Enriching
+    );
+    control.release.notify_one();
+    service.wait(&opened.id, started.generation).await.unwrap();
+    println!(
+        "early publication: listed={listed_ms}ms content={content_ms}ms complete={}ms",
+        started_at.elapsed().as_millis()
+    );
     service.close(&opened.id).await;
 }

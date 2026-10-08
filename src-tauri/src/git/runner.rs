@@ -13,7 +13,9 @@ use serde::Serialize;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
+#[path = "admission.rs"]
+mod admission;
+pub(crate) use admission::enrichment;
 use std::sync::{Mutex, OnceLock, atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering}};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
@@ -39,7 +41,7 @@ static SOURCES: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 struct RunningJob { id: String, cancelled: Arc<AtomicBool>, stop: Arc<Stop>, accepts_cancel: bool }
 type RunningJobs = Vec<RunningJob>;
 static RUNNING: OnceLock<Mutex<RunningJobs>> = OnceLock::new();
-static SLOTS: OnceLock<Semaphore> = OnceLock::new();
+static SLOTS: OnceLock<admission::Admission> = OnceLock::new();
 #[cfg(test)]
 pub(crate) fn require_runner_lock(lock: &tokio::sync::Mutex<()>) {
     assert!(lock.try_lock().is_err(), "tests that spawn Git must hold test_support::git_runner()");
@@ -327,6 +329,7 @@ async fn execute_core_env(request: Request<'_>, observer: Option<Observer>, canc
     require_runner_lock(&TEST_RUNNER_LOCK);
     #[cfg(target_os = "linux")]
     {
+        let class = admission::current();
         let args: Vec<_> = request.args.iter().map(|arg| arg.to_string()).collect();
         let envs_owned: Vec<(String, String)> = envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         let context = request.context.to_string();
@@ -339,8 +342,8 @@ async fn execute_core_env(request: Request<'_>, observer: Option<Observer>, canc
         tokio::spawn(async move {
             let args: Vec<_> = args.iter().map(String::as_str).collect();
             let envs_ref: Vec<(&str, &str)> = envs_owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-            run_inner(Request { args: &args, context: &context, expected: &expected, timeout, policy }, observer,
-                cancellation, input.as_deref(), stop, sink, &envs_ref, #[cfg(test)] after_exit).await
+            admission::scope(class, run_inner(Request { args: &args, context: &context, expected: &expected, timeout, policy }, observer,
+                cancellation, input.as_deref(), stop, sink, &envs_ref, #[cfg(test)] after_exit)).await
         }).await.map_err(|_| "Git runner task failed".to_string())?
     }
     #[cfg(not(target_os = "linux"))]
@@ -458,8 +461,7 @@ async fn run_inner(request: Request<'_>, observer: Option<Observer>, cancellatio
     let queue = crate::benchmark::Span::new("git.queue", operation);
     let _watch = cancel::watch(cancellation.as_ref(), &stop);
     let _filesystem = cancel::admitted(filesystem_gate().read(), &cancellation, &stop).await?;
-    let _permit = cancel::admitted(SLOTS.get_or_init(|| Semaphore::new(32)).acquire(), &cancellation, &stop).await?
-        .map_err(|_| "Git runner unavailable")?;
+    let _permit = cancel::admitted(SLOTS.get_or_init(admission::Admission::default).acquire(admission::current()), &cancellation, &stop).await?;
     if is_cancelled(&cancellation, &stop) { return Err("Git command cancelled".into()); }
     #[cfg(feature = "benchmark")]
     drop(queue);
@@ -621,7 +623,7 @@ pub async fn buffered(args: &[&str], context: &str, expected: &[i32]) -> Result<
 
 #[cfg(all(test, target_os = "linux"))]
 pub(super) fn resources_idle() -> bool {
-    batch::resources_idle() && SLOTS.get().is_none_or(|slots| slots.available_permits() == 32)
+    batch::resources_idle() && SLOTS.get().is_none_or(|slots| slots.idle())
         && RUNNING.get().is_none_or(|jobs| jobs.lock().unwrap().is_empty())
 }
 

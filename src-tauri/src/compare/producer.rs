@@ -76,20 +76,23 @@ impl Service {
             let cleanup = job.readers.clone();
             let task = tokio::spawn(async move {
                 let _permit = job.slot(&worker.slots).await?;
-                worker
-                    .prepare_source(
-                        &settings,
-                        remote::Refresh {
-                            id: &worker_id,
-                            generation,
-                            endpoints: [contexts[0].endpoint.clone(), contexts[1].endpoint.clone()],
-                            options,
-                            job: &job,
-                        },
-                        contexts,
-                        source,
-                    )
-                    .await
+                let produce = worker.prepare_source(
+                    &settings,
+                    remote::Refresh {
+                        id: &worker_id,
+                        generation,
+                        endpoints: [contexts[0].endpoint.clone(), contexts[1].endpoint.clone()],
+                        options,
+                        job: &job,
+                    },
+                    contexts,
+                    source,
+                );
+
+                tokio::select! {
+                    result = produce => result,
+                    _ = wait_cancel(&job.cancel) => Err(Problem::new("cancelled", "Comparison cancelled")),
+                }
             });
             let result = task
                 .await
@@ -135,7 +138,6 @@ impl Service {
             Ok(SourcePrepared::Github(prepared)) => prepared.files(0, FILE_LIMIT).await,
             _ => Vec::new(),
         };
-        self.transition(id, generation, State::Enriching);
         let mut sessions = self.sessions();
         let Some(session) = sessions
             .get_mut(id)
@@ -161,7 +163,7 @@ impl Service {
                         (snapshot, remote_rows)
                     }
                 };
-                for row in rows {
+                for row in rows.into_iter().filter(|_| progress.listed.is_none()) {
                     progress.updates.push(RowUpdate::Pending(PendingRow {
                         id: row.id.clone(),
                         path: row.path.clone(),
@@ -178,6 +180,7 @@ impl Service {
                     rows: snapshot.file_count,
                 });
                 progress.snapshot = Some(snapshot);
+                progress.listed = None;
                 progress.state = State::Complete;
             }
             Err(problem) => {
@@ -260,5 +263,11 @@ impl Drop for Service {
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             runtime.spawn(closing);
         }
+    }
+}
+
+async fn wait_cancel(cancel: &AtomicBool) {
+    while !cancel.load(Ordering::Relaxed) {
+        tokio::time::sleep(Duration::from_millis(25)).await;
     }
 }

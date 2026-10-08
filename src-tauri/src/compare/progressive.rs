@@ -69,6 +69,8 @@ pub struct Progress {
 }
 
 pub(super) struct Retained {
+    pub listed: Option<Arc<listing::Listed>>,
+    pub final_ids: std::collections::HashSet<String>,
     pub state: State,
     pub updates: Vec<RowUpdate>,
     pub totals: Option<Totals>,
@@ -80,6 +82,8 @@ pub(super) struct Retained {
 impl Retained {
     pub fn new(app: Option<tauri::AppHandle>) -> Self {
         Self {
+            listed: None,
+            final_ids: Default::default(),
             state: State::Resolving,
             updates: Vec::new(),
             totals: None,

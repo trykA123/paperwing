@@ -1,3 +1,4 @@
+pub(crate) use runner::enrichment;
 pub(crate) use runner::CAPTURE_LIMIT;
 pub(crate) mod batch_repository;
 pub(crate) use runner::BatchReader;
