@@ -225,6 +225,8 @@ export const api = {
   getRefsMany: (urls: string[]) => invoke<RefsResult[]>('get_refs_many', { urls }),
   startClone: (jobs: CloneJob[], opts: CloneOpts, mode: GitAction = 'clone') => invoke<void>('start_clone', { jobs, opts, mode }),
   localStatus: (paths: string[]) => invoke<LocalStatus[]>('local_status', { paths }),
+  watchSet: (setId: string, roots: string[]) => invoke<number>('watch_set', { setId, roots }),
+  unwatchSet: (setId: string) => invoke<void>('unwatch_set', { setId }),
   activitySnapshot: () => invoke<Activity[]>('activity_snapshot'),
   clearActivity: () => invoke<{ running: Activity[]; retained: string[]; through: number }>('clear_activity'),
   cancelActivity: (id: string) => invoke<boolean>('cancel_activity', { id }),

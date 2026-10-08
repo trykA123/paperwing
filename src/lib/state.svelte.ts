@@ -28,6 +28,7 @@ import { NotificationStore, type NoticeAction, type NoticeKind, type NoticeOptio
 import { describeError } from './errors';
 import { localOnlyNote } from './local-only';
 import { AutoRefresh } from './auto-refresh';
+import { watchTargets } from './watch-targets';
 export { DEFAULT_COLS, DEFAULT_TEMPLATE, type View } from './workspace';
 
 export type { RefsEntry, CommitsEntry, RefState } from './state/repository-metadata.svelte';
@@ -716,7 +717,13 @@ class AppState {
 
   autoRefresh = new AutoRefresh({
     refresh: paths => this.#refreshChanged(paths),
+    watch: (setId, roots) => api.watchSet(setId, roots),
+    unwatch: setId => api.unwatchSet(setId),
   });
+
+  watchTargets() {
+    return watchTargets({ sets: [...this.ws.sets, ...this.temporary.sets], tabs: this.tabs, local: this.local, dest: (item, setId) => this.dest(item, setId) });
+  }
 
   #refreshChanged(paths: string[]) {
     const settling = new Set(this.running ? this.#runItems.map(item => this.dest(item)) : []);
