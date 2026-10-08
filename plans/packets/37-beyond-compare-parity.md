@@ -1,6 +1,6 @@
 # 37 — Replace Beyond Compare
 
-Status: ready (owner chose the faster editor, 2026-10-06). Delivered together with 06s.
+Status: step 1 done (CodeMirror 6 adapter and large-file viewer); steps 2-7 ready. Delivered together with 06s.
 Platform: Windows first, Linux parity
 Size: L
 Role: both (editor and engine work first, then integrations)

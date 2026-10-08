@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { calls, deleteMerged, localStatus, mergedBranches } from './backend.mjs';
+import { openSet } from './shell-nav.mjs';
 import { git, makeCapRepo, makeDivergentRepo, makeRepo, moveTip } from './fixture.mjs';
 import { SearchJobs } from './search-jobs.mjs';
 
@@ -80,7 +81,7 @@ const branches = dir => git(dir, 'for-each-ref', '--format=%(refname:short)', 'r
 await page.goto(url);
 await page.waitForTimeout(5500);
 await page.waitForSelector('.fm-row[data-id]');
-await page.click('.side .nav:has-text("Fixture set")');
+await openSet(page, 'Fixture set', width);
 await page.waitForSelector('.rf-setbar');
 await page.waitForTimeout(800);
 await shot('set');
@@ -184,7 +185,7 @@ check('closing the tab leaves no running job', jobs.running.size === 0, jobs.log
 check('closing the tab removes the listeners', (await page.evaluate(() => window.__listeners('search-matches'))) === 0);
 
 // 5. Divergent bases: local master, remote main and master, no origin/HEAD.
-await page.click('.shell-side button:has-text("Divergent set")');
+await openSet(page, 'Divergent set', width);
 await page.waitForSelector('.fm-row[data-id="delta repo"]');
 await page.hover('.fm-row[data-id="delta repo"]');
 await page.click('button[aria-label="More actions for delta repo"]');
@@ -200,8 +201,8 @@ await page.click('.cleanup-dialog footer .btn:not(.danger):not(.dark)');
 await page.waitForSelector('.cleanup-dialog', { state: 'detached' });
 
 // 6. Caps, failed and skipped repositories, and 10000 matches.
-await page.click('.shell-side button:has-text("Caps set")');
-await page.waitForSelector('.fm-row[data-id="c13"]');
+await openSet(page, 'Caps set', width);
+await page.waitForSelector('.fm-row[data-id="c01"]');
 await page.waitForTimeout(1500);
 await page.keyboard.press('Control+Shift+F');
 await page.waitForSelector('.code-search');

@@ -9,9 +9,9 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 #[cfg(not(feature = "test-profile"))]
-const SERVICE: &str = "paperwing";
+const SERVICE: &str = "skein";
 #[cfg(feature = "test-profile")]
-const SERVICE: &str = "paperwing-testing-fixtures-v1";
+const SERVICE: &str = "skein-testing-fixtures-v1";
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -435,7 +435,7 @@ mod native {
 
 #[cfg(feature = "test-profile")]
 pub fn drill() {
-    if !std::env::args().any(|arg| arg == "--paperwing-credential-drill") { return; }
+    if !std::env::args().any(|arg| arg == "--skein-credential-drill") { return; }
     use std::io::Read;
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -586,17 +586,7 @@ mod native {
     pub fn read(source_id: &str) -> Result<Option<String>, Failure> {
         match entry(source_id)?.get_password() {
             Ok(token) => Ok(Some(token)),
-            Err(keyring::Error::NoEntry) => {
-                #[cfg(not(feature = "test-profile"))]
-                if let Ok(legacy) = keyring::Entry::new("flock", source_id) {
-                    match legacy.get_password() {
-                        Ok(token) => { let _ = entry(source_id)?.set_password(&token); return Ok(Some(token)); }
-                        Err(keyring::Error::NoEntry) => (),
-                        Err(error) => return Err(failure(error)),
-                    }
-                }
-                Ok(None)
-            }
+            Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(failure(error)),
         }
     }
@@ -610,8 +600,6 @@ mod native {
     }
 
     pub fn delete(source_id: &str) -> Result<(), Failure> {
-        #[cfg(not(feature = "test-profile"))]
-        if let Ok(legacy) = keyring::Entry::new("flock", source_id) { let _ = legacy.delete_credential(); }
         match entry(source_id)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(error) => Err(failure(error)),

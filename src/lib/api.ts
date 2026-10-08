@@ -150,6 +150,7 @@ export type Workspace = {
   cols: ColWidths;
   shallow: boolean; parallel: number; onExisting: OnExisting; pageSize: PageSize; density?: RowDensity; rightWidth: number;
   theme: Theme; uiFont: string; codeFont: string;
+  languageMap?: Record<string, string>;
   shell: ShellLayout;
 };
 
@@ -309,3 +310,19 @@ export type CiInput = { name: string; description: string; kind: 'string' | 'boo
 export type CiDispatchForm = { provider: string; host: string; pipelineId: string; reference: string; capabilities: CiCapabilities; inputs: CiInput[] };
 export type CiActionResult = { provider: string; host: string; runId: string | null; accepted: boolean };
 export type CiError = { kind: 'rateLimited'; resetAt: string; message: string } | { kind: 'message'; message: string };
+
+export type PatchLine = { kind: 'context' | 'add' | 'remove'; text: string; noNewline: boolean };
+export type PatchHunk = { index: number; oldStart: number; newStart: number; lines: PatchLine[] };
+export type ChangeHunks = { contentHash: string; binary: boolean; hunks: PatchHunk[] };
+export type HunkSelection = { hunk: number; ranges: { start: number; end: number }[] | null };
+export type HunkRequest = { file: string; origPath: string | null; area: DiffArea; contentHash: string; hunks: HunkSelection[] };
+export type DiscardFile = { file: string; origPath?: string | null; contentHash: string };
+export type DiscardOutcome = { file: string; state: 'discarded' | 'trashed' | 'failed'; recoveryId: string | null; message: string; warning: string | null };
+
+export const partialStagingApi = {
+  changeHunks: (path: string, file: string, origPath: string | null, area: DiffArea) => invoke<ChangeHunks>('change_hunks', { path, file, origPath, area }),
+  stageHunks: (path: string, request: HunkRequest) => invoke<void>('stage_hunks', { path, request }),
+  unstageHunks: (path: string, request: HunkRequest) => invoke<void>('unstage_hunks', { path, request }),
+  discardFiles: (path: string, files: DiscardFile[], confirmed: boolean) => invoke<DiscardOutcome[]>('discard_files', { path, files, confirmed }),
+  discardHunk: (path: string, request: HunkRequest, confirmed: boolean) => invoke<DiscardOutcome>('discard_hunk', { path, request, confirmed }),
+};

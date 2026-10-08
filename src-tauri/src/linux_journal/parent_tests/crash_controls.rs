@@ -135,14 +135,14 @@ fn parent_process_helper() {
         path.is_absolute()
             && path.starts_with(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("../.skillify/evidence/paperwing/14/a2/native")
+                    .join("../.skillify/evidence/skein/14/a2/native")
                     .canonicalize()
                     .unwrap()
             )
     );
     assert_eq!(
-        std::fs::read(path.join(".paperwing-parent-fixture")).unwrap(),
-        b"paperwing-parent-fixture-v1\n"
+        std::fs::read(path.join(".skein-parent-fixture")).unwrap(),
+        b"skein-parent-fixture-v1\n"
     );
     assert!(path.join("restore-proof.json").is_file());
     let wanted = crate::env_names::var("SKEIN_PARENT_CRASH_PHASE").unwrap();

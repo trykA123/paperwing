@@ -98,7 +98,7 @@ independent frozen repair review pass.
 Windows, actual older kernels, casefold filesystems, privileged metadata and real
 power-loss checks remain unavailable. No real repository or recovery record is used.
 
-Ignored evidence: .skillify/evidence/paperwing/12/. Revert only this slice's owned
+Ignored evidence: .skillify/evidence/skein/12/. Revert only this slice's owned
 files to disable its primitives; no production Linux write authority is enabled.
 
 Combined-source verification on2026-10-04 passes80 default/85 test-profile tests,

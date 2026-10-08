@@ -7,7 +7,7 @@ import time
 
 root = Path(sys.argv[1])
 assert root.is_absolute() and root.resolve() == root
-assert root.joinpath('.paperwing-process-fixture').read_text() == 'paperwing-process-fixture-v1\n'
+assert root.joinpath('.skein-process-fixture').read_text() == 'skein-process-fixture-v1\n'
 
 
 def started(pid):

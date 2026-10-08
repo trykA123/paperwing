@@ -1,6 +1,8 @@
 mod authority;
 mod commands;
 mod copy;
+mod discard;
+pub(crate) use discard::discard_restore;
 mod recovery;
 mod save;
 mod tickets;

@@ -27,11 +27,11 @@ test('a doubled BOM keeps both marks', () => {
   expect(contentBytes(content, content.format.text)).toEqual(bytes);
 });
 
-test('the language registry keeps the extension mapping the Monaco view used', () => {
+test('the language registry keeps the original extension mapping', () => {
   const expected: Record<string, string> = { c: 'cpp', h: 'cpp', cpp: 'cpp', hpp: 'cpp', rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript',
     ts: 'typescript', tsx: 'typescript', xml: 'xml', arxml: 'xml', yml: 'yaml', yaml: 'yaml' };
   for (const [extension, id] of Object.entries(expected)) expect(languageId(`dir/File.${extension.toUpperCase()}`)).toBe(id);
-  for (const path of ['README.md', 'data.json', 'Makefile', 'archive.tar.gz']) expect(languageId(path)).toBe('plaintext');
+  for (const path of ['notes.txt', 'archive.tar.gz', 'firmware.elf']) expect(languageId(path)).toBe('plaintext');
   expect(LANGUAGES.every(entry => findLanguage(entry.id) === entry)).toBe(true);
 });
 

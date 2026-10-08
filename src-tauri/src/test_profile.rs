@@ -2,13 +2,13 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
-const MARKER: &str = "paperwing-disposable-profile-v1\n";
-const IDENTIFIER: &str = "dev.paperwing.testing";
+const MARKER: &str = "skein-disposable-profile-v1\n";
+const IDENTIFIER: &str = "dev.skein.testing";
 static ROOT: OnceLock<PathBuf> = OnceLock::new();
 
 pub fn information(identifier: &str) {
-    if std::env::args().any(|arg| arg == "--paperwing-test-profile-info") {
-        println!("{}", serde_json::json!({ "profileBuild": "paperwing-test-profile-build-v1", "identifier": identifier, "benchmark": true }));
+    if std::env::args().any(|arg| arg == "--skein-test-profile-info") {
+        println!("{}", serde_json::json!({ "profileBuild": "skein-test-profile-build-v1", "identifier": identifier, "benchmark": true }));
         std::process::exit(0);
     }
 }
@@ -28,7 +28,7 @@ fn plain_directory(path: &Path) -> Result<PathBuf, String> {
 
 fn root(path: &Path) -> Result<PathBuf, String> {
     let root = plain_directory(path)?;
-    let marker = root.join(".paperwing-disposable");
+    let marker = root.join(".skein-disposable");
     let metadata = std::fs::symlink_metadata(&marker).map_err(|_| "Test profile marker missing")?;
     if !metadata.is_file() || metadata.file_type().is_symlink() || std::fs::read_to_string(marker).ok().as_deref() != Some(MARKER) {
         return Err("Test profile marker invalid".into());
@@ -37,7 +37,7 @@ fn root(path: &Path) -> Result<PathBuf, String> {
 }
 
 pub fn preflight(identifier: &str) -> Result<(), String> {
-    if identifier != IDENTIFIER { return Err("Test-profile build requires dev.paperwing.testing configuration".into()); }
+    if identifier != IDENTIFIER { return Err("Test-profile build requires dev.skein.testing configuration".into()); }
     let path = crate::env_names::var_os("SKEIN_TEST_PROFILE").ok_or("SKEIN_TEST_PROFILE is required")?;
     let path = root(Path::new(&path))?;
     #[cfg(target_os = "linux")]
@@ -51,7 +51,7 @@ pub fn preflight(identifier: &str) -> Result<(), String> {
 pub fn ensure() -> Result<(), String> {
     let expected = ROOT.get().ok_or("Test profile has not passed isolation checks")?;
     if &root(expected)? != expected { return Err("Test profile root changed".into()); }
-    for suffix in ["config/dev.paperwing.testing", "data/dev.paperwing.testing", "cache/dev.paperwing.testing", "data/dev.paperwing.testing/logs", "webview"] {
+    for suffix in ["config/dev.skein.testing", "data/dev.skein.testing", "cache/dev.skein.testing", "data/dev.skein.testing/logs", "webview"] {
         if !plain_directory(&expected.join(suffix))?.starts_with(expected) { return Err("Test profile directory changed".into()); }
     }
     Ok(())
@@ -87,7 +87,7 @@ pub fn root_probe_delay(path: &str) -> Result<(), String> {
     let delay: u64 = value.parse().map_err(|_| "Invalid isolated root-probe delay")?;
     if !(100..=2000).contains(&delay) { return Err("Isolated root-probe delay exceeds its bound".into()); }
     ensure()?;
-    let file = ROOT.get().ok_or("Test profile unavailable")?.join("config/dev.paperwing.testing/settings.json");
+    let file = ROOT.get().ok_or("Test profile unavailable")?.join("config/dev.skein.testing/settings.json");
     plain_file(&file)?;
     let saved: crate::settings::Settings = serde_json::from_slice(&std::fs::read(file).map_err(|_| "Test profile settings unavailable")?)
         .map_err(|_| "Invalid isolated root-probe settings")?;
@@ -126,9 +126,9 @@ pub fn settings(settings: &crate::settings::Settings) -> Result<(), String> {
         return Err("Test profile workspace must use fixture checkouts".into());
     }
     let parent = workspace.parent().ok_or("Fixture root missing")?;
-    let marker = parent.join(".paperwing-disposable");
+    let marker = parent.join(".skein-disposable");
     if std::fs::symlink_metadata(&marker).map_err(|_| "Fixture marker missing")?.file_type().is_symlink()
-        || std::fs::read_to_string(marker).ok().as_deref() != Some("paperwing-disposable-fixture-v1\n") {
+        || std::fs::read_to_string(marker).ok().as_deref() != Some("skein-disposable-fixture-v1\n") {
         return Err("Test profile workspace fixture marker invalid".into());
     }
     Ok(())
@@ -152,7 +152,7 @@ pub fn trace() -> Result<(PathBuf, u32), String> {
     ensure()?;
     let sample = sample()?;
     let root = ROOT.get().ok_or("Test profile unavailable")?;
-    let logs = plain_directory(&root.join("data/dev.paperwing.testing/logs"))?;
+    let logs = plain_directory(&root.join("data/dev.skein.testing/logs"))?;
     Ok((logs.join(format!("sample-{sample}.jsonl")), sample))
 }
 
@@ -205,7 +205,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("skein-profile-refusal-{}", std::process::id()));
         std::fs::create_dir_all(&path).unwrap();
         assert!(root(&path).is_err());
-        std::fs::write(path.join(".paperwing-disposable"), MARKER).unwrap();
+        std::fs::write(path.join(".skein-disposable"), MARKER).unwrap();
         assert_eq!(root(&path).unwrap(), std::fs::canonicalize(&path).unwrap());
         assert!(plain_directory(&path.join("../outside")).is_err());
         #[cfg(unix)] {
@@ -213,7 +213,7 @@ mod tests {
             std::os::unix::fs::symlink(&path, &link).unwrap();
             assert!(root(&link).is_err());
         }
-        assert!(preflight("dev.paperwing.app").is_err());
+        assert!(preflight("dev.skein.app").is_err());
         assert!(source("real-source").is_err());
     }
 }

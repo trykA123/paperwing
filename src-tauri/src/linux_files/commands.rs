@@ -6,7 +6,7 @@ use super::{
 use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Manager};
 
-fn environment(app: &AppHandle) -> Result<Environment, String> {
+pub(super) fn environment(app: &AppHandle) -> Result<Environment, String> {
     let app_data = app
         .path()
         .app_data_dir()
