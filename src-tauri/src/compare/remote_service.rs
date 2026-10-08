@@ -4,10 +4,17 @@ use crate::settings::Settings;
 type RemoteSession = (Arc<remote::Prepared>, Job, Arc<tokio::sync::Notify>);
 
 impl Service {
-    pub(crate) fn configure_remote(&self, cache: PathBuf) -> Result<(), String> {
+    pub(crate) fn configure_remote(
+        &self,
+        cache: PathBuf,
+        store: crate::store::Store,
+    ) -> Result<(), String> {
         if !cache.is_absolute() {
             return Err("GitHub cache requires an absolute app cache directory".into());
         }
+        self.remote_store
+            .set(store)
+            .map_err(|_| "GitHub store is already configured")?;
         self.remote_cache
             .set(Arc::new(crate::github::blob::Cache::new(cache)))
             .map_err(|_| "GitHub cache is already configured".into())
@@ -29,7 +36,10 @@ impl Service {
                     "GitHub cache is not configured",
                 ));
             }
-            return remote::prepare(request, refresh)
+            let store = self.remote_store.get().ok_or_else(|| {
+                Problem::new("githubUnavailable", "GitHub store is not configured")
+            })?;
+            return remote::prepare(request, refresh, store)
                 .await
                 .map(|prepared| SourcePrepared::Github(Box::new(prepared)));
         }

@@ -127,7 +127,7 @@ pub fn run() {
             }
             events::install(app.handle());
             let store = store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok());
-            app.state::<compare::Service>().configure_remote(app.path().app_cache_dir()?)?;
+            app.state::<compare::Service>().configure_remote(app.path().app_cache_dir()?, store.clone())?;
             providers::install(app.handle(), store.clone());
             app.manage(store);
             let handle = app.handle().clone();

@@ -47,7 +47,32 @@ pub(crate) async fn file(
         .compare_get(&format!("{prefix}/git/commits/{commit}"))
         .await?
         .data;
-    let mut sha = commit.tree.sha;
+    walk(
+        &http,
+        TreePath {
+            prefix,
+            sha: commit.tree.sha,
+            parts,
+        },
+    )
+    .await
+}
+
+struct TreePath<'a> {
+    prefix: String,
+    sha: String,
+    parts: Vec<&'a str>,
+}
+
+async fn walk(
+    http: &crate::github::http::Http<'_>,
+    path: TreePath<'_>,
+) -> Result<BlobReference, Error> {
+    let TreePath {
+        prefix,
+        mut sha,
+        parts,
+    } = path;
     for (index, part) in parts.iter().enumerate() {
         if !immutable(&sha) {
             return Err(Error::Message("Invalid GitHub tree object ID".into()));

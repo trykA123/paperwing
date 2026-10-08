@@ -118,3 +118,28 @@ pub(super) fn comparison(page: &Page, refs: [String; 2]) -> super::Comparison {
         },
     }
 }
+
+pub(super) fn validate_cached(data: &super::Comparison) -> Result<(), Error> {
+    valid_sha(data.head.clone())?;
+    if data.files.len() > super::FILE_LIMIT || data.commits.len() > super::COMMIT_LIMIT {
+        return Err(Error::Message(
+            "GitHub comparison cache exceeds limits".into(),
+        ));
+    }
+    validate_page(
+        &Page {
+            base_commit: Sha {
+                sha: data.base.clone(),
+            },
+            merge_base_commit: Sha {
+                sha: data.merge_base.clone(),
+            },
+            ahead_by: data.ahead,
+            behind_by: data.behind,
+            total_commits: data.commits.len() as u64,
+            files: data.files.clone(),
+            commits: data.commits.clone(),
+        },
+        &data.base,
+    )
+}

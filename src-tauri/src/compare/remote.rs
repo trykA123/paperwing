@@ -32,14 +32,18 @@ pub(super) struct Refresh<'a> {
     pub job: &'a Job,
 }
 
-pub(super) async fn prepare(request: Request, refresh: Refresh<'_>) -> Result<Prepared, Problem> {
+pub(super) async fn prepare(
+    request: Request,
+    refresh: Refresh<'_>,
+    store: &crate::store::Store,
+) -> Result<Prepared, Problem> {
     refresh.job.check()?;
     let revision = crate::credentials::metadata_revision(&request.source)
         .map_err(|message| Problem::new("githubUnavailable", &message))?;
     let lease = crate::providers::acquire(&request.source, &request.repository.host, None)
         .map_err(|message| Problem::new("githubUnavailable", &message))?;
     let data = lease
-        .run(crate::github::compare::load(&request))
+        .run(crate::github::compare::load(&request, store))
         .await
         .map_err(|error| Problem::new("githubUnavailable", &error.to_string()))?
         .map_err(problem)?;

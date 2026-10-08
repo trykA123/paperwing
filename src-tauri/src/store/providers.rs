@@ -1,4 +1,4 @@
-use super::{commits, listings, Error, Store};
+use super::{commits, comparisons, listings, Error, Store};
 use std::collections::HashSet;
 use std::sync::MutexGuard;
 
@@ -36,6 +36,7 @@ pub(crate) fn purge(
             }
             listings::remove(&transaction, &source_id)?;
             commits::remove_source(&transaction, &source_id)?;
+            comparisons::remove_source(&transaction, &source_id)?;
         }
         Ok(transaction.commit()?)
     })?.blocking_recv().map_err(|_| Error::Unavailable)?

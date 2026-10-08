@@ -2,9 +2,9 @@ use super::*;
 use crate::github::compare::fixture::{source, Reply, Server};
 use crate::github::http::fixture::Binding;
 
-struct Temp(PathBuf);
+pub(super) struct Temp(pub(super) PathBuf);
 impl Temp {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let root = crate::test_support::tmp_root().join(format!(
             "p40-blob-{}-{}",
@@ -21,7 +21,7 @@ impl Drop for Temp {
     }
 }
 
-fn request(source: crate::settings::Source) -> Request {
+pub(super) fn request(source: crate::settings::Source) -> Request {
     let url = format!("https://{}/admin/repo.git", source.host);
     Request::from_url(source, &url, ["a".repeat(40), "b".repeat(40)]).unwrap()
 }

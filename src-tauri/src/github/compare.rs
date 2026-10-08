@@ -6,6 +6,8 @@ use crate::settings::Source;
 use serde::{Deserialize, Serialize};
 
 pub(crate) mod blob_reference;
+mod cache;
+pub(crate) use cache::load;
 #[cfg(test)]
 pub(crate) mod fixture;
 mod mapping;
@@ -93,6 +95,7 @@ pub(in crate::github) async fn resolve(
     mapping::valid_sha(response.sha)
 }
 
+#[cfg(test)]
 pub(in crate::github) async fn fetch(
     http: &Http<'_>,
     request: &Request,
@@ -144,11 +147,6 @@ pub(in crate::github) async fn fetch_resolved(
         }
     }
     result.ok_or_else(|| Error::Message("GitHub comparison unavailable".into()))
-}
-
-pub(crate) async fn load(request: &Request) -> Result<Comparison, Error> {
-    let http = request.connect().await?;
-    fetch(&http, request).await
 }
 
 #[cfg(test)]

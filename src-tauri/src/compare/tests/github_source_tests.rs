@@ -20,7 +20,9 @@ async fn existing_local_refs_stay_local_and_missing_refs_require_explicit_github
     }).await;
     let _binding = Binding::new(&source.id, &server.base);
     let service = fixture.service();
-    service.configure_remote(fixture.0.join("cache")).unwrap();
+    service
+        .configure_remote(fixture.0.join("cache"), crate::store::Store::disabled())
+        .unwrap();
     let mut settings = fixture.settings();
     settings.workspace["sets"][0]["items"][0]["repoId"] =
         format!("{}:admin/repo", source.id).into();

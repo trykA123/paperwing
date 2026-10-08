@@ -9,6 +9,8 @@ use tokio::sync::OnceCell;
 
 mod disk;
 #[cfg(test)]
+mod locking_tests;
+#[cfg(test)]
 mod tests;
 
 pub(crate) const MAX_BYTES: usize = 5 * 1024 * 1024;
@@ -71,12 +73,7 @@ impl Cache {
         let blob = flight
             .get_or_try_init(|| self.load(request, &key, sha, revision))
             .await?;
-        crate::providers::ensure_enabled(&request.source).map_err(Error::Message)?;
-        if crate::credentials::revision(&request.source.id) != revision {
-            return Err(Error::Message(
-                "Source credentials changed; refresh comparison".into(),
-            ));
-        }
+        check(&request.source, revision)?;
         Ok(blob.clone())
     }
 
@@ -92,20 +89,24 @@ impl Cache {
         let capacity = self.capacity;
         let source = request.source.clone();
         let cached = tauri::async_runtime::spawn_blocking(move || {
-            crate::credentials::if_current(&source.id, revision, || {
-                crate::providers::ensure_enabled(&source).map_err(Error::Message)?;
-                disk::read(&root, &cache_key, capacity)
-            })
-            .ok_or_else(|| {
-                Error::Message("Source credentials changed; refresh comparison".into())
-            })?
+            disk::read_checked(
+                disk::Request {
+                    root: &root,
+                    key: &cache_key,
+                    capacity,
+                },
+                || check(&source, revision),
+            )
         })
         .await
         .map_err(|_| cache_error())??;
+        check(&request.source, revision)?;
         if let Some(blob) = cached {
             return Ok(blob);
         }
-        let http = request.connect().await?;
+        let http = super::http::Http::connect_at(&request.source, revision)
+            .await
+            .map_err(Error::from)?;
         let path = format!("{}/git/blobs/{sha}", request.repository.api_path());
         let blob = http.raw_blob(&path).await?;
         self.save(request, key, revision, &blob).await?;
@@ -125,17 +126,29 @@ impl Cache {
         let capacity = self.capacity;
         let blob = blob.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            crate::credentials::if_current(&source.id, revision, || {
-                crate::providers::ensure_enabled(&source).map_err(Error::Message)?;
-                disk::write(&root, &key, &blob, capacity)
-            })
-            .ok_or_else(|| {
-                Error::Message("Source credentials changed; refresh comparison".into())
-            })?
+            disk::write_checked(
+                disk::Request {
+                    root: &root,
+                    key: &key,
+                    capacity,
+                },
+                &blob,
+                || check(&source, revision),
+            )
         })
         .await
         .map_err(|_| cache_error())?
     }
+}
+
+fn check(source: &crate::settings::Source, revision: u64) -> Result<(), Error> {
+    crate::providers::ensure_enabled(source).map_err(Error::Message)?;
+    if crate::credentials::metadata_revision(source).map_err(Error::Message)? != revision {
+        return Err(Error::Message(
+            "Source credentials changed; refresh comparison".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn key(request: &Request, sha: &str, revision: u64) -> String {

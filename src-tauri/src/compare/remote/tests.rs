@@ -10,6 +10,7 @@ struct Fixture {
     root: PathBuf,
     settings: Settings,
     service: Arc<Service>,
+    store: crate::store::Store,
 }
 impl Fixture {
     fn new(source: crate::settings::Source) -> Self {
@@ -26,11 +27,16 @@ impl Fixture {
             workspace,
         };
         let service = Arc::new(Service::default());
-        service.configure_remote(root.join("cache")).unwrap();
+        let store =
+            crate::store::Store::open(&root.join("store.sqlite3"), &Default::default()).unwrap();
+        service
+            .configure_remote(root.join("cache"), store.clone())
+            .unwrap();
         Self {
             root,
             settings,
             service,
+            store,
         }
     }
 
@@ -57,6 +63,7 @@ impl Fixture {
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
+        self.store.close();
         std::fs::remove_dir_all(&self.root).unwrap();
     }
 }
@@ -267,4 +274,154 @@ async fn changed_saved_source_and_cancelled_generation_refuse_remote_reads() {
         .await
         .is_err());
     assert_eq!(server.count(), 3);
+}
+
+fn immutable_refs(head: &str) -> [CompareRef; 2] {
+    [
+        CompareRef::Commit {
+            sha: "a".repeat(40),
+        },
+        CompareRef::Commit { sha: head.into() },
+    ]
+}
+
+async fn ready(fixture: &Fixture, id: &str) -> Box<Snapshot> {
+    let RefreshResult::Ready { snapshot } = fixture
+        .service
+        .refresh(&fixture.settings, id, Options::default())
+        .await
+        .unwrap()
+    else {
+        panic!("comparison unavailable");
+    };
+    snapshot
+}
+
+#[tokio::test]
+async fn immutable_comparisons_use_sqlite_across_sessions_and_restarts_without_extra_http_on_both_hosts(
+) {
+    for host in ["github.com", "gitint.company.com"] {
+        let source = source(host);
+        let server = Server::new(|request, _| reply(request)).await;
+        let _binding = Binding::new(&source.id, &server.base);
+        let mut fixture = Fixture::new(source);
+        let id = fixture.open(immutable_refs(&"b".repeat(40))).await;
+        let first = ready(&fixture, &id).await;
+        assert_eq!(server.count(), 1);
+        let second = ready(&fixture, &id).await;
+        assert_eq!(second.left.commit, first.left.commit);
+        assert_eq!(second.right.commit, first.right.commit);
+        assert_eq!(server.count(), 1);
+        fixture.service.close(&id).await;
+        fixture.store.close();
+        fixture.store =
+            crate::store::Store::open(&fixture.root.join("store.sqlite3"), &Default::default())
+                .unwrap();
+        fixture.service = Arc::new(Service::default());
+        fixture
+            .service
+            .configure_remote(fixture.root.join("cache"), fixture.store.clone())
+            .unwrap();
+        let id = fixture.open(immutable_refs(&"b".repeat(40))).await;
+        assert_eq!(ready(&fixture, &id).await.source, "github");
+        assert_eq!(server.count(), 1);
+        fixture.service.close(&id).await;
+        let rows = fixture
+            .store
+            .read_blocking(|connection| {
+                Ok(connection.query_row::<i64, _, _>(
+                    "SELECT count(*) FROM github_comparisons",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(rows, 1);
+    }
+}
+
+#[tokio::test]
+async fn explicit_branch_refresh_resolves_fresh_shas_and_reuses_only_immutable_pairs() {
+    let source = source("github.com");
+    let head = Arc::new(std::sync::Mutex::new("b".repeat(40)));
+    let current = head.clone();
+    let server = Server::new(move |request, _| {
+        if request.contains("/commits/heads%2Ftopic") {
+            return Reply::json(serde_json::json!({"sha": *current.lock().unwrap()}));
+        }
+        reply(request)
+    })
+    .await;
+    let _binding = Binding::new(&source.id, &server.base);
+    let fixture = Fixture::new(source);
+    let id = fixture.open(refs()).await;
+    assert_eq!(ready(&fixture, &id).await.right.commit, "b".repeat(40));
+    assert_eq!(server.count(), 3);
+    assert_eq!(ready(&fixture, &id).await.right.commit, "b".repeat(40));
+    assert_eq!(server.count(), 5);
+    *head.lock().unwrap() = "f".repeat(40);
+    assert_eq!(ready(&fixture, &id).await.right.commit, "f".repeat(40));
+    assert_eq!(server.count(), 8);
+    assert_eq!(ready(&fixture, &id).await.right.commit, "f".repeat(40));
+    assert_eq!(server.count(), 10);
+    fixture.service.close(&id).await;
+    let id = fixture.open(immutable_refs(&"f".repeat(40))).await;
+    ready(&fixture, &id).await;
+    assert_eq!(server.count(), 10);
+    fixture.service.close(&id).await;
+}
+
+#[tokio::test]
+async fn disabled_store_admission_refuses_http_and_cache_then_purges_cached_comparisons() {
+    let source = source("gitext.company.com");
+    let server = Server::new(|request, _| reply(request)).await;
+    let _binding = Binding::new(&source.id, &server.base);
+    let fixture = Fixture::new(source.clone());
+    crate::store::providers::configure(&fixture.store, vec![(source.id.clone(), false)]).unwrap();
+    let id = fixture.open(immutable_refs(&"b".repeat(40))).await;
+    assert!(matches!(
+        fixture
+            .service
+            .refresh(&fixture.settings, &id, Options::default())
+            .await
+            .unwrap(),
+        RefreshResult::Unavailable { .. }
+    ));
+    assert_eq!(server.count(), 0);
+    let count = || {
+        fixture
+            .store
+            .read_blocking(|connection| {
+                Ok(connection.query_row::<i64, _, _>(
+                    "SELECT count(*) FROM github_comparisons",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap()
+    };
+    assert_eq!(count(), 0);
+    crate::store::providers::configure(&fixture.store, vec![(source.id.clone(), true)]).unwrap();
+    ready(&fixture, &id).await;
+    assert_eq!(server.count(), 1);
+    assert_eq!(count(), 1);
+    let store = fixture.store.clone();
+    let id_to_disable = source.id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::store::providers::save(&store, vec![(id_to_disable, false)], Vec::new())
+    })
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(count(), 0);
+    assert!(matches!(
+        fixture
+            .service
+            .refresh(&fixture.settings, &id, Options::default())
+            .await
+            .unwrap(),
+        RefreshResult::Unavailable { .. }
+    ));
+    assert_eq!(server.count(), 1);
+    fixture.service.close(&id).await;
 }

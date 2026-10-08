@@ -694,6 +694,7 @@ pub struct Service {
     diff: std::sync::OnceLock<Arc<crate::linux_diff::Storage>>,
     counts: std::sync::OnceLock<Arc<count_eligibility::Eligibility>>,
     remote_cache: std::sync::OnceLock<Arc<crate::github::blob::Cache>>,
+    remote_store: std::sync::OnceLock<crate::store::Store>,
     #[cfg(all(test, target_os = "linux"))]
     fresh_write_root_hook: std::sync::Mutex<Option<WriteRootHook>>,
 }
@@ -725,6 +726,7 @@ impl Default for Service {
             diff: std::sync::OnceLock::new(),
             counts: std::sync::OnceLock::new(),
             remote_cache: std::sync::OnceLock::new(),
+            remote_store: std::sync::OnceLock::new(),
             #[cfg(all(test, target_os = "linux"))]
             fresh_write_root_hook: std::sync::Mutex::new(None),
         }

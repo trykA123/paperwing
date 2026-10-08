@@ -1,4 +1,5 @@
 pub mod commits;
+pub(crate) mod comparisons;
 mod error;
 mod legacy;
 pub mod listings;
@@ -236,6 +237,7 @@ impl Store {
             let transaction = connection.transaction()?;
             listings::remove(&transaction, &source_id)?;
             commits::remove_source(&transaction, &source_id)?;
+            comparisons::remove_source(&transaction, &source_id)?;
             Ok(transaction.commit()?)
         });
     }

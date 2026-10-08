@@ -4,7 +4,8 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-fn lock(root: &Path) -> Result<File, Error> {
+fn lock(root: &Path, check: &impl Fn() -> Result<(), Error>) -> Result<File, Error> {
+    check()?;
     std::fs::create_dir_all(root).map_err(|_| cache_error())?;
     if std::fs::symlink_metadata(root)
         .map_err(|_| cache_error())?
@@ -26,16 +27,46 @@ fn lock(root: &Path) -> Result<File, Error> {
         .write(true)
         .open(path)
         .map_err(|_| cache_error())?;
+    #[cfg(test)]
+    super::locking_tests::waiting(root);
     file.lock().map_err(|_| cache_error())?;
+    check()?;
     cleanup_pending(root)?;
     Ok(file)
 }
 
+pub(super) struct Request<'a> {
+    pub root: &'a Path,
+    pub key: &'a str,
+    pub capacity: u64,
+}
+
+#[cfg(test)]
 pub(super) fn read(root: &Path, key: &str, capacity: u64) -> Result<Option<Blob>, Error> {
+    read_checked(
+        Request {
+            root,
+            key,
+            capacity,
+        },
+        || Ok(()),
+    )
+}
+
+pub(super) fn read_checked(
+    request: Request<'_>,
+    check: impl Fn() -> Result<(), Error>,
+) -> Result<Option<Blob>, Error> {
+    let Request {
+        root,
+        key,
+        capacity,
+    } = request;
+    check()?;
     if !root.exists() {
         return Ok(None);
     }
-    let _lock = lock(root)?;
+    let _lock = lock(root, &check)?;
     evict(root, capacity)?;
     let path = root.join(key);
     let metadata = match std::fs::symlink_metadata(&path) {
@@ -62,6 +93,7 @@ pub(super) fn read(root: &Path, key: &str, capacity: u64) -> Result<Option<Blob>
     let blob = decode(&bytes)?;
     file.set_times(std::fs::FileTimes::new().set_modified(SystemTime::now()))
         .map_err(|_| cache_error())?;
+    check()?;
     Ok(Some(blob))
 }
 
@@ -91,11 +123,34 @@ fn encode(blob: &Blob) -> Result<Vec<u8>, Error> {
     Ok(result)
 }
 
+#[cfg(test)]
 pub(super) fn write(root: &Path, key: &str, blob: &Blob, capacity: u64) -> Result<(), Error> {
-    let _lock = lock(root)?;
+    write_checked(
+        Request {
+            root,
+            key,
+            capacity,
+        },
+        blob,
+        || Ok(()),
+    )
+}
+
+pub(super) fn write_checked(
+    request: Request<'_>,
+    blob: &Blob,
+    check: impl Fn() -> Result<(), Error>,
+) -> Result<(), Error> {
+    let Request {
+        root,
+        key,
+        capacity,
+    } = request;
+    let _lock = lock(root, &check)?;
     let destination = root.join(key);
     if destination.exists() {
-        return evict(root, capacity);
+        evict(root, capacity)?;
+        return check();
     }
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let temporary = root.join(format!(
@@ -104,25 +159,37 @@ pub(super) fn write(root: &Path, key: &str, blob: &Blob, capacity: u64) -> Resul
         NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     let bytes = encode(blob)?;
+    let mut published = false;
     let result = (|| {
-        let mut options = OpenOptions::new();
-        options.create_new(true).write(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let mut file = options.open(&temporary).map_err(|_| cache_error())?;
-        file.write_all(&bytes).map_err(|_| cache_error())?;
-        file.sync_all().map_err(|_| cache_error())?;
-        drop(file);
+        stage(&temporary, &bytes)?;
+        check()?;
         std::fs::rename(&temporary, &destination).map_err(|_| cache_error())?;
-        evict(root, capacity)
+        published = true;
+        evict(root, capacity)?;
+        check()
     })();
     if temporary.exists() {
         std::fs::remove_file(temporary).map_err(|_| cache_error())?;
     }
+    if result.is_err() && published && destination.exists() {
+        std::fs::remove_file(destination).map_err(|_| cache_error())?;
+    }
     result
+}
+
+fn stage(temporary: &Path, bytes: &[u8]) -> Result<(), Error> {
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(temporary).map_err(|_| cache_error())?;
+    file.write_all(bytes).map_err(|_| cache_error())?;
+    file.sync_all().map_err(|_| cache_error())?;
+    drop(file);
+    Ok(())
 }
 
 fn evict(root: &Path, capacity: u64) -> Result<(), Error> {
