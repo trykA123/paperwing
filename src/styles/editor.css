@@ -19,11 +19,15 @@
     inset: 0;
 }
 
-.editor-host>.cm-mergeView,
-.editor-host>.cm-editor {
+.editor-host>.cm-mergeView {
     position: absolute;
     inset: 0 var(--ruler-w) 0 0;
     scrollbar-width: none;
+}
+
+.editor-host>.cm-editor {
+    width: calc(100% - var(--ruler-w));
+    height: 100%;
 }
 
 .editor-host>.cm-mergeView::-webkit-scrollbar,

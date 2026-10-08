@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type IconName = 'branch' | 'tag' | 'commit' | 'search' | 'gear' | 'refresh' | 'folder' | 'code' | 'plus' | 'trash' | 'check' | 'copy' | 'close' | 'panel' | 'theme' | 'chevron' | 'activity' | 'download' | 'info' | 'alert' | 'error' | 'disclosure' | 'folderOpen' | 'minimize' | 'maximize' | 'restore' | 'upload' | 'remote' | 'stash' | 'submodule' | 'more' | 'layers' | 'undo' | 'changes' | 'pr' | 'actions' | 'jira' | 'server' | 'board' | 'eye' | 'external' | 'repo' | 'cloud' | 'star';
+  export type IconName = 'branch' | 'tag' | 'commit' | 'search' | 'gear' | 'refresh' | 'folder' | 'code' | 'plus' | 'trash' | 'check' | 'copy' | 'close' | 'panel' | 'theme' | 'chevron' | 'activity' | 'download' | 'info' | 'alert' | 'error' | 'disclosure' | 'folderOpen' | 'minimize' | 'maximize' | 'restore' | 'upload' | 'remote' | 'stash' | 'submodule' | 'more' | 'layers' | 'undo' | 'changes' | 'pr' | 'actions' | 'jira' | 'server' | 'board' | 'eye' | 'external' | 'repo' | 'cloud' | 'star' | 'save' | 'swap' | 'arrowLeft' | 'arrowRight';
   export type IconTone = 'folder' | 'repo' | 'file' | 'branch' | 'tag' | 'commit' | 'ok' | 'warn' | 'err' | 'brand' | 'sync' | 'record' | 'inspect' | 'danger';
 </script>
 
@@ -97,6 +97,14 @@
     <path d="M4.5 12.5a3 3 0 0 1-.3-6 4 4 0 0 1 7.6-.5 2.8 2.8 0 0 1 .2 6.5z" stroke-linejoin="round" />
   {:else if name === 'star'}
     <path d="m8 2 1.8 3.7 4 .6-2.9 2.8.7 4L8 11.2 4.4 13.1l.7-4L2.2 6.3l4-.6z" stroke-linejoin="round" />
+  {:else if name === 'save'}
+    <path d="M3 3h8l2 2v8H3zM5.5 3v3.5h5V3M5.5 13V9.5h5V13" stroke-linejoin="round" />
+  {:else if name === 'swap'}
+    <path d="M3 6h10l-3-3M13 10H3l3 3" stroke-linecap="round" stroke-linejoin="round" />
+  {:else if name === 'arrowLeft'}
+    <path d="M13 8H3M7 4 3 8l4 4" stroke-linecap="round" stroke-linejoin="round" />
+  {:else if name === 'arrowRight'}
+    <path d="M3 8h10M9 4l4 4-4 4" stroke-linecap="round" stroke-linejoin="round" />
   {:else if name === 'error'}
     <circle cx="8" cy="8" r="6" /><path d="m5.8 5.8 4.4 4.4M10.2 5.8l-4.4 4.4" stroke-linecap="round" />
   {/if}

@@ -60,8 +60,6 @@ svg.i.tone-err {
 .compare-filters .btn,
 .compare-bar .btn,
 .compare-details .btn,
-.editor-endpoints .btn,
-.editor-footer .btn,
 .fld>span .btn {
     height: var(--ctl-h-sm);
     padding: 0 10px;
@@ -247,24 +245,8 @@ svg.i.tone-err {
     padding: var(--sp-2) var(--sp-4);
 }
 
-.compare-bar,
-.editor-toolbar {
+.compare-bar {
     gap: var(--sp-2);
-}
-
-.editor-endpoints>div {
-    gap: var(--sp-2);
-    padding: var(--sp-2) var(--sp-4);
-}
-
-.editor-footer {
-    gap: var(--sp-2);
-    padding: var(--sp-2) var(--sp-4);
-}
-
-.editor-count {
-    min-width: 64px;
-    font-variant-numeric: tabular-nums;
 }
 
 .compare-pathbar span {
@@ -387,9 +369,7 @@ svg.i.tone-err {
     border-color: var(--acc);
 }
 
-.editor-toolbar label,
 .editor-count,
-.editor-endpoints>div,
 .endpoint-side,
 .endpoint-access,
 .compare-filters>button,
