@@ -124,12 +124,24 @@ fn scan(search: Scan<'_>) -> RepoResult {
         truncated: false,
         stopped: false,
     };
-    let root = match crate::platform::canonical_path(Path::new(&target.path)) {
-        Ok(root) => root,
-        Err(error) => return failed(error.to_string(), cancel),
-    };
+    if let Err(error) = scan_files(&target.path, files, &mut sink) {
+        return failed(error, cancel);
+    }
+    if cancel.load(Ordering::Relaxed) {
+        return failed("Search cancelled".into(), cancel);
+    }
+    finish(sink)
+}
+
+fn scan_files(
+    root: &str,
+    files: Vec<std::path::PathBuf>,
+    sink: &mut Results<'_>,
+) -> Result<(), String> {
+    let root =
+        crate::platform::canonical_path(Path::new(root)).map_err(|error| error.to_string())?;
     for relative in files {
-        if cancel.load(Ordering::Relaxed) || sink.stopped {
+        if sink.cancel.load(Ordering::Relaxed) || sink.stopped {
             break;
         }
         let full = root.join(&relative);
@@ -139,19 +151,18 @@ fn scan(search: Scan<'_>) -> RepoResult {
         sink.path = relative
             .to_string_lossy()
             .replace(std::path::MAIN_SEPARATOR, "/");
-        if let Err(error) = scan_file(&full, &mut sink) {
-            return failed(error.to_string(), cancel);
-        }
+        scan_file(&full, sink).map_err(|error| error.to_string())?;
     }
-    if cancel.load(Ordering::Relaxed) {
-        return failed("Search cancelled".into(), cancel);
-    }
-    let matches = build_matches(sink.rows, plan.context);
+    Ok(())
+}
+
+fn finish(sink: Results<'_>) -> RepoResult {
+    let matches = build_matches(sink.rows, sink.plan.context);
     RepoResult {
         status: RepoStatus {
             state: State::Done,
             matches: matches.len(),
-            truncated: sink.truncated || budget.is_capped(),
+            truncated: sink.truncated || sink.budget.is_capped(),
             error: None,
             engine_note: None,
         },
