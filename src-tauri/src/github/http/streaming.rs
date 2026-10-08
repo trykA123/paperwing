@@ -119,6 +119,7 @@ impl Http<'_> {
             .sync_all()
             .await
             .map_err(|_| Error::Message("Cannot write the download file".into()))?;
+        drop(out);
         self.check_revision()?;
         tokio::fs::rename(&part, destination)
             .await
