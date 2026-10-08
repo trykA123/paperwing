@@ -300,7 +300,7 @@ export type CiRun = {
   startedAt: string | null; completedAt: string | null; durationSeconds: number | null; capabilities: CiCapabilities;
 };
 export type CiStep = { provider: string; host: string; number: number; name: string; status: CiStatus; startedAt: string | null; completedAt: string | null };
-export type CiJob = { provider: string; host: string; id: string; runId: string; name: string; status: CiStatus; url: string; startedAt: string | null; completedAt: string | null; durationSeconds: number | null; steps: CiStep[] };
+export type CiJob = { provider: string; host: string; id: string; runId: string; name: string; status: CiStatus; url: string | null; startedAt: string | null; completedAt: string | null; durationSeconds: number | null; steps: CiStep[] };
 export type CiLog = { provider: string; host: string; jobId: string; text: string };
 export type CiArtifact = { provider: string; host: string; id: string; name: string; sizeBytes: number; expired: boolean; createdAt: string; expiresAt: string | null };
 export type CiDownload = { provider: string; host: string; filename: string; mediaType: string; path: string; sizeBytes: number };

@@ -51,7 +51,7 @@ pub struct CiJob {
     pub run_id: String,
     pub name: String,
     pub status: CiStatus,
-    pub url: String,
+    pub url: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
     pub duration_seconds: Option<u64>,

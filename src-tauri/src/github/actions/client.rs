@@ -123,18 +123,32 @@ impl<T: Transport> Client<'_, T> {
         let next_page = response.next.then_some(page + 1);
         let value: Value = serde_json::from_slice(&response.body)
             .map_err(|_| CiError::message("Unexpected CI response from GitHub"))?;
-        let items: Vec<Raw> = serde_json::from_value(
+        let items: Vec<Value> = serde_json::from_value(
             value
                 .get(field)
                 .cloned()
                 .ok_or_else(|| CiError::message("Missing CI records from GitHub"))?,
         )
         .map_err(|_| CiError::message("Unexpected CI records from GitHub"))?;
+        let total = items.len();
+        let items: Vec<Item> = items
+            .into_iter()
+            .filter_map(|item| {
+                serde_json::from_value::<Raw>(item)
+                    .map_err(|_| ())
+                    .and_then(|item| convert(item, self.repo).map_err(|_| ()))
+                    .ok()
+            })
+            .collect();
+        if items.len() < total {
+            eprintln!(
+                "Skipped {} malformed CI {field} records from {}",
+                total - items.len(),
+                self.repo.host
+            );
+        }
         Ok(CiPage::Updated {
-            items: items
-                .into_iter()
-                .map(|item| convert(item, self.repo))
-                .collect::<Result<_, _>>()?,
+            items,
             etag,
             next_page,
         })

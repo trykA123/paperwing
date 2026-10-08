@@ -244,6 +244,36 @@ async fn jobs_steps_logs_and_artifacts_use_neutral_records_without_persistence()
 }
 
 #[tokio::test]
+async fn one_malformed_job_is_skipped_and_a_null_job_url_is_kept_as_none() {
+    let transport = Recorded::new(
+        r#"[{"kind":"metadata","path":"/repos/admin/repo/actions/runs/31/jobs?filter=latest&per_page=100&page=1","status":200,"body":{"jobs":[
+            {"id":1,"run_id":31,"name":"no url","status":"completed","conclusion":"success","html_url":null},
+            {"id":2,"run_id":31,"name":"bad url","status":"completed","conclusion":"success","html_url":"http://elsewhere.invalid/job"},
+            {"id":"three","run_id":31},
+            {"id":4,"run_id":31,"name":"fine","status":"queued","html_url":"https://enterprise.invalid/admin/repo/actions/runs/31/job/4"}
+        ]}}]"#,
+    );
+    let repo = enterprise();
+    let provider = Client {
+        transport: &transport,
+        repo: &repo,
+    };
+    let page = CiProvider::jobs(&provider, "31", &CiQuery::default())
+        .await
+        .unwrap();
+    let CiPage::Updated { items, .. } = page else {
+        panic!("updated jobs")
+    };
+    assert_eq!(
+        items.iter().map(|job| job.id.as_str()).collect::<Vec<_>>(),
+        ["1", "4"]
+    );
+    assert_eq!(items[0].url, None);
+    assert!(items[1].url.is_some());
+    transport.complete();
+}
+
+#[tokio::test]
 async fn incomplete_jobs_never_request_logs() {
     let transport = Recorded::new(
         r#"[{"kind":"metadata","path":"/repos/admin/repo/actions/jobs/32","status":200,"body":{"status":"in_progress"}}]"#,

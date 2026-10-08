@@ -63,7 +63,7 @@ pub(super) struct Job {
     pub name: String,
     pub status: String,
     pub conclusion: Option<String>,
-    pub html_url: String,
+    pub html_url: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
     #[serde(default)]
@@ -72,7 +72,9 @@ pub(super) struct Job {
 
 impl Job {
     pub(super) fn convert(self, repo: &Repository) -> Result<CiJob, CiError> {
-        validate_url(&self.html_url, repo)?;
+        if let Some(url) = &self.html_url {
+            validate_url(url, repo)?;
+        }
         let duration = duration(self.started_at.as_deref(), self.completed_at.as_deref())?;
         Ok(CiJob {
             provider: PROVIDER.into(),
