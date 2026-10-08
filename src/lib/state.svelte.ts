@@ -272,6 +272,7 @@ class AppState {
     await listen<{ sourceId: string; revision: number }>('credential-changed', event => this.credentials.invalidate(event.payload.sourceId, event.payload.revision));
     await listen<ActivityDelta>('git-activity', event => this.gitActivity.applyDelta(event.payload));
     await listen<{ path: string }>(events.repoChanged, event => this.autoRefresh.changed(event.payload.path));
+    await listen<{ setId: string; reason: string }>(events.watchFailed, event => { void this.autoRefresh.failed(event.payload.setId, event.payload.reason); });
     await this.refreshActivity();
     this.ready = true;
     this.modules.restore();
@@ -717,6 +718,7 @@ class AppState {
 
   autoRefresh = new AutoRefresh({
     refresh: paths => this.#refreshChanged(paths),
+    notice: message => { this.toast(message, 'warn'); },
     watch: (setId, roots) => api.watchSet(setId, roots),
     unwatch: setId => api.unwatchSet(setId),
   });

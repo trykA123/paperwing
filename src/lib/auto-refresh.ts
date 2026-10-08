@@ -2,6 +2,7 @@ export const REFRESH_WINDOW_MS = 300;
 
 export type AutoRefreshHost = {
   refresh: (paths: string[]) => void;
+  notice: (message: string) => void;
   watch: (setId: string, roots: string[]) => Promise<unknown>;
   unwatch: (setId: string) => Promise<unknown>;
   windowMs?: number;
@@ -18,6 +19,7 @@ export class AutoRefresh {
   #applied = new Map<string, string>();
   #active = new Set<string>();
   #queue: Promise<void> = Promise.resolve();
+  #warned = false;
 
   constructor(host: AutoRefreshHost) { this.#host = host; }
 
@@ -30,6 +32,15 @@ export class AutoRefresh {
 
   sync(targets: WatchTargets): Promise<void> {
     this.#queue = this.#queue.then(() => this.#reconcile(targets));
+    return this.#queue;
+  }
+
+  failed(setId: string, reason: string): Promise<void> {
+    this.#queue = this.#queue.then(async () => {
+      this.#active.delete(setId);
+      await this.#release(setId);
+      this.#warn(`Automatic refresh stopped: ${reason}.`);
+    });
     return this.#queue;
   }
 
@@ -53,11 +64,23 @@ export class AutoRefresh {
   }
 
   async #start(setId: string, roots: readonly string[]) {
-    await this.#host.watch(setId, [...roots]);
-    this.#active.add(setId);
+    try {
+      await this.#host.watch(setId, [...roots]);
+      this.#active.add(setId);
+      this.#warned = false;
+    } catch (reason) {
+      this.#active.delete(setId);
+      this.#warn(`${String(reason).replace(/\.$/, '')}.`);
+    }
   }
 
   async #release(setId: string) {
-    await this.#host.unwatch(setId);
+    try { await this.#host.unwatch(setId); } catch (reason) { this.#warn(`Automatic refresh could not stop watching a set: ${String(reason)}.`); }
+  }
+
+  #warn(text: string) {
+    if (this.#warned) return;
+    this.#warned = true;
+    this.#host.notice(`${text} Refresh local status still works.`);
   }
 }

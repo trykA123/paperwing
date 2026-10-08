@@ -25,7 +25,7 @@ pub(crate) type Sink = Arc<dyn Fn(Signal) + Send + Sync>;
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub(crate) enum WatchError {
-    #[error("This set has {count} repositories; automatic refresh watches up to {limit}. Use Refresh local status.")]
+    #[error("This set has {count} repositories; automatic refresh watches up to {limit}.")]
     TooManyRoots { count: usize, limit: usize },
     #[error("Automatic refresh could not watch {0}")]
     Start(String),
@@ -154,6 +154,10 @@ pub async fn watch_set(
     set_id: String,
     roots: Vec<String>,
 ) -> Result<usize, String> {
+    let roots: Vec<String> = roots
+        .into_iter()
+        .filter(|root| std::path::Path::new(root).is_dir())
+        .collect();
     for root in &roots {
         crate::git::valid_path(root, true)?;
     }
