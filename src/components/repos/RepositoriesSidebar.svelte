@@ -8,6 +8,9 @@
   const clonedCount = $derived(store.everything.filter(entry => store.localOf(entry)?.repo).length);
   const changedCount = $derived(store.everything.filter(entry => (store.localOf(entry)?.dirty ?? 0) > 0).length);
   const off = $derived(app.sources.filter(isDisabled));
+  const hostOf = (source: { host: string }) => source.host.trim().toLowerCase();
+  const offHosts = $derived(new Set(off.map(hostOf).filter(host => !app.sources.some(source => !isDisabled(source) && hostOf(source) === host))));
+  const tree = $derived(store.tree.filter(host => !offHosts.has(host.host.toLowerCase())));
   const failing = $derived(app.sources.filter(source => !isDisabled(source) && app.repoErrors[source.id]?.length));
   const loading = $derived(app.sources.filter(source => !isDisabled(source) && app.loadingRepos[source.id]));
   const onList = $derived(app.view.kind === 'repos' && !store.hostFilter && !store.org && !store.query);
@@ -47,7 +50,7 @@
       </span>
     </div>
   {/each}
-  {#each store.tree as host (host.host)}
+  {#each tree as host (host.host)}
     <button class="nav rf-hostbtn" class:on={hostOn(host.host)} aria-pressed={hostOn(host.host)} title="Show only {host.host}" onclick={() => narrow(host.host)}>
       <Icon name="server" /><span class="lbl mono">{host.host}</span><span class="cnt">{host.count}</span>
     </button>
