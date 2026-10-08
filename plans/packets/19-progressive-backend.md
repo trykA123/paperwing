@@ -10,7 +10,7 @@ The backend publishes the list of changed files as soon as it knows it, then fil
 
 ## Already done
 - Nothing progressive exists. `Service::refresh` in `src-tauri/src/compare.rs` waits for the whole `prepare` before returning. `Job`, `Prepared`, `FILE_LIMIT` (20,000) and `BYTE_LIMIT` (64 MiB) are in the same file.
-- The Git runner (`src-tauri/src/git/runner.rs`) has one semaphore of 32 slots and no priority classes. `git/batch.rs` (packet 17) reserves 30 slots for readers.
+- The Git runner (`src-tauri/src/git/runner.rs`) has one semaphore of 32 slots and no priority classes. `git/batch.rs` (packet 17) has its own independent pool of 12 reader permits (`READER_LIMIT`); it does not reserve runner slots. The two classes below apply to the runner's 32 slots and must not change that pool.
 - No budget module exists (`src-tauri/src/budget.rs` is absent). Packet 21 defines it; ratify it before this packet starts.
 
 ## Decisions
@@ -47,11 +47,11 @@ The backend publishes the list of changed files as soon as it knows it, then fil
 
 ## Gates
 - `cd src-tauri && cargo test --offline` (`SKEIN_TEST_TMP` on ext4), `rustfmt --check`, clippy
-- Windows VM: serial `cargo test --locked`
+- Windows proof: the Windows VM is gone. Proof is CI `test-windows` (it runs `cargo test --locked`, parallel) plus a traces export from the owner's work PC after merge. Write every Windows-sensitive path so CI exercises it, and list what only the owner's PC can show.
 - `bun run --bun check`, `bun test src/lib` (legacy IPC unchanged)
 
 ## Stop and report if
-- 18 is not accepted, authorisation could go stale, semantics drift, work is unbounded, or Windows proof is missing.
+- 18 is not accepted, authorisation could go stale, semantics drift or work is unbounded. A missing local Windows run is not a stop: CI `test-windows` and the owner's PC are the Windows proof (list the paths they must cover).
 
 ## Report
 Commit sha, the command and type list, step checks, Windows traces, gate results.
