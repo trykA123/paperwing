@@ -82,7 +82,7 @@ pub(super) struct Retained {
 }
 
 impl Retained {
-    pub fn new(app: Option<tauri::AppHandle>) -> Self {
+    pub fn new(sink: Option<progress_events::Sink>) -> Self {
         Self {
             listed: None,
             final_ids: Default::default(),
@@ -91,7 +91,7 @@ impl Retained {
             totals: None,
             snapshot: None,
             problem: None,
-            events: progress_events::Events::new(app),
+            events: progress_events::Events::new(sink),
             #[cfg(feature = "benchmark")]
             listed_timer: Some(crate::benchmark::Span::new("compare.listed", "other")),
         }

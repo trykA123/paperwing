@@ -30,7 +30,7 @@ impl Service {
         id: &str,
         options: Options,
         source: Option<CompareSource>,
-        app: Option<tauri::AppHandle>,
+        sink: Option<progress_events::Sink>,
     ) -> Result<Opened, Problem> {
         self.start_request(
             settings,
@@ -38,7 +38,7 @@ impl Service {
                 id,
                 options,
                 source,
-                app,
+                sink,
             },
         )
         .await
@@ -86,7 +86,7 @@ impl Service {
         session.generation += 1;
         session.prepared = None;
         session.remote = None;
-        session.progress = Some(progressive::Retained::new(request.app));
+        session.progress = Some(progressive::Retained::new(request.sink));
         if let Some(progress) = &mut session.progress {
             progress.emit(request.id, session.generation);
         }
@@ -316,7 +316,7 @@ pub(super) struct Start<'a> {
     pub id: &'a str,
     pub options: Options,
     pub source: Option<CompareSource>,
-    pub app: Option<tauri::AppHandle>,
+    pub sink: Option<progress_events::Sink>,
 }
 
 struct Production {

@@ -13,7 +13,7 @@ pub(super) struct Notice {
     pub state: State,
 }
 
-type Sink = Arc<dyn Fn(&Notice) + Send + Sync>;
+pub(super) type Sink = Arc<dyn Fn(&Notice) + Send + Sync>;
 
 pub(super) struct Events {
     queue: VecDeque<Notice>,
@@ -21,17 +21,18 @@ pub(super) struct Events {
     sink: Option<Sink>,
 }
 
+pub(super) fn tauri_sink(app: tauri::AppHandle) -> Sink {
+    Arc::new(move |notice: &Notice| {
+        let _ = crate::events::publish_payload(
+            &app,
+            crate::kernel::events::CoreEvent::CompareProgress,
+            notice,
+        );
+    })
+}
+
 impl Events {
-    pub fn new(app: Option<tauri::AppHandle>) -> Self {
-        let sink = app.map(|app| {
-            Arc::new(move |notice: &Notice| {
-                let _ = crate::events::publish_payload(
-                    &app,
-                    crate::kernel::events::CoreEvent::CompareProgress,
-                    notice,
-                );
-            }) as Sink
-        });
+    pub fn new(sink: Option<Sink>) -> Self {
         Self {
             queue: VecDeque::new(),
             sent: None,

@@ -1013,7 +1013,7 @@ impl Service {
         options: Options,
         source: Option<CompareSource>,
     ) -> Result<RefreshResult, Problem> {
-        let opened = self.start_request(settings, producer::Start { id, options, source, app: None }).await?;
+        let opened = self.start_request(settings, producer::Start { id, options, source, sink: None }).await?;
         self.wait(id, opened.generation).await
     }
 
@@ -1222,7 +1222,7 @@ pub async fn comparison_refresh(
     #[cfg(feature = "benchmark")]
     let _span = crate::benchmark::Span::new("ipc.refresh", "other");
     let settings = saved(&app)?;
-    let opened = service.start_request(&settings, producer::Start { id: &id, options, source, app: Some(app) }).await?;
+    let opened = service.start_request(&settings, producer::Start { id: &id, options, source, sink: Some(progress_events::tauri_sink(app)) }).await?;
     service.wait(&id, opened.generation).await
 }
 
@@ -1404,7 +1404,7 @@ pub async fn comparison_start(
     options: Options,
 ) -> Result<Opened, Problem> {
     let settings = saved(&app)?;
-    service.start_request(&settings, producer::Start { id: &id, options, source: None, app: Some(app) }).await
+    service.start_request(&settings, producer::Start { id: &id, options, source: None, sink: Some(progress_events::tauri_sink(app)) }).await
 }
 
 #[tauri::command]
