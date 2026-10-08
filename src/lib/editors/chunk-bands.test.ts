@@ -1,6 +1,6 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
-import { bandOf, bandsIn, chunkBands, firstChunkFrom, kindOf, laneOf, rulerMarks, scrollForRuler, thumbOf, type BandChunk, type LineMetrics } from './chunk-bands';
+import { bandOf, bandsIn, chunkBands, firstChunkFrom, kindOf, laneOf, rulerMarks, scrollForRuler, thinMarks, thumbOf, type BandChunk, type LineMetrics } from './chunk-bands';
 
 const LINE = 20;
 const lines: LineMetrics = { top: pos => pos * LINE, bottom: pos => (pos + 1) * LINE };
@@ -84,6 +84,11 @@ describe('ruler', () => {
   test('a mark at the very end stays inside the ruler', () => {
     const [mark] = rulerMarks([{ index: 0, kind: 'add', top: 1999, bottom: 2000, wedgeA: true, wedgeB: false }], 2000, 200);
     expect(mark!.top + mark!.height).toBeLessThanOrEqual(200);
+  });
+
+  test('marks of one lane on the same pixels collapse, other lanes stay', () => {
+    const mark = (index: number, kind: 'add' | 'rem', top: number) => ({ index, kind, lane: laneOf(kind), top, height: 3 });
+    expect(thinMarks([mark(0, 'add', 10), mark(1, 'add', 11), mark(2, 'rem', 10), mark(3, 'add', 20)]).map(item => item.index)).toEqual([0, 2, 3]);
   });
 
   test('the thumb shows the visible part and never shrinks below a grabbable size', () => {

@@ -72,6 +72,12 @@ export function rulerMarks(bands: readonly Band[], contentHeight: number, rulerH
   }));
 }
 
+/** Marks of the same lane that land on the same few pixels collapse into the first one. */
+export function thinMarks(marks: readonly RulerMark[]): RulerMark[] {
+  const seen = new Set<string>();
+  return marks.filter(mark => { const key = `${mark.lane}:${Math.floor(mark.top / 3)}`; if (seen.has(key)) return false; seen.add(key); return true; });
+}
+
 export type Thumb = { top: number; height: number };
 export const MIN_THUMB = 20;
 

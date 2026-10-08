@@ -9,8 +9,9 @@ import { mountInline } from './inline-surface';
 import { linesOf, replaceSpan } from './line-spans';
 import { darkExtension, darkSlot, languageSlot, readOnlyExtension, readOnlySlot, viewExtensions } from './merge-extensions';
 import { mountSideBySide } from './side-by-side-surface';
+import { withRuler } from './surface-ruler';
 import { Listeners, SIDES, stepIndex } from './shared';
-import type { Surface } from './surface';
+import type { Surface, SurfaceInit } from './surface';
 
 const toText = (text: string) => Text.of(text.split('\n'));
 
@@ -55,11 +56,12 @@ class MergeEditor implements CompareEditor {
   private mount(docs: Record<Side, Text>): Surface {
     const watch = (side: Side) => EditorView.updateListener.of(update => { if (update.docChanged) { this.lastEdited = side; this.textChanged(side); } });
     const mount = this.settings.layout === 'inline' ? mountInline : mountSideBySide;
-    return mount({
+    const init: SurfaceInit = {
       host: this.host, docs, hideUnchanged: this.settings.hideUnchanged, ignoreWhitespace: this.settings.ignoreWhitespace, primary: this.primarySide(),
       extensions: side => viewExtensions({ language: this.language, readOnly: this.isReadOnly(side), dark: this.settings.theme === 'dark' }, watch(side)),
       onText: side => this.textChanged(side), onJump: index => this.jump(index),
-    });
+    };
+    return withRuler(mount(init), init);
   }
 
   private replaceSurface(docs: Record<Side, Text>) {

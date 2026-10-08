@@ -10,15 +10,89 @@
     display: none;
 }
 
-.editor-host>.cm-mergeView,
-.editor-host>.cm-editor,
+.editor-host {
+    --ruler-w: 22px;
+}
+
 .editor-host>.vw {
     position: absolute;
     inset: 0;
 }
 
+.editor-host>.cm-mergeView,
+.editor-host>.cm-editor {
+    position: absolute;
+    inset: 0 var(--ruler-w) 0 0;
+    scrollbar-width: none;
+}
+
+.editor-host>.cm-mergeView::-webkit-scrollbar,
+.editor-host>.cm-editor .cm-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.editor-host>.cm-editor .cm-scroller {
+    scrollbar-width: none;
+}
+
 .editor-host>.cm-mergeView {
     overflow: auto;
+}
+
+.cm-ruler {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: var(--ruler-w);
+    overflow: hidden;
+    border-left: 1px solid var(--line);
+    background: var(--sidebar);
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+}
+
+.cm-ruler-mark {
+    position: absolute;
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 1px;
+    background: var(--tone);
+}
+
+.cm-ruler-mark:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+
+.cm-ruler-add {
+    --tone: var(--ok);
+}
+
+.cm-ruler-rem {
+    --tone: var(--err);
+}
+
+.cm-ruler-chg {
+    --tone: var(--warn);
+}
+
+.cm-ruler-cur {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
+}
+
+.cm-ruler-thumb {
+    position: absolute;
+    inset: 0 0 auto 0;
+    border-block: 1px solid var(--line-ctl);
+    background: color-mix(in oklch, var(--text) 10%, transparent);
+    pointer-events: none;
+    will-change: transform;
+}
+
+.cm-ruler-thumb.cm-ruler-drag {
+    background: color-mix(in oklch, var(--text) 18%, transparent);
 }
 
 .editor-host .cm-mergeViewEditor {
