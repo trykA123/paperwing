@@ -5,6 +5,8 @@ use tauri::{AppHandle, Manager};
 
 mod cache;
 #[cfg(test)]
+mod compare;
+#[cfg(test)]
 mod commit_cache;
 mod http;
 mod listing;

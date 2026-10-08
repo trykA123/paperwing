@@ -41,6 +41,27 @@ impl Response {
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn check_rate_limit(&self) -> Result<(), Error> {
+        let exhausted = self
+            .headers
+            .get("x-ratelimit-remaining")
+            .is_some_and(|value| value == "0");
+        let secondary = matches!(self.status, 403 | 429)
+            && (self.status == 429
+                || self.headers.contains_key("retry-after")
+                || String::from_utf8_lossy(&self.body)
+                    .to_ascii_lowercase()
+                    .contains("secondary rate limit"));
+        if exhausted || secondary {
+            let reset_at = self.reset_time().unwrap_or_else(|| {
+                DateTime::<Utc>::from(std::time::SystemTime::now()) + chrono::Duration::minutes(1)
+            });
+            return Err(Error::RateLimited { reset_at });
+        }
+        Ok(())
+    }
+
     fn error(&self) -> Error {
         let limited = self.status == 429
             || self.headers.contains_key("retry-after")

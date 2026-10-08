@@ -2,6 +2,8 @@ use super::{api_base, Source};
 use reqwest::Method;
 
 mod response;
+#[cfg(test)]
+pub(crate) mod fixture;
 pub(super) use response::{Error, Response};
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,6 +50,10 @@ impl<'a> Http<'a> {
     }
 
     pub async fn connect_at(source: &'a Source, expected: u64) -> Result<Self, (u16, String)> {
+        #[cfg(test)]
+        if let Some(base) = fixture::endpoint(&source.id) {
+            return Self::fixture(source, base, expected).await;
+        }
         Self::connect_host_at(source, expected, &source.host).await
     }
 
@@ -129,6 +135,13 @@ fn changed() -> (u16, String) {
 }
 
 impl Http<'_> {
+    #[cfg(test)]
+    pub async fn compare_get<T: DeserializeOwned>(&self, path: &str) -> Result<Page<T>, Error> {
+        let response = self.send(Method::GET, path, None).await?;
+        response.check_rate_limit()?;
+        response.decode()
+    }
+
     pub async fn send(
         &self,
         method: Method,
