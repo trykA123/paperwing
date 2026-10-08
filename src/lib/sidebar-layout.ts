@@ -12,5 +12,8 @@ export function applySidebar(facts: SidebarFacts, visible: boolean): { docked: b
   return isNarrow(facts.width) ? { docked: facts.docked, overlay: visible } : { docked: visible, overlay: false };
 }
 
+/** A window that grew past the breakpoint forgets its overlay, so it does not return after maximise and restore. */
+export const overlayAfterResize = (width: number, open: boolean) => isNarrow(width) && open;
+
 /** A rail pick opens the overlay only for modules that have no page of their own; page modules show their page. */
 export const overlayOnReveal = (ownsPage: boolean) => !ownsPage;

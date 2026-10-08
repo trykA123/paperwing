@@ -1,6 +1,6 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
-import { applySidebar, isNarrow, NARROW_BELOW, overlayOnReveal, sidebarShown } from './sidebar-layout';
+import { applySidebar, isNarrow, NARROW_BELOW, overlayAfterResize, overlayOnReveal, sidebarShown } from './sidebar-layout';
 
 describe('sidebar layout', () => {
   test('the breakpoint is 1000 px', () => {
@@ -27,6 +27,12 @@ describe('sidebar layout', () => {
   test('widening restores the docked sidebar unless the user folded it', () => {
     expect(sidebarShown({ width: 1440, docked: true, overlay: false })).toBe(true);
     expect(sidebarShown({ width: 1440, docked: false, overlay: false })).toBe(false);
+  });
+
+  test('growing past the breakpoint drops the overlay for good', () => {
+    expect(overlayAfterResize(1440, true)).toBe(false);
+    expect(overlayAfterResize(390, true)).toBe(true);
+    expect(overlayAfterResize(390, false)).toBe(false);
   });
 
   test('page modules show their page, sidebar-only modules open the overlay', () => {
