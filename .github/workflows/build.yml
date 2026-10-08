@@ -33,9 +33,15 @@ jobs:
       - run: bun test src/lib
       - run: bun scripts/testing/css-order.ts --self-test
       - run: bun scripts/testing/css-order.ts
-      - name: Isolate the crash in the new GitHub tests (single thread, names print as they start)
+      - name: Crash isolation A, GitHub tests in parallel
         continue-on-error: true
-        run: "cargo test --locked --lib github:: -- --test-threads=1"
+        run: "cargo test --locked --lib github:: -- --test-threads=4"
+        working-directory: src-tauri
+        env:
+          GIT_CONFIG_NOSYSTEM: 1
+      - name: Crash isolation B, every other test in parallel
+        continue-on-error: true
+        run: "cargo test --locked --lib -- --skip github:: --test-threads=4"
         working-directory: src-tauri
         env:
           GIT_CONFIG_NOSYSTEM: 1
