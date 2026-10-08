@@ -5,15 +5,16 @@
   import Select, { type SelectOption } from '../Select.svelte';
 
   type LanguageChoice = { id: string; label: string; extension: string; remembered: boolean; enabled: boolean };
-  let { path, count, previous, next, inline = $bindable(), hideSame = $bindable(), ignoreWhitespace = $bindable(), language, onlanguage, onremember, onexecute }: {
-    path: string; count: string; previous: Command; next: Command;
+  let { path, count, previous, next, inline = $bindable(), hideSame = $bindable(), ignoreWhitespace = $bindable(), language, onlanguage, onremember, onexecute, onback }: {
+    path: string; count: string; previous: Command; next: Command; onback?: () => void;
     inline: boolean; hideSame: boolean; ignoreWhitespace: boolean; language: LanguageChoice;
     onlanguage: (id: string) => void; onremember: (on: boolean) => void; onexecute: (command: Command) => void;
   } = $props();
   const options = $derived<SelectOption[]>([{ id: PLAIN_TEXT, label: PLAIN_LABEL }, ...LANGUAGES].map(option => ({ value: option.id, label: option.id === language.id ? language.label : option.label })));
 </script>
 
-<header class="compare-summary editor-toolbar"><strong class="mono">{path}</strong><span class="grow"></span>
+<header class="compare-summary editor-toolbar">
+    {#if onback}<button class="btn flip compare-back" title="Back (Esc)" onclick={onback}><Icon name="chevron" />Back<kbd>Esc</kbd></button>{/if}<strong class="mono">{path}</strong><span class="grow"></span>
     <button class="btn small icon-only flip" title="Previous difference (Shift+F7)" aria-label="Previous difference" disabled={!previous.enabled} onclick={() => onexecute(previous)}><Icon name="chevron" /></button>
     <span class="editor-count">{count}</span>
     <button class="btn small icon-only" title="Next difference (F7)" aria-label="Next difference" disabled={!next.enabled} onclick={() => onexecute(next)}><Icon name="chevron" /></button>

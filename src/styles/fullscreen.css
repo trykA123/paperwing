@@ -1,0 +1,32 @@
+#shell.immersive {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "main";
+}
+
+#shell.immersive>.activity-rail,
+#shell.immersive>.shell-brand,
+#shell.immersive>.tabs-chrome,
+#shell.immersive>.shell-side,
+#shell.immersive>.shell-right,
+#shell.immersive>.shell-status,
+#shell.immersive>.side-scrim {
+    display: none;
+}
+
+#shell.immersive>.main {
+    gap: 0;
+    padding: 0;
+}
+
+.compare-back {
+    flex: none;
+}
+
+.compare-back kbd {
+    margin-left: var(--sp-1);
+}
+
+.compare-bar.with-back {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}

@@ -7,6 +7,7 @@
   import type { CompareState } from '../lib/compare.svelte';
   import { tabId, type View } from '../lib/workspace';
   import { commands, execute } from '../lib/commands';
+  import { compareFullscreen } from '../lib/compare-fullscreen';
   import { createCompareEditor, currentTheme, LARGE_FILE_NOTICE, loadEngine, type CompareEditor, type EngineKind, type Side } from '../lib/editor';
   import { openSides } from '../lib/compare-sides';
   import { fileSignature } from '../lib/file-signature';
@@ -190,6 +191,7 @@
 
 <section class="file-compare">
   <Toolbar path={view.path} count={changeCount ? `${Math.max(1, hunkIndex + 1)} / ${changeCount}` : computing ? 'Computing' : 'Identical'}
+    onback={compareFullscreen.active ? () => void compareFullscreen.back() : undefined}
     previous={command('difference-previous')} next={command('difference-next')} bind:inline bind:hideSame bind:ignoreWhitespace onexecute={execute}
     language={{ id: language, label: languageLabel(view.path, language), extension, remembered, enabled: editor?.capabilities.highlight !== false }}
     onlanguage={pickLanguage} onremember={on => rememberLanguage(on ? language : null)} />

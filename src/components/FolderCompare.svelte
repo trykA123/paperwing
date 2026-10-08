@@ -4,6 +4,7 @@
   import type { Source, Workspace, CompareFile } from '../lib/api';
   import { app } from '../lib/state.svelte';
   import { commands, execute } from '../lib/commands';
+  import { compareFullscreen } from '../lib/compare-fullscreen';
   import { tabId } from '../lib/workspace';
   import type { View } from '../lib/workspace';
   import type { CompareState } from '../lib/compare.svelte';
@@ -112,7 +113,8 @@
 
 <svelte:window onpointerdown={event => { if (!(event.target as Element).closest('.compare-menu')) menu = null; }} onkeydown={event => { if (event.key === 'Escape') menu = null; }} />
 <section class="folder-compare">
-  <div class="compare-bar">
+  <div class="compare-bar" class:with-back={compareFullscreen.active}>
+    {#if compareFullscreen.active}<button class="btn flip compare-back" title="Back (Esc)" onclick={() => void compareFullscreen.back()}><Icon name="chevron" />Back<kbd>Esc</kbd></button>{/if}
     <div class="compare-sides">
       <CompareEndpointPicker side="LEFT" bind:endpoint={view.left} readOnly={view.readOnly} />
       <CompareEndpointPicker side="RIGHT" bind:endpoint={view.right} readOnly={view.readOnly} />
