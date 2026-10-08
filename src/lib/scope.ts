@@ -28,16 +28,19 @@ export function cleanScope(raw: unknown): ScopeMap {
   return clean;
 }
 
-/** The repositories a scoped page reads: the active set, or every saved set without repeating a folder. */
-export function scopeItems(mode: ScopeMode, active: Pick<RepoSet, 'items'>, sets: readonly Pick<RepoSet, 'items'>[], dest: (item: SetItem) => string): SetItem[] {
+/** The repositories a scoped page reads: the active set, or every saved set without repeating a folder; `folderKey` folds paths that name one folder. */
+export function scopeItems(mode: ScopeMode, active: Pick<RepoSet, 'items'>, sets: readonly Pick<RepoSet, 'items'>[], folderKey: (item: SetItem) => string): SetItem[] {
   if (mode === 'set') return active.items;
   const seen = new Set<string>();
   return sets.flatMap(set => set.items).filter(item => {
-    const path = dest(item);
-    if (seen.has(path)) return false;
-    seen.add(path);
+    const key = folderKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 }
+
+/** Folders no status read has answered or failed for; the "all" scope reads them so their branch is known. */
+export const unreadPaths = (paths: readonly string[], local: Record<string, unknown>, failures: Record<string, unknown>) => paths.filter(path => !local[path] && !failures[path]);
 
 export const scopeLabel = (mode: ScopeMode, setName: string) => (mode === 'set' ? `In ${setName}` : 'All repositories');

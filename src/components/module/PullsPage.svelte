@@ -24,6 +24,11 @@
     if (pullQueue.autoLoad) void untrack(() => pulls.ensure(keys));
   });
 
+  $effect(() => {
+    const paths = pullQueue.unread;
+    if (pullQueue.mode === 'all' && paths.length) void untrack(() => app.checkExists(paths));
+  });
+
   async function open(row: PullRow) {
     try { await openPull(row.pull.url); }
     catch { app.toast('Could not open the browser. Copy the link from the details panel.', 'error'); }

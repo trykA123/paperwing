@@ -1,11 +1,11 @@
 const testModule = 'bun:test';
 const { describe, expect, test } = await import(testModule);
 import type { SetItem, Workspace } from './api';
-import { cleanScope, scopeItems, scopeLabel, scopeOf, toggleScope } from './scope';
+import { cleanScope, scopeItems, scopeLabel, scopeOf, toggleScope, unreadPaths } from './scope';
 import { defaultWorkspace, migrateWorkspace } from './workspace';
 
 const item = (id: string): SetItem => ({ id, repoId: `src:${id}`, name: id, org: 'o', url: `https://example.test/${id}`, ref: { type: 'branch', name: 'main' }, on: true });
-const dest = (entry: SetItem) => `/dev/${entry.name}`;
+const dest = (entry: SetItem) => `/dev/${entry.name}`.toLowerCase();
 
 describe('scope', () => {
   test('pull requests and actions default to the active set', () => {
@@ -27,6 +27,18 @@ describe('scope', () => {
     const b = { items: [item('y'), item('z')] };
     expect(scopeItems('set', a, [a, b], dest).map(entry => entry.name)).toEqual(['x', 'y']);
     expect(scopeItems('all', a, [a, b], dest).map(entry => entry.name)).toEqual(['x', 'y', 'z']);
+  });
+
+  test('folders that differ only in case count once', () => {
+    const a = { items: [item('Api')] };
+    const b = { items: [item('api')] };
+    expect(scopeItems('all', a, [a, b], dest)).toHaveLength(1);
+  });
+
+  test('an item of another set without a status entry is read, failed ones are not retried', () => {
+    const other = { items: [item('far'), item('near'), item('broken')] };
+    const paths = scopeItems('all', { items: [] }, [{ items: [] }, other], dest).map(dest);
+    expect(unreadPaths(paths, { '/dev/near': {} }, { '/dev/broken': 'x' })).toEqual(['/dev/far']);
   });
 
   test('chip words name the set or all repositories', () => {
