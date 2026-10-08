@@ -5,7 +5,42 @@ use reqwest::{
     Method, Url,
 };
 
-const DOWNLOAD_LIMIT: usize = 64 * 1024 * 1024;
+const TEXT_LIMIT: usize = 64 * 1024 * 1024;
+
+pub(super) trait Hop {
+    fn status(&self) -> u16;
+    fn location(&self) -> Option<String>;
+    fn oversize(&self) -> bool {
+        false
+    }
+}
+
+impl Hop for Response {
+    fn status(&self) -> u16 {
+        self.status
+    }
+    fn location(&self) -> Option<String> {
+        self.headers
+            .get(LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string)
+    }
+    fn oversize(&self) -> bool {
+        self.body.len() > TEXT_LIMIT
+    }
+}
+
+impl Hop for reqwest::Response {
+    fn status(&self) -> u16 {
+        reqwest::Response::status(self).as_u16()
+    }
+    fn location(&self) -> Option<String> {
+        self.headers()
+            .get(LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string)
+    }
+}
 
 impl Http<'_> {
     pub(crate) async fn conditional(
@@ -62,33 +97,34 @@ impl Http<'_> {
                     .execute(request)
                     .await
                     .map_err(|_| Error::Message("Cannot download CI content".into()))?;
-                self.read_bounded(&url, response, DOWNLOAD_LIMIT).await
+                self.read_bounded(&url, response, TEXT_LIMIT).await
             })
         })
         .await
     }
 
-    async fn download_with<'a>(
+    pub(super) async fn download_with<'a, R: Hop + Send + 'a>(
         &'a self,
         path: &str,
-        send: impl Fn(reqwest::Request) -> ProviderFuture<'a, Result<Response, Error>>,
-    ) -> Result<Response, Error> {
+        send: impl Fn(reqwest::Request) -> ProviderFuture<'a, Result<R, Error>>,
+    ) -> Result<R, Error> {
         let mut url = Url::parse(&format!("{}{path}", self.base))
             .map_err(|_| Error::Message("Invalid CI download path".into()))?;
         let request = self.build_request(Method::GET, path, None)?;
         let mut response = self
             .dispatch_request(request, |request| async {
                 let response = send(request).await?;
-                Ok((response.status, response))
+                Ok((response.status(), response))
             })
             .await?;
+        let mut left_api_origin = false;
         for attempt in 0..=5 {
-            if response.body.len() > DOWNLOAD_LIMIT {
+            if response.oversize() {
                 return Err(Error::Message(
                     "GitHub response exceeds download limit".into(),
                 ));
             }
-            if !matches!(response.status, 301 | 302 | 303 | 307 | 308) {
+            if !matches!(response.status(), 301 | 302 | 303 | 307 | 308) {
                 self.check_revision()?;
                 return Ok(response);
             }
@@ -96,22 +132,29 @@ impl Http<'_> {
                 return Err(Error::Message("Too many CI download redirects".into()));
             }
             let location = response
-                .headers
-                .get(LOCATION)
-                .and_then(|value| value.to_str().ok())
+                .location()
                 .ok_or_else(|| Error::Message("CI download redirect has no destination".into()))?;
-            url = redirect_target(&url, location)?;
+            url = redirect_target(&url, &location)?;
             self.check_revision()?;
-            response = send(self.download_request(&url)?).await?;
+            left_api_origin |= !self.is_api_origin(&url)?;
+            response = send(self.download_request(&url, !left_api_origin)?).await?;
         }
         Err(Error::Message("Too many CI download redirects".into()))
     }
 
-    fn download_request(&self, url: &Url) -> Result<reqwest::Request, Error> {
-        let mut request = self.client.get(url.clone());
+    fn is_api_origin(&self, url: &Url) -> Result<bool, Error> {
         let base =
             Url::parse(&self.base).map_err(|_| Error::Message("Invalid CI API host".into()))?;
-        if url.origin() == base.origin() {
+        Ok(url.origin() == base.origin())
+    }
+
+    fn download_request(
+        &self,
+        url: &Url,
+        may_authenticate: bool,
+    ) -> Result<reqwest::Request, Error> {
+        let mut request = self.client.get(url.clone());
+        if may_authenticate && self.is_api_origin(url)? {
             if let Some(token) = &self.token {
                 request = request.bearer_auth(token);
             }
@@ -221,6 +264,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn token_stays_off_after_a_redirect_chain_leaves_and_returns_to_the_api_origin() {
+        let source = source("ci-return-source");
+        let http = connect(&source).await;
+        let responses = Mutex::new(VecDeque::from([
+            response(302, Some("https://downloads.invalid/signed"), Vec::new()),
+            response(
+                302,
+                Some("https://enterprise.invalid/api/v3/again"),
+                Vec::new(),
+            ),
+            response(200, None, b"done".to_vec()),
+        ]));
+        let requests = Mutex::new(Vec::new());
+        http.download_with("/logs", |request| {
+            requests.lock().unwrap().push((
+                request.url().host_str().unwrap().to_string(),
+                request.headers().contains_key("authorization"),
+            ));
+            let response = responses.lock().unwrap().pop_front().unwrap();
+            Box::pin(async move { Ok(response) })
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            *requests.lock().unwrap(),
+            [
+                ("enterprise.invalid".into(), true),
+                ("downloads.invalid".into(), false),
+                ("enterprise.invalid".into(), false)
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn recorded_download_loop_rejects_invalid_missing_and_excessive_redirects() {
         let source = source("ci-loop-errors-source");
         let http = connect(&source).await;
@@ -265,7 +342,7 @@ mod tests {
         let http = connect(&source).await;
         let result = http
             .download_with("/logs", |_| {
-                Box::pin(async { Ok(response(200, None, vec![0; DOWNLOAD_LIMIT + 1])) })
+                Box::pin(async { Ok(response(200, None, vec![0; TEXT_LIMIT + 1])) })
             })
             .await;
         assert!(result.err().unwrap().to_string().contains("download limit"));
@@ -314,14 +391,19 @@ mod tests {
         .await
         .unwrap();
         let same = http
-            .download_request(&Url::parse("https://enterprise.invalid/download").unwrap())
+            .download_request(
+                &Url::parse("https://enterprise.invalid/download").unwrap(),
+                true,
+            )
             .unwrap();
         assert!(same.headers().contains_key("authorization"));
         for target in [
             "https://external.invalid/log?signature=fixture",
             "https://enterprise.invalid:444/log",
         ] {
-            let request = http.download_request(&Url::parse(target).unwrap()).unwrap();
+            let request = http
+                .download_request(&Url::parse(target).unwrap(), true)
+                .unwrap();
             for header in [
                 "authorization",
                 "cookie",
