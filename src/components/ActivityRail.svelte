@@ -18,7 +18,7 @@
     gitRunning: app.activityRunning,
   }));
   const shown = $derived(layout.providers.find(entry => entry.provider.id === flyout.open?.id));
-  const isOn = (module: ModuleDef) => module.id === 'settings' ? app.view.kind === 'settings' : app.ws.shell.sidebarVisible && app.ws.shell.section === module.id;
+  const isOn = (module: ModuleDef) => module.id === 'settings' ? app.view.kind === 'settings' : app.sidebar.shown && app.ws.shell.section === module.id;
   const titleOf = (module: ModuleDef) => { const keys = shortcutLabel(module); return keys ? `${module.label} (${keys})` : module.label; };
   const buttonOf = (id: string) => document.querySelector<HTMLElement>(`.rail-btn[data-provider="${id}"]`);
 
@@ -102,7 +102,7 @@
   {@const anchor = buttonOf(shown.provider.id)}
   {#if anchor}
     {#key flyout.open.id}
-      <RailFlyout entry={shown} {anchor} focusFirst={flyout.open.focus} current={app.ws.shell.sidebarVisible ? { id: app.ws.shell.section, host: app.modules.host } : null} count={countFor}
+      <RailFlyout entry={shown} {anchor} focusFirst={flyout.open.focus} current={app.sidebar.shown ? { id: app.ws.shell.section, host: app.modules.host } : null} count={countFor}
         onpick={pick} onclose={close} onenter={() => flyout.enterPanel()} onleave={event => flyout.leave({ x: event.clientX, y: event.clientY })} />
     {/key}
   {/if}

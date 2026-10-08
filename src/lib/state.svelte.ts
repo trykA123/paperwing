@@ -6,6 +6,7 @@ import { loadInChunks } from './state/chunked-load';
 import { RootProbes } from './state/root-probes.svelte';
 import { moduleById } from './modules';
 import { ModuleNavigation } from './state/modules.svelte';
+import { SidebarLayout } from './state/sidebar.svelte';
 import { Repositories } from './state/repositories.svelte';
 import { doingWord, RunNotices } from './state/run-notices';
 import { TemporarySets } from './state/temporary-sets.svelte';
@@ -171,13 +172,14 @@ class AppState {
   jobs = $state<Record<string, Progress>>({});
   running = $state(false);
   clonePreparing = $state(false);
-  get activityOpen() { return this.ws.shell.sidebarVisible && this.ws.shell.section === 'activity'; }
+  sidebar = new SidebarLayout({ get ws() { return app.ws; } });
+  get activityOpen() { return this.sidebar.shown && this.ws.shell.section === 'activity'; }
   set activityOpen(open: boolean) {
-    if (open) { this.ws.shell.section = 'activity'; this.ws.shell.sidebarVisible = true; }
-    else if (this.activityOpen) this.ws.shell.sidebarVisible = false;
+    if (open) { this.ws.shell.section = 'activity'; this.sidebar.set(true); }
+    else if (this.activityOpen) this.sidebar.set(false);
   }
   modules = new ModuleNavigation({
-    get ws() { return app.ws; }, get sources() { return app.sources; }, get view() { return app.view; },
+    get ws() { return app.ws; }, get sources() { return app.sources; }, get view() { return app.view; }, get sidebar() { return app.sidebar; },
     openView: view => this.openView(view), openCodeSearch: () => this.openCodeSearch(),
   });
   repositories = new Repositories(this);

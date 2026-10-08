@@ -910,33 +910,6 @@ button.fm-ref:hover {
     box-shadow: var(--ring);
 }
 
-/* narrow windows: the section panel floats over the table and the details panel steps aside */
-@media (max-width: 760px) {
-    #shell,
-    #shell.noright {
-        grid-template-columns: var(--rail-w) 0 minmax(0, 1fr) 0;
-    }
-
-    .shell-brand,
-    .shell-right {
-        display: none;
-    }
-
-    .shell-side {
-        position: relative;
-        overflow: visible;
-        z-index: var(--z-panel);
-    }
-
-    .shell-side .shell-panel-content {
-        position: absolute;
-        inset-block: 0;
-        left: 0;
-        width: min(var(--panel-width), calc(100vw - var(--rail-w) - 40px));
-        box-shadow: var(--shadow-2);
-    }
-}
-
 [data-theme="dark"] .rail-badge.err {
     color: oklch(18% 0.03 27);
 }

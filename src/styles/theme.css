@@ -666,3 +666,9 @@ summary:focus-visible {
     }
 }
 
+@media (max-width: 600px) {
+    .kbtn kbd {
+        display: none;
+    }
+}
+
