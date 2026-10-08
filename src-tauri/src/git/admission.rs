@@ -127,7 +127,7 @@ mod tests {
             enrichment.push(admission.acquire(Class::Enrichment).await);
         }
         let mut waiting = Box::pin(admission.acquire(Class::Enrichment));
-        assert!(futures_util::poll!(&mut waiting).is_pending());
+        assert!(futures_util::FutureExt::now_or_never(&mut waiting).is_none());
         let mut interactive = Vec::new();
         for _ in 0..16 {
             interactive.push(admission.acquire(Class::Interactive).await);
@@ -147,10 +147,10 @@ mod tests {
             held.push(admission.acquire(Class::Interactive).await);
         }
         let mut queued = Box::pin(admission.acquire(Class::Enrichment));
-        assert!(futures_util::poll!(&mut queued).is_pending());
+        assert!(futures_util::FutureExt::now_or_never(&mut queued).is_none());
         let last = admission.acquire(Class::Interactive).await;
         held.pop();
-        assert!(futures_util::poll!(&mut queued).is_pending());
+        assert!(futures_util::FutureExt::now_or_never(&mut queued).is_none());
         held.pop();
         let enrichment = queued.await;
         assert_eq!(admission.counts().active, 31);
@@ -170,10 +170,10 @@ mod tests {
         let enrichment = admission.acquire(Class::Enrichment);
         let interactive = admission.acquire(Class::Interactive);
         tokio::pin!(enrichment, interactive);
-        assert!(futures_util::poll!(&mut enrichment).is_pending());
-        assert!(futures_util::poll!(&mut interactive).is_pending());
+        assert!(futures_util::FutureExt::now_or_never(&mut enrichment).is_none());
+        assert!(futures_util::FutureExt::now_or_never(&mut interactive).is_none());
         held.pop();
-        assert!(futures_util::poll!(&mut enrichment).is_pending());
+        assert!(futures_util::FutureExt::now_or_never(&mut enrichment).is_none());
         let permit = interactive.await;
         assert_eq!(admission.counts().active, 32);
         drop(permit);

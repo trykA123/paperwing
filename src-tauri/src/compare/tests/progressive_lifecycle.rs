@@ -350,12 +350,12 @@ async fn content_memory_bounds_reserve_interactive_capacity_and_release_cancelle
         .await
         .unwrap();
     let mut queued = Box::pin(flight::acquire(&third, true, flight::ROW_BYTES));
-    assert!(futures_util::poll!(&mut queued).is_pending());
+    assert!(futures_util::FutureExt::now_or_never(&mut queued).is_none());
     let selected = flight::acquire(&first, false, 8 * 1024 * 1024)
         .await
         .unwrap();
     let mut over_comparison = Box::pin(flight::acquire(&first, false, 1));
-    assert!(futures_util::poll!(&mut over_comparison).is_pending());
+    assert!(futures_util::FutureExt::now_or_never(&mut over_comparison).is_none());
     first.cancel.store(true, Ordering::Relaxed);
     assert_eq!(over_comparison.await.err().unwrap().kind, "cancelled");
     drop(queued);
