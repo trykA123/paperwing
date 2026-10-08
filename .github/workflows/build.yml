@@ -33,11 +33,11 @@ jobs:
       - run: bun test src/lib
       - run: bun scripts/testing/css-order.ts --self-test
       - run: bun scripts/testing/css-order.ts
-      - name: Probe, live output so an abort names its thread
+      - name: Rust tests (live output; captured output aborts the Windows test process)
         run: "cargo test --locked -- --nocapture"
         working-directory: src-tauri
         env:
-          RUST_BACKTRACE: full
+          RUST_BACKTRACE: 1
           GIT_CONFIG_NOSYSTEM: 1
 
   windows:
