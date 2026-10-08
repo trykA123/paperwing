@@ -4,60 +4,70 @@
 
 # Skein
 
-**A desktop workspace for Git repository sets, local comparison, and reviewed changes.**
-
+**One desktop app for all the Git repositories you work across: see them, sync them, compare them, commit to them.**
 
 </div>
 
-Skein organizes related Git repositories into reusable sets. Clone a workspace,
-inspect local changes, compare folders or Git snapshots, copy selected differences,
-and stage and commit your work from one desktop app.
+You do not work in one repository. You work in twenty, or eight hundred: a product split into
+services, a customer workspace, a release train, a GitHub Enterprise organization. Terminals and
+browser tabs handle that badly. Skein is built for it.
 
-Use the same repository in several folders when you need separate checkouts.
-Skein remembers each folder and reference, so tomorrow starts with a workspace,
-not another round of "which terminal was that?"
+Skein lists the repositories your GitHub, GitHub Enterprise or plain Git sources expose, clones the
+ones you choose, and then keeps one honest table of their state: branch, ahead/behind, uncommitted
+files, open pull request, and the **one next action** each repository needs (Clone, Commit, Pull,
+Push, Switch). From there you can compare any two folders or Git references, copy differences
+between them with undo, stage and commit line by line, and search code across every checkout.
 
-Skein uses its own app identifier and credential service. Configure settings and
-re-enter tokens; settings and credentials from earlier names are not imported.
+It is a Tauri app: a Svelte/TypeScript interface on a Rust core, running your own installed `git`.
+Your repositories stay ordinary Git repositories. Terminals and other editors keep working beside it.
+
+<p align="center">
+  <img src="docs/images/repositories.png" alt="The repository table for a set of 800 repositories, with filters, sync graphs and one next action per row" width="900" />
+</p>
 
 ---
 
 ## Contents
 
 - [What Skein does](#what-skein-does)
+- [Screenshots](#screenshots)
+- [How Skein is built](#how-skein-is-built)
+- [How the local database works](#how-the-local-database-works)
+- [Roadmap](#roadmap)
 - [The workspace model](#the-workspace-model)
 - [A typical workflow](#a-typical-workflow)
 - [Comparing folders and references](#comparing-folders-and-references)
 - [Branches, commits, and push](#branches-commits-and-push)
 - [Recovery and limits](#recovery-and-limits)
-- [How it works](#how-it-works)
-- [Install](#install)
-- [Setup](#setup)
+- [Code map](#code-map)
+- [Install](#install) · [Setup](#setup) · [Troubleshooting](#troubleshooting)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Build from source](#build-from-source)
 - [Where things are stored](#where-things-are-stored)
 
 ## What Skein does
 
-Skein is a Windows-first desktop app for work that spans several Git repositories.
-Use named sets for a product, customer workspace, release, or experiment.
-Each row remembers its repository URL, folder name, and checkout reference.
-
-The main capabilities are:
+Skein runs on Windows 10/11 first (the work environment it is designed for: Defender, several
+GitHub Enterprise hosts plus github.com) and also builds on Linux (GTK3/WebKitGTK).
 
 | Capability | What you get |
 |---|---|
-| Repository discovery | GitHub, GitHub Enterprise, and manual Git URLs; organization browsing, search, favorites, and paging. |
-| Repeatable workspaces | Named sets, duplicate checkouts, shared reference selection, custom destination paths, and parallel cloning. |
-| Local Git visibility | Current branch or commit, ahead/behind counts, changed-file counts, and a tree of branches, tags, remotes, stashes, and submodules. |
-| Folder comparison | Local working trees or read-only Git snapshots, file filters, content-based differences, and commit-history comparisons where available. |
-| File comparison | CodeMirror side-by-side or inline diffs, difference navigation, editable working-tree files, and directional block copying. Files over 5 MB open in a read-only viewer. |
-| Reviewed changes | New branches, staged/unstaged file previews, commit messages, and a separate Push action. |
-| Recoverable copies | Confirmed file/folder copy previews, per-file outcomes, saved-operation undo, and persisted recovery records. |
-| Desktop workflow | Tabs, a command palette, Git Activity, resizable panels, light/dark/system themes, bundled fonts, and VS Code integration. |
+| Repository discovery | GitHub, GitHub Enterprise (several hosts side by side) and manual Git URLs. Organization browsing, search, favorites, paging and a disk-backed cache that opens instantly. |
+| Repository-first workspace | The repository is the main object. Sets are a saved grouping on top: duplicate checkouts, shared ref selection, custom destination paths, parallel cloning. |
+| Local Git visibility | Branch or commit, ahead/behind graph, changed-file counts, and a tree of branches, tags, remotes, stashes and submodules, per repository. |
+| One next action | Each row says what to do next and does it: Clone, Commit, Switch, Pull, Push. Select many rows and run the action for all of them. |
+| Compare | Folders, working trees or read-only Git snapshots; file filters; content-based differences; commit-history comparison; whole-set compare. |
+| File editing | CodeMirror side-by-side or inline diffs, difference navigation, editable working-tree files and directional block copy. Files over 5 MB open read-only. |
+| Reviewed changes | New branches, staged and unstaged previews, partial (hunk and line) staging, safe discard, commit messages and a separate Push. |
+| Pull requests and releases | PR status per branch, open or bulk-open pull requests, and GitHub releases from pushed tags, on github.com and Enterprise. |
+| Code search | Search across the checkouts of a set, streamed per repository, with caps and cancel. |
+| Recoverable writes | Confirmed copy previews, per-file outcomes, saved-operation undo and persisted recovery records. |
+| Desktop workflow | Tabs, command palette, Git Activity log, resizable panels, light/dark/system themes, bundled fonts, VS Code integration. |
 
-Search filters repository lists that Skein has loaded. It is not server-wide code search.
-The app uses ordinary Git repositories, so terminal commands and other editors still work.
+Search filters the repository lists Skein has loaded; code search reads the files of repositories you have cloned.
+It is not server-wide code search.
+
+### GitHub and Enterprise integration
 
 The pull request client supports GitHub.com and separately configured GitHub Enterprise Server hosts.
 It uses each host's stored token, targets fork parents, follows branch upstream names, and reports unpushed commits.
@@ -72,6 +82,205 @@ Saved tokens are bound to their original host. Changing a host requires saving a
 Test connection and Load my organizations use a typed token without saving it until Save source.
 
 Skein reduces terminal juggling; Git retains its right to complain about conflicts.
+
+## Screenshots
+
+These come from Skein's UI test harness, which drives the real interface against a mocked backend.
+
+| Folder compare | File compare |
+|---|---|
+| <img src="docs/images/folder-compare.png" alt="Folder compare listing different, left-only and right-only files with line counts" /> | <img src="docs/images/file-compare.png" alt="Side-by-side file diff with copy-left and copy-right actions and an undo button" /> |
+| Two references of one repository, or two checkouts, with per-file line counts and the comparison rules on the right. | A CodeMirror diff you can edit and save. Block copy moves a difference in either direction. |
+
+The next shell is designed and being built (packet 44): a module rail on the left (Repositories, Changes,
+Branches & tags, Compare, Search, Pull requests, Actions, Jira), a details drawer, and a destination and
+clone plan that opens as a popover. This is the approved design prototype, not a shipped build:
+
+<p align="center">
+  <img src="docs/images/shell-target.png" alt="Design prototype of the new shell with a module rail and a clone plan popover" width="900" />
+</p>
+
+## How Skein is built
+
+The Svelte interface owns sets, tabs, dialogs and editor buffers. A Rust core, hosted in the same
+process, owns Git execution, comparison, filesystem writes, credentials and the local database.
+New integrations (CI, issue trackers, other hosts) plug in as providers behind typed traits and
+can be switched off completely.
+
+```mermaid
+flowchart LR
+  UI["Svelte UI<br/>sets, tabs, editors"] -->|Tauri commands| CMD["Domain command handlers"]
+  CMD --> PROV["Provider adapters<br/>GitHub, Enterprise, manual URLs"]
+  CMD --> GIT["Git runner<br/>your installed git"]
+  CMD --> CMP["Compare engine"]
+  CMD --> FILES["Safe file service<br/>guards and recovery journal"]
+  PROV --> REG["Registry and leases<br/>enabled sources only"]
+  PROV --> STORE[("SQLite store<br/>skein-store.sqlite3")]
+  PROV -->|HTTPS, per-host token| HOSTS(["github.com and<br/>Enterprise hosts"])
+  GIT -->|SSH or HTTPS| HOSTS
+  CMP --> GIT
+  FILES --> DISK[("Working trees<br/>and recovery records")]
+  GIT --> DISK
+  JOBS["Clone, search, discovery jobs"] --> BUS["Event delivery"]
+  PROV --> BUS
+  BUS --> UI
+  BUS --> SUBS["In-process subscribers<br/>CoreEvent bus"]
+```
+
+Comparison and writes are deliberately separated. A comparison reads Git snapshots or files and never
+writes. Every write goes through the file service, which checks the comparison generation, the
+registered root, file metadata and the expected bytes before it publishes, and records a backup so the
+operation can be undone. See [core boundaries](docs/architecture.md), the
+[write contract](docs/linux-write-contract.md) and [recovery](docs/linux-recovery.md).
+
+## How the local database works
+
+Skein keeps a disposable SQLite cache, `skein-store.sqlite3`, in the app data directory. It speeds up
+startup and repeat views. It never holds credentials, settings or repositories, so you can delete it
+at any time and nothing is lost.
+
+**Tables.** Repository listings, commit histories and remote refs each have a parent row that records
+where the data came from and how fresh it is, and child rows that hold the data. Two full-text indexes
+(FTS5) make repository and commit-subject search instant, kept in sync by triggers.
+
+```mermaid
+erDiagram
+  github_listings ||--o{ repositories : "has (cascade delete)"
+  commit_sets ||--o{ commits : "has (cascade delete)"
+  ref_sets ||--o{ refs : "has (cascade delete)"
+  github_listings {
+    text source_id PK
+    text scope
+    text login
+    int fetched_at
+    int version
+  }
+  repositories {
+    int rowid PK
+    text source_id FK
+    int position
+    text full_name
+    text url
+    text default_branch
+    text pushed_at
+    int archived
+  }
+  commit_sets {
+    int id PK
+    text source_id
+    text repository
+    text branch
+    int ref_epoch
+    int fetched_at
+  }
+  commits {
+    int rowid PK
+    int set_id FK
+    int position
+    text sha
+    text subject
+    text author
+    text parents
+  }
+  ref_sets {
+    text url PK
+    int ref_epoch
+    int fetched_at
+  }
+  refs {
+    text url FK
+    text kind "branch or tag"
+    int position
+    text name
+    text sha
+  }
+```
+
+`repository_search` indexes `repositories.full_name` and `commit_search` indexes `commits.subject`.
+Both are FTS5 tables over the parent rows. Writes are serialized through a single writer, with separate read connections.
+
+**Stale while revalidate.** A listing opens from disk immediately, marked stale, then is replaced by a
+fresh response. If you are offline or the host fails, the stale rows stay.
+
+```mermaid
+sequenceDiagram
+  participant UI as Interface
+  participant S as SQLite store
+  participant H as GitHub host
+  UI->>S: read listing for source
+  S-->>UI: stale rows (instant, if any)
+  UI->>H: GET /user, then list repositories
+  alt host answers
+    H-->>UI: fresh pages
+    UI->>S: replace rows (version, login, fetched_at)
+    S-->>UI: fresh rows
+  else offline, denied or failed
+    H--xUI: error
+    Note over UI,S: stale rows stay visible, error is shown, retry stays possible
+  end
+```
+
+**What invalidates it.** Entries are keyed by source configuration, credential revision and, for
+histories and refs, a ref epoch. Editing a source or token, a forced refresh, or a Git operation that
+moves refs invalidates the matching entries. A listing that lost later pages is stored marked
+`partial` and never replaces a fuller stored listing.
+
+**Safety rules.** The store opens on a background thread, so startup never waits for it. Until it is
+ready, or when it is disabled, reads are cache misses and writes are dropped. A file is moved aside
+only when SQLite reports it is corrupt or a migration fails. Disabling a source removes its cache rows
+and refuses further writes for it. The cache keeps at most a bounded size and prunes oldest rows first.
+
+Rollback is simple: close Skein and delete `skein-store.sqlite3` with its `-wal`, `-shm` and `.running`
+files. Details, known gaps and the freshness table are in [metadata caching](docs/metadata-caching.md).
+
+## Roadmap
+
+Open work lives as one packet per job in [`plans/packets/`](plans/README.md). Finished packets are deleted;
+Git history keeps them. Owner priorities: Windows first, repositories before sets, deletes stay local,
+and every integration can be switched off.
+
+```mermaid
+flowchart LR
+  subgraph Now["In progress"]
+    P44["44 App shell and module rail"]
+    P38["38 Core boundaries and providers"]
+    P29["29 Partial staging and discard"]
+    P37["37 Replace Beyond Compare"]
+  end
+  subgraph Next["Ready"]
+    P47["47 Search engines and Ctrl+P file finder"]
+    P46["46 Syntax colouring for embedded files"]
+    P06["06 / 06s Windows write split, full-screen compare"]
+    P30["30 File watcher refresh"]
+    P40["40 Compare on GitHub without cloning"]
+    P28["28 Pull request rail badge"]
+  end
+  subgraph Later["Blocked on the above"]
+    P31["31 CI runs and logs (Actions)"]
+    P35["35 Jira boards and branch from ticket"]
+    P19["18 / 19 / 20 Progressive comparison"]
+    P21["21 / 22 Fact cache and prewarm"]
+    P27["27 Release snapshots"]
+    P36["36 Frontend performance"]
+  end
+  P38 --> P31
+  P38 --> P35
+  P19 --> P21 --> P22["22 Prewarm"]
+  P37 --> P46
+  P44 --> P28
+```
+
+| Theme | Packets | What changes for you |
+|---|---|---|
+| New shell | 44, 03b, 28 | A module rail, a details drawer and context menus; repositories stay the main view. |
+| Beyond Compare replacement | 37, 46, 06s | Three-way merge, `git difftool`/`mergetool`, full-screen compare, colouring for C/C++, ARXML, A2L, DBC, HEX and more. |
+| Speed | 18, 19, 20, 21, 22, 36, 17b | The changed-file list appears first and the rest fills in; repeat comparisons become near-instant. |
+| Integrations | 38, 31, 35, 40 | GitHub Actions runs and logs, read-only Jira boards, compare on GitHub without cloning. |
+| Search | 47 | A choice of search engine in Settings and a fuzzy file finder across a set. |
+| Live status | 30 | Local status updates itself when files change. |
+
+Approved ideas without a packet (set-wide merge or rebase plans, a three-way merge editor, compare
+reports, Jenkins, other hosting providers) are in [`plans/packets/backlog.md`](plans/packets/backlog.md).
 
 ## The workspace model
 
@@ -294,7 +503,7 @@ they do not authenticate backups against malicious tampering. Keep independent b
 This README describes the current source, including features absent from the published v0.1.0 installers.
 The development build is not a signed-off release; live acceptance and UX work remain in progress.
 
-## How it works
+## Code map
 
 Skein combines a Svelte/TypeScript interface with a Rust backend through Tauri.
 The interface owns sets, tabs, dialogs, and editor buffers. Tauri commands request
