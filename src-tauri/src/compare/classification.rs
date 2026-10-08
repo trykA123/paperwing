@@ -103,6 +103,7 @@ impl Classifier<'_> {
         if cost > BYTE_LIMIT.saturating_sub(*used) {
             return Ok(budget_row(row));
         }
+        let _flight = flight::acquire(self.job, true, flight::ROW_BYTES).await?;
         let bytes = self.read(&mut row, used).await?;
         if *used > BYTE_LIMIT {
             return Ok(budget_row(row));

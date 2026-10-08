@@ -76,7 +76,7 @@ pub(super) struct Retained {
     pub totals: Option<Totals>,
     pub snapshot: Option<Snapshot>,
     pub problem: Option<Problem>,
-    pub app: Option<tauri::AppHandle>,
+    pub events: progress_events::Events,
 }
 
 impl Retained {
@@ -89,7 +89,7 @@ impl Retained {
             totals: None,
             snapshot: None,
             problem: None,
-            app,
+            events: progress_events::Events::new(app),
         }
     }
 
@@ -131,16 +131,13 @@ impl Retained {
         })
     }
 
-    pub fn emit(&self, id: &str, generation: u64) {
-        if let Some(app) = &self.app {
-            let payload = serde_json::json!({"id": id, "generation": generation,
-                "sequence": self.updates.len(), "state": self.state});
-            let _ = crate::events::publish_payload(
-                app,
-                crate::kernel::events::CoreEvent::CompareProgress,
-                &payload,
-            );
-        }
+    pub fn emit(&mut self, id: &str, generation: u64) {
+        self.events.queue(progress_events::Notice {
+            id: id.into(),
+            generation,
+            sequence: self.updates.len() as u64,
+            state: self.state,
+        });
     }
 }
 

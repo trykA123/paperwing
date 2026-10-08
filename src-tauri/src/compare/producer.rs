@@ -46,7 +46,7 @@ impl Service {
             session.prepared = None;
             session.remote = None;
             session.progress = Some(progressive::Retained::new(app));
-            if let Some(progress) = &session.progress {
+            if let Some(progress) = &mut session.progress {
                 progress.emit(id, session.generation);
             }
             let previous = std::mem::take(&mut session.readers);
@@ -74,6 +74,11 @@ impl Service {
             let worker = service.worker();
             let worker_id = id_owned.clone();
             let cleanup = job.readers.clone();
+            let event_service = service.worker();
+            let event_id = id_owned.clone();
+            let events = tokio::spawn(async move {
+                event_service.send_events(&event_id, generation).await;
+            });
             let task = tokio::spawn(async move {
                 let _permit = job.slot(&worker.slots).await?;
                 let produce = worker.prepare_source(
@@ -89,10 +94,7 @@ impl Service {
                     source,
                 );
 
-                tokio::select! {
-                    result = produce => result,
-                    _ = wait_cancel(&job.cancel) => Err(Problem::new("cancelled", "Comparison cancelled")),
-                }
+                produce.await
             });
             let result = task
                 .await
@@ -101,6 +103,7 @@ impl Service {
                 close_readers(&cleanup).await;
             }
             service.finish(&id_owned, generation, result).await;
+            let _ = events.await;
         });
         let mut sessions = self.sessions();
         if let Some(session) = sessions
@@ -266,7 +269,7 @@ impl Drop for Service {
     }
 }
 
-async fn wait_cancel(cancel: &AtomicBool) {
+pub(super) async fn wait_cancel(cancel: &AtomicBool) {
     while !cancel.load(Ordering::Relaxed) {
         tokio::time::sleep(Duration::from_millis(25)).await;
     }

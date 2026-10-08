@@ -171,3 +171,11 @@ async fn the_tauri_forwarder_delivers_every_legacy_event_to_listeners() {
         app.unlisten(listener);
     }
 }
+
+#[test]
+fn comparison_progress_maps_to_the_required_frontend_event() {
+    let payload = serde_json::json!({"id":"comparison-1", "generation":2, "sequence":500, "state":"enriching"});
+    let event = CoreEvent::CompareProgress(EventPayload::new(&payload).unwrap());
+    assert_eq!(frontend_event(&event).unwrap().0, "compare-progress");
+    assert_eq!(serde_json::to_value(&event).unwrap()["payload"], payload);
+}

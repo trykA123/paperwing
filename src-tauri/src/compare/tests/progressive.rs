@@ -130,6 +130,7 @@ async fn inventory_and_selected_content_are_ready_before_deferred_enrichment() {
         listed: Default::default(),
         release: Default::default(),
         panic: false,
+        after_fixed: false,
     });
     *service.enrichment_control.lock().unwrap() = Some(control.clone());
     let opened = service
@@ -187,6 +188,7 @@ async fn inventory_and_selected_content_are_ready_before_deferred_enrichment() {
         .err()
         .unwrap()
         .contains("finishes checking"));
+    let held_producer_slots = service.slots.acquire_many(3).await.unwrap();
     let content = service
         .selected_content(&settings, &opened.id, started.generation, &row.id, "right")
         .await
@@ -200,6 +202,7 @@ async fn inventory_and_selected_content_are_ready_before_deferred_enrichment() {
             .state,
         State::Enriching
     );
+    drop(held_producer_slots);
     control.release.notify_one();
     service.wait(&opened.id, started.generation).await.unwrap();
     println!(

@@ -9,6 +9,8 @@ use std::sync::{
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 
+mod flight;
+mod progress_events;
 mod classification;
 mod listing;
 mod ordered_commit;
@@ -934,8 +936,11 @@ impl Service {
         let _span = crate::benchmark::Span::new("compare.prepare", "other");
         let (mut left, mut right, job) = self.resolve_comparison(contexts, job).await?;
         self.transition(id, generation, State::Listing);
-        left.files = inventory(&left, &job).await.map_err(|problem| problem.side("left"))?;
-        right.files = inventory(&right, &job).await.map_err(|problem| problem.side("right"))?;
+        {
+            let _flight = flight::acquire(&job, false, 16 * 1024 * 1024).await?;
+            left.files = inventory(&left, &job).await.map_err(|problem| problem.side("left"))?;
+            right.files = inventory(&right, &job).await.map_err(|problem| problem.side("right"))?;
+        }
         let paths: BTreeSet<_> = left.files.keys().chain(right.files.keys()).cloned().collect();
         let over_limit = paths.len() > FILE_LIMIT;
         if over_limit {
@@ -943,9 +948,9 @@ impl Service {
             return Err(Problem::new("limitExceeded", "Comparison exceeds inventory limit"));
         }
         let listed = Arc::new(listing::Listed::new(left, right, paths));
-        self.publish_inventory((id, generation), listed.clone())?;
+        self.publish_inventory((id, generation), listed.clone()).await?;
         #[cfg(test)]
-        self.defer_enrichment(&job).await?;
+        self.defer_enrichment(&job, false).await?;
         let metadata = git::enrichment(diff_metadata(&listed.left, &listed.right, &job)).await?;
         let classifier = classification::Classifier { left: &listed.left, right: &listed.right,
             metadata: &metadata, options: &options, job: &job };
@@ -1276,7 +1281,9 @@ pub async fn comparison_content(
         service.remote_snapshot(&saved(&app)?, &id, generation).await?;
         return Ok(content);
     }
-    service.selected_content(&settings, &id, generation, &file_id, &side).await
+    let result = service.selected_content(&settings, &id, generation, &file_id, &side).await?;
+    service.available(&saved(&app)?, &id, generation)?;
+    Ok(result)
 }
 
 #[tauri::command]

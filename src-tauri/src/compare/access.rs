@@ -111,6 +111,7 @@ impl Service {
             .files
             .get(path)
             .ok_or_else(|| Problem::new("unavailable", "File absent on selected side"))?;
+        let _flight = flight::acquire(&job, false, 4 * 1024 * 1024).await?;
         let bytes = content(resolved, path, entry, &job).await?;
         job.check()?;
         self.available(settings, id, generation)?;

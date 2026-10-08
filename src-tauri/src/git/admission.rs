@@ -140,6 +140,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn enrichment_never_takes_the_last_free_runner_slot() {
+        let admission = Admission::default();
+        let mut held = Vec::new();
+        for _ in 0..31 {
+            held.push(admission.acquire(Class::Interactive).await);
+        }
+        let mut queued = Box::pin(admission.acquire(Class::Enrichment));
+        assert!(futures_util::poll!(&mut queued).is_pending());
+        let last = admission.acquire(Class::Interactive).await;
+        held.pop();
+        assert!(futures_util::poll!(&mut queued).is_pending());
+        held.pop();
+        let enrichment = queued.await;
+        assert_eq!(admission.counts().active, 31);
+        drop(enrichment);
+        drop(last);
+        drop(held);
+        assert!(admission.idle());
+    }
+
+    #[tokio::test]
     async fn queued_interactive_work_passes_queued_enrichment_and_dropped_waiters_release() {
         let admission = Arc::new(Admission::default());
         let mut held = Vec::new();

@@ -89,12 +89,14 @@ pub(super) async fn commit(
         let mut row = ordered.bases[index].clone();
         if classifier.fixed(&mut row) || (folder(&row) && ordered.remaining[index] == 0) {
             let updates = ordered.commit(index, row);
-            service.publish_final(identity, updates)?;
+            service.publish_final(identity, updates).await?;
         }
         if index % progressive::PAGE_ROWS == 0 {
             tokio::task::yield_now().await;
         }
     }
+    #[cfg(test)]
+    service.defer_enrichment(classifier.job, true).await?;
     let mut used = 0;
     for index in 0..ordered.bases.len() {
         if ordered.final_rows[index].is_some() || folder(&ordered.bases[index]) {
@@ -104,7 +106,7 @@ pub(super) async fn commit(
             .commit(ordered.bases[index].clone(), &mut used)
             .await?;
         let updates = ordered.commit(index, row);
-        service.publish_final(identity, updates)?;
+        service.publish_final(identity, updates).await?;
         tokio::task::yield_now().await;
     }
     ordered

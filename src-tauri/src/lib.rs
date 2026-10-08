@@ -162,6 +162,8 @@ pub fn run() {
         .expect("error while building Skein")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                let closing = app.state::<compare::Service>().release_sessions();
+                tauri::async_runtime::block_on(closing);
                 app.state::<std::sync::Arc<watch::Service>>().stop_all();
                 app.state::<store::Store>().mark_clean();
             }

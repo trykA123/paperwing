@@ -63,6 +63,8 @@ mod cold_measure;
 mod cold_path;
 mod equivalence;
 mod progressive;
+mod progressive_lifecycle;
+mod progressive_scale;
 mod legacy;
 #[cfg(target_os = "linux")]
 mod metadata_limits;
