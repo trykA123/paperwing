@@ -1,6 +1,6 @@
 # 18 — Progressive comparison: contract and UX
 
-Status: ready (packet 17 phase 1 is on main). Design only; gates 19 and 20.
+Status: done. Contract ratified 2026-10-08: `docs/progressive-comparison-contract.md`. Delete this packet when 19 starts.
 Platform: neutral contract; measured on Windows first
 Size: S
 Role: orchestrator with reviewer (documentation only, no product code)
