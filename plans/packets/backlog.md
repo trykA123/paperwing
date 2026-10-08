@@ -21,7 +21,6 @@ Moved out: branch cleanup and set search are in 39.
 - A match limit selector (default caps are 200 per repo, 2000 overall).
 
 ## Test stability
-- `git::process_tests::linux_post_spawn_capture_failure_retains_registration_and_permits_until_reap` flakes under parallel load (CI run 37573417043, passed on rerun). Make the process tests take `TEST_RUNNER_LOCK` or wait for runner idleness.
 
 ## Packet 44 follow-ups (pass 2 review, 2026-10-08)
 - Shell cleanup: delete the dead right-panel CSS (`.item-details`, `.set-summary`, `.tree-*` rules in `workflow-overrides.css` and `workspace.css`) and rename the drawer `history-*` classes to `details-*` (update `ui-26`, `ui-33` and `ui-44` selectors with them).

@@ -57,10 +57,14 @@ descendants = json.loads(os.read(read_fd, 4096))
 os.close(read_fd)
 processes = [identity(os.getpid()), *descendants]
 output = root / 'pids.json'
-with output.open('x') as file:
+staged = root / 'pids.json.tmp'
+with staged.open('x') as file:
     json.dump({'processes': processes, 'mode': mode}, file)
     file.flush()
     os.fsync(file.fileno())
+if output.exists():
+    raise FileExistsError(output)
+os.replace(staged, output)
 if mode == 'mutation':
     (root / 'mutation-completed').write_text('completed\n')
 print('fixture-ready', flush=True)
