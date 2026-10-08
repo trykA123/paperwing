@@ -6,6 +6,9 @@ import { buildRows, ROW_ADDED, ROW_CHANGED, ROW_GAP, ROW_REMOVED, type Rows } fr
 
 const ROW_HEIGHT = 20, OVERSCAN = 10, CLIP = 4000, NUMBER_PX = 56, PAD_PX = 16, BAR_PX = 14;
 const trimmed = (line: string) => line.trim();
+const SIDE_CLASSES: Record<number, readonly [string, string]> = {
+  [ROW_REMOVED]: ['is-removed', 'is-void is-gap-err'], [ROW_ADDED]: ['is-void is-gap-ok', 'is-added'], [ROW_CHANGED]: ['is-changed', 'is-changed'],
+};
 
 function element(tag: string, className: string, text = ''): HTMLElement {
   const node = document.createElement(tag);
@@ -127,9 +130,10 @@ class ViewerEditor implements CompareEditor {
       row.append(cell);
       return row;
     }
+    const [leftClass, rightClass] = SIDE_CLASSES[k] ?? ['', ''];
     row.append(
-      this.cell(removed ? 'is-removed' : added && k !== ROW_CHANGED ? 'is-void' : '', a, a >= 0 ? clip(this.lines.left[a]!) : ''),
-      this.cell(added ? 'is-added' : removed ? 'is-void' : '', b, b >= 0 ? clip(this.lines.right[b]!) : ''),
+      this.cell(leftClass, a, a >= 0 ? clip(this.lines.left[a]!) : ''),
+      this.cell(rightClass, b, b >= 0 ? clip(this.lines.right[b]!) : ''),
     );
     return row;
   }

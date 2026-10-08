@@ -3,9 +3,10 @@ import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 
-// !important: @codemirror/merge sets its own text and gutter colours with higher specificity.
-const removedText = 'color-mix(in oklch, var(--err) 26%, transparent) !important';
-const addedText = 'color-mix(in oklch, var(--ok) 30%, transparent) !important';
+const changedText = 'color-mix(in oklch, var(--tone) 30%, transparent) !important';
+const gapStripe = 'repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in oklch, var(--tone) 28%, transparent) 6px 7px)';
+const gapBar = 'repeating-linear-gradient(180deg, var(--tone) 0 4px, transparent 4px 7px)';
+const bar = { content: '""', position: 'absolute', left: '0', top: '0', bottom: '0', width: '3px', background: 'var(--tone)' };
 
 const theme = EditorView.theme({
   '&': { backgroundColor: 'var(--editor)', color: 'var(--text)', fontSize: '13px' },
@@ -19,13 +20,27 @@ const theme = EditorView.theme({
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { backgroundColor: 'var(--accs)' },
   '.cm-selectionMatch': { backgroundColor: 'var(--hl-soft)' },
   '&.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--soft)', outline: '1px solid var(--line-ctl)' },
-  '.cm-changedLine, .cm-insertedLine, .cm-inlineChangedLine': { backgroundColor: 'var(--ok-bg)' },
-  '&.cm-merge-a .cm-changedLine, .cm-deletedChunk, .cm-deletedLine': { backgroundColor: 'var(--err-bg)' },
-  '.cm-changedText, .cm-insertedText': { background: addedText },
-  '&.cm-merge-a .cm-changedText, .cm-deletedChunk .cm-deletedText': { background: removedText },
-  '.cm-changedText, .cm-changedText *, .cm-deletedText, .cm-deletedText *, .cm-insertedText, .cm-insertedText *': { color: 'var(--text)' },
-  '.cm-changedLineGutter, .cm-insertedLineGutter, .cm-inlineChangedLineGutter': { background: 'var(--ok) !important' },
-  '&.cm-merge-a .cm-changedLineGutter, .cm-deletedLineGutter': { background: 'var(--err) !important' },
+  '&.cm-merge-a .cm-changedLine, &.cm-merge-b .cm-changedLine, .cm-inlineChangedLine, .cm-deletedChunk': { backgroundColor: 'transparent' },
+  '.cm-mk-add': { '--tone': 'var(--ok)', '--tt': 'var(--ok-text)' },
+  '.cm-mk-rem, .cm-deletedChunk': { '--tone': 'var(--err)', '--tt': 'var(--err-text)' },
+  '.cm-mk-chg, .cm-deletedChunk[data-mk="chg"]': { '--tone': 'var(--warn)', '--tt': 'var(--warn-text)' },
+  '.cm-deletedChunk[data-mk="rem"] .cm-deletedText': { background: 'none !important' },
+  '.cm-line.cm-mk, .cm-deletedChunk': { position: 'relative' },
+  '.cm-line.cm-mk::before, .cm-deletedChunk::before': bar,
+  '.cm-mk-first::before': { borderTopRightRadius: '3px' },
+  '.cm-mk-last::before': { borderBottomRightRadius: '3px' },
+  '.cm-changedText, .cm-deletedChunk .cm-deletedText': { background: changedText },
+  '.cm-mk-add .cm-changedText, .cm-mk-rem .cm-changedText': { background: 'none !important' },
+  '.cm-changedText, .cm-changedText *, .cm-deletedText, .cm-deletedText *': { color: 'var(--text)' },
+  '.cm-mk-glyphs': { display: 'block' },
+  '.cm-mk-glyph': { display: 'block', height: '20px', lineHeight: '20px' },
+  '.cm-markGutter .cm-gutterElement': { width: '16px', padding: '0', textAlign: 'center', fontWeight: '700', color: 'var(--tt)' },
+  '.cm-gutterElement.cm-mk-cur': { backgroundColor: 'var(--accs)' },
+  '.cm-mergeSpacer': { position: 'relative', '--tone': 'var(--line-ctl)', backgroundImage: gapStripe },
+  '.cm-mergeSpacer::before': { ...bar, background: gapBar },
+  '.cm-mergeSpacer[data-mk="add"]': { '--tone': 'var(--ok)' },
+  '.cm-mergeSpacer[data-mk="rem"]': { '--tone': 'var(--err)' },
+  '.cm-mergeSpacer[data-mk="chg"]': { '--tone': 'var(--warn)' },
   '.cm-collapsedLines': { background: 'var(--soft)', color: 'var(--dim)', fontFamily: 'var(--font)', fontSize: '12px', padding: '2px 10px' },
   '.cm-panels': { backgroundColor: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)', fontFamily: 'var(--font)' },
   '.cm-search label': { fontSize: '12px' },

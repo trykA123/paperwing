@@ -38,7 +38,7 @@
   const files = [{ id: 'f0', path, left: entry('file', 'commitBlob'), right: entry('file', 'workingTree'), rawStatus: 'different', displayStatus: 'different',
     rawLines: { added: 4, removed: 2 }, displayLines: { added: 4, removed: 2 }, binary: false, rename: null, reason: null }];
   const base = window.__TAURI_INTERNALS__.invoke;
-  window.__saved = [];
+  window.__fileSaves = [];
   window.__bytes = sides;
   window.__TAURI_INTERNALS__.invoke = async (command, args = {}) => {
     if (command === 'comparison_open' && window.__FX.bothWorking) return base(command, { ...args, left: args.right });
@@ -47,7 +47,7 @@
     if (command === 'comparison_content') return sides[args.side].buffer.slice(0);
     if (command === 'file_edit_open') return { ticket: `ticket-${args.side}`, bytes: Array.from(sides[args.side]), exists: true };
     if (command === 'file_edit_close') return true;
-    if (command === 'file_save') { window.__saved.push({ ticket: args.ticket, bytes: Array.from(args.bytes) }); return { id: `record-${window.__saved.length}`, root: 'C:\\Dev\\repos', path, existed: true, stage: 'applied', createdAt: Date.now(), warning: null }; }
+    if (command === 'file_save') { window.__fileSaves.push({ ticket: args.ticket, bytes: Array.from(args.bytes) }); return { id: `record-${window.__fileSaves.length}`, root: 'C:\\Dev\\repos', path, existed: true, stage: 'applied', createdAt: Date.now(), warning: null }; }
     return base(command, args);
   };
   window.__openTiming = {};

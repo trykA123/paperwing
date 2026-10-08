@@ -3,6 +3,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openFolderCompare } from './open-compare.mjs';
 
 const [url, shots, theme = 'light', width = '1440'] = process.argv.slice(2);
 const { chromium } = await import(`${process.env.PLAYWRIGHT_DIR}/index.mjs`);
@@ -18,16 +19,13 @@ const FILES = ['ecu.arxml', 'config.m4', 'powertrain.a2l', 'body.dbc', 'node.can
 async function open(file, extra = {}) {
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: theme })).newPage();
   page.on('pageerror', error => { console.log('PAGE ERROR', error.message); process.exitCode = 1; });
-  await page.addInitScript(`window.__AUDIT=${JSON.stringify({ theme, platform: 'windows' })};window.__FX=${JSON.stringify({ file, ...extra })};`);
+  await page.addInitScript(`window.__AUDIT=${JSON.stringify({ theme, platform: 'windows', bigSet: true })};window.__FX=${JSON.stringify({ file, ...extra })};`);
   await page.addInitScript(mock);
   await page.addInitScript(fixtures);
   await page.goto(url);
   await page.waitForTimeout(5500);
   await page.reload();
-  await page.waitForSelector('.fm-row[data-id]');
-  await page.locator('.fm-row[data-id] input[type=checkbox]').nth(1).check({ force: true });
-  await page.click('.rail-btn[aria-label^="Compare"]');
-  await page.click('text=Compare repository refs');
+  await openFolderCompare(page);
   await page.getByText(file, { exact: true }).first().dblclick();
   await page.waitForSelector('.editor-host .cm-line', { timeout: 60000 });
   await page.setViewportSize({ width: Number(width), height: 900 });
