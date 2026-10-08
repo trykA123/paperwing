@@ -125,6 +125,13 @@ pub fn run() {
                 tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
                     .data_directory(webview).build()?;
             }
+            #[cfg(not(test))]
+            {
+                let temp_root = app.path().app_data_dir()?.join("temp");
+                let _ = std::fs::create_dir_all(&temp_root);
+                commit::sweep_stale_temp_dirs(&temp_root);
+                commit::configure_temp_root(temp_root);
+            }
             events::install(app.handle());
             let store = store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok());
             providers::install(app.handle(), store.clone());

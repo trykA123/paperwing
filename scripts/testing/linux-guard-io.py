@@ -7,7 +7,7 @@ import sys
 root = Path(sys.argv[1])
 binary = Path(sys.argv[2])
 assert root.is_absolute() and root.resolve() == root
-assert root.joinpath('.paperwing-guard-fixture').read_text() == 'paperwing-guard-fixture-v1\n'
+assert root.joinpath('.skein-guard-fixture').read_text() == 'skein-guard-fixture-v1\n'
 assert root.stat().st_uid == os.getuid() and root.stat().st_mode & 0o777 == 0o700
 assert os.readlink('/proc/self/ns/mnt') != sys.argv[3]
 mount = root / 'namespace-mount'

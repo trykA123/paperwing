@@ -162,15 +162,15 @@ pub(super) fn produce() {
     .unwrap();
     let path = PathBuf::from(crate::env_names::var("SKEIN_PARENT_COMPAT_FIXTURE").unwrap());
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../.skillify/evidence/paperwing/14/a2/compatibility/fixtures")
+        .join("../.skillify/evidence/skein/14/a2/compatibility/fixtures")
         .canonicalize()
         .unwrap();
     assert!(path.is_absolute() && path.parent().unwrap() == base && !path.exists());
     std::fs::create_dir(&path).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::write(
-        path.join(".paperwing-parent-compatibility-fixture"),
-        b"paperwing-parent-compatibility-v1\n",
+        path.join(".skein-parent-compatibility-fixture"),
+        b"skein-parent-compatibility-v1\n",
     )
     .unwrap();
     for name in ["repo", "repo/.git", "data"] {
@@ -293,7 +293,7 @@ pub(super) fn produce() {
         .unwrap();
     }
     let manifest = Manifest {
-        schema: "paperwing-parent-compatibility".into(),
+        schema: "skein-parent-compatibility".into(),
         version: 1,
         fixture: path.clone(),
         root: path.join("repo"),

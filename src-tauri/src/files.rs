@@ -1,12 +1,14 @@
 #![cfg(windows)]
 
 mod copy;
+mod discard;
 mod journal;
 mod tickets;
 
 pub use copy::{CopyOutcome, CopyPreview, CopyPreviewFile};
 pub use journal::{contents, locked_file, Journal, Record};
 pub use tickets::Service;
+pub(crate) use discard::discard_restore;
 pub(crate) use journal::identity;
 
 use crate::file_guard::PinnedPath;

@@ -1,6 +1,6 @@
 {
   "productName": "Skein Testing",
-  "identifier": "dev.paperwing.testing",
+  "identifier": "dev.skein.testing",
   "build": {
     "beforeBuildCommand": "VITE_SKEIN_BENCHMARK_FIXTURE=1 bun run --bun build"
   },

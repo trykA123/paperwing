@@ -11,7 +11,7 @@
   import { openSides } from '../lib/compare-sides';
   import { fileSignature } from '../lib/file-signature';
   import { reopenSide } from '../lib/side-tickets';
-  import { languageId } from '../lib/languages';
+  import { languageLabel, resolveLanguage, extensionOf } from '../lib/languages';
   import { verifyReadonly } from '../lib/readonly-benchmark';
   import type { TextFormat } from '../lib/text-format';
   import Toolbar from './file-compare/Toolbar.svelte';
@@ -25,6 +25,7 @@
   let inline = $state(false), hideSame = $state(false), ignoreWhitespace = $state(false);
   let dirty = $state([false, false]), hunkIndex = $state(-1), changeCount = $state(0), computing = $state(true);
   let formats = $state<TextFormat[]>([]);
+  let sniffed = $state(''), override = $state<string | null>(null);
   let tickets = $state<(EditFile | null)[]>([]);
   let readOnlyReasons = $state<(string | null)[]>([]);
   let undoIds = $state<string[]>([]);
@@ -40,7 +41,16 @@
   const writable = $derived([snapshot?.left.endpoint, snapshot?.right.endpoint].map(endpoint => app.platform.platform !== 'linux' || !!endpoint && app.endpointCapability(endpoint, 'edit').supported));
   const canCopyLeft = $derived(!stale && !busy && !computing && !!tickets[0] && writable[0] && !!file?.right && changeCount > 0);
   const canCopyRight = $derived(!stale && !busy && !computing && !!tickets[1] && writable[1] && !!file?.left && changeCount > 0);
+  const extension = $derived(extensionOf(view.path));
+  const language = $derived(override ?? resolveLanguage(view.path, app.ws.languageMap, sniffed));
+  const remembered = $derived(!!extension && !!app.ws.languageMap?.[extension]);
   const editorCommands = $derived(commands());
+  function rememberLanguage(id: string | null) {
+    const map = { ...app.ws.languageMap };
+    if (id) map[extension] = id; else delete map[extension];
+    app.ws.languageMap = map; override = null;
+  }
+  function pickLanguage(id: string) { if (remembered) rememberLanguage(id); else override = id; }
   function command(id: string) { return editorCommands.find(command => command.id === id)!; }
   $effect(() => {
     const tabIdentity = identity;
@@ -134,10 +144,11 @@
       const finishImport = benchmarkTimer('editor.import');
       await loadEngine(opening.kind);
       finishImport();
+      sniffed = (opening.contents[0]!.format.text || opening.contents[1]!.format.text).slice(0, 2000);
       const finishConstruct = benchmarkTimer('editor.construct');
       const finishDiff = benchmarkTimer('editor.diff');
       const created = await createCompareEditor({ host, kind: opening.kind, left: opening.contents[0]!, right: opening.contents[1]!,
-        settings: { layout: inline ? 'inline' : 'sideBySide', theme: currentTheme(), language: languageId(path), hideUnchanged: hideSame, ignoreWhitespace,
+        settings: { layout: inline ? 'inline' : 'sideBySide', theme: currentTheme(), language, hideUnchanged: hideSame, ignoreWhitespace,
           readOnly: { left: !tickets[0], right: !tickets[1] }, locked: false } });
       if (disposed || current !== revision) { created.dispose(); return; }
       handles.push(created);
@@ -164,7 +175,7 @@
   });
   $effect(() => {
     if (!editor) return;
-    void editor.configure({ layout: inline ? 'inline' : 'sideBySide', hideUnchanged: hideSame, ignoreWhitespace,
+    void editor.configure({ language, layout: inline ? 'inline' : 'sideBySide', hideUnchanged: hideSame, ignoreWhitespace,
       readOnly: { left: !tickets[0], right: !tickets[1] }, locked: busy }).catch(reason => { error = String(reason); });
     if (active) requestAnimationFrame(() => editor?.layout());
   });
@@ -179,7 +190,9 @@
 
 <section class="file-compare">
   <Toolbar path={view.path} count={changeCount ? `${Math.max(1, hunkIndex + 1)} / ${changeCount}` : computing ? 'Computing' : 'Identical'}
-    previous={command('difference-previous')} next={command('difference-next')} bind:inline bind:hideSame bind:ignoreWhitespace onexecute={execute} />
+    previous={command('difference-previous')} next={command('difference-next')} bind:inline bind:hideSame bind:ignoreWhitespace onexecute={execute}
+    language={{ id: language, label: languageLabel(view.path, language), extension, remembered, enabled: editor?.capabilities.highlight !== false }}
+    onlanguage={pickLanguage} onremember={on => rememberLanguage(on ? language : null)} />
   {#if snapshot}<Endpoints endpoints={[snapshot.left.endpoint, snapshot.right.endpoint]} {tickets} {formats} {dirty} reasons={readOnlyReasons}
     saveCommands={[command('editor-save-left'), command('editor-save-right')]} onexecute={execute} />{/if}
   {#if stale}<p class="compare-message warn">Comparison changed. Reopen this file from the folder comparison.</p>{/if}

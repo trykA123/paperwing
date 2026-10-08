@@ -6,7 +6,6 @@
 
 **A desktop workspace for Git repository sets, local comparison, and reviewed changes.**
 
-<img src="docs/paperwing-tour.svg" alt="Animated tour with sample repositories: browse an organization, build a set, pick a branch, tag or commit per repository, clone in parallel, use the right-click menu, review and commit changes side by side, branch into a new folder, compare folders, and confirm destructive actions" width="100%" />
 
 </div>
 
@@ -18,10 +17,8 @@ Use the same repository in several folders when you need separate checkouts.
 Skein remembers each folder and reference, so tomorrow starts with a workspace,
 not another round of "which terminal was that?"
 
-Skein was previously named PaperWing, and before that Flock. When the new settings file is absent, the app
-attempts to copy settings from `%APPDATA%\dev.flock.app\`. Token lookup also supports
-the old Credential Manager service `flock`. The published v0.1.0 installers retain
-their original Flock branding; new builds use Skein.
+Skein uses its own app identifier and credential service. Configure settings and
+re-enter tokens; settings and credentials from earlier names are not imported.
 
 ---
 
@@ -513,7 +510,7 @@ before releasing runner resources. Detached helpers are outside that boundary; s
 [durable Linux recovery](docs/linux-recovery.md) supply the Linux file service. Folder
 workflows still need packet15. The accepted
 [Linux write contract](docs/linux-write-contract.md) records concurrent-writer race limits.
-See [implementation status](docs/implementation-status.md) and [isolated testing](docs/testing.md).
+See [isolated testing](docs/testing.md) and the [plans](plans/README.md).
 
 ### Check a source change
 
@@ -549,16 +546,14 @@ valid, Skein starts with defaults and retains the broken main file as `settings.
 
 | What | Where |
 |---|---|
-| Sets, favorites, options | `%APPDATA%\dev.paperwing.app\settings.json` |
-| Cached repo lists | App cache directory, normally `%LOCALAPPDATA%\dev.paperwing.app\repos-<source-id>.json` |
-| Filesystem recovery records and backup bytes | `%APPDATA%\dev.paperwing.app\recovery-v2\` |
-| Tokens | Windows Credential Manager or Linux Secret Service, service `paperwing`, keyed by source ID |
+| Sets, favorites, options | `%APPDATA%\dev.skein.app\settings.json` |
+| Cached repo lists | App cache directory, normally `%LOCALAPPDATA%\dev.skein.app\repos-<source-id>.json` |
+| Filesystem recovery records and backup bytes | `%APPDATA%\dev.skein.app\recovery-v2\` |
+| Tokens | Windows Credential Manager or Linux Secret Service, service `skein`, keyed by source ID |
 | Cloned repositories | Your configured destination root and path layout |
 
 Settings save automatically after changes. Theme and font choices belong to workspace settings;
 some dialog preferences also use WebView local storage. Comparison results and Activity are transient.
-The Flock migration copies legacy settings only when the new settings file is absent.
-Windows token lookup also supports the legacy `flock` service and attempts to copy tokens into `paperwing`.
 Builds with a different Tauri identifier use different app storage locations.
 
 ---

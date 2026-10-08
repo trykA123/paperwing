@@ -45,8 +45,8 @@ fn encoded_metadata_bound_accommodates_supported_decimal_attribute_bytes() {
 pub(super) fn persist_checkpoint(phase: &str, id: &str) {
     let path = std::path::PathBuf::from(crate::env_names::var_os("SKEIN_JOURNAL_FIXTURE").unwrap());
     assert_eq!(
-        std::fs::read(path.join(".paperwing-journal-fixture")).unwrap(),
-        b"paperwing-journal-fixture-v1\n"
+        std::fs::read(path.join(".skein-journal-fixture")).unwrap(),
+        b"skein-journal-fixture-v1\n"
     );
     let file = std::fs::File::create(path.join("checkpoint")).unwrap();
     use std::io::Write;
@@ -67,7 +67,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../.skillify/evidence/paperwing/13/repair-1/native")
+            .join("../.skillify/evidence/skein/13/repair-1/native")
             .join(format!(
                 "fixture-{}-{}",
                 std::process::id(),
@@ -77,8 +77,8 @@ impl Fixture {
         std::fs::create_dir(&path).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
         std::fs::write(
-            path.join(".paperwing-journal-fixture"),
-            b"paperwing-journal-fixture-v1\n",
+            path.join(".skein-journal-fixture"),
+            b"skein-journal-fixture-v1\n",
         )
         .unwrap();
         for directory in ["repo", "repo/.git", "data"] {
@@ -698,15 +698,15 @@ fn cleanup_refuses_unknown_entries_substituted_artifacts_and_changed_bytes() {
 fn validated_child_fixture() -> Fixture {
     let path = std::path::PathBuf::from(crate::env_names::var_os("SKEIN_JOURNAL_FIXTURE").unwrap());
     let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../.skillify/evidence/paperwing/13/repair-1/native")
+        .join("../.skillify/evidence/skein/13/repair-1/native")
         .canonicalize()
         .unwrap();
     assert!(path.is_absolute());
     assert_eq!(path.canonicalize().unwrap(), path);
     assert!(path.starts_with(&base));
     assert_eq!(
-        std::fs::read(path.join(".paperwing-journal-fixture")).unwrap(),
-        b"paperwing-journal-fixture-v1\n"
+        std::fs::read(path.join(".skein-journal-fixture")).unwrap(),
+        b"skein-journal-fixture-v1\n"
     );
     assert_eq!(
         std::fs::read(path.join("outside")).unwrap(),
@@ -889,9 +889,7 @@ impl OwnedChild {
             .env("SKEIN_JOURNAL_FIXTURE", &fixture.path)
             .env("SKEIN_JOURNAL_CHILD_MODE", mode)
             .env_remove("SKEIN_JOURNAL_KILL_PHASE")
-            .env_remove("PAPERWING_JOURNAL_KILL_PHASE")
             .env_remove("SKEIN_JOURNAL_RECORD")
-            .env_remove("PAPERWING_JOURNAL_RECORD")
             .stdout(std::fs::File::create(fixture.path.join("child-stdout.log"))?)
             .stderr(std::fs::File::create(fixture.path.join("child-stderr.log"))?);
         if let Some(phase) = phase {
@@ -1134,7 +1132,7 @@ fn actual_sigkill_publication_restart_matrix_retains_identity_proofs_stages_and_
         matrix.push(serde_json::json!({"phase":phase,"fixture":fixture.path,"record":id,"classified":stage,"beforeHash":hash(b"before"),"restoredHash":hash(restored.bytes().unwrap()),"sentinelHash":hash(b"outside-sentinel"),"processReaped":true,"powerLoss":false}));
     }
     let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../.skillify/evidence/paperwing/13/repair-1");
+        .join("../.skillify/evidence/skein/13/repair-1");
     std::fs::write(
         base.join("sigkill-publication.json"),
         serde_json::to_vec_pretty(&matrix).unwrap(),
@@ -1197,7 +1195,7 @@ fn actual_sigkill_reverse_and_created_undo_resume_with_forward_reader_available(
     }
     std::fs::write(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../.skillify/evidence/paperwing/13/repair-1/sigkill-undo.json"),
+            .join("../.skillify/evidence/skein/13/repair-1/sigkill-undo.json"),
         serde_json::to_vec_pretty(&matrix).unwrap(),
     )
     .unwrap();
@@ -1236,7 +1234,7 @@ fn actual_sigkill_cleanup_resumes_through_empty_directory_and_final_manifest_del
     }
     std::fs::write(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../.skillify/evidence/paperwing/13/repair-1/sigkill-cleanup.json"),
+            .join("../.skillify/evidence/skein/13/repair-1/sigkill-cleanup.json"),
         serde_json::to_vec_pretty(&matrix).unwrap(),
     )
     .unwrap();
@@ -1562,7 +1560,7 @@ fn actual_sigkill_stacked_undo_resumes_only_with_exact_persisted_provenance() {
     }
     std::fs::write(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../.skillify/evidence/paperwing/13/repair-1/sigkill-stack.json"),
+            .join("../.skillify/evidence/skein/13/repair-1/sigkill-stack.json"),
         serde_json::to_vec_pretty(&matrix).unwrap(),
     )
     .unwrap();
@@ -1576,7 +1574,7 @@ fn isolated_native_journal_full_readonly_and_cross_device_failures_preserve_sour
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
 assert root.is_absolute() and root.resolve()==root
-assert (root/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-fixture-v1\n'
+assert (root/'.skein-journal-fixture').read_bytes()==b'skein-journal-fixture-v1\n'
 assert os.readlink('/proc/self/ns/mnt')!=original
 mount=root/'namespace-mount'
 subprocess.run(['mount','-t','tmpfs','-o','size=64k,mode=700','tmpfs',str(mount)],check=True,timeout=10)
@@ -1832,7 +1830,7 @@ fn private_namespace_bind_alias_cannot_place_recovery_inside_the_physical_root()
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
 assert root.is_absolute() and root.resolve()==root
-assert (root/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-fixture-v1\n'
+assert (root/'.skein-journal-fixture').read_bytes()==b'skein-journal-fixture-v1\n'
 assert os.readlink('/proc/self/ns/mnt')!=original
 subprocess.run(['mount','--bind',str(root/'repo'),str(root/'namespace-alias')],check=True,timeout=10)
 env=os.environ.copy();env['SKEIN_JOURNAL_FIXTURE']=str(root);env['SKEIN_JOURNAL_CHILD_MODE']='insideBind'
@@ -1867,7 +1865,7 @@ fn private_namespace_nested_bind_alias_cannot_hide_recovery_root_ancestry() {
     let script = r#"import os,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]);exe=sys.argv[2];original=sys.argv[3]
 assert root.is_absolute() and root.resolve()==root
-assert (root/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-fixture-v1\n'
+assert (root/'.skein-journal-fixture').read_bytes()==b'skein-journal-fixture-v1\n'
 assert os.readlink('/proc/self/ns/mnt')!=original
 subprocess.run(['mount','--bind',str(root/'repo/nested-bind-data'),str(root/'namespace-alias')],check=True,timeout=10)
 env=os.environ.copy();env['SKEIN_JOURNAL_FIXTURE']=str(root);env['SKEIN_JOURNAL_CHILD_MODE']='nestedBind'
@@ -1973,14 +1971,14 @@ fn externally_owned_child_fault_probe(mode: &str) {
     let script = r#"import ctypes,json,os,pathlib,resource,signal,subprocess,sys,time
 fixture=pathlib.Path(sys.argv[1]);exe=sys.argv[2];mode=sys.argv[3]
 assert fixture.is_absolute() and fixture.resolve()==fixture
-assert (fixture/'.paperwing-journal-fixture').read_bytes()==b'paperwing-journal-fixture-v1\n'
+assert (fixture/'.skein-journal-fixture').read_bytes()==b'skein-journal-fixture-v1\n'
 assert '/repair-1/native/' in str(fixture)
 resource.setrlimit(resource.RLIMIT_CORE,(0,0))
 assert ctypes.CDLL(None,use_errno=True).prctl(36,1,0,0,0)==0
 env=os.environ.copy();env['SKEIN_JOURNAL_FIXTURE']=str(fixture);env['SKEIN_JOURNAL_CHILD_MODE']=mode
-env.pop('SKEIN_JOURNAL_KILL_PHASE',None);env.pop('PAPERWING_JOURNAL_KILL_PHASE',None)
+env.pop('SKEIN_JOURNAL_KILL_PHASE',None)
 if mode=='pidfdProbe':env['SKEIN_JOURNAL_PIDFD_FAIL']='1'
-else:env.pop('SKEIN_JOURNAL_PIDFD_FAIL',None);env.pop('PAPERWING_JOURNAL_PIDFD_FAIL',None)
+else:env.pop('SKEIN_JOURNAL_PIDFD_FAIL',None)
 with (fixture/'probe-stdout.log').open('wb') as stdout,(fixture/'probe-stderr.log').open('wb') as stderr:
  helper=subprocess.Popen([exe,'--exact','linux_journal::tests::native_child','--ignored','--nocapture','--test-threads=1'],env=env,stdout=stdout,stderr=stderr)
  helper_fd=None

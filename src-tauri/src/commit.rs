@@ -1,5 +1,20 @@
+#[cfg(test)]
+pub(crate) mod test_fixture;
+pub(crate) mod patch;
+pub(crate) mod snapshot;
+mod content;
+mod index;
+pub(crate) mod stage;
+mod discard;
+pub use snapshot::*;
+pub use stage::*;
+pub use discard::*;
+pub(crate) use content::sweep_stale_temp_dirs;
+#[cfg(not(test))]
+pub(crate) use content::configure_temp_root;
+
 use crate::git::repo_command::RepoGit;
-use crate::git::{execute_input, valid_ref, valid_root, Captured, OutputPolicy, Request};
+use crate::git::{execute_input_env, valid_ref, valid_root, Captured, OutputPolicy, Request};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -58,8 +73,13 @@ pub struct CommitResult {
 
 /// Runs git in `path` with literal pathspecs and without fsmonitor hooks; fails on any unexpected exit code.
 pub(crate) async fn run(path: &str, args: &[&str], context: &str, expected: &[i32], policy: OutputPolicy, input: Option<&[u8]>, timeout: Duration) -> Result<Captured, String> {
+    run_with_env(path, args, context, expected, policy, input, timeout, &[]).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_with_env(path: &str, args: &[&str], context: &str, expected: &[i32], policy: OutputPolicy, input: Option<&[u8]>, timeout: Duration, envs: &[(&str, &str)]) -> Result<Captured, String> {
     let argv = RepoGit::at(path).literal_pathspecs().argv(args);
-    let output = execute_input(Request { args: &argv, context, expected, policy, timeout }, input).await?;
+    let output = execute_input_env(Request { args: &argv, context, expected, policy, timeout }, input, envs).await?;
     if !output.code.is_some_and(|code| expected.contains(&code)) {
         return Err(output.last_error());
     }
@@ -229,17 +249,38 @@ pub async fn change_content(path: String, file: String, orig_path: Option<String
     crate::paths::relative(&file)?;
     if let Some(original) = &orig_path { crate::paths::relative(original)?; }
     let before = orig_path.as_deref().unwrap_or(&file);
-    let working = || async {
-        let (root, relative) = (path.clone(), file.clone());
-        let read = tauri::async_runtime::spawn_blocking(move || {
-            crate::paths::ReadRoot::new(std::path::Path::new(&root), Vec::new())?.read(&relative)
-        }).await.map_err(|_| "Could not read the file".to_string())??;
-        Ok::<_, String>(read.map(|bytes| bytes.bytes))
+    let staged_original = if area == "staged" {
+        blob(&path, &format!("HEAD:{before}")).await?
+    } else if area == "unstaged" {
+        blob(&path, &format!(":0:{file}")).await?
+    } else {
+        None
+    };
+    let working = {
+        let (root, relative, index_bytes) = (path.clone(), file.clone(), staged_original.clone());
+        async move {
+            let (r, rel) = (root.clone(), relative.clone());
+            let read = tauri::async_runtime::spawn_blocking(move || {
+                crate::paths::ReadRoot::new(std::path::Path::new(&r), Vec::new())?.read(&rel)
+            }).await.map_err(|_| "Could not read the file".to_string())??;
+            match read {
+                Some(bytes) => {
+                    if content::refuse_filters(&root, &relative).await.is_err() {
+                        return Ok::<_, String>(Some(bytes.bytes));
+                    }
+                    match content::clean(&root, &relative, &bytes.bytes, index_bytes.as_deref()).await {
+                        Ok(cleaned) => Ok(Some(cleaned)),
+                        Err(_) => Ok(Some(bytes.bytes)),
+                    }
+                }
+                None => Ok(None),
+            }
+        }
     };
     let (original, modified, original_label, modified_label) = match area.as_str() {
-        "staged" => (blob(&path, &format!("HEAD:{before}")).await?, blob(&path, &format!(":0:{file}")).await?, "HEAD", "Staged"),
-        "unstaged" => (blob(&path, &format!(":0:{file}")).await?, working().await?, "Staged", "Working tree"),
-        "untracked" => (None, working().await?, "New file", "Working tree"),
+        "staged" => (staged_original, blob(&path, &format!(":0:{file}")).await?, "HEAD", "Staged"),
+        "unstaged" => (staged_original, working.await?, "Staged", "Working tree"),
+        "untracked" => (None, working.await?, "New file", "Working tree"),
         _ => return Err("Unknown diff area".into()),
     };
     let (original, original_binary) = text_of(original);
