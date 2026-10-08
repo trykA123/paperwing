@@ -192,7 +192,7 @@ async fn external_status_stat_refresh_does_not_invalidate_stage() {
     let raw_index = std::fs::read(fixture.root.join(".git/index")).unwrap();
     fixture.write("other.txt", b"other\n");
     let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
-    std::fs::File::open(fixture.root.join("other.txt"))
+    std::fs::OpenOptions::new().write(true).open(fixture.root.join("other.txt"))
         .unwrap()
         .set_modified(later)
         .unwrap();
