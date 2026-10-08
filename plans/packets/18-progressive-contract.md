@@ -1,6 +1,6 @@
 # 18 — Progressive comparison: contract and UX
 
-Status: ready (packet 17 phase 1 is on main). Design only; gates 19 and 20.
+Status: contract written and reviewed (`docs/progressive-comparison-contract.md`, revision 2); waiting for the owner on its section 14. Gates 19 and 20.
 Platform: neutral contract; measured on Windows first
 Size: S
 Role: orchestrator with reviewer (documentation only, no product code)

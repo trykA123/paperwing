@@ -1,6 +1,6 @@
 # 19 — Progressive comparison backend
 
-Status: blocked by 18 (accepted contract)
+Status: blocked by the owner's answers to section 14 of `docs/progressive-comparison-contract.md` (packet 18)
 Platform: Windows first, Linux parity
 Size: L
 Role: api-builder (gpt-6.1-sol xhigh), one writer
@@ -14,6 +14,7 @@ The backend publishes the list of changed files as soon as it knows it, then fil
 - No budget module exists (`src-tauri/src/budget.rs` is absent). Packet 21 defines it; ratify it before this packet starts.
 
 ## Decisions
+- The contract is `docs/progressive-comparison-contract.md`. Implement its sections 4-7 and 9-10 exactly: the two-lane ordered commit (section 5), `PendingRow`/`RowUpdate`/`Progress`/`Totals`, `comparison_start`, `comparison_progress`, `CoreEvent::CompareProgress` mapped to `compare-progress`, write eligibility on final rows only, the interactive permit pool for `comparison_content`, and the producer supervisor. `comparison_refresh` runs the same producer and waits.
 - A new additive producer mode with generation-tagged batches. Names and types come from packet 18. Legacy commands return identical final output; progressive output converges to the same fingerprint.
 - Two admission classes in the runner: `interactive` (anything the user asked for directly: open a file, pick a ref, refresh, start a comparison) and `enrichment` (classification, counts, history). Interactive work never waits behind queued enrichment. Enrichment uses at most half the slots, never takes the last free slot, and yields between bounded batches. Packet 22 later adds a lower `speculative` class to the same owner.
 - Limits from the app budget: at most 32 MiB in flight per comparison and 64 MiB across all; batches of at most 500 rows or 1 MiB; progress events at most ten per second.
