@@ -2,6 +2,7 @@ import type { CompareEndpoint, PlatformInfo, RailSection, Workspace } from './ap
 import { cleanLanguageMap } from './languages';
 import { HOME_MODULE, isSection } from './modules';
 import { isRepoSection, type RepoSection } from './repo-sections';
+import { cleanScope } from './scope';
 
 export type View =
   | { kind: 'repos' }
@@ -64,6 +65,7 @@ export function migrateWorkspace(saved: Partial<Workspace> | null, platform: Pla
   if ((ws.shell.section as string) === 'sets') ws.shell.section = HOME_MODULE;
   if (!isSection(ws.shell.section)) ws.shell.section = HOME_MODULE;
   if (ws.shell.lastRepo && (typeof ws.shell.lastRepo.repoId !== 'string' || !isRepoSection(ws.shell.lastRepo.section))) delete ws.shell.lastRepo;
+  if (ws.shell.scope !== undefined) ws.shell.scope = cleanScope(ws.shell.scope);
   ws.shell.sidebarWidth = Math.round(Math.max(190, Math.min(360, ws.shell.sidebarWidth)));
   return ws;
 }

@@ -5,6 +5,8 @@ import { AUTO_LOAD_LIMIT, inQueue, matchesText, queueCounts, shouldAutoLoad, typ
 import { pullable, pullKey } from './pull-flow.svelte';
 import type { PullKey } from './pull-support';
 import { pulls } from './pulls.svelte';
+import { isRepoDisabled } from './source-status';
+import { scopeItems, scopeOf, takeUnrequested, unreadPaths } from './scope';
 import { app } from './state.svelte';
 
 export type PullRow = { item: SetItem; folder: string; key: PullKey; pull: PullRequest };
@@ -17,10 +19,26 @@ class PullQueue {
 
   armedFor = $state<string | null>(null);
 
+  mode = $derived(scopeOf(app.ws.shell, 'prs'));
+
+  armKey = $derived(this.mode === 'all' ? 'all' : app.set.id);
+
   hosts = $derived(providerHosts(PROVIDERS.find(provider => provider.id === 'github')!, app.sources));
 
-  /** The set's repositories, narrowed to the host a flyout pick chose. */
-  scoped = $derived(app.set.items.filter(item => !app.modules.host || hostOfRepoId(item.repoId, this.hosts) === app.modules.host));
+  /** The scope's repositories on enabled sources, narrowed to the host a flyout pick chose. */
+  scoped = $derived(scopeItems(this.mode, app.set, app.ws.sets, item => app.collisionKey(app.dest(item))).filter(item => !isRepoDisabled(item.repoId, app.sources)).filter(item => !app.modules.host || hostOfRepoId(item.repoId, this.hosts) === app.modules.host));
+
+  /** Folders of the scope whose status nothing has read yet, so their branch is unknown. */
+  unread = $derived(unreadPaths(this.scoped.map(item => app.dest(item)), app.local, app.statusFailures));
+
+  private requested = new Set<string>();
+  private requestedMode: string | null = null;
+
+  /** The unread folders not yet asked for; switching the scope starts over. */
+  claimUnread(): string[] {
+    if (this.requestedMode !== this.mode) { this.requested.clear(); this.requestedMode = this.mode; }
+    return takeUnrequested(this.unread, this.requested);
+  }
 
   keys = $derived(pullable(this.scoped).flatMap(item => pullKey(item) ?? []));
 
@@ -36,9 +54,9 @@ class PullQueue {
     && matchesText(this.query, [row.pull.title, `#${row.pull.number}`, row.pull.targetRepo, row.folder, row.key.branch])));
 
   /** Large sets wait for a click, because loading asks GitHub once per repository. */
-  needsClick = $derived(this.keys.length > AUTO_LOAD_LIMIT && this.armedFor !== app.set.id);
+  needsClick = $derived(this.keys.length > AUTO_LOAD_LIMIT && this.armedFor !== this.armKey);
 
-  autoLoad = $derived(shouldAutoLoad({ count: this.keys.length, armed: this.armedFor === app.set.id }));
+  autoLoad = $derived(shouldAutoLoad({ count: this.keys.length, armed: this.armedFor === this.armKey }));
 
   select(queue: QueueId) { this.queue = queue; this.page = 0; }
 
@@ -46,7 +64,7 @@ class PullQueue {
 
   /** The user asked for this set; later checkouts and clones load on their own. */
   load() {
-    this.armedFor = app.set.id;
+    this.armedFor = this.armKey;
     return pulls.ensure(this.keys);
   }
 

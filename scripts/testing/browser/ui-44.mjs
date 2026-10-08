@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const [url, shots, theme = 'light', width = '1440'] = process.argv.slice(2);
+const narrow = Number(width) < 1000;
 const { chromium } = await import(`${process.env.PLAYWRIGHT_DIR}/index.mjs`);
 const mock = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'shell-mock.js'), 'utf8');
 const sources = {
@@ -93,7 +94,7 @@ await two.keyboard.press('Space');
 check('Space opens it', (await flyout(two).count()) === 1);
 await two.keyboard.press('Enter');
 await two.waitForSelector('.shell-tab.on');
-check('Enter on an item opens the module', (await brand(two)) === 'PULL REQUESTS' && (await flyout(two).count()) === 0, await brand(two));
+check('Enter on an item opens the module', (narrow ? (await two.locator('.shell-tab.on').innerText()).includes('Pull requests') : (await brand(two)) === 'PULL REQUESTS') && (await flyout(two).count()) === 0, await brand(two));
 check('focus returns to the rail button after a pick', (await two.evaluate(() => document.activeElement?.getAttribute('data-provider'))) === 'github');
 
 await provider(two).click();
@@ -108,7 +109,11 @@ check('a click outside closes it', (await flyout(two).count()) === 0);
 for (const [key, label] of [['Control+1', 'REPOSITORIES'], ['Control+2', 'CHANGES'], ['Control+3', 'BRANCHES & TAGS'], ['Control+4', 'COMPARE'], ['Control+5', 'SEARCH'], ['Control+j', 'ACTIVITY']]) {
   await two.keyboard.press(key);
   await two.waitForTimeout(200);
-  check(`${key} shows ${label}`, (await brand(two)) === label, await brand(two));
+  if (!narrow) { check(`${key} shows ${label}`, (await brand(two)) === label, await brand(two)); continue; }
+  const [tab, overlay] = [await two.locator('.shell-tab.on').innerText(), await two.locator('.shell-side.floating').count()];
+  const expected = { REPOSITORIES: 'Repositories', CHANGES: 'Changes', 'BRANCHES & TAGS': 'Branches & tags', SEARCH: 'Code search' }[label];
+  check(`${key} shows ${label} (sidebar folded)`, expected ? tab.includes(expected) && overlay === 0 : overlay === 1, `${tab} overlay=${overlay}`);
+  if (overlay) { await two.keyboard.press('Escape'); await two.waitForTimeout(200); }
 }
 await two.keyboard.press('Control+,');
 await two.waitForTimeout(200);
@@ -122,14 +127,54 @@ const tableWidth = page => page.evaluate(() => Math.round(document.querySelector
 await rail(two, 'Repositories');
 await two.waitForSelector('.fm-row[data-id]');
 await two.waitForTimeout(600);
+const available = () => two.evaluate(() => { const main = getComputedStyle(document.querySelector('.main')); return Math.round(document.querySelector('.main').clientWidth - parseFloat(main.paddingLeft) - parseFloat(main.paddingRight)); });
 const wide = Number(width) === 1440 ? [714, 1094] : [390, 770];
-check(`Repositories table: ${wide[1]} px`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
-check('the Repositories table does not scroll sideways', await two.evaluate(() => { const box = document.querySelector('.fm-table .vbox'); return box.scrollWidth <= box.clientWidth; }));
+if (narrow) check('Repositories table fills the width the page has', (await tableWidth(two)) === (await available()), `${await tableWidth(two)} of ${await available()}`);
+else check(`Repositories table: ${wide[1]} px`, (await tableWidth(two)) === wide[1], String(await tableWidth(two)));
+check('the Repositories table does not scroll sideways', narrow || await two.evaluate(() => { const box = document.querySelector('.fm-table .vbox'); return box.scrollWidth <= box.clientWidth; }));
+if (narrow) await two.click('button[aria-label="Toggle sidebar"]');
 await two.click('.side .nav:has-text("All services")');
 await two.waitForSelector('.rf-setbar');
 await two.waitForTimeout(600);
-check(`A set table is ${wide[1]} px: there is no right panel`, (await tableWidth(two)) === wide[1] && (await two.locator('button[aria-label="Toggle details"]').count()) === 0, String(await tableWidth(two)));
+check(`A set table fills the page: there is no right panel`, (await tableWidth(two)) === (narrow ? await available() : wide[1]) && (await two.locator('button[aria-label="Toggle details"]').count()) === 0, String(await tableWidth(two)));
 check('the shell has no right track outside the compare views', await two.evaluate(() => document.querySelector('#shell').classList.contains('noright')));
+if (narrow) {
+  const toggle = two.locator('button[aria-label="Toggle sidebar"]');
+  check('the overlay closed itself after a sidebar pick', (await two.locator('.shell-side.floating').count()) === 0);
+  check('the page does not overflow with the sidebar folded', await two.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await shot(two, 'folded');
+  await toggle.focus();
+  await toggle.click();
+  await two.waitForTimeout(300);
+  check('the toggle opens the sidebar as an overlay above the page with a scrim', (await two.locator('.shell-side.floating').count()) === 1 && (await two.locator('.side-scrim').count()) === 1 && (await toggle.getAttribute('aria-pressed')) === 'true');
+  check('the table did not move under the overlay', (await tableWidth(two)) === (await available()));
+  check('focus moves into the overlay', await two.evaluate(() => !!document.activeElement?.closest('.shell-side')));
+  check('the overlay is modal: the page and the tab strip are inert', (await two.locator('.shell-side .shell-panel-content').getAttribute('aria-modal')) === 'true' && (await two.locator('#workspace-view[inert]').count()) === 1 && (await two.locator('.tabstrip[inert]').count()) === 1);
+  let outside = 0;
+  for (let step = 0; step < 40; step++) { await two.keyboard.press(step % 2 ? 'Tab' : 'Shift+Tab'); if (!(await two.evaluate(() => !!document.activeElement?.closest('.shell-side')))) outside++; }
+  for (let step = 0; step < 40; step++) { await two.keyboard.press('Tab'); if (!(await two.evaluate(() => !!document.activeElement?.closest('.shell-side')))) outside++; }
+  check('Tab stays inside the sidebar', outside === 0, String(outside));
+  await shot(two, 'overlay');
+  await two.keyboard.press('Escape');
+  await two.waitForTimeout(300);
+  check('Escape closes it and focus returns to the toggle', (await two.locator('.shell-side.floating').count()) === 0 && (await two.evaluate(() => document.activeElement?.hasAttribute('data-sidebar-toggle'))));
+  await toggle.click();
+  await two.waitForTimeout(300);
+  await two.mouse.click(380, 600);
+  await two.waitForTimeout(300);
+  check('a click outside closes it', (await two.locator('.shell-side.floating').count()) === 0);
+  await two.setViewportSize({ width: 1440, height: 900 });
+  await two.waitForTimeout(500);
+  check('widening past the breakpoint docks the sidebar again', (await two.locator('.shell-side[aria-hidden="false"]').count()) === 1 && (await two.locator('.shell-side.floating').count()) === 0 && (await tableWidth(two)) > 700);
+  await two.click('button[aria-label="Toggle sidebar"]');
+  await two.setViewportSize({ width: 390, height: 900 });
+  await two.waitForTimeout(400);
+  await two.setViewportSize({ width: 1440, height: 900 });
+  await two.waitForTimeout(500);
+  check('a sidebar the user folded stays folded after narrowing and widening', (await two.locator('.shell-side[aria-hidden="true"]').count()) === 1);
+  await browser.close();
+  process.exit(process.exitCode ?? 0);
+}
 await two.click('.rf-setbar button:has-text("Edit")');
 await two.waitForSelector('.popover');
 const edit = (await two.locator('.popover').innerText()).replace(/\s+/g, ' ');
@@ -350,7 +395,7 @@ await repos.click('.rf-back');
 await repos.fill('.rf-search input', 'gateway');
 await repos.click('.fm-chip:has-text("Cloned")');
 await repos.waitForTimeout(300);
-const drawer = repos.locator('.history-drawer');
+const drawer = repos.locator('.details-drawer');
 await repos.locator('.fm-row[data-id] .fm-sub').first().click();
 await drawer.waitFor();
 await repos.waitForTimeout(800);

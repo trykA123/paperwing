@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { benchmarkEnabled } from './lib/benchmark';
-  import { fly } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
+  import { trapTab } from './lib/focus-trap';
   import { isTauri } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { api, type Source, type Workspace } from './lib/api';
@@ -52,7 +53,7 @@
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activityRunning > 0);
   let previousPanels: string | undefined;
   $effect.pre(() => {
-    const visibility = `${app.ws.shell.sidebarVisible}:${rightVisible}`;
+    const visibility = `${app.sidebar.shown && !app.sidebar.narrow}:${rightVisible}`;
     if (previousPanels === visibility) return;
     const changed = previousPanels !== undefined;
     previousPanels = visibility;
@@ -62,7 +63,27 @@
     return () => clearTimeout(timer);
   });
 
+  let sideOpener: HTMLElement | null = null;
+  $effect(() => {
+    if (app.sidebar.overlay) {
+      sideOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      queueMicrotask(() => document.querySelector<HTMLElement>('.shell-side .shell-panel-content')?.focus());
+    } else if (sideOpener) {
+      if (sideOpener.isConnected && !document.activeElement?.closest('#workspace-view')) sideOpener.focus();
+      sideOpener = null;
+    }
+  });
+
+  function onSideClick(event: MouseEvent) {
+    if (app.sidebar.overlay && (event.target as Element).closest('.nav, .fav, .set-nav')) app.sidebar.close();
+  }
+
   function onKey(event: KeyboardEvent) {
+    if (event.key === 'Escape' && app.sidebar.overlay && !event.defaultPrevented && !document.querySelector('dialog[open], .details-drawer')) {
+      event.preventDefault();
+      app.sidebar.close();
+      return;
+    }
     if (app.copyRequest || app.recoveryOpen || detailsDrawer.target || document.querySelector('dialog[open]:not(.palette)')) return;
     if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
@@ -171,17 +192,18 @@
   });
 </script>
 
-<svelte:window onfocus={onFocus} />
+<svelte:window onfocus={onFocus} bind:innerWidth={app.sidebar.width} />
 
-<div id="shell" class:noright={!rightVisible} class:noside={!app.ws.shell.sidebarVisible} class:panels-moving={panelsMoving}
-  style:--lw="{app.ws.shell.sidebarVisible ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
+<div id="shell" class:noright={!rightVisible} class:noside={!app.sidebar.shown || app.sidebar.narrow} class:narrow={app.sidebar.narrow} class:panels-moving={panelsMoving}
+  style:--lw="{app.sidebar.shown && !app.sidebar.narrow ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
   <ActivityRail {gitBusy} />
   <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{app.view.kind === 'repo' && app.ws.shell.section === 'repos' ? 'Repository' : moduleById(app.ws.shell.section).label}</span></div>
   <Tabs />
-  <div class="shell-side" inert={!app.ws.shell.sidebarVisible} aria-hidden={!app.ws.shell.sidebarVisible} style:--panel-width="{app.ws.shell.sidebarWidth}px">
-    {#if app.ws.shell.sidebarVisible}<div class="shell-panel-content" transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
+  {#if app.sidebar.overlay}<div class="side-scrim" role="presentation" onclick={() => app.sidebar.close()} transition:fade|global={{ duration: reducedMotion ? 0 : 180 }}></div>{/if}
+  <div class="shell-side" class:floating={app.sidebar.overlay} role="presentation" onclick={onSideClick} onkeydown={event => { if (app.sidebar.overlay) { const panel = event.currentTarget.querySelector<HTMLElement>('.shell-panel-content'); if (panel) trapTab(event, panel); } }} inert={!app.sidebar.shown} aria-hidden={!app.sidebar.shown} style:--panel-width="{app.ws.shell.sidebarWidth}px">
+    {#if app.sidebar.shown}<div class="shell-panel-content" tabindex="-1" role={app.sidebar.overlay ? 'dialog' : undefined} aria-modal={app.sidebar.overlay ? 'true' : undefined} aria-label={app.sidebar.overlay ? 'Module sidebar' : undefined} transition:fly={{ x: -12, duration: reducedMotion ? 0 : 180 }}><SidePanel /></div>{/if}
   </div>
-  <main id="workspace-view" class="main" class:scroll={app.view.kind === 'settings' || app.view.kind === 'repo'}>
+  <main id="workspace-view" class="main" inert={app.sidebar.overlay} class:scroll={app.view.kind === 'settings' || app.view.kind === 'repo'}>
     {#if !app.ready}
       <div class="empty"><span class="spin"></span></div>
     {:else if app.view.kind === 'repos' || app.view.kind === 'set' || app.view.kind === 'item'}

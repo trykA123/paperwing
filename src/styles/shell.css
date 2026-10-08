@@ -56,6 +56,37 @@
     display: none;
 }
 
+/* below 1000 px the sidebar is an overlay above the page, opened from the toggle */
+#shell.narrow .shell-side {
+    display: none;
+}
+
+#shell.narrow .shell-side.floating {
+    display: block;
+    position: fixed;
+    top: 42px;
+    bottom: 26px;
+    left: var(--rail-w);
+    z-index: var(--z-panel);
+    width: min(var(--panel-width), calc(100vw - var(--rail-w) - 40px));
+    box-shadow: var(--shadow-2);
+}
+
+#shell.narrow .shell-panel-content {
+    width: 100%;
+}
+
+#shell.narrow .shell-panel-content:focus-visible {
+    outline: none;
+}
+
+.side-scrim {
+    position: fixed;
+    inset: 42px 0 26px var(--rail-w);
+    z-index: calc(var(--z-panel) - 1);
+    background: var(--scrim);
+}
+
 .main {
     grid-area: main;
     display: flex;

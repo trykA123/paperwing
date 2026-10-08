@@ -1,7 +1,7 @@
 import { api, type Commit, type Repo, type RefsResult, type SetItem, type Source } from '../api';
 import { ForegroundRequests } from './foreground-requests';
 import { commitHistoryKey, sourceFingerprint } from './metadata-keys';
-import { newFailures } from '../source-status';
+import { isDisabled, newFailures } from '../source-status';
 
 export type RefsEntry = {
   branches: string[]; tags: string[]; branchShas?: string[]; tagShas?: string[]; branchLabels?: string[]; tagLabels?: string[]; error?: string; loading?: boolean; stale?: boolean; failures?: number; retryAt?: number;
@@ -123,6 +123,10 @@ export class RepositoryMetadata {
 
   loadRepos(src: Source, refresh: boolean, signal?: AbortSignal) {
     if (signal?.aborted) return Promise.resolve();
+    if (isDisabled(src)) {
+      this.invalidateSource(src.id);
+      return Promise.resolve();
+    }
     const scope = this.sourceScope(src);
     const previous = this.listingScopes.get(src.id);
     if (previous && previous !== scope) this.invalidateSource(src.id);
@@ -221,7 +225,14 @@ export class RepositoryMetadata {
     return { branches: [], tags: [], error, failures, retryAt: Date.now() + delay };
   }
 
+  private refsDisabled(url: string) {
+    const owners = new Set([...(this.ownersByUrl.get(url) ?? []), ...(this.refOwners.get(url) ?? [])]);
+    const sources = this.sources();
+    return owners.size > 0 && [...owners].every(id => isDisabled(sources.find(source => source.id === id)));
+  }
+
   private loadRefs(url: string, { force, priority, signal }: { force: boolean; priority: 'foreground' | 'background'; signal?: AbortSignal | undefined }) {
+    if (this.refsDisabled(url)) return Promise.resolve();
     if (force) this.invalidateRefs([url]);
     const key = this.refsKey(url);
     const cached = this.refs[url];

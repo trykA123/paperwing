@@ -1,15 +1,13 @@
 import type { SetItem } from './api';
-import { isCloned } from './formation';
+import { choosePullKey } from './pull-key';
 import type { PullKey } from './pull-support';
 import { app } from './state.svelte';
 
 export type PullDialog = { kind: 'open'; item: SetItem } | { kind: 'bulk'; items: SetItem[] };
 
-/** The branch a pull request would start from: a cloned repository that is on a branch, not a tag or a detached commit. */
 export function pullKey(item: SetItem): PullKey | null {
   const path = app.dest(item);
-  const local = app.local[path];
-  return isCloned(local) && local?.branch ? { path, branch: local.branch } : null;
+  return choosePullKey(item, path, app.local[path], app.sources);
 }
 
 /** The listing carries no fork flag yet, so every repository is unknown and the backend decides. */

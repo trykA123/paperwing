@@ -10,7 +10,7 @@
   const copy = () => { void navigator.clipboard.writeText(sha); app.toast('Commit id copied', 'success'); };
 </script>
 
-<div class="history-body">
+<div class="details-body">
   <HistoryDetails row={target.row} />
   {#if sha}<button class="btn small" onclick={copy}><Icon name="copy" />Copy commit id</button>{/if}
 </div>

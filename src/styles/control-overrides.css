@@ -205,40 +205,6 @@ svg.i.tone-err {
     border-radius: var(--r-ctl);
 }
 
-.repo-nav {
-    border-radius: var(--r-ctl);
-}
-
-.repo-nav:hover {
-    background: var(--soft);
-}
-
-.repo-nav .nav,
-.repo-nav .nav:hover {
-    padding-left: 0;
-    background: transparent;
-}
-
-.repo-nav.on,
-.repo-nav.on:hover {
-    background: var(--accs);
-    box-shadow: inset 3px 0 var(--acc);
-}
-
-.repo-nav.on .nav {
-    color: var(--acc);
-    font-weight: 600;
-}
-
-.repo-nav {
-    transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
-}
-
-.tree-toggle {
-    width: 26px;
-    height: var(--ctl-h-sm);
-}
-
 .nav .cnt.dirty {
     min-width: 18px;
     padding: 0 6px;
@@ -448,9 +414,6 @@ svg.i.tone-err {
 .lok,
 .cmt .sub,
 .shell-status,
-.repo-subtree,
-.tree-url,
-.tree-error,
 .activity-entry pre {
     font-size: var(--fs-sm);
 }
@@ -458,33 +421,6 @@ svg.i.tone-err {
 /* ---------- tree disclosure ---------- */
 :root {
     interpolate-size: allow-keywords;
-}
-
-.repo-subtree details::details-content {
-    block-size: 0;
-    overflow: hidden;
-    transition: block-size var(--dur-med) var(--ease-out), content-visibility var(--dur-med) allow-discrete;
-}
-
-.repo-subtree details[open]::details-content {
-    block-size: auto;
-}
-
-.repo-subtree summary {
-    border-radius: 6px;
-}
-
-.repo-subtree summary:hover,
-.tree-toggle:hover {
-    color: var(--text);
-}
-
-.repo-subtree summary>svg {
-    transition: transform var(--dur-fast) var(--ease-out);
-}
-
-.repo-subtree .tree-entry {
-    animation: fade-in var(--dur-med) var(--ease-out);
 }
 
 .activity-toolbar input,

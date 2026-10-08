@@ -1,12 +1,14 @@
 import type { Source, Workspace } from '../api';
-import { HOME_MODULE, isModuleVisible, moduleOfView, ownsPage, railClick, sectionOnActivate, viewOfModule, type ModuleId } from '../modules';
+import { HOME_MODULE, isModuleVisible, moduleOfView, ownsPage, sectionOnActivate, viewOfModule, type ModuleId } from '../modules';
 import { isRepoSection } from '../repo-sections';
 import type { View } from '../workspace';
+import type { SidebarLayout } from './sidebar.svelte';
 
 export type ModuleHost = {
   readonly ws: Workspace;
   readonly sources: readonly Source[];
   readonly view: View;
+  readonly sidebar: SidebarLayout;
   openView: (view: View) => void;
   openCodeSearch: () => void;
 };
@@ -21,8 +23,8 @@ export class ModuleNavigation {
   /** A rail click: fold the sidebar when its module is already showing, otherwise show the module and open its page. */
   open(id: ModuleId) {
     const shell = this.app.ws.shell;
-    const showing = id !== 'settings' && shell.sidebarVisible && shell.section === id;
-    if (showing && this.app.view.kind !== 'repo' && (!ownsPage(id) || moduleOfView(this.app.view) === id)) { Object.assign(shell, railClick(shell, id)); return; }
+    const showing = id !== 'settings' && this.app.sidebar.shown && shell.section === id;
+    if (showing && this.app.view.kind !== 'repo' && (!ownsPage(id) || moduleOfView(this.app.view) === id)) { this.app.sidebar.set(false); return; }
     this.show(id);
   }
 
@@ -31,7 +33,7 @@ export class ModuleNavigation {
     this.host = host;
     if (id === 'settings') { this.app.openView({ kind: 'settings' }); return; }
     this.app.ws.shell.section = id;
-    this.app.ws.shell.sidebarVisible = true;
+    this.app.sidebar.reveal(ownsPage(id));
     if (id === 'search') { this.app.openCodeSearch(); return; }
     const view = viewOfModule(id);
     if (view) this.app.openView(view);

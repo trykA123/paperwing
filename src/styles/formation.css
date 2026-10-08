@@ -892,33 +892,6 @@ button.fm-ref:hover {
     }
 }
 
-/* right panel */
-.item-details .path {
-    overflow-wrap: anywhere;
-}
-
-.tree-block {
-    margin-top: var(--sp-3);
-}
-
-.tree-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: var(--sp-1) 0;
-    font-size: var(--fs-sm);
-    font-weight: 600;
-}
-
-.tree-chev {
-    display: grid;
-    transition: transform var(--dur-fast) var(--ease-out);
-}
-
-.tree-chev.open {
-    transform: rotate(90deg);
-}
-
 .activity-filters input {
     height: var(--ctl-h);
     padding: 0 var(--sp-2);
@@ -935,58 +908,8 @@ button.fm-ref:hover {
     box-shadow: var(--ring);
 }
 
-/* narrow windows: the section panel floats over the table and the details panel steps aside */
-@media (max-width: 760px) {
-    #shell,
-    #shell.noright {
-        grid-template-columns: var(--rail-w) 0 minmax(0, 1fr) 0;
-    }
-
-    .shell-brand,
-    .shell-right {
-        display: none;
-    }
-
-    .shell-side {
-        position: relative;
-        overflow: visible;
-        z-index: var(--z-panel);
-    }
-
-    .shell-side .shell-panel-content {
-        position: absolute;
-        inset-block: 0;
-        left: 0;
-        width: min(var(--panel-width), calc(100vw - var(--rail-w) - 40px));
-        box-shadow: var(--shadow-2);
-    }
-}
-
 [data-theme="dark"] .rail-badge.err {
     color: oklch(18% 0.03 27);
-}
-
-.set-summary dl {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--sp-1) var(--sp-3);
-    margin: var(--sp-3) 0 0;
-    font-size: var(--fs-sm);
-}
-
-.set-summary dt {
-    color: var(--dim);
-}
-
-.set-summary dd {
-    margin: 0;
-    font: 600 12px var(--mono);
-    text-align: right;
-}
-
-.set-summary dd.zero {
-    color: var(--faint-text);
-    font-weight: 400;
 }
 
 .err-line {

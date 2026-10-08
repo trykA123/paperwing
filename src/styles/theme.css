@@ -274,8 +274,7 @@
 }
 
 .shell-tab span,
-.status-context,
-.item-details dd {
+.status-context {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -397,158 +396,6 @@ kbd {
 .nav.on .cnt,
 [data-theme="dark"] .nav.on .cnt {
     color: var(--dim);
-}
-
-.repo-nav {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    border-radius: 7px;
-}
-
-.repo-nav.on {
-    background: var(--accs);
-    color: var(--acc);
-}
-
-.repo-nav .nav {
-    padding-left: 2px;
-    min-width: 0;
-}
-
-.tree-toggle {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 22px;
-    height: 28px;
-    color: var(--faint-text);
-}
-
-.tree-toggle.expanded svg {
-    transform: rotate(90deg);
-}
-
-.repo-subtree {
-    margin: 2px 0 6px 22px;
-    border-left: 1px solid var(--line);
-    padding-left: 12px;
-    font-size: var(--fs-xs);
-}
-
-.repo-subtree summary {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    list-style: none;
-    cursor: pointer;
-    color: var(--dim);
-    padding: 4px 0;
-}
-
-.repo-subtree summary::-webkit-details-marker {
-    display: none;
-}
-
-.repo-subtree summary>svg {
-    flex: none;
-    color: var(--faint-text);
-}
-
-.repo-subtree details[open]>summary>svg:first-child {
-    transform: rotate(90deg);
-}
-
-.repo-subtree details>span {
-    display: block;
-    padding: 2px 0 6px;
-}
-
-.repo-subtree details>.tree-entry,
-.repo-subtree details>.tree-url,
-.repo-subtree details>span {
-    margin-left: 17px;
-}
-
-.tree-refresh {
-    float: right;
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    margin-right: 9px;
-    border-radius: 6px;
-    color: var(--dim);
-}
-
-.tree-refresh:hover:not(:disabled) {
-    background: var(--soft);
-    color: var(--text);
-}
-
-.tree-entry {
-    display: flex;
-    align-items: baseline;
-    gap: 5px;
-    padding: 3px 0;
-    overflow-wrap: anywhere;
-    min-width: 0;
-}
-
-.tree-entry svg {
-    flex: none;
-}
-
-.tree-entry span {
-    min-width: 0;
-}
-
-.tree-url,
-.tree-error {
-    overflow-wrap: anywhere;
-    color: var(--dim);
-    font-size: var(--fs-xs);
-}
-
-.remote-tree {
-    margin-left: 17px;
-}
-
-.repo-subtree details> :is(.tree-entry, .tree-url, span, .remote-tree) {
-    position: relative;
-}
-
-.repo-subtree details> :is(.tree-entry, .tree-url, span, .remote-tree)::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -11px;
-    border-left: 1px solid var(--line);
-    pointer-events: none;
-}
-
-.repo-subtree details> :is(.tree-entry, .tree-url, span, .remote-tree)::after {
-    content: '';
-    position: absolute;
-    top: 12px;
-    left: -11px;
-    width: 9px;
-    border-top: 1px solid var(--line);
-    pointer-events: none;
-}
-
-.repo-subtree details> :is(.tree-entry, .tree-url, span, .remote-tree):last-child::before {
-    bottom: auto;
-    height: 12px;
-}
-
-.repo-subtree .tree-url {
-    padding: 3px 0;
-}
-
-.repo-subtree summary small {
-    color: var(--faint-text);
 }
 
 .activity-toolbar {
@@ -693,29 +540,6 @@ kbd {
     justify-content: flex-end;
 }
 
-.item-details {
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 12px;
-    margin-bottom: 8px;
-    overflow-wrap: anywhere;
-}
-
-.item-details dl {
-    display: grid;
-    grid-template-columns: 70px minmax(0, 1fr);
-    gap: 5px;
-    font-size: var(--fs-sm);
-    margin-bottom: 0;
-}
-
-.item-details dt {
-    color: var(--faint-text);
-}
-
-.item-details dd {
-    margin: 0;
-}
-
 .right .hrow {
     flex-wrap: wrap;
     gap: 6px;
@@ -839,6 +663,12 @@ summary:focus-visible {
 
     .main {
         padding: 14px;
+    }
+}
+
+@media (max-width: 600px) {
+    .kbtn kbd {
+        display: none;
     }
 }
 

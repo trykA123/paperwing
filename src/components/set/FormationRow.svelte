@@ -57,7 +57,7 @@
     </small>
   </div>
   <div class="fm-cell fm-branch" role="gridcell">
-    {#if row.fixed}
+    {#if row.fixed || row.sourceOff}
       <span class="fm-ref static" title={row.refTitle}><span class="t-{row.refType}"><Icon name={row.refType} /></span><span class="nm">{row.refLabel || 'detached'}</span></span>
     {:else}
       <button class="fm-ref" tabindex={stop} class:bad={row.refBad} onclick={event => handlers.pickRef(event.currentTarget)} title={row.refTitle}>
@@ -69,7 +69,7 @@
       {/if}
     {/if}
   </div>
-  <div class="fm-cell fm-pull" role="gridcell"><PullCell target={row.pull} /></div>
+  <div class="fm-cell fm-pull" role="gridcell"><PullCell target={row.pull} disabled={row.sourceOff} /></div>
   <div class="fm-cell fm-syncc" role="gridcell"><SyncRails view={row.sync} /></div>
   <div class="fm-cell fm-next" role="gridcell">
     {#if row.busy}

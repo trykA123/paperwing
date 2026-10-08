@@ -3,10 +3,11 @@
   import type { PullKey } from '../../lib/pull-support';
   import { formatReset } from '../../lib/pull-support';
   import { openPull, pulls } from '../../lib/pulls.svelte';
+  import { DISABLED_HINT, DISABLED_LABEL } from '../../lib/source-status';
   import { app } from '../../lib/state.svelte';
   import PullChip from './PullChip.svelte';
 
-  let { target }: { target: PullKey | null } = $props();
+  let { target, disabled = false }: { target: PullKey | null; disabled?: boolean } = $props();
 
   const path = $derived(target?.path);
   const branch = $derived(target?.branch);
@@ -24,7 +25,9 @@
 </script>
 
 <span class="pull-cell">
-  {#if !target}
+  {#if disabled}
+    <span class="pull-none" title={DISABLED_HINT}>{DISABLED_LABEL}</span>
+  {:else if !target}
     <span class="pull-none" aria-hidden="true">·</span>
   {:else if entry?.status === 'ready' && entry.pull}
     {@const pull = entry.pull}

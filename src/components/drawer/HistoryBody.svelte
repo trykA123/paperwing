@@ -10,7 +10,7 @@
   let active = $state<GraphRow | null>(null);
 </script>
 
-<div class="history-body">
+<div class="details-body">
   <TagSection path={target.path} name={target.name} />
   <StashSection path={target.path} name={target.name} />
   <HistoryPanel path={target.path} bind:active onloaded={onready} />

@@ -8,4 +8,4 @@
   onMount(() => onready());
 </script>
 
-<div class="history-body"><StashSection path={target.path} name={target.name} only={target.oid} /></div>
+<div class="details-body"><StashSection path={target.path} name={target.name} only={target.oid} /></div>

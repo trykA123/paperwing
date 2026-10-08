@@ -186,9 +186,7 @@
       app.sources = sources;
       if (enabled) await app.loadRepos(updated, true);
       else {
-        app.repos[s.id] = [];
-        app.repoErrors[s.id] = [];
-        delete app.staleRepos[s.id];
+        await app.loadRepos(updated, false);
       }
       app.toast(`${s.name} ${enabled ? 'enabled' : 'disabled'}.`, 'success');
     } catch (error) { app.toast(String(error), 'error'); }

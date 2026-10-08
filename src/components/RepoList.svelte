@@ -10,7 +10,7 @@
   import Alert from './Alert.svelte';
   import EmptyState from './EmptyState.svelte';
   import Skeleton from './Skeleton.svelte';
-  import { countLabel, errorSummary } from '../lib/source-status';
+  import { countLabel, DISABLED_HINT, DISABLED_LABEL, errorSummary, isDisabled } from '../lib/source-status';
   import { explainError } from '../lib/errors';
   import { plural } from '../lib/plural';
 
@@ -22,6 +22,7 @@
   $effect(() => { if (tab) { tab.filter = filter; tab.page = page; } });
 
   const src = $derived(app.sources.find(s => s.id === source));
+  const off = $derived(mode === 'org' && isDisabled(src));
   const base = $derived(mode === 'org' ? app.reposOf(source, org) : app.allRepos);
   const query = $derived(mode === 'org' ? filter : app.query);
   const list = $derived(query.trim() ? base.filter(r => matches(`${r.org}/${r.name} ${r.description}`, query)) : base);
@@ -64,7 +65,7 @@
     <div class="crumb">{mode === 'org' ? `Organization · ${src?.name ?? ''}` : 'Search'} · <button class="link" onclick={() => app.openView({ kind: 'set' })}>← Back to {app.set.name}</button></div>
     <h1>{mode === 'org' ? org : `“${app.query}”`}</h1>
     <div class="mut">
-      {unknown ? countLabel(false, 0) : list.length}{query.trim() && mode === 'org' && !unknown ? ` of ${base.length}` : ''} repositories{mode === 'search' ? ' across all sources' : ''}
+      {#if off}{DISABLED_LABEL} in Settings{:else}{unknown ? countLabel(false, 0) : list.length}{query.trim() && mode === 'org' && !unknown ? ` of ${base.length}` : ''} repositories{mode === 'search' ? ' across all sources' : ''}{/if}
       {#if loading}· <span class="spin"></span> loading{/if}
     </div>
   </div>
@@ -73,7 +74,7 @@
       <label class="gsearch small"><Icon name="search" /><input placeholder="Filter {org}…" bind:value={filter} spellcheck="false" /></label>
     {/if}
     {#if src && src.kind !== 'manual'}
-      <button class="btn" disabled={loading} onclick={() => app.loadRepos(src, true)} title="Fetch the repo list again from {src.host}">
+      <button class="btn" disabled={loading || off} onclick={() => app.loadRepos(src, true)} title={off ? DISABLED_HINT : `Fetch the repo list again from ${src.host}`}>
         <Icon name="refresh" /> Refresh
       </button>
     {/if}
@@ -81,7 +82,7 @@
   </div>
 </header>
 
-{#if errors.length}
+{#if errors.length && !off}
   <Alert kind="err" role="status" title="Can't reach {failing.map(s => s.name).join(', ') || 'the source'}">
     {#each errorLines as line}<span class="err-line">{line}</span>{/each}
     {#snippet action()}<button class="btn small" disabled={loading} onclick={retry}>Retry</button>{/snippet}
@@ -93,7 +94,10 @@
   {#key `${cur}|${size}|${query}`}
     <VirtualList items={rows} rowHeight={56} key={r => r.id}>
       {#snippet empty()}
-        {#if loading}<Skeleton rows={8} height={56} />
+        {#if off}<EmptyState icon="server" title="{src?.name ?? 'This source'} is disabled" hint={DISABLED_HINT}>
+          <button class="btn" onclick={() => app.openView({ kind: 'settings' })}>Open Settings</button>
+        </EmptyState>
+        {:else if loading}<Skeleton rows={8} height={56} />
         {:else if query.trim()}<EmptyState icon="search" title={`No repositories match "${query.trim()}"`} hint="Check the spelling or try a shorter term.">
           <button class="btn" onclick={clearQuery}>{mode === 'org' ? 'Clear filter' : 'Clear search'}</button>
         </EmptyState>

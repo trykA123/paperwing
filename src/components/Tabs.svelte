@@ -25,7 +25,7 @@
 </script>
 
 <header class="tabs-chrome" class:native-controls={titlebar} data-tauri-drag-region={titlebar}>
-  <div class="tabstrip" role="tablist" aria-label="Workspace tabs">
+  <div class="tabstrip" inert={app.sidebar.overlay} role="tablist" aria-label="Workspace tabs">
     {#each app.tabs as tab, index (tab.id)}
       <div class="shell-tab" class:on={tab.id === app.activeTabId} class:temp={!!app.temporary.find(tab.setId)}>
         <button role="tab" aria-selected={tab.id === app.activeTabId} aria-controls="workspace-view"
@@ -42,8 +42,8 @@
   <div class="drag-spacer" class:grip={titlebar} data-tauri-drag-region={titlebar} aria-hidden="true"></div>
   <div class="topbtns">
     <button class="kbtn" title="Command palette (Ctrl+K)" onclick={() => (app.paletteOpen = true)}><Icon name="search" /><span>Search or run a command...</span><kbd>Ctrl K</kbd></button>
-    <button class="icon shell-control" class:on={app.ws.shell.sidebarVisible} title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.ws.shell.sidebarVisible}
-      onclick={() => (app.ws.shell.sidebarVisible = !app.ws.shell.sidebarVisible)}><Icon name="panel" /></button>
+    <button class="icon shell-control" class:on={app.sidebar.shown} data-sidebar-toggle title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed={app.sidebar.shown}
+      onclick={() => app.sidebar.toggle()}><Icon name="panel" /></button>
     {#if app.detailsAvailable}
       <button class="icon shell-control" class:on={app.ws.shell.rightVisible} title="Toggle comparison details" aria-label="Toggle details" aria-pressed={app.ws.shell.rightVisible}
         onclick={() => (app.ws.shell.rightVisible = !app.ws.shell.rightVisible)}><Icon name="panel" /></button>

@@ -9,17 +9,25 @@
   import EmptyState from '../EmptyState.svelte';
   import Icon from '../Icon.svelte';
   import HostChip from './HostChip.svelte';
+  import ScopeChip from './ScopeChip.svelte';
   import PullChip from '../pulls/PullChip.svelte';
   import ModuleTable from './ModuleTable.svelte';
   import PageFrame from './PageFrame.svelte';
 
   const counts = $derived(pullQueue.counts);
-  const scope = $derived(app.modules.host ? `${app.set.name} on ${app.modules.host}` : app.set.name);
+  const where = $derived(pullQueue.mode === 'all' ? 'all repositories' : app.set.name);
+  const scope = $derived(app.modules.host ? `${where} on ${app.modules.host}` : where);
   const sub = $derived(`${plural(counts.open, 'open pull request')} in ${scope} · ${counts.review} need review${pulls.loading ? ' · loading…' : ''}`);
 
   $effect(() => {
     const keys = pullQueue.keys;
     if (pullQueue.autoLoad) void untrack(() => pulls.ensure(keys));
+  });
+
+  $effect(() => {
+    if (pullQueue.mode !== 'all' || !pullQueue.unread.length) return;
+    const fresh = untrack(() => pullQueue.claimUnread());
+    if (fresh.length) void untrack(() => app.checkExists(fresh));
   });
 
   async function open(row: PullRow) {
@@ -34,6 +42,7 @@
   {/snippet}
   {#snippet chips()}
     <div class="fm-filters" role="group" aria-label="Pull request queue">
+      <ScopeChip module="prs" />
       <HostChip />
       {#each CHIP_QUEUES as chip (chip.id)}
         <button class="fm-chip" class:on={pullQueue.queue === chip.id} aria-pressed={pullQueue.queue === chip.id} onclick={() => pullQueue.select(chip.id)}>
@@ -43,7 +52,7 @@
     </div>
   {/snippet}
   <p class="sr-only" role="status" aria-live="polite">{pulls.limit ? pulls.limit.message : pulls.loading ? 'Loading pull requests' : ''}</p>
-  <ModuleTable label="Pull requests in {app.set.name}" columns={['Pull request', 'Branch', 'Checks & review', 'Next action']} cols="minmax(200px, 1.6fr) minmax(150px, 1fr) minmax(190px, 1.3fr) minmax(120px, 164px)"
+  <ModuleTable label="Pull requests in {where}" columns={['Pull request', 'Branch', 'Checks & review', 'Next action']} cols="minmax(200px, 1.6fr) minmax(150px, 1fr) minmax(190px, 1.3fr) minmax(120px, 164px)"
     items={pullQueue.rows} key={row => row.item.id} bind:page={pullQueue.page}>
     {#snippet cells(row: PullRow, index: number)}
       {@const step = pullStep(row.pull)}
@@ -64,7 +73,7 @@
     {/snippet}
     {#snippet empty()}
       {#if pullQueue.needsClick && !pullQueue.known.length}
-        <EmptyState icon="refresh" title="Pull requests are not loaded" hint="{plural(pullQueue.keys.length, 'repository', 'repositories')} in this set. Loading asks GitHub once for each.">
+        <EmptyState icon="refresh" title="Pull requests are not loaded" hint="{plural(pullQueue.keys.length, 'repository', 'repositories')} in {pullQueue.mode === 'all' ? 'scope' : 'this set'}. Loading asks GitHub once for each.">
           <button class="btn dark" onclick={() => void pullQueue.load()}><Icon name="download" /> Load pull requests</button>
         </EmptyState>
       {:else if !pullQueue.keys.length}
@@ -72,7 +81,7 @@
       {:else if pulls.loading}
         <EmptyState icon="refresh" title="Loading pull requests" hint="Asking GitHub for {plural(pullQueue.keys.length, 'repository', 'repositories')}." />
       {:else}
-        <EmptyState icon="check" title="Nothing in this queue" hint="No repository of {app.set.name} has a matching pull request on its current branch." />
+        <EmptyState icon="check" title="Nothing in this queue" hint="{pullQueue.mode === 'all' ? 'No repository' : `No repository of ${app.set.name}`} has a matching pull request on its current branch." />
       {/if}
     {/snippet}
   </ModuleTable>
