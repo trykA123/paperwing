@@ -40,6 +40,7 @@ impl Fixture {
     }
     pub fn git(&self, args: &[&str]) -> Vec<u8> {
         let output = Command::new("git")
+            .env_remove("GIT_INDEX_FILE")
             .arg("-C")
             .arg(&self.root)
             .args(args)
@@ -63,6 +64,7 @@ impl Fixture {
 
     pub fn git_input(&self, args: &[&str], input: &[u8]) -> Vec<u8> {
         let mut child = Command::new("git")
+            .env_remove("GIT_INDEX_FILE")
             .arg("-C")
             .arg(&self.root)
             .args(args)
@@ -83,6 +85,7 @@ impl Fixture {
     pub fn apply(&self, patch: &[u8], reverse: bool) {
         let mut command = Command::new("git");
         command
+            .env_remove("GIT_INDEX_FILE")
             .arg("-C")
             .arg(&self.root)
             .args(["apply", "--cached", "--whitespace=nowarn"]);
