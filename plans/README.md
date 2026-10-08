@@ -13,6 +13,8 @@ Owner priorities: Windows first (work PC, Defender, several GitHub Enterprise ho
 ## Ready now
 | Packet | What | Size |
 |---|---|---|
+| [48](packets/48-status-cost.md) | Cut the cost and count of `git status` (owner diagnostics 2026-10-08) | M |
+| [49](packets/49-compare-ref-lists.md) | Compare: reference list ready without pressing refresh | S |
 | [47](packets/47-search-engines.md) | Search engines and fuzzy file finder, chosen in Settings | L |
 | [46](packets/46-languages.md) | Colouring for automotive and embedded files (after 37 step 1) | M |
 | [18](packets/18-progressive-contract.md) | Progressive results contract (design only) | S |
