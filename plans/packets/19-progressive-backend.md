@@ -1,6 +1,6 @@
 # 19 — Progressive comparison backend
 
-Status: blocked by the owner's answers to section 14 of `docs/progressive-comparison-contract.md` (packet 18)
+Status: ready (contract ratified 2026-10-08)
 Platform: Windows first, Linux parity
 Size: L
 Role: api-builder (gpt-6.1-sol xhigh), one writer

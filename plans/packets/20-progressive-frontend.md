@@ -1,6 +1,6 @@
 # 20 — Progressive comparison in the UI
 
-Status: blocked by 19 (and 18)
+Status: blocked by 19
 Platform: Windows first (WebView2, Defender on), Linux parity
 Size: L
 Role: ui-builder-high (state and lifecycle work), one writer

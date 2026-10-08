@@ -1,6 +1,6 @@
 # Progressive comparison contract
 
-Status: proposed by packet 18, 2026-10-08, revision 2 (after review). Packets 19 (backend) and 20 (UI) implement it.
+Status: ratified by the owner 2026-10-08 (revision 2, reviewed). Packets 19 (backend) and 20 (UI) implement it.
 Code references: `src-tauri/src/compare.rs` (written `compare.rs:N`) and its modules, as of main d20faba.
 
 ## 1. Purpose
@@ -300,9 +300,9 @@ Targets:
 - `ui.first-row` is under 2 s on the owner's largest repository.
 - Final fingerprints equal the legacy ones.
 
-## 14. Open decisions for the owner
+## 14. Owner decisions (ratified 2026-10-08)
 
-1. **Laziness.** Every changed file is still read in full to classify it. The gain is seeing and opening files early, not less total work. Accept?
-2. **Differences filter.** Files whose content id changed show as "Checking…" under Differences, and some will end up Same once line endings or whitespace are ignored. Accept, or show them only under All?
-3. **Editing.** A file opens read-only until it is classified, which takes seconds, then becomes editable in place (reloaded from disk at that moment). Accept?
-4. **Copy.** Copying a file or folder is refused until it has finished checking. Accept?
+1. Laziness: every changed file is still read in full; the gain is first-useful-render. Accepted.
+2. Pending `changedId` rows show as "Checking…" under Differences. Accepted.
+3. A pending file opens read-only, then becomes editable in place after a reload from disk. Accepted.
+4. Copy of a pending file or folder is refused with "Wait until … finishes checking". Accepted.
