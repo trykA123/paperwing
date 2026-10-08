@@ -3,6 +3,7 @@
   import { ago, app, matches, type RefsEntry } from '../lib/state.svelte';
   import type { Commit, Ref, RefKind, SetItem } from '../lib/api';
   import { createDemand } from '../lib/metadata-demand';
+  import { DISABLED_HINT, isRepoDisabled } from '../lib/source-status';
   import Icon from './Icon.svelte';
 
   let { items, anchor, onclose, onpick }: {
@@ -26,6 +27,8 @@
   const openBelow = below >= Math.min(MAX_H, MIN_H) || below >= above;
   const H = Math.max(Math.min(MAX_H, openBelow ? below : above), Math.min(MIN_H, innerHeight - 2 * EDGE));
   const total = untrack(() => items.length);
+  const off = $derived(items.filter(i => isRepoDisabled(i.repoId, app.sources)));
+  const online = $derived(items.filter(i => !off.includes(i)));
   const single = total === 1;
   const current = untrack(() => (single ? items[0].ref : null));
   const x = untrack(() => Math.max(EDGE, Math.min(anchor.left, innerWidth - W - EDGE)));
@@ -48,17 +51,17 @@
     return () => { refsDemand.release(); commitsDemand.release(); };
   });
   $effect(() => {
-    const urls = items.map(i => i.url).filter(url => app.needsRefs(url));
+    const urls = online.map(i => i.url).filter(url => app.needsRefs(url));
     untrack(() => refsDemand.request(urls));
   });
   $effect(() => {
-    const wanted = single && tab === 'commit' && app.needsCommits(items[0]) ? [items[0]] : [];
+    const wanted = single && tab === 'commit' && !off.length && app.needsCommits(items[0]) ? [items[0]] : [];
     untrack(() => commitsDemand.request(wanted));
   });
 
-  const entries = $derived(items.map(i => app.refs[i.url]));
+  const entries = $derived(online.map(i => app.refs[i.url]));
   const loaded = $derived(entries.filter(e => e && !e.loading).length);
-  const loading = $derived(loaded < total);
+  const loading = $derived(loaded < online.length);
   const failed = $derived(items.filter(i => app.refs[i.url]?.error));
   const commitsEntry = $derived(single ? app.commitsFor(items[0]) : undefined);
   const commits = $derived(Array.isArray(commitsEntry) ? commitsEntry : []);
@@ -248,6 +251,7 @@
   </div>
   <div class="plist" bind:this={listEl}>
     {#if loading && tab !== 'commit' && !br.length && !tg.length}<div class="pnote">Asking the remote{total > 1 ? 's' : ''}…</div>{/if}
+    {#each off.slice(0, 3) as f (f.id)}<div class="pnote">{f.name}: {DISABLED_HINT}</div>{/each}
     {#each failed.slice(0, 3) as f (f.id)}<div class="pnote err">{f.name}: {app.refs[f.url]?.error}</div>{/each}
     {#each rows as r, i (i)}
       {#if r.k === 'sec'}
