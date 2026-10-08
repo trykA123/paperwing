@@ -187,3 +187,20 @@ async fn destination_must_be_absolute_with_an_existing_folder_and_not_a_director
         .unwrap();
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[tokio::test]
+async fn a_stale_part_file_next_to_the_destination_does_not_block_a_new_download() {
+    let dir = scratch();
+    let source = source("stream-stale-source");
+    let destination = dir.join("artifact.zip");
+    std::fs::write(dir.join("artifact.zip.skein-part"), b"stale").unwrap();
+    std::fs::write(dir.join("artifact.zip.1-1.skein-part"), b"stale").unwrap();
+    let http = connect(&source, serve("200 OK", 1024, 1024, false).await).await;
+    http.stream_download("/zip", &destination)
+        .await
+        .ok()
+        .unwrap();
+    assert_eq!(std::fs::read(&destination).unwrap().len(), 1024);
+    assert_eq!(leftovers(&dir).len(), 3);
+    std::fs::remove_dir_all(&dir).unwrap();
+}

@@ -27,20 +27,21 @@ async fn validate_destination(destination: &Path) -> Result<(), Error> {
         Ok(metadata) if metadata.is_dir() => {}
         _ => return Err(invalid("the folder does not exist")),
     }
-    for path in [destination.to_path_buf(), part_path(destination)] {
-        if tokio::fs::metadata(&path)
-            .await
-            .is_ok_and(|metadata| metadata.is_dir())
-        {
-            return Err(invalid("the path is a folder"));
-        }
+    if tokio::fs::metadata(destination)
+        .await
+        .is_ok_and(|metadata| metadata.is_dir())
+    {
+        return Err(invalid("the path is a folder"));
     }
     Ok(())
 }
 
 fn part_path(destination: &Path) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
     let mut name = destination.as_os_str().to_os_string();
-    name.push(PART_SUFFIX);
+    name.push(format!(".{}-{nanos}{PART_SUFFIX}", std::process::id()));
     PathBuf::from(name)
 }
 
