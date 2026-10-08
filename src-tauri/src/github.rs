@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 pub(crate) mod actions;
+pub(crate) mod blob;
 mod cache;
+pub(crate) mod compare;
 #[cfg(test)]
 mod commit_cache;
 mod http;
