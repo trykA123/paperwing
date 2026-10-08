@@ -2,11 +2,11 @@ use super::{api_base, Source};
 use reqwest::Method;
 
 mod response;
-#[cfg(test)]
 mod raw;
 #[cfg(test)]
 pub(crate) mod fixture;
-pub(super) use response::{Error, Response};
+pub(crate) use response::Error;
+pub(super) use response::Response;
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -137,7 +137,6 @@ fn changed() -> (u16, String) {
 }
 
 impl Http<'_> {
-    #[cfg(test)]
     pub async fn compare_get<T: DeserializeOwned>(&self, path: &str) -> Result<Page<T>, Error> {
         let response = self.send(Method::GET, path, None).await?;
         response.check_rate_limit()?;

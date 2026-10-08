@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeComparison } from './compare-response';
 import type { CompareContent, CompareEntryKind } from './api';
 
 type ContentRequest = {
@@ -11,7 +11,7 @@ type ContentRequest = {
 
 export async function readComparisonContent(request: ContentRequest): Promise<CompareContent> {
   const { kind, ...args } = request;
-  const buffer = await invoke<ArrayBuffer>('comparison_content', args);
+  const buffer = await invokeComparison<ArrayBuffer>('comparison_content', args);
   if (!(buffer instanceof ArrayBuffer)) throw new Error('Invalid comparison content response');
   const bytes = new Uint8Array(buffer);
   let binary = bytes.includes(0);

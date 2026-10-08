@@ -56,6 +56,7 @@ mod review_fixes;
 mod review_round2;
 mod review_round3;
 mod count_config;
+mod github_source_tests;
 mod cold_lifecycle;
 #[cfg(feature = "benchmark")]
 mod cold_measure;

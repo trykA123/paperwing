@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { readComparisonContent } from './content-bytes';
+import { refreshComparison } from './compare-response';
 import { withoutTemporaryActive } from './temporary-set';
 
 export type RefKind = 'branch' | 'tag' | 'commit';
@@ -9,14 +10,15 @@ export type CompareRef =
   | { kind: 'commit'; sha: string }
   | { kind: 'head' | 'workingTree' };
 export type CompareEndpoint = { setId: string; itemId: string; reference: CompareRef };
+export type CompareSource = 'local' | 'github';
 export type CompareOptions = { normalizeEol: boolean; ignoreWhitespace: boolean };
 export type CompareUnavailableReason = 'notCloned' | 'notRepository' | 'unsupportedEncoding' | 'unmergedIndex' | 'refreshRequired' | 'unbornHead' | 'gitCapability' | 'other';
-export type CompareProblem = { kind: string; side: 'left' | 'right' | null; message: string; reason?: CompareUnavailableReason | null };
+export type CompareProblem = { kind: string; side: 'left' | 'right' | null; message: string; reason?: CompareUnavailableReason | null; retryAt?: number };
 export type CompareStatus = 'same' | 'different' | 'leftOnly' | 'rightOnly' | 'typeConflict' | 'unavailable';
 export type CompareEntryKind = 'file' | 'symlink' | 'gitlink' | 'directory';
 export type CompareSide = {
   kind: CompareEntryKind; size: number | null; modifiedMs: number | null; reason: string | null;
-  source: 'commitBlob' | 'workingTree' | 'indexGitlink' | 'untrackedRepository' | 'aggregate';
+  source: 'commitBlob' | 'workingTree' | 'indexGitlink' | 'untrackedRepository' | 'aggregate' | 'githubBlob';
 };
 export type CompareLines = { added: number; removed: number };
 export type CompareFile = {
@@ -33,6 +35,7 @@ export type CompareHistory = {
 };
 export type CompareSnapshot = {
   id: string; generation: number;
+  source?: CompareSource; truncated?: { files: boolean; commits: boolean };
   left: { endpoint: CompareEndpoint; commit: string; historyBasis: CompareHistory['leftBasis'] };
   right: { endpoint: CompareEndpoint; commit: string; historyBasis: CompareHistory['rightBasis'] };
   raw: CompareSummary; display: CompareSummary; history: CompareHistory; fileCount: number; options: CompareOptions;
@@ -252,7 +255,7 @@ export const api = {
   trashSetFolders: (setId: string) => invoke<TrashOutcome[]>('trash_set_folders', { setId }),
   openComparison: (left: CompareEndpoint, right: CompareEndpoint) =>
     invoke<{ id: string; generation: number }>('comparison_open', { left, right }),
-  refreshComparison: (id: string, options: CompareOptions) => invoke<CompareResult>('comparison_refresh', { id, options }),
+  refreshComparison,
   closeComparison: (id: string) => invoke<boolean>('comparison_close', { id }),
   cancelComparison: (id: string) => invoke<boolean>('comparison_cancel', { id }),
   comparisonFiles: (id: string, generation: number, offset = 0, limit = 512) =>

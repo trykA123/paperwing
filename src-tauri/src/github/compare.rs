@@ -1,9 +1,11 @@
-use super::http::{Error, Http};
+pub(crate) use super::http::Error;
+use super::http::Http;
 use super::pulls::repository::{parse_remote, Repository};
 use super::{enc, valid_name};
 use crate::settings::Source;
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod blob_reference;
 #[cfg(test)]
 pub(crate) mod fixture;
 mod mapping;
@@ -64,7 +66,7 @@ impl Request {
         })
     }
 
-    pub(crate) async fn connect(&self) -> Result<Http<'_>, Error> {
+    pub(in crate::github) async fn connect(&self) -> Result<Http<'_>, Error> {
         crate::providers::ensure_enabled(&self.source).map_err(Error::Message)?;
         let revision =
             crate::credentials::metadata_revision(&self.source).map_err(Error::Message)?;
@@ -78,7 +80,7 @@ pub(crate) fn immutable(reference: &str) -> bool {
     matches!(reference.len(), 40 | 64) && reference.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-pub(crate) async fn resolve(
+pub(in crate::github) async fn resolve(
     http: &Http<'_>,
     repository: &Repository,
     reference: &str,
@@ -91,13 +93,16 @@ pub(crate) async fn resolve(
     mapping::valid_sha(response.sha)
 }
 
-pub(crate) async fn fetch(http: &Http<'_>, request: &Request) -> Result<Comparison, Error> {
+pub(in crate::github) async fn fetch(
+    http: &Http<'_>,
+    request: &Request,
+) -> Result<Comparison, Error> {
     let base = resolve(http, &request.repository, &request.base).await?;
     let head = resolve(http, &request.repository, &request.head).await?;
     fetch_resolved(http, &request.repository, base, head).await
 }
 
-pub(crate) async fn fetch_resolved(
+pub(in crate::github) async fn fetch_resolved(
     http: &Http<'_>,
     repository: &Repository,
     base: String,
@@ -140,3 +145,11 @@ pub(crate) async fn fetch_resolved(
     }
     result.ok_or_else(|| Error::Message("GitHub comparison unavailable".into()))
 }
+
+pub(crate) async fn load(request: &Request) -> Result<Comparison, Error> {
+    let http = request.connect().await?;
+    fetch(&http, request).await
+}
+
+#[cfg(test)]
+pub(crate) use super::http::fixture::Binding;

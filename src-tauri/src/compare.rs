@@ -11,6 +11,10 @@ use tokio::sync::{Mutex, Semaphore};
 
 mod count_eligibility;
 mod history;
+mod github_source;
+mod remote;
+mod remote_service;
+pub use github_source::Preference as CompareSource;
 mod index_objects;
 mod inventory;
 mod line_counts;
@@ -77,6 +81,8 @@ pub struct Problem {
     pub side: Option<String>,
     pub message: String,
     pub reason: Option<UnavailableReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_at: Option<i64>,
 }
 
 impl Problem {
@@ -86,6 +92,7 @@ impl Problem {
             side: None,
             message: git::safe(message),
             reason: (kind == "unavailable").then_some(UnavailableReason::Other),
+            retry_at: None,
         }
     }
     fn side(mut self, side: &str) -> Self {
@@ -641,6 +648,8 @@ pub struct Snapshot {
     history: History,
     file_count: usize,
     options: Options,
+    source: &'static str,
+    truncated: crate::github::compare::Truncated,
 }
 
 #[derive(Clone)]
@@ -684,8 +693,14 @@ pub struct Service {
     #[cfg(target_os = "linux")]
     diff: std::sync::OnceLock<Arc<crate::linux_diff::Storage>>,
     counts: std::sync::OnceLock<Arc<count_eligibility::Eligibility>>,
+    remote_cache: std::sync::OnceLock<Arc<crate::github::blob::Cache>>,
     #[cfg(all(test, target_os = "linux"))]
     fresh_write_root_hook: std::sync::Mutex<Option<WriteRootHook>>,
+}
+
+enum SourcePrepared {
+    Local(Box<Prepared>),
+    Github(Box<remote::Prepared>),
 }
 
 struct Session {
@@ -695,6 +710,8 @@ struct Session {
     generation: u64,
     cancel: Arc<AtomicBool>,
     prepared: Option<Arc<Prepared>>,
+    remote: Option<Arc<remote::Prepared>>,
+    notify: Arc<tokio::sync::Notify>,
 }
 
 impl Default for Service {
@@ -707,6 +724,7 @@ impl Default for Service {
             #[cfg(target_os = "linux")]
             diff: std::sync::OnceLock::new(),
             counts: std::sync::OnceLock::new(),
+            remote_cache: std::sync::OnceLock::new(),
             #[cfg(all(test, target_os = "linux"))]
             fresh_write_root_hook: std::sync::Mutex::new(None),
         }
@@ -796,6 +814,8 @@ impl Service {
                 generation: 0,
                 cancel: Arc::new(AtomicBool::new(false)),
                 prepared: None,
+                remote: None,
+                notify: Arc::default(),
             },
         );
         Ok(Opened { id, generation: 0 })
@@ -820,6 +840,7 @@ impl Service {
         let session = self.sessions().remove(id);
         if let Some(session) = session {
             session.cancel.store(true, Ordering::Relaxed);
+            session.notify.notify_waiters();
             close_readers(&session.readers).await;
             true
         } else {
@@ -833,6 +854,7 @@ impl Service {
             .collect();
         for session in &sessions {
             session.cancel.store(true, Ordering::Relaxed);
+            session.notify.notify_waiters();
         }
         async move {
             futures_util::future::join_all(sessions.iter().map(|session| close_readers(&session.readers))).await;
@@ -846,8 +868,10 @@ impl Service {
                 return false;
             };
             session.cancel.store(true, Ordering::Relaxed);
+            session.notify.notify_waiters();
             session.generation += 1;
             session.prepared = None;
+            session.remote = None;
             session.readers.clone()
         };
         close_readers(&readers).await;
@@ -1322,6 +1346,8 @@ impl Service {
             history,
             file_count: rows.len(),
             options,
+            source: "local",
+            truncated: Default::default(),
         };
         Ok(Prepared {
             view,
@@ -1332,13 +1358,19 @@ impl Service {
         })
     }
 
-    async fn refresh(
+    #[cfg(test)]
+    async fn refresh(&self, settings: &crate::settings::Settings, id: &str, options: Options) -> Result<RefreshResult, Problem> {
+        self.refresh_with_source(settings, id, options, None).await
+    }
+
+    async fn refresh_with_source(
         &self,
         settings: &crate::settings::Settings,
         id: &str,
         options: Options,
+        source: Option<CompareSource>,
     ) -> Result<RefreshResult, Problem> {
-        let (contexts, generation, job, previous) = {
+        let (contexts, generation, job, previous, notify) = {
             let mut sessions = self.sessions();
             let session = sessions
                 .get_mut(id)
@@ -1346,9 +1378,12 @@ impl Service {
             Self::rebind(settings, &session.left)?;
             Self::rebind(settings, &session.right)?;
             session.cancel.store(true, Ordering::Relaxed);
+            session.notify.notify_waiters();
             session.cancel = Arc::new(AtomicBool::new(false));
+            session.notify = Arc::default();
             session.generation += 1;
             session.prepared = None;
+            session.remote = None;
             let previous = std::mem::take(&mut session.readers);
             (
                 [session.left.clone(), session.right.clone()],
@@ -1367,12 +1402,21 @@ impl Service {
                     inventory_started: None,
                 },
                 previous,
+                session.notify.clone(),
             )
         };
         close_readers(&previous).await;
         self.reset_configuration(&contexts);
         let _permit = job.slot(&self.slots).await?;
-        let result = self.prepare(id, generation, contexts, options, &job).await;
+        let cancelled = notify.notified();
+        tokio::pin!(cancelled);
+        cancelled.as_mut().enable();
+        job.check()?;
+        let result = tokio::select! {
+            biased;
+            _ = &mut cancelled => Err(Problem::new("cancelled", "Comparison cancelled")),
+            result = self.prepare_source(settings, remote::Refresh { id, generation, endpoints: [contexts[0].endpoint.clone(), contexts[1].endpoint.clone()], options, job: &job }, contexts, source) => result,
+        };
         if result.is_err() {
             close_readers(&job.readers).await;
         }
@@ -1383,9 +1427,14 @@ impl Service {
             .filter(|session| session.generation == generation)
             .ok_or_else(|| Problem::new("staleGeneration", "Obsolete comparison result"))?;
         match result {
-            Ok(prepared) => {
+            Ok(SourcePrepared::Local(prepared)) => {
                 let snapshot = Box::new(prepared.view.clone());
-                session.prepared = Some(Arc::new(prepared));
+                session.prepared = Some(Arc::new(*prepared));
+                Ok(RefreshResult::Ready { snapshot })
+            }
+            Ok(SourcePrepared::Github(prepared)) => {
+                let snapshot = Box::new(prepared.view.clone());
+                session.remote = Some(Arc::new(*prepared));
                 Ok(RefreshResult::Ready { snapshot })
             }
             Err(problem) => match problem.kind.as_str() {
@@ -1394,6 +1443,7 @@ impl Service {
                 "missingLeft" => Ok(RefreshResult::MissingLeft { problem }),
                 "missingRight" => Ok(RefreshResult::MissingRight { problem }),
                 "networkError" => Ok(RefreshResult::NetworkError { problem }),
+                "githubUnavailable" | "githubNotFound" | "githubRateLimited" => Ok(RefreshResult::Unavailable { problem }),
                 _ => Err(problem),
             },
         }
@@ -1588,10 +1638,11 @@ pub async fn comparison_refresh(
     service: tauri::State<'_, Service>,
     id: String,
     options: Options,
+    source: Option<CompareSource>,
 ) -> Result<RefreshResult, Problem> {
     #[cfg(feature = "benchmark")]
     let _span = crate::benchmark::Span::new("ipc.refresh", "other");
-    service.refresh(&saved(&app)?, &id, options).await
+    service.refresh_with_source(&saved(&app)?, &id, options, source).await
 }
 
 #[tauri::command]
@@ -1624,7 +1675,12 @@ pub async fn comparison_files(
     if limit == 0 || limit > 512 || offset > FILE_LIMIT {
         return Err(Problem::new("limitExceeded", "Invalid inventory page"));
     }
-    let (prepared, job) = service.snapshot(&saved(&app)?, &id, generation).await?;
+    let settings = saved(&app)?;
+    if let Some((prepared, job, _)) = service.remote_snapshot(&settings, &id, generation).await? {
+        job.check()?;
+        return Ok(prepared.files(offset, limit).await);
+    }
+    let (prepared, job) = service.snapshot(&settings, &id, generation).await?;
     job.check()?;
     Ok(prepared
         .rows
@@ -1647,6 +1703,11 @@ pub async fn comparison_content(
     #[cfg(feature = "benchmark")]
     let _span = crate::benchmark::Span::new("ipc.content", "other");
     let settings = saved(&app)?;
+    if let Some(session) = service.remote_snapshot(&settings, &id, generation).await? {
+        let content = service.remote_content(session, (&file_id, &side)).await?;
+        service.remote_snapshot(&saved(&app)?, &id, generation).await?;
+        return Ok(content);
+    }
     let (prepared, job) = service.snapshot(&settings, &id, generation).await?;
     let _permit = job.slot(&service.slots).await?;
     let row = prepared
@@ -1683,6 +1744,10 @@ pub async fn comparison_commits(
         return Err(Problem::new("limitExceeded", "Invalid commit page"));
     }
     let settings = saved(&app)?;
+    if let Some((prepared, job, _)) = service.remote_snapshot(&settings, &id, generation).await? {
+        job.check()?;
+        return Ok(prepared.commits(offset, limit));
+    }
     let (prepared, job) = service.snapshot(&settings, &id, generation).await?;
     let _permit = job.slot(&service.slots).await?;
     let source = prepared.history_source.as_ref().ok_or_else(|| {

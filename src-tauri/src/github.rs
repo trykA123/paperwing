@@ -3,11 +3,9 @@ use crate::store::Store;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-#[cfg(test)]
-mod blob;
+pub(crate) mod blob;
 mod cache;
-#[cfg(test)]
-mod compare;
+pub(crate) mod compare;
 #[cfg(test)]
 mod commit_cache;
 mod http;

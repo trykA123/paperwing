@@ -41,7 +41,6 @@ impl Response {
         })
     }
 
-    #[cfg(test)]
     pub(super) fn check_rate_limit(&self) -> Result<(), Error> {
         let exhausted = self
             .headers
