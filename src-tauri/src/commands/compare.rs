@@ -3,6 +3,8 @@ use crate::compare;
 domain! {
             compare::comparison_open,
             compare::comparison_refresh,
+            compare::comparison_start,
+            compare::comparison_progress,
             compare::comparison_close,
             compare::comparison_cancel,
             compare::comparison_files,

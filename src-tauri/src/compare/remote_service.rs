@@ -64,7 +64,7 @@ impl Service {
             .remote_cache
             .get()
             .ok_or_else(|| Problem::new("githubUnavailable", "GitHub cache is not configured"))?;
-        let _permit = job.slot(&self.slots).await?;
+        let _permit = job.slot(&self.interactive_slots).await?;
         let cancelled = notify.notified();
         tokio::pin!(cancelled);
         cancelled.as_mut().enable();

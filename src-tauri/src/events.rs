@@ -43,6 +43,7 @@ fn frontend_event(event: &CoreEvent) -> Option<(&'static str, Option<&EventPaylo
         CoreEvent::LaunchRequest => (crate::launch::LAUNCH_EVENT, None),
         CoreEvent::CredentialChanged(payload) => ("credential-changed", Some(payload)),
         CoreEvent::GitActivity(payload) => ("git-activity", Some(payload)),
+        CoreEvent::CompareProgress(payload) => ("compare-progress", Some(payload)),
         CoreEvent::DiagnosticsProgress(payload) => ("diagnostics-progress", Some(payload)),
         CoreEvent::RepoChanged(payload) => ("repo-changed", Some(payload)),
         CoreEvent::WatchFailed(payload) => ("watch-failed", Some(payload)),

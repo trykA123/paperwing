@@ -23,6 +23,7 @@ pub enum CoreEvent {
     LaunchRequest,
     CredentialChanged(EventPayload),
     GitActivity(EventPayload),
+    CompareProgress(EventPayload),
     DiagnosticsProgress(EventPayload),
     RepoChanged(EventPayload),
     WatchFailed(EventPayload),

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add generation-tagged comparison start and progress commands with session-owned supervised producers (packet 19 step 1).
+
 - Add provider-neutral CI backend commands and a foreground GitHub Actions/Enterprise client for conditional runs, jobs, completed logs, bounded artifact downloads and confirmed rerun, cancel and typed dispatch actions (packet 31 backend).
 
 - Replace Monaco with CodeMirror 6 in file compare behind one editor adapter (`src/lib/editor.ts`, contract-tested), and open files over 5 MB in a read-only large-file renderer. Saves keep each file's BOM and line endings; files with mixed line endings stay read-only.

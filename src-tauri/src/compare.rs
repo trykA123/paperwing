@@ -9,6 +9,9 @@ use std::sync::{
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 
+mod progressive;
+mod producer;
+pub use progressive::{Hint, PendingRow, Progress, RowUpdate, State, Totals};
 mod count_eligibility;
 mod history;
 mod github_source;
@@ -686,10 +689,21 @@ type WriteRootHook = Arc<dyn Fn() + Send + Sync>;
 type DiffConfigurations = HashMap<PathBuf, Arc<tokio::sync::OnceCell<Vec<String>>>>;
 
 pub struct Service {
+    inner: Arc<ServiceState>,
+    owner: bool,
+}
+
+impl std::ops::Deref for Service {
+    type Target = ServiceState;
+    fn deref(&self) -> &ServiceState { &self.inner }
+}
+
+pub struct ServiceState {
     sessions: std::sync::Mutex<HashMap<String, Session>>,
     fetches: Mutex<HashMap<PathBuf, Arc<Mutex<Fetch>>>>,
     diff_configs: std::sync::Mutex<DiffConfigurations>,
     slots: Semaphore,
+    interactive_slots: Semaphore,
     #[cfg(target_os = "linux")]
     diff: std::sync::OnceLock<Arc<crate::linux_diff::Storage>>,
     counts: std::sync::OnceLock<Arc<count_eligibility::Eligibility>>,
@@ -713,15 +727,24 @@ struct Session {
     prepared: Option<Arc<Prepared>>,
     remote: Option<Arc<remote::Prepared>>,
     notify: Arc<tokio::sync::Notify>,
+    progress: Option<progressive::Retained>,
+    producer: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl Default for Service {
+    fn default() -> Self {
+        Self { inner: Arc::new(ServiceState::default()), owner: true }
+    }
+}
+
+impl Default for ServiceState {
     fn default() -> Self {
         Self {
             sessions: std::sync::Mutex::new(HashMap::new()),
             fetches: Mutex::new(HashMap::new()),
             diff_configs: std::sync::Mutex::new(HashMap::new()),
             slots: Semaphore::new(4),
+            interactive_slots: Semaphore::new(4),
             #[cfg(target_os = "linux")]
             diff: std::sync::OnceLock::new(),
             counts: std::sync::OnceLock::new(),
@@ -818,6 +841,8 @@ impl Service {
                 prepared: None,
                 remote: None,
                 notify: Arc::default(),
+                progress: None,
+                producer: None,
             },
         );
         Ok(Opened { id, generation: 0 })
@@ -844,6 +869,7 @@ impl Service {
             session.cancel.store(true, Ordering::Relaxed);
             session.notify.notify_waiters();
             close_readers(&session.readers).await;
+            if let Some(producer) = session.producer { let _ = producer.await; }
             true
         } else {
             false
@@ -859,12 +885,15 @@ impl Service {
             session.notify.notify_waiters();
         }
         async move {
-            futures_util::future::join_all(sessions.iter().map(|session| close_readers(&session.readers))).await;
+            for session in sessions {
+                close_readers(&session.readers).await;
+                if let Some(producer) = session.producer { let _ = producer.await; }
+            }
         }
     }
 
     async fn cancel(&self, id: &str) -> bool {
-        let readers = {
+        let (readers, producer) = {
             let mut sessions = self.sessions();
             let Some(session) = sessions.get_mut(id) else {
                 return false;
@@ -874,9 +903,11 @@ impl Service {
             session.generation += 1;
             session.prepared = None;
             session.remote = None;
-            session.readers.clone()
+            session.progress = None;
+            (session.readers.clone(), session.producer.take())
         };
         close_readers(&readers).await;
+        if let Some(producer) = producer { let _ = producer.await; }
         true
     }
 
@@ -1080,6 +1111,7 @@ impl Service {
             commit: commits[1].take().unwrap(),
             files: BTreeMap::new(),
         };
+        self.transition(id, generation, State::Listing);
         left.files = inventory(&left, job).await.map_err(|problem| problem.side("left"))?;
         right.files = inventory(&right, job).await.map_err(|problem| problem.side("right"))?;
         let metadata = diff_metadata(&left, &right, job).await?;
@@ -1372,83 +1404,8 @@ impl Service {
         options: Options,
         source: Option<CompareSource>,
     ) -> Result<RefreshResult, Problem> {
-        let (contexts, generation, job, previous, notify) = {
-            let mut sessions = self.sessions();
-            let session = sessions
-                .get_mut(id)
-                .ok_or_else(|| Problem::new("unknownSession", "Unknown comparison"))?;
-            Self::rebind(settings, &session.left)?;
-            Self::rebind(settings, &session.right)?;
-            session.cancel.store(true, Ordering::Relaxed);
-            session.notify.notify_waiters();
-            session.cancel = Arc::new(AtomicBool::new(false));
-            session.notify = Arc::default();
-            session.generation += 1;
-            session.prepared = None;
-            session.remote = None;
-            let previous = std::mem::take(&mut session.readers);
-            (
-                [session.left.clone(), session.right.clone()],
-                session.generation,
-                Job {
-                    rust_counts: None,
-                    count_root: self.counts.get().and_then(|counts| counts.storage.clone()),
-                    readers: session.readers.clone(),
-                    context: format!("compare:{id}"),
-                    cancel: session.cancel.clone(),
-                    #[cfg(target_os = "linux")] diff: self.diff.get().cloned(),
-                    #[cfg(target_os = "linux")] roots: Vec::new(),
-                    #[cfg(test)]
-                    temporary_root: None,
-                    #[cfg(test)]
-                    inventory_started: None,
-                },
-                previous,
-                session.notify.clone(),
-            )
-        };
-        close_readers(&previous).await;
-        self.reset_configuration(&contexts);
-        let _permit = job.slot(&self.slots).await?;
-        let cancelled = notify.notified();
-        tokio::pin!(cancelled);
-        cancelled.as_mut().enable();
-        job.check()?;
-        let result = tokio::select! {
-            biased;
-            _ = &mut cancelled => Err(Problem::new("cancelled", "Comparison cancelled")),
-            result = self.prepare_source(settings, remote::Refresh { id, generation, endpoints: [contexts[0].endpoint.clone(), contexts[1].endpoint.clone()], options, job: &job }, contexts, source) => result,
-        };
-        if result.is_err() {
-            close_readers(&job.readers).await;
-        }
-        job.check()?;
-        let mut sessions = self.sessions();
-        let session = sessions
-            .get_mut(id)
-            .filter(|session| session.generation == generation)
-            .ok_or_else(|| Problem::new("staleGeneration", "Obsolete comparison result"))?;
-        match result {
-            Ok(SourcePrepared::Local(prepared)) => {
-                let snapshot = Box::new(prepared.view.clone());
-                session.prepared = Some(Arc::new(*prepared));
-                Ok(RefreshResult::Ready { snapshot })
-            }
-            Ok(SourcePrepared::Github(prepared)) => {
-                let snapshot = Box::new(prepared.view.clone());
-                session.remote = Some(Arc::new(*prepared));
-                Ok(RefreshResult::Ready { snapshot })
-            }
-            Err(problem) => match problem.kind.as_str() {
-                "unavailable" => Ok(RefreshResult::Unavailable { problem }),
-                "invalidRef" => Ok(RefreshResult::InvalidRef { problem }),
-                "missingLeft" => Ok(RefreshResult::MissingLeft { problem }),
-                "missingRight" => Ok(RefreshResult::MissingRight { problem }),
-                "networkError" => Ok(RefreshResult::NetworkError { problem }),
-                "githubUnavailable" | "githubNotFound" | "githubRateLimited" => Ok(RefreshResult::Unavailable { problem }),
-                _ => Err(problem),
-            },
-        }
+        let opened = self.start(settings, id, options, source, None).await?;
+        self.wait(id, opened.generation).await
     }
 
     pub async fn copy_source_context(&self, settings: &crate::settings::Settings, id: &str, generation: u64, file_id: &str, side: &str) -> Result<Option<WriteContext>, String> {
@@ -1711,7 +1668,7 @@ pub async fn comparison_content(
         return Ok(content);
     }
     let (prepared, job) = service.snapshot(&settings, &id, generation).await?;
-    let _permit = job.slot(&service.slots).await?;
+    let _permit = job.slot(&service.interactive_slots).await?;
     let row = prepared
         .rows
         .iter()
@@ -1833,4 +1790,27 @@ pub(crate) async fn native_diff_counts(input: NativeDiffTest) -> Result<serde_js
     #[cfg(not(feature="benchmark"))]
     let counters=serde_json::json!({"diff":commands.len()});
     Ok(serde_json::json!({"lines":lines,"commands":counters,"gitOperations":commands.len()}))
+}
+
+#[tauri::command]
+pub async fn comparison_start(
+    app: tauri::AppHandle,
+    service: tauri::State<'_, Service>,
+    id: String,
+    options: Options,
+) -> Result<Opened, Problem> {
+    service
+        .start(&saved(&app)?, &id, options, None, Some(app))
+        .await
+}
+
+#[tauri::command]
+pub async fn comparison_progress(
+    service: tauri::State<'_, Service>,
+    id: String,
+    generation: u64,
+    after: u64,
+    limit: usize,
+) -> Result<Progress, Problem> {
+    service.progress(&id, generation, after, limit)
 }
