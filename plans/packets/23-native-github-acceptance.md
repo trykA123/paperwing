@@ -1,6 +1,6 @@
 # 23 — Native acceptance with disposable GitHub fixtures
 
-Status: blocked by 17, 20, 21a (and 06 for the Windows write rows)
+Status: blocked by 20, 21a (and 06 for the Windows write rows)
 Platform: Windows first (Defender on), then Linux. Windows results gate acceptance.
 Size: L
 Role: orchestrator plus api-builder; the owner observes live steps
@@ -11,7 +11,7 @@ Prove every feature end to end on native Windows and Linux with local adversaria
 ## Already done
 - `scripts/testing/github-fixtures.sh` creates private repos `skein-fixture-api`, `-web`, `-infra` and `-mono` on the signed-in `gh` account and skips existing ones. `--delete` removes them (needs `delete_repo` scope).
 - `scripts/testing/{baseline,fixtures,native-profile}.ts` provide the baseline runner, local fixtures and an isolated native profile.
-- A Windows VM exists (`plans/2026-10-06/handoff.md`). CI builds `Skein.exe` and a Linux deb and AppImage.
+- CI builds `Skein.exe` and a Linux deb and AppImage.
 - Enterprise host and multi-source behaviour is covered by fixture tests only (`src-tauri/src/github/`, `src/lib/api-pulls.test.js`).
 
 ## Decisions
@@ -29,7 +29,7 @@ Prove every feature end to end on native Windows and Linux with local adversaria
 
 ## Read first
 - `scripts/testing/github-fixtures.sh`, `scripts/testing/native-profile.ts`, `docs/testing.md`
-- `docs/implementation-status.md`, `plans/2026-10-06/handoff.md`
+- `docs/testing.md`
 - Evidence from 17, 19, 20, 21 and the Windows rows of 14 and 15
 
 ## Steps

@@ -29,3 +29,6 @@ Moved out: branch cleanup and set search are in 39.
 - Unbuilt in the repository shell: clone by URL ("Clone repository…"), discard in the Changes section (packet 29 UI), failing runs in the quick look and run details in the drawer (packet 31 run data), pull requests for remote-only repositories (needs a remote lookup, not a local path).
 - Chip counts on the Repositories home are a lower bound until statuses are read (shown with a "+"). A cheap on-disk probe (`paths_exist`) could give exact "Cloned" counts without full status.
 - Packet 38 nit: the events bus serialises each event twice (`RawValue`); skip the second pass when no bus subscribers are registered.
+- Dev warning `ownership_invalid_binding` when Code search opens: `CodeSearch.svelte` does `bind:form={session.form}` on a session that `App.svelte` passes as a plain prop. Fix the ownership (bindable prop or a function binding) and check the console in `ui-39`.
+- `ui-44` fails at 390 px (Ctrl+1–5, Ctrl+J, Enter on an item, page overflow, table width 310 vs 770): its width asserts assume 1440, and the 250 px sidebar crowds a narrow window. Decide a minimum window width or make the asserts width-aware.
+- `ui-39` "2000 matches stays smooth" frame check flakes under heavy machine load (133 ms worst frame with other harnesses running). Run harnesses sequentially.

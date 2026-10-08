@@ -51,8 +51,8 @@ proves rendering and refusal, without ratifying editor latency targets. Logs con
 
 Windows write, junction and recovery checks require native Windows. Linux compilation and server tests do not substitute for them. Current Linux save/copy/recovery support remains gated by the Linux protection contract and later backend packets.
 
-See [packet execution status](implementation-status.md) and the [Linux write contract](linux-write-contract.md)
-for completed work, deferred checks and the accepted practical contract.
+See the [Linux write contract](linux-write-contract.md) for the accepted practical contract,
+and [`plans/README.md`](../plans/README.md) for work still to do.
 
 ## Linux read-only editor acceptance
 
@@ -202,7 +202,7 @@ cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib linux_d
 cargo test --offline --locked --manifest-path src-tauri/Cargo.toml --lib compare -- --test-threads=1
 ```
 
-Fixtures live under `.skillify/evidence/paperwing/14/resume/native`, carry an ownership
+Fixtures live under `.skillify/evidence/skein/14/resume/native`, carry an ownership
 marker, prove restoration before mutation and retain before/after source and sentinel
 checks. Tests cover guarded missing suffixes and create races, direct/external metadata
 and bind overlap, durable quota/restart/partial accounting, malformed artifacts, two

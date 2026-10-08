@@ -10,7 +10,7 @@ use super::{
 };
 use crate::linux_guard::{
     metadata::Security,
-    mutation::{AuthorizedPublication, OperationAuthority, Parent, Snapshot},
+    mutation::{AuthorizedPublication, OperationAuthority, Parent, Snapshot, STAGE_PREFIX},
     storage, Identity, Root,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -105,7 +105,7 @@ impl Journal {
             .map(str::to_string)
             .map(Ok)
             .unwrap_or_else(|| storage::unique_name("r-"))?;
-        let candidate = storage::unique_name(".paperwing-stage-")?;
+        let candidate = storage::unique_name(STAGE_PREFIX)?;
         let before = expected.bytes().unwrap_or_default();
         let intent = Intent {
             id: id.clone(),

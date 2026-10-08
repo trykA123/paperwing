@@ -27,7 +27,7 @@ fn snapshot(path: &Path) -> serde_json::Value {
 impl Fixture {
     fn new() -> Self {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../.skillify/evidence/paperwing/14/a2/native/journal-parents")
+            .join("../.skillify/evidence/skein/14/a2/native/journal-parents")
             .join(format!(
                 "fixture-{}-{}",
                 std::process::id(),
@@ -37,8 +37,8 @@ impl Fixture {
         std::fs::create_dir(&path).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
         std::fs::write(
-            path.join(".paperwing-parent-fixture"),
-            b"paperwing-parent-fixture-v1\n",
+            path.join(".skein-parent-fixture"),
+            b"skein-parent-fixture-v1\n",
         )
         .unwrap();
         for name in ["repo", "repo/.git", "data"] {

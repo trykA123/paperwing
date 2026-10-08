@@ -8,7 +8,7 @@ fn stage(path: &Path) -> PathBuf {
                 .unwrap()
                 .to_str()
                 .unwrap()
-                .starts_with(".paperwing-stage-")
+                .starts_with(".skein-stage-")
         })
         .unwrap()
 }

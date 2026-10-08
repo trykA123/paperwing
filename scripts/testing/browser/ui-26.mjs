@@ -7,6 +7,7 @@ import { localStatus } from './backend.mjs';
 import { git } from './fixture.mjs';
 import * as stash from './stash-backend.mjs';
 import { makeStashSet } from './stash-fixture.mjs';
+import { clearNarrow } from './shell-nav.mjs';
 
 const [url, shots, theme = 'light', width = '1440'] = process.argv.slice(2);
 const { chromium } = await import(`${process.env.PLAYWRIGHT_DIR}/index.mjs`);
@@ -38,6 +39,7 @@ await page.exposeFunction('__backend', async (cmd, a) => {
     case 'stash_drop': return stash.drop(a.path, a.oid) ?? null;
     case 'stash_show': return stash.show(a.path, a.oid);
     case 'switch_with_stash': return stash.switchWithStash(a.path, a.branch);
+    case 'pull_for_branch': return null;
     case 'activity_snapshot': case 'get_refs_many': case 'list_tags': return [];
     case 'list_repos': return { repos: [], fetchedAt: 0, errors: [] };
     case 'open_in_vscode': return null;
@@ -76,6 +78,7 @@ const row = name => page.locator(`.fm-row[data-id="${name}"]`);
 await page.goto(url);
 await page.waitForTimeout(5500);
 await page.waitForSelector('.fm-row[data-id="alpha"]');
+await clearNarrow(page, width);
 await page.waitForTimeout(800);
 
 // Row menu: disabled reasons on the clean repository, enabled on a dirty one.

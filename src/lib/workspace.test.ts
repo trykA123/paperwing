@@ -32,6 +32,11 @@ describe('P1 saved workspace', () => {
     expect(migrateWorkspace(JSON.parse(JSON.stringify(defaults)))).toEqual(defaults);
   });
 
+  test('language mappings load from old files, keep valid entries and drop the rest', () => {
+    expect(migrateWorkspace({ root: 'E:\\x' }).languageMap).toEqual({});
+    expect(migrateWorkspace({ languageMap: { cfg: 'xml', '.Foo': 'asap2', bad: 'nope', n: 3 } } as unknown as Partial<Workspace>).languageMap).toEqual({ cfg: 'xml', foo: 'asap2' });
+  });
+
   test('empty sets and stale active identity recover without changing the root', () => {
     const restored = migrateWorkspace({ sets: [], activeSet: 'deleted', root: 'E:\\private' });
     expect(restored.sets).toHaveLength(1);

@@ -2,6 +2,7 @@
 // Usage: PLAYWRIGHT_DIR=<dir with playwright-core> node ui-28.mjs <url> <shots-dir> [light|dark] [width] [compact|comfortable] [full|shots]
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { clearNarrow, setSidebar } from './shell-nav.mjs';
 import { hostOf, lastCommit, makePulls, remoteTree, statusFor } from './pulls-backend.mjs';
 
 const [url, shots, theme = 'light', width = '1440', density = 'compact', mode = 'full'] = process.argv.slice(2);
@@ -30,6 +31,7 @@ const handle = async (cmd, a) => {
     case 'pull_for_branch': return pulls.pullForBranch(a.path, a.branch);
     case 'open_pull_request': return pulls.openPullRequest(a.path, a.request);
     case 'push_branch': pushes.push(a.path); return { remote: 'origin', branch: 'x', upstreamSet: true };
+    case 'repo_changes': return { branch: 'main', detached: false, unborn: false, head: 'a'.repeat(40), files: [] };
     case 'repository_tree': return remoteTree();
     case 'repository_history': return lastCommit(a.path);
     case 'plugin:opener|open_url': pulls.browser = [...(pulls.browser ?? []), a.url]; return null;
@@ -77,6 +79,7 @@ await page.waitForTimeout(5500);
 pulls.calls.length = 0;
 await page.reload();
 await page.waitForSelector('.fm-row[data-id="repo-0"]');
+await clearNarrow(page, width);
 await settle();
 const first = pulls.calls.length;
 const mounted = await page.locator('.fm-table .fm-row[data-id]').count();
@@ -84,13 +87,11 @@ check(`initial load asks only for visible rows (${first} calls, ${mounted} rows 
 const box = await page.evaluate(() => ({ wrap: document.querySelector('.fm-wrap').clientWidth, row: document.querySelector('.fm-table .fm-row[data-id]').scrollWidth, view: document.querySelector('.fm-table .vbox').clientWidth }));
 console.log(`widths wrap=${box.wrap} view=${box.view} rowScroll=${box.row}`);
 await shot('table-top');
-await page.click('button[aria-label="Toggle sidebar"]');
-await page.waitForTimeout(400);
+await setSidebar(page, false);
 const wide = await page.evaluate(() => ({ wrap: document.querySelector('.fm-wrap').clientWidth, text: document.querySelectorAll('.pull-text').length && getComputedStyle(document.querySelector('.pull-text')).display }));
 console.log(`panels hidden: wrap=${wide.wrap} pull-text display=${wide.text}`);
 await shot('table-wide');
-await page.click('button[aria-label="Toggle sidebar"]');
-await page.waitForTimeout(400);
+await setSidebar(page, Number(width) >= 700);
 
 await scrollTo(rowH * 400);
 await settle();

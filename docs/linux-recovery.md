@@ -185,7 +185,7 @@ Diagnostic Clippy passes with dead_code permitted. Strict Clippy is recorded sep
 and still reports unused disabled/staged backend APIs. The only dependency change is the
 already locked Linux direct sha2=0.10.9 edge; all553 locked package tuples remain intact.
 Evidence and explicit source snapshots/hashes live under ignored
-`.skillify/evidence/paperwing/13/`. Native Windows, reboot, power-loss, older kernels,
+`.skillify/evidence/skein/13/`. Native Windows, reboot, power-loss, older kernels,
 casefold filesystems and hidden privileged metadata were not tested. Process restart
 and SIGKILL evidence do not establish reboot or power-loss durability.
 
@@ -218,7 +218,7 @@ one declared descendant. It captures the descendant PID, terminates/reaps an orp
 when required and verifies no children remain. The repaired controls need no external
 termination and preserve their fixture sentinels.
 
-Repair runs write exclusively under `.skillify/evidence/paperwing/13/repair-1/`.
+Repair runs write exclusively under `.skillify/evidence/skein/13/repair-1/`.
 The original frozen manifest, source snapshots, native fixtures and four SIGKILL JSON
 matrices remain unchanged. The repair adds four native regressions; final results are recorded separately as
 118 default/123 test-profile and15 guard/35 journal passes, with one ignored

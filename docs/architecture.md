@@ -66,8 +66,8 @@ associated ref cache rows. A writer-side check of in-memory admission state
 derived from settings rejects late listing writes. Reenabling prevents an older
 queued cleanup from removing the newly enabled source's cache.
 Credential configuration revisions also invalidate requests when enabled state
-changes. SQLite never supplies enabled flags. Tokens remain in the existing keyring service
-`paperwing`, and the app identifier remains `dev.paperwing.app`.
+changes. SQLite never supplies enabled flags. Tokens live in the keyring service
+`skein`, and the app identifier is `dev.skein.app`.
 
 Disabling the only configured github.com source also refuses `git ls-remote` for
 github.com URLs. This is intentional: a disabled host means no traffic, including

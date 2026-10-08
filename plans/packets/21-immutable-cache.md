@@ -1,6 +1,6 @@
 # 21 — Cache for repeat comparisons (immutable Git facts)
 
-Status: blocked by 17 and 20 (21a); 21b also needs a Windows write-path proof
+Status: blocked by 20 (21a); 21b also needs a Windows write-path proof
 Platform: Windows first, Linux parity
 Size: L (two parts: 21a read paths, 21b write contexts after hits)
 Role: api-builder (gpt-6.1-sol xhigh), one writer

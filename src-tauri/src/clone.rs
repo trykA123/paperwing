@@ -247,7 +247,7 @@ async fn run_job(app: &AppHandle, job: &Job, opts: &Opts) -> Result<(&'static st
                     use std::os::windows::ffi::OsStrExt;
                     let original_identity = crate::files::identity(&dest)?;
                     let mut parent = crate::file_guard::PinnedPath::existing_directory(dest.parent().ok_or("Missing clone parent")?)?;
-                    let keeper_path = parent.path.join(format!(".paperwing-reclone-{ts}.lock"));
+                    let keeper_path = parent.path.join(format!(".skein-reclone-{ts}.lock"));
                     use std::os::windows::fs::OpenOptionsExt;
                     let keeper = std::fs::OpenOptions::new().write(true).create_new(true).share_mode(1)
                         .custom_flags(0x04000000).open(keeper_path).map_err(|error| error.to_string())?;

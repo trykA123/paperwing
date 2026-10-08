@@ -1,6 +1,6 @@
 # 20 — Progressive comparison in the UI
 
-Status: blocked by 19 (and 18)
+Status: blocked by 19
 Platform: Windows first (WebView2, Defender on), Linux parity
 Size: L
 Role: ui-builder-high (state and lifecycle work), one writer
@@ -14,6 +14,7 @@ Changed files appear and can be selected before classification, counts and histo
 - `src/components/VirtualList.svelte` exists. Binary content IPC arrives with packet 17 (`src/lib/content-bytes.ts`).
 
 ## Decisions
+- The contract is `docs/progressive-comparison-contract.md`, sections 8, 9 and 11-13: `openProgressive()` beside today's `open()` (set compare keeps `open()` in this packet), identity `{id, generation}` during enriching, hint labels, filters and "N checking", read-only editor until final with a reload from `EditFile.bytes`, re-select by path after refresh, and the `ui.first-row` timer.
 - Pending UI follows `docs/progressive-comparison-contract.md` exactly. Lifecycle stays in the existing owners.
 - Pending rows never allow copy or save. Selected-file actions request fresh tickets as the contract says.
 - Batches apply at most once per animation frame. Large results use `$state.raw` with whole replacement; rows are keyed by stable id; counts and totals come from Rust (shared with packet 36).

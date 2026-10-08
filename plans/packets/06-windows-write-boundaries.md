@@ -1,6 +1,6 @@
 # 06 — Windows write boundaries
 
-Status: ready (Windows VM and the CI `test-windows` job both exist now)
+Status: ready. Windows proof runs in CI `test-windows` (the Windows VM was deleted 2026-10-07).
 Platform: Windows only. Linux must still compile with the Windows code excluded.
 Size: M
 Role: api-builder (gpt-6.1-sol xhigh), one writer
@@ -13,7 +13,7 @@ Split `src-tauri/src/files.rs` (887 lines) into cohesive modules without changin
 - `src-tauri/src/file_guard.rs` (332 lines) holds `PinnedPath`, `Transaction` (TxF), `atomic_replace`, `pin_metadata`.
 - `files::identity` is used by `clone.rs` (reclone). Registration in `src-tauri/src/lib.rs` is per platform (`#[cfg(windows)] files::…`, `#[cfg(target_os = "linux")] linux_files::…`).
 - Linux has its own accepted service in `src-tauri/src/linux_files/`. Do not merge the two.
-- CI runs `cargo test --locked` on `windows-latest` (`.github/workflows/build.yml`, job `test-windows`). The Windows VM is described in `plans/2026-10-06/handoff.md`.
+- CI runs `cargo test --locked` on `windows-latest` (`.github/workflows/build.yml`, job `test-windows`). The Windows VM was deleted on 2026-10-07; Windows proof is CI plus the owner's work PC.
 
 ## Decisions
 - `files.rs` stays the façade. New modules: `files/journal.rs`, `files/tickets.rs`, `files/copy.rs`. Native primitives may move unchanged to `file_guard/windows.rs`.

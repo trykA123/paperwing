@@ -14,14 +14,14 @@ impl Fixture {
         let parent = crate::env_names::var_os("SKEIN_PROCESS_EVIDENCE").map_or_else(std::env::temp_dir, |path| {
             let path = PathBuf::from(path);
             assert!(path.is_absolute() && path.canonicalize().unwrap() == path);
-            assert_eq!(std::fs::read_to_string(path.join(".paperwing-process-evidence")).unwrap(), "paperwing-process-evidence-v1\n");
+            assert_eq!(std::fs::read_to_string(path.join(".skein-process-evidence")).unwrap(), "skein-process-evidence-v1\n");
             path
         });
         let root = parent.join(format!("skein-process-{}-{}", std::process::id(), NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir(&root).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::fs::write(root.join(".paperwing-process-fixture"), "paperwing-process-fixture-v1\n").unwrap();
+        std::fs::write(root.join(".skein-process-fixture"), "skein-process-fixture-v1\n").unwrap();
         Self(root)
     }
 

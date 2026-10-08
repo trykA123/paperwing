@@ -2,7 +2,10 @@ use super::{
     record::{digest_valid, hash, id_valid},
     Error, STATE_LIMIT,
 };
-use crate::linux_guard::{mutation::StageProof, Identity};
+use crate::linux_guard::{
+    mutation::{StageProof, STAGE_PREFIX},
+    Identity,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,9 +97,9 @@ impl State {
     }
     pub(super) fn validate(&self) -> Result<(), Error> {
         if let Some(name) = self.candidate() {
-            if name.len() != 49
-                || !name.starts_with(".paperwing-stage-")
-                || !name[17..]
+            if name.len() != STAGE_PREFIX.len() + 32
+                || !name.starts_with(STAGE_PREFIX)
+                || !name[STAGE_PREFIX.len()..]
                     .bytes()
                     .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             {
@@ -227,4 +230,37 @@ pub(super) fn transition(before: &State, after: &State) -> Result<(), Error> {
         return Err(Error::invalid("Invalid recovery state transition"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::State;
+
+    #[test]
+    fn stage_names_accept_skein_prefix() {
+        let state = State::Prepared {
+            candidate: ".skein-stage-0123456789abcdef0123456789abcdef".into(),
+        };
+        assert!(state.validate().is_ok());
+    }
+
+    #[test]
+    fn stage_names_reject_malformed_names() {
+        for candidate in [
+            ".other-stage-0123456789abcdef0123456789abcdef",
+            ".skein-stage-0123456789abcdef0123456789abcde",
+            ".skein-stage-0123456789abcdef0123456789abcdef0",
+            ".skein-stage-0123456789abcdef0123456789abcdeF",
+            ".skein-stage-0123456789abcdef0123456789abcdeg",
+            ".skein-stage-0123456789abcdef0123456789abcde/",
+        ] {
+            let state = State::Prepared {
+                candidate: candidate.into(),
+            };
+            assert!(
+                state.validate().is_err(),
+                "accepted invalid stage: {candidate}"
+            );
+        }
+    }
 }

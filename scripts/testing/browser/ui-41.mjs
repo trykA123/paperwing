@@ -3,6 +3,7 @@
 import { strict as assert } from 'node:assert';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { clearNarrow } from './shell-nav.mjs';
 
 const [url, shots, theme = 'light', width = '1440', mode = 'present'] = process.argv.slice(2);
 const { chromium } = await import(`${process.env.PLAYWRIGHT_DIR}/index.mjs`);
@@ -65,6 +66,7 @@ await page.goto(url);
 await page.waitForTimeout(5500);
 await page.click('button[aria-label="Settings"]');
 await page.waitForSelector('.settings-nav');
+await clearNarrow(page, width);
 await page.waitForTimeout(500);
 const nav = await page.locator('.settings-nav').innerText();
 if (mode === 'absent') {

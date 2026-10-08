@@ -7,6 +7,11 @@ use crate::trash;
 domain! {
             commit::repo_changes,
             commit::change_content,
+            commit::change_hunks,
+            commit::stage_hunks,
+            commit::unstage_hunks,
+            commit::discard_files,
+            commit::discard_hunk,
             commit::stage_paths,
             commit::unstage_paths,
             commit::commit_staged,

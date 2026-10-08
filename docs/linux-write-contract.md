@@ -17,15 +17,15 @@ Research date: 2026-10-03. Reference host: Linux 7.2.4-3-cachyos, x86_64, uid100
 local ext4 on `/dev/nvme1n1p1`, mounted `rw,relatime` at `/mnt/Sabrent`.
 These observations establish one test environment, not support for every ext4 mount or kernel.
 
-Prototype source lives in the dedicated `work/paperwing-08-prototype` worktree:
-`/mnt/Sabrent/homelab/paperwing-08-prototype/prototype/linux-write-safety/probe.py`.
+Prototype source lives in the dedicated `work/skein-08-prototype` worktree:
+`/mnt/Sabrent/homelab/skein-08-prototype/prototype/linux-write-safety/probe.py`.
 It creates a new marked0700 root, uses separate processes for external writers, and retains
 all sacrificial files and recovery artifacts. No product write commands, real repositories,
 credentials or existing journals are used. It verifies a byte-for-byte fixture restore first.
 
 ```bash
 python3 prototype/linux-write-safety/probe.py --run \
-  /mnt/Sabrent/homelab/paperwing-08-prototype/prototype/linux-write-safety/run-02
+  /mnt/Sabrent/homelab/skein-08-prototype/prototype/linux-write-safety/run-02
 ```
 
 The runner passed independent pre-execution review. Native results and the reviewed
@@ -137,7 +137,7 @@ unavailable until these later packets meet their gates.
 ## Native probe results
 
 Fresh `run-02` completed on 2026-10-03. Report:
-`/mnt/Sabrent/homelab/paperwing-08-prototype/prototype/linux-write-safety/run-02/report.json`.
+`/mnt/Sabrent/homelab/skein-08-prototype/prototype/linux-write-safety/run-02/report.json`.
 Reviewed and executed source SHA256:
 `12255ad9fd323e02210b5d0da433eb4cdc7a36c31cd734c0cb03d715db6b7982`.
 The runner records 11 verified observations, seven reproduced gaps and two unverified probes.
@@ -206,7 +206,7 @@ available for inspection:
 
 ```bash
 python3 prototype/linux-write-safety/lease_probe.py --run \
-  /mnt/Sabrent/homelab/paperwing-08-prototype/prototype/linux-write-safety/lease-run-01
+  /mnt/Sabrent/homelab/skein-08-prototype/prototype/linux-write-safety/lease-run-01
 ```
 
 Runner SHA256: `8b5ec8c0a20017232ab6d7d15db315fcd9b422528e317d15219ca6b54d61dcd2`.
