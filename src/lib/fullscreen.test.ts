@@ -113,6 +113,18 @@ describe('compare full screen', () => {
     expect(calls).toEqual(['fullscreen:true']);
   });
 
+  test('F11 pressed on a compare belongs to the compare, so Back leaves it', async () => {
+    const { screen, calls, activated } = fixture();
+    await screen.follow({ id: 'repos', compare: false });
+    await screen.follow({ id: 'compare:1', compare: true });
+    await screen.toggle();
+    await screen.toggle();
+    await screen.back();
+    expect(screen.active).toBe(false);
+    expect(activated).toEqual(['repos']);
+    expect(calls).toEqual(['fullscreen:true', 'fullscreen:false', 'fullscreen:true', 'fullscreen:false']);
+  });
+
   test('F11 inside a compare leaves full screen and stays on the compare', async () => {
     const { screen, calls, activated } = fixture();
     await screen.follow({ id: 'repos', compare: false });

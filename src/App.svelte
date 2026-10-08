@@ -114,7 +114,7 @@
       app.repositories.back();
       return;
     }
-    const id = shortcut(event);
+    const id = shortcut(event, !!(event.target as Element | null)?.closest?.('.cm-content:not([aria-readonly="true"])'));
     if (!id) return;
     if (id.startsWith('rail-')) {
       if (!app.ready || app.paletteOpen) return;

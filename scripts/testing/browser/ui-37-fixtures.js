@@ -28,13 +28,14 @@
     c: () => [join(cFile(), '\n'), join(edit(cFile()), '\n')],
     crlf: () => [join(cFile(), '\r\n', true), join(edit(cFile()), '\r\n', true)],
     mixed: () => { const text = cFile().join('\n').replace('\n#include "frame.h"', '\r\n#include "frame.h"'); return [enc.encode(text), enc.encode(text.replace('int total = 0', 'int total = 5'))]; },
+    many: () => { const left = Array.from({ length: 600 }, (_, i) => `row ${i} of the table`), right = left.map((line, i) => (i % 10 === 1 ? `${line} edited` : line)); return [join(left, '\n'), join(right, '\n')]; },
     mb: () => { const left = Array.from({ length: 24000 }, (_, i) => `export const value_${i} = compute(${i}, "text-${i % 97}");`), right = left.map((line, i) => (i % 700 === 350 ? `${line} // changed` : line)); return [join(left, '\n'), join(right, '\n')]; },
     large: () => { const left = largeLines(), right = left.map((line, i) => (i % 1000 === 500 ? line.replace('compute', 'compute_v2') : line)); return [join(left, '\n'), join(right, '\n')]; },
     json: () => [minified(false), minified(true)],
   }[scenario]();
   const sides = { left: make[0], right: make[1] };
   const entry = (kind, source) => ({ kind: 'file', size: 1200, modifiedMs: Date.now(), reason: null, source });
-  const path = { c: 'engine.c', crlf: 'frame.c', mixed: 'mixed.c', large: 'values.txt', mb: 'values.ts', json: 'items.json' }[scenario];
+  const path = { c: 'engine.c', crlf: 'frame.c', mixed: 'mixed.c', large: 'values.txt', mb: 'values.ts', json: 'items.json', many: 'rows.txt' }[scenario];
   const files = [{ id: 'f0', path, left: entry('file', 'commitBlob'), right: entry('file', 'workingTree'), rawStatus: 'different', displayStatus: 'different',
     rawLines: { added: 4, removed: 2 }, displayLines: { added: 4, removed: 2 }, binary: false, rename: null, reason: null }];
   const base = window.__TAURI_INTERNALS__.invoke;

@@ -18,6 +18,7 @@ export class FullScreen {
   private ownsWindow = false;
   private wasMaximized = false;
   private tabId = '';
+  private onCompare = false;
   private returnTab = '';
   private chain: Promise<void> = Promise.resolve();
   private readonly host: FullScreenHost;
@@ -53,7 +54,11 @@ export class FullScreen {
     } catch (reason) { this.active = true; throw reason; }
   }
 
-  toggle(): Promise<void> { return this.report(this.active ? this.exit() : this.enter()); }
+  toggle(): Promise<void> {
+    if (this.active) return this.report(this.exit());
+    this.ownsWindow = this.onCompare;
+    return this.report(this.enter());
+  }
 
   private async report(task: Promise<void>): Promise<void> {
     try { await task; } catch (reason) { this.host.fail(reason); }
@@ -62,7 +67,7 @@ export class FullScreen {
   /** Called whenever the active tab changes; opening a compare tab enters full screen, leaving one for another view ends it. */
   follow(tab: FullScreenTab): Promise<void> {
     if (tab.id === this.tabId) return Promise.resolve();
-    this.tabId = tab.id;
+    this.tabId = tab.id; this.onCompare = tab.compare;
     if (!tab.compare) {
       this.returnTab = tab.id;
       return this.active && this.ownsWindow ? this.report(this.exit()) : Promise.resolve();

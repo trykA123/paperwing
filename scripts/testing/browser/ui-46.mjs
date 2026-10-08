@@ -60,13 +60,14 @@ if (width === '1440') {
   await sniff.waitForTimeout(300);
   check('picking a language applies to this file', (await pick(sniff).innerText()) === 'A2L (ASAP2)');
   const before = (await coloured(sniff)).colours;
-  await sniff.locator('label:has-text("Use for all .zzz files") input').check();
+  await sniff.getByRole('button', { name: 'More file actions' }).click();
+  await sniff.locator('label:has-text("Use this language for all .zzz files") input').check();
   await sniff.waitForFunction(() => window.__settings.at(-1)?.settings.workspace.languageMap?.zzz === 'asap2', null, { timeout: 8000 }).catch(() => {});
   const saved = await sniff.evaluate(() => window.__settings.at(-1).settings.workspace.languageMap);
   check('"Use for all" persists the mapping in the workspace', saved?.zzz === 'asap2', JSON.stringify(saved));
   check('the colouring stays after remembering', (await coloured(sniff)).colours >= Math.min(before, 2));
   await shot(sniff, 'picker-remembered');
-  await sniff.locator('label:has-text("Use for all .zzz files") input').uncheck();
+  await sniff.locator('label:has-text("Use this language for all .zzz files") input').uncheck();
   await sniff.waitForFunction(() => window.__settings.at(-1).settings.workspace.languageMap.zzz === undefined, null, { timeout: 5000 });
   check('unchecking removes the mapping', (await pick(sniff).innerText()) === 'XML');
   await sniff.context().close();
@@ -75,8 +76,8 @@ if (width === '1440') {
 if (width === '390') {
   const page = await open('ecu.arxml');
   check('picker is visible on a narrow window', await pick(page).isVisible());
-  const overflow = await page.evaluate(() => { const bar = document.querySelector('.editor-toolbar'); return bar.scrollWidth > bar.clientWidth + 1; });
-  check('the toolbar wraps without horizontal overflow', !overflow);
+  const overflow = await page.evaluate(() => { return ['.fc-head', '.fc-foot'].some(selector => { const bar = document.querySelector(selector); return bar.scrollWidth > bar.clientWidth + 1; }); });
+  check('the header and footer fit without horizontal overflow', !overflow);
   await shot(page, 'toolbar');
   await page.context().close();
 }

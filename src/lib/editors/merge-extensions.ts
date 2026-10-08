@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
@@ -18,7 +18,7 @@ export const darkExtension = (dark: boolean): Extension => EditorView.darkTheme.
 const base: Extension = [
   changeMarks, changeMarkGutter, lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(), history(), drawSelection(),
   indentOnInput(), bracketMatching(), highlightSelectionMatches(), search({ top: true }), mergeTheme,
-  keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+  keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
 ];
 
 export type ViewSettings = { language: Extension; readOnly: boolean; dark: boolean };
