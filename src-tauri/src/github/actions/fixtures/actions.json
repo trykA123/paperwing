@@ -4,5 +4,5 @@
   {"kind":"write","path":"/repos/admin/repo/actions/runs/31/cancel","status":202},
   {"kind":"metadata","path":"/repos/admin/repo/actions/workflows/7","status":200,"body":{"path":".github/workflows/build.yml"}},
   {"kind":"raw","path":"/repos/admin/repo/contents/.github/workflows/build.yml?ref=release%2F1","status":200,"raw":"on:\n  workflow_dispatch:\n    inputs:\n      dry:\n        type: boolean\n        default: true\n"},
-  {"kind":"write","path":"/repos/admin/repo/actions/workflows/7/dispatches","status":204,"body":{"ref":"release/1","inputs":{"dry":false}}}
+  {"kind":"write","path":"/repos/admin/repo/actions/workflows/7/dispatches","status":204,"body":{"ref":"release/1","inputs":{"dry":"false"}}}
 ]

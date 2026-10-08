@@ -204,7 +204,7 @@ fn parse_input(name: &str, input: &Value) -> Result<CiInput, CiError> {
 fn validate_inputs(
     schema: &[CiInput],
     supplied: &BTreeMap<String, Value>,
-) -> Result<BTreeMap<String, Value>, CiError> {
+) -> Result<BTreeMap<String, String>, CiError> {
     if supplied
         .keys()
         .any(|name| !schema.iter().any(|input| &input.name == name))
@@ -213,9 +213,8 @@ fn validate_inputs(
     }
     let mut inputs = BTreeMap::new();
     for input in schema {
-        let value = supplied.get(&input.name).or(input.default.as_ref());
-        let Some(value) = value else {
-            if input.required {
+        let Some(value) = supplied.get(&input.name) else {
+            if input.required && input.default.as_ref().is_none_or(Value::is_null) {
                 return Err(CiError::message(format!(
                     "Missing required CI input {}",
                     input.name
@@ -223,46 +222,88 @@ fn validate_inputs(
             }
             continue;
         };
-        let valid = match input.kind {
-            CiInputKind::String => value.is_string(),
-            CiInputKind::Boolean => value.is_boolean(),
-            CiInputKind::Number => value.is_number(),
-            CiInputKind::Choice => value
-                .as_str()
-                .is_some_and(|value| input.options.iter().any(|option| option == value)),
-        };
-        if !valid || input.required && value.as_str() == Some("") {
-            return Err(CiError::message(format!("Invalid CI input {}", input.name)));
-        }
-        inputs.insert(input.name.clone(), value.clone());
+        let text = input_text(input, value)
+            .ok_or_else(|| CiError::message(format!("Invalid CI input {}", input.name)))?;
+        inputs.insert(input.name.clone(), text);
     }
     Ok(inputs)
+}
+
+fn input_text(input: &CiInput, value: &Value) -> Option<String> {
+    let text = match (&input.kind, value) {
+        (CiInputKind::Boolean, Value::Bool(flag)) => flag.to_string(),
+        (CiInputKind::Boolean, Value::String(text))
+            if matches!(text.as_str(), "true" | "false") =>
+        {
+            text.clone()
+        }
+        (CiInputKind::Number, Value::Number(number)) => number.to_string(),
+        (CiInputKind::Number, Value::String(text))
+            if text.parse::<f64>().is_ok_and(f64::is_finite) =>
+        {
+            text.clone()
+        }
+        (CiInputKind::String, Value::String(text)) => text.clone(),
+        (CiInputKind::String, Value::Number(number)) => number.to_string(),
+        (CiInputKind::String, Value::Bool(flag)) => flag.to_string(),
+        (CiInputKind::Choice, Value::String(text)) if input.options.contains(text) => text.clone(),
+        _ => return None,
+    };
+    (!input.required || !text.is_empty()).then_some(text)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn schema(yaml: &str) -> Vec<CiInput> {
+        parse_inputs(&serde_yaml_ng::from_str(yaml).unwrap()).unwrap()
+    }
+
     #[test]
     fn parses_typed_yaml_dispatch_inputs_and_rejects_invalid_values() {
-        let yaml: Value = serde_yaml_ng::from_str("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: choice\n        required: true\n        options: [staging, production]\n      dry:\n        type: boolean\n        default: true\n      count:\n        type: number\n").unwrap();
-        let schema = parse_inputs(&yaml).unwrap();
+        let schema = schema("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: choice\n        required: true\n        options: [staging, production]\n      dry:\n        type: boolean\n        default: true\n      count:\n        type: number\n");
         let inputs = BTreeMap::from([
             ("target".into(), json!("staging")),
             ("count".into(), json!(3)),
         ]);
         let values = validate_inputs(&schema, &inputs).unwrap();
-        assert_eq!(values["dry"], true);
+        assert_eq!(values["count"], "3");
+        assert!(!values.contains_key("dry"));
         for inputs in [
             BTreeMap::new(),
             BTreeMap::from([("target".into(), json!("other"))]),
             BTreeMap::from([
                 ("target".into(), json!("staging")),
-                ("dry".into(), json!("true")),
+                ("dry".into(), json!("yes")),
             ]),
             BTreeMap::from([("unexpected".into(), json!("value"))]),
         ] {
             assert!(validate_inputs(&schema, &inputs).is_err());
         }
+    }
+
+    #[test]
+    fn boolean_input_with_string_default_dispatches_nothing_when_unsupplied() {
+        let schema = schema("on:\n  workflow_dispatch:\n    inputs:\n      dry:\n        type: boolean\n        default: 'false'\n");
+        assert!(validate_inputs(&schema, &BTreeMap::new())
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn supplied_boolean_is_sent_as_a_string() {
+        let schema = schema("on:\n  workflow_dispatch:\n    inputs:\n      dry:\n        type: boolean\n        default: 'false'\n");
+        let inputs = BTreeMap::from([("dry".into(), json!(true))]);
+        assert_eq!(validate_inputs(&schema, &inputs).unwrap()["dry"], "true");
+    }
+
+    #[test]
+    fn string_input_accepts_a_numeric_default() {
+        let schema = schema("on:\n  workflow_dispatch:\n    inputs:\n      label:\n        type: string\n        required: true\n        default: 1\n");
+        assert_eq!(schema[0].default, Some(json!(1)));
+        assert!(validate_inputs(&schema, &BTreeMap::new())
+            .unwrap()
+            .is_empty());
     }
 }
