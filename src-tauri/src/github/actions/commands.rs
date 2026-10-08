@@ -7,8 +7,9 @@ use crate::{
     },
 };
 use serde::Deserialize;
-use std::path::Path;
+use std::path::PathBuf;
 use tauri::AppHandle;
+use tauri_plugin_dialog::DialogExt;
 
 #[derive(Deserialize)]
 #[serde(untagged, rename_all_fields = "camelCase", deny_unknown_fields)]
@@ -128,21 +129,45 @@ pub async fn ci_artifacts(
     .await
 }
 
+async fn choose_destination(
+    app: &AppHandle,
+    file_name: String,
+) -> Result<Option<PathBuf>, CiError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_file_name(file_name)
+        .add_filter("ZIP", &["zip"])
+        .save_file(move |path| {
+            let _ = sender.send(path);
+        });
+    let selected = receiver
+        .await
+        .map_err(|_| CiError::message("The save dialog failed"))?;
+    selected
+        .map(|path| {
+            path.into_path()
+                .map_err(|_| CiError::message("The chosen save location is invalid"))
+        })
+        .transpose()
+}
+
 #[tauri::command]
 pub async fn ci_download_artifact(
     app: AppHandle,
     target: CiRepositoryRequest,
     artifact_id: String,
-    destination: String,
-) -> Result<CiDownload, CiError> {
+) -> Result<Option<CiDownload>, CiError> {
+    super::model::validate_id(&artifact_id)?;
+    let Some(destination) = choose_destination(&app, format!("artifact-{artifact_id}.zip")).await?
+    else {
+        return Ok(None);
+    };
     with_provider(app, target, |provider| {
-        Box::pin(async move {
-            provider
-                .download_artifact(&artifact_id, Path::new(&destination))
-                .await
-        })
+        Box::pin(async move { provider.download_artifact(&artifact_id, &destination).await })
     })
     .await
+    .map(Some)
 }
 
 #[tauri::command]
@@ -150,16 +175,17 @@ pub async fn ci_download_run_logs(
     app: AppHandle,
     target: CiRepositoryRequest,
     run_id: String,
-    destination: String,
-) -> Result<CiDownload, CiError> {
+) -> Result<Option<CiDownload>, CiError> {
+    super::model::validate_id(&run_id)?;
+    let Some(destination) = choose_destination(&app, format!("run-{run_id}-logs.zip")).await?
+    else {
+        return Ok(None);
+    };
     with_provider(app, target, |provider| {
-        Box::pin(async move {
-            provider
-                .download_logs(&run_id, Path::new(&destination))
-                .await
-        })
+        Box::pin(async move { provider.download_logs(&run_id, &destination).await })
     })
     .await
+    .map(Some)
 }
 
 #[tauri::command]
