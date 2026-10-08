@@ -26,6 +26,7 @@ pub enum CoreEvent {
     DiagnosticsProgress(EventPayload),
     RepoChanged(EventPayload),
     WatchFailed(EventPayload),
+    WatchLost(EventPayload),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

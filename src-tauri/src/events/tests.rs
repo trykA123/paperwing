@@ -122,7 +122,12 @@ fn legacy_events() -> Vec<(&'static str, CoreEvent, Value)> {
         ),
         (
             "watch-failed",
-            CoreEvent::WatchFailed(payload),
+            CoreEvent::WatchFailed(payload.clone()),
+            value.clone(),
+        ),
+        (
+            "watch-lost",
+            CoreEvent::WatchLost(payload),
             value,
         ),
     ]

@@ -1,24 +1,26 @@
 mod filter;
-mod session;
+mod hub;
 #[cfg(test)]
 mod tests;
 
 use crate::kernel::events::CoreEvent;
+use hub::{Factory, Hub, Timing};
 use serde::Serialize;
-use session::{Factory, Options, Root, Session};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Component, Path, Prefix};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Runtime, State};
 
 pub const MAX_ROOTS: usize = 200;
 const DEBOUNCE: Duration = Duration::from_millis(300);
+const HEALTH_CHECK: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Signal {
     Changed(String),
-    Failed { set: String, reason: String },
+    Failed { reason: String },
+    Lost { path: String, reason: String },
 }
 
 pub(crate) type Sink = Arc<dyn Fn(Signal) + Send + Sync>;
@@ -27,8 +29,23 @@ pub(crate) type Sink = Arc<dyn Fn(Signal) + Send + Sync>;
 pub(crate) enum WatchError {
     #[error("This set has {count} repositories; automatic refresh watches up to {limit}.")]
     TooManyRoots { count: usize, limit: usize },
-    #[error("Automatic refresh could not watch {0}")]
+    #[error("Automatic refresh could not start: {0}")]
     Start(String),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Skipped {
+    path: String,
+    reason: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Report {
+    watched: usize,
+    skipped: Vec<Skipped>,
+    best_effort: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -40,39 +57,70 @@ struct ChangedPayload {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FailedPayload {
-    set_id: String,
     reason: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LostPayload {
+    path: String,
+    reason: String,
+}
+
+#[derive(Default)]
+struct Registry {
+    sets: HashMap<String, Vec<String>>,
+    hub: Option<Hub>,
+}
+
+impl Registry {
+    fn is_held(&self, path: &str) -> bool {
+        self.sets
+            .values()
+            .any(|roots| roots.iter().any(|root| root == path))
+    }
+
+    fn release(&mut self, previous: &[String]) {
+        for path in previous.iter().filter(|path| !self.is_held(path)) {
+            if let Some(hub) = &self.hub {
+                hub.remove(path);
+            }
+        }
+        if self.sets.is_empty() {
+            self.hub = None;
+        }
+    }
+}
+
 pub struct Service {
-    sessions: Mutex<HashMap<String, Session>>,
+    state: Mutex<Registry>,
     factory: Factory,
     sink: Sink,
     debounce: Duration,
+    health: Duration,
 }
 
 impl Service {
     pub(crate) fn new(sink: Sink) -> Self {
-        Self::with_parts(sink, session::recommended(), DEBOUNCE)
+        Self::with_parts(sink, hub::recommended(), DEBOUNCE, HEALTH_CHECK)
     }
 
-    fn with_parts(sink: Sink, factory: Factory, debounce: Duration) -> Self {
+    fn with_parts(sink: Sink, factory: Factory, debounce: Duration, health: Duration) -> Self {
         Self {
-            sessions: Mutex::default(),
+            state: Mutex::default(),
             factory,
             sink,
             debounce,
+            health,
         }
     }
 
-    pub(crate) fn watch(&self, set: &str, paths: &[String]) -> Result<usize, WatchError> {
-        let unique: Vec<&String> = {
-            let mut seen = HashSet::new();
-            paths
-                .iter()
-                .filter(|path| seen.insert(path.as_str()))
-                .collect()
-        };
+    pub(crate) fn watch(&self, set: &str, paths: &[String]) -> Result<Report, WatchError> {
+        let mut seen = HashSet::new();
+        let unique: Vec<&String> = paths
+            .iter()
+            .filter(|path| seen.insert(path.as_str()))
+            .collect();
         if unique.len() > MAX_ROOTS {
             self.unwatch(set);
             return Err(WatchError::TooManyRoots {
@@ -80,49 +128,142 @@ impl Service {
                 limit: MAX_ROOTS,
             });
         }
-        self.unwatch(set);
-        if unique.is_empty() {
-            return Ok(0);
+        let mut state = self.lock();
+        let previous = state.sets.remove(set).unwrap_or_default();
+        let mut report = Report::default();
+        let mut kept: Vec<String> = Vec::new();
+        for path in unique {
+            if let Err(reason) = self.attach(&mut state, &previous, path) {
+                match reason {
+                    Attach::Refused(reason) => report.skipped.push(Skipped {
+                        path: path.clone(),
+                        reason,
+                    }),
+                    Attach::Broken(reason) => {
+                        state.release(&previous);
+                        return Err(WatchError::Start(reason));
+                    }
+                }
+                continue;
+            }
+            if is_best_effort_location(Path::new(path)) {
+                report.best_effort.push(path.clone());
+            }
+            kept.push(path.clone());
         }
-        let roots = unique
-            .iter()
-            .map(|path| Root {
-                path: PathBuf::from(path.as_str()),
-                label: (*path).clone(),
-            })
-            .collect::<Vec<_>>();
-        let count = roots.len();
-        let options = Options {
-            set: set.to_string(),
-            debounce: self.debounce,
-            sink: self.sink.clone(),
-        };
-        let session = Session::start(roots, options, &self.factory).map_err(WatchError::Start)?;
-        let replaced = self.lock().insert(set.to_string(), session);
-        drop(replaced);
-        Ok(count)
+        report.watched = kept.len();
+        if !kept.is_empty() {
+            state.sets.insert(set.to_string(), kept);
+        }
+        state.release(&previous);
+        Ok(report)
+    }
+
+    fn attach(&self, state: &mut Registry, previous: &[String], path: &str) -> Result<(), Attach> {
+        if let Some(reason) = refusal(path) {
+            return Err(Attach::Refused(reason));
+        }
+        if previous.iter().any(|known| known == path) || state.is_held(path) {
+            return Ok(());
+        }
+        if state.hub.is_none() {
+            let timing = Timing {
+                debounce: self.debounce,
+                health: self.health,
+            };
+            let hub = Hub::new(&self.factory, timing, self.sink.clone()).map_err(Attach::Broken)?;
+            state.hub = Some(hub);
+        }
+        let hub = state
+            .hub
+            .as_ref()
+            .ok_or_else(|| Attach::Broken("watcher missing".into()))?;
+        hub.add(path).map_err(Attach::Refused)
     }
 
     pub(crate) fn unwatch(&self, set: &str) {
-        let removed = self.lock().remove(set);
-        drop(removed);
+        let mut state = self.lock();
+        let previous = state.sets.remove(set).unwrap_or_default();
+        state.release(&previous);
     }
 
     pub(crate) fn stop_all(&self) {
-        let removed: Vec<Session> = self.lock().drain().map(|(_, session)| session).collect();
-        drop(removed);
+        let mut state = self.lock();
+        state.sets.clear();
+        let hub = state.hub.take();
+        drop(state);
+        drop(hub);
     }
 
     #[cfg(test)]
     pub(crate) fn count(&self) -> usize {
-        self.lock().len()
+        self.lock().sets.len()
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Session>> {
-        self.sessions
+    #[cfg(test)]
+    pub(crate) fn root_count(&self) -> usize {
+        self.lock().hub.as_ref().map_or(0, Hub::len)
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Registry> {
+        self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+}
+
+enum Attach {
+    Refused(String),
+    Broken(String),
+}
+
+fn home_directory() -> Option<std::path::PathBuf> {
+    let name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+    std::env::var_os(name).map(std::path::PathBuf::from)
+}
+
+fn same_folder(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
+}
+
+fn refusal(path: &str) -> Option<String> {
+    refusal_in(path, home_directory().as_deref())
+}
+
+fn refusal_in(path: &str, home: Option<&Path>) -> Option<String> {
+    let folder = Path::new(path);
+    if !folder.is_dir() {
+        return Some("the folder was not found".into());
+    }
+    if let Err(reason) = crate::git::valid_path(path, true) {
+        return Some(reason);
+    }
+    if folder.parent().is_none() {
+        return Some("a drive or filesystem root is too broad to watch".into());
+    }
+    if home.is_some_and(|home| same_folder(folder, home)) {
+        return Some("the home folder is too broad to watch".into());
+    }
+    None
+}
+
+fn is_best_effort_location(path: &Path) -> bool {
+    let mut parts = path.components();
+    let network = matches!(
+        parts.next(),
+        Some(Component::Prefix(prefix))
+            if matches!(prefix.kind(), Prefix::UNC(..) | Prefix::VerbatimUNC(..))
+    );
+    network
+        || path.components().any(|part| match part {
+            Component::Normal(name) => name
+                .to_str()
+                .is_some_and(|name| name.to_ascii_lowercase().starts_with("onedrive")),
+            _ => false,
+        })
 }
 
 pub(crate) fn tauri_sink<R: Runtime>(app: AppHandle<R>) -> Sink {
@@ -133,13 +274,15 @@ pub(crate) fn tauri_sink<R: Runtime>(app: AppHandle<R>) -> Sink {
                 CoreEvent::RepoChanged,
                 &ChangedPayload { path },
             ),
-            Signal::Failed { set, reason } => crate::events::publish_payload(
+            Signal::Failed { reason } => crate::events::publish_payload(
                 &app,
                 CoreEvent::WatchFailed,
-                &FailedPayload {
-                    set_id: set,
-                    reason,
-                },
+                &FailedPayload { reason },
+            ),
+            Signal::Lost { path, reason } => crate::events::publish_payload(
+                &app,
+                CoreEvent::WatchLost,
+                &LostPayload { path, reason },
             ),
         };
         if let Err(error) = sent {
@@ -153,14 +296,7 @@ pub async fn watch_set(
     service: State<'_, Arc<Service>>,
     set_id: String,
     roots: Vec<String>,
-) -> Result<usize, String> {
-    let roots: Vec<String> = roots
-        .into_iter()
-        .filter(|root| std::path::Path::new(root).is_dir())
-        .collect();
-    for root in &roots {
-        crate::git::valid_path(root, true)?;
-    }
+) -> Result<Report, String> {
     let service = service.inner().clone();
     tauri::async_runtime::spawn_blocking(move || service.watch(&set_id, &roots))
         .await

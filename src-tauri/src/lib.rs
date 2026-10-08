@@ -104,6 +104,9 @@ pub fn run() {
     builder
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                if let Some(watcher) = webview.try_state::<std::sync::Arc<watch::Service>>() {
+                    watcher.stop_all();
+                }
                 let closing = webview.state::<compare::Service>().release_sessions();
                 tauri::async_runtime::spawn(closing);
                 #[cfg(windows)]
