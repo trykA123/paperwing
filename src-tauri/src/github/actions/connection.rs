@@ -2,11 +2,13 @@ use super::{client::Client, transport::Transport};
 use crate::{
     github::{
         http::Http,
+        provider::GithubProvider,
         pulls::{self, repository::Repository},
     },
     kernel::{
         capabilities::{CiProvider, ProviderFuture},
         ci::*,
+        registry::Lease,
     },
     settings::Source,
 };
@@ -44,13 +46,30 @@ impl Connection for StoredConnection {
     }
 }
 
+type Acquire<'a> = &'a (dyn Fn(&Source, &str) -> Result<Lease<GithubProvider>, String> + Sync);
+
 pub(super) async fn run<T>(
     connection: &impl Connection,
     target: (&Source, &Repository),
     operation: impl for<'a> FnOnce(&'a Provider<'a>) -> ProviderFuture<'a, Result<T, CiError>>,
 ) -> Result<T, CiError> {
+    run_with(
+        &|source, host| crate::providers::acquire(source, host, None),
+        connection,
+        target,
+        operation,
+    )
+    .await
+}
+
+async fn run_with<T>(
+    acquire: Acquire<'_>,
+    connection: &impl Connection,
+    target: (&Source, &Repository),
+    operation: impl for<'a> FnOnce(&'a Provider<'a>) -> ProviderFuture<'a, Result<T, CiError>>,
+) -> Result<T, CiError> {
     let (source, repo) = target;
-    let lease = crate::providers::acquire(source, &repo.host, None).map_err(CiError::message)?;
+    let lease = acquire(source, &repo.host).map_err(CiError::message)?;
     lease
         .run(async {
             let transport = connection.connect(source, &repo.host).await?;

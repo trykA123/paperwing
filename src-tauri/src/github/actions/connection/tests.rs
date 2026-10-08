@@ -101,25 +101,26 @@ async fn disabled_ci_source_constructs_no_provider_transport_or_requests() {
     registry
         .configure(std::slice::from_ref(&config), construct)
         .unwrap();
-    assert!(matches!(
-        registry.acquire(&config, construct),
-        Err(RegistryError::Disabled(_))
-    ));
-    let mut stale = source.clone();
-    stale.enabled = true;
-    let stale = crate::providers::configuration(&stale, &repo.host).unwrap();
-    assert!(matches!(
-        registry.acquire(&stale, construct),
-        Err(RegistryError::Disabled(_))
-    ));
+    let acquire = |source: &Source, host: &str| {
+        registry
+            .acquire(&crate::providers::configuration(source, host)?, construct)
+            .map_err(|error| error.to_string())
+    };
     let connection = CountingConnection {
         counts: counts.clone(),
         pause: None,
     };
-    let result = run(&connection, (&source, &repo), |provider| {
+    let result = run_with(&acquire, &connection, (&source, &repo), |provider| {
         Box::pin(async move { provider.runs(&CiQuery::default()).await })
     })
     .await;
+    let mut stale = source.clone();
+    stale.enabled = true;
+    let stale_result = run_with(&acquire, &connection, (&stale, &repo), |provider| {
+        Box::pin(async move { provider.runs(&CiQuery::default()).await })
+    })
+    .await;
+    assert!(stale_result.unwrap_err().to_string().contains("disabled"));
     assert!(result.unwrap_err().to_string().contains("disabled"));
     assert_eq!(constructions.load(Ordering::SeqCst), 0);
     assert_eq!(counts.transports.load(Ordering::SeqCst), 0);
