@@ -50,6 +50,27 @@ fn stage_one_crlf_hunk_and_reverse_it_byte_for_byte() {
     assert_eq!(fixture.git(&["show", ":with spaces.txt"]), before);
 }
 
+#[tokio::test]
+async fn fixture_git_ignores_process_git_index_file() {
+    let _serial = crate::test_support::serial().await;
+    let fixture = Fixture::new();
+    let (before, after) = two_hunks();
+    fixture.commit("with spaces.txt", &before);
+    let built = Diff::new(&before, &after)
+        .unwrap()
+        .build(
+            paths("with spaces.txt", "with spaces.txt"),
+            &[whole(0)],
+            false,
+        )
+        .unwrap();
+    std::env::set_var("GIT_INDEX_FILE", fixture.root.join(".git/missing_index"));
+    fixture.apply(&built.patch, false);
+    let indexed = fixture.git(&["show", ":with spaces.txt"]);
+    std::env::remove_var("GIT_INDEX_FILE");
+    assert_eq!(indexed, built.content.unwrap());
+}
+
 #[test]
 fn line_ranges_stage_and_unstage_only_selected_replacements() {
     let fixture = Fixture::new();

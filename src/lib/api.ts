@@ -86,6 +86,7 @@ export type LocalStatus = {
   path: string; exists: boolean; repo: boolean; branch: string | null; tag: string | null; branchLabel?: string | null; tagLabel?: string | null; sha: string;
   upstream: string | null; upstreamLabel?: string | null; ahead: number; behind: number; dirty: number; error: string | null;
 };
+export type WatchReport = { watched: number; skipped: { path: string; reason: string }[]; bestEffort: string[] };
 export type Theme = 'system' | 'light' | 'dark';
 export type GitAction = 'clone' | 'fetch' | 'pull' | 'switch';
 export type Activity = {
@@ -190,6 +191,7 @@ export type SearchCapabilities = { perl: boolean };
 export const events = {
   launchRequest: 'launch-request', discoverBatch: 'discover-batch', discoverDone: 'discover-done',
   searchMatches: 'search-matches', searchRepo: 'search-repo', searchDone: 'search-done',
+  repoChanged: 'repo-changed', watchFailed: 'watch-failed', watchLost: 'watch-lost',
 } as const;
 
 export const api = {
@@ -224,6 +226,8 @@ export const api = {
   getRefsMany: (urls: string[]) => invoke<RefsResult[]>('get_refs_many', { urls }),
   startClone: (jobs: CloneJob[], opts: CloneOpts, mode: GitAction = 'clone') => invoke<void>('start_clone', { jobs, opts, mode }),
   localStatus: (paths: string[]) => invoke<LocalStatus[]>('local_status', { paths }),
+  watchSet: (setId: string, roots: string[]) => invoke<WatchReport>('watch_set', { setId, roots }),
+  unwatchSet: (setId: string) => invoke<void>('unwatch_set', { setId }),
   activitySnapshot: () => invoke<Activity[]>('activity_snapshot'),
   clearActivity: () => invoke<{ running: Activity[]; retained: string[]; through: number }>('clear_activity'),
   cancelActivity: (id: string) => invoke<boolean>('cancel_activity', { id }),
@@ -275,10 +279,41 @@ export const api = {
   diagnosticsPreview: () => invoke<string>('diagnostics_preview'),
   diagnosticsCancel: () => invoke<boolean>('diagnostics_cancel'),
   diagnosticsExport: () => invoke<boolean>('diagnostics_export'),
+  ciRuns: (target: CiRepositoryRequest, query: CiQuery = {}) => invoke<CiPage<CiRun>>('ci_runs', { target, query }),
+  ciJobs: (target: CiRepositoryRequest, runId: string, query: CiQuery = {}) => invoke<CiPage<CiJob>>('ci_jobs', { target, runId, query }),
+  ciJobLog: (target: CiRepositoryRequest, jobId: string) => invoke<CiLog>('ci_job_log', { target, jobId }),
+  ciArtifacts: (target: CiRepositoryRequest, runId: string, query: CiQuery = {}) => invoke<CiPage<CiArtifact>>('ci_artifacts', { target, runId, query }),
+  ciDownloadArtifact: (target: CiRepositoryRequest, artifactId: string) => invoke<CiDownload | null>('ci_download_artifact', { target, artifactId }),
+  ciDownloadRunLogs: (target: CiRepositoryRequest, runId: string) => invoke<CiDownload | null>('ci_download_run_logs', { target, runId }),
+  ciRerun: (target: CiRepositoryRequest, request: { runId: string; failedOnly: boolean; confirmed: boolean }) => invoke<CiActionResult>('ci_rerun', { target, request }),
+  ciCancel: (target: CiRepositoryRequest, request: { runId: string; confirmed: boolean }) => invoke<CiActionResult>('ci_cancel', { target, request }),
+  ciDispatchInputs: (target: CiRepositoryRequest, request: CiDispatch) => invoke<CiDispatchForm>('ci_dispatch_inputs', { target, request }),
+  ciDispatch: (target: CiRepositoryRequest, request: { dispatch: CiDispatch; confirmed: boolean }) => invoke<CiActionResult>('ci_dispatch', { target, request }),
   createGithubRelease: (path: string, tag: string, notes: string, draft = true, remote: string | null = null) => invoke<CreatedGithubRelease>('create_github_release', { path, tag, notes, draft, remote }),
 };
 
 export type CreatedGithubRelease = { id: number; url: string; draft: boolean };
+
+export type CiRepositoryRequest = { path: string; branch: string } | { sourceId: string; url: string };
+export type CiQuery = { page?: number; etag?: string; branch?: string };
+export type CiStatus = 'queued' | 'running' | 'waiting' | 'succeeded' | 'failed' | 'cancelled' | 'skipped' | 'unknown';
+export type CiCapabilities = { canDispatch: boolean; canRerunFailed: boolean };
+export type CiRun = {
+  provider: string; host: string; id: string; pipelineId: string; name: string; number: number; attempt: number;
+  branch: string | null; commit: string; trigger: string; status: CiStatus; url: string;
+  startedAt: string | null; completedAt: string | null; durationSeconds: number | null; capabilities: CiCapabilities;
+};
+export type CiStep = { provider: string; host: string; number: number; name: string; status: CiStatus; startedAt: string | null; completedAt: string | null };
+export type CiJob = { provider: string; host: string; id: string; runId: string; name: string; status: CiStatus; url: string | null; startedAt: string | null; completedAt: string | null; durationSeconds: number | null; steps: CiStep[] };
+export type CiLog = { provider: string; host: string; jobId: string; text: string };
+export type CiArtifact = { provider: string; host: string; id: string; name: string; sizeBytes: number; expired: boolean; createdAt: string; expiresAt: string | null };
+export type CiDownload = { provider: string; host: string; filename: string; mediaType: string; path: string; sizeBytes: number };
+export type CiPage<T> = { state: 'updated'; items: T[]; etag: string | null; nextPage: number | null } | { state: 'notModified'; etag: string | null };
+export type CiDispatch = { pipelineId: string; reference: string; inputs: Record<string, string | number | boolean> };
+export type CiInput = { name: string; description: string; kind: 'string' | 'boolean' | 'number' | 'choice'; required: boolean; default: string | number | boolean | null; options: string[] };
+export type CiDispatchForm = { provider: string; host: string; pipelineId: string; reference: string; capabilities: CiCapabilities; inputs: CiInput[] };
+export type CiActionResult = { provider: string; host: string; runId: string | null; accepted: boolean };
+export type CiError = { kind: 'rateLimited'; resetAt: string; message: string } | { kind: 'message'; message: string };
 
 export type PatchLine = { kind: 'context' | 'add' | 'remove'; text: string; noNewline: boolean };
 export type PatchHunk = { index: number; oldStart: number; newStart: number; lines: PatchLine[] };

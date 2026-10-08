@@ -32,3 +32,9 @@ Moved out: branch cleanup and set search are in 39.
 - Dev warning `ownership_invalid_binding` when Code search opens: `CodeSearch.svelte` does `bind:form={session.form}` on a session that `App.svelte` passes as a plain prop. Fix the ownership (bindable prop or a function binding) and check the console in `ui-39`.
 - `ui-44` fails at 390 px (Ctrl+1–5, Ctrl+J, Enter on an item, page overflow, table width 310 vs 770): its width asserts assume 1440, and the 250 px sidebar crowds a narrow window. Decide a minimum window width or make the asserts width-aware.
 - `ui-39` "2000 matches stays smooth" frame check flakes under heavy machine load (133 ms worst frame with other harnesses running). Run harnesses sequentially.
+
+## Packet 30 follow-ups (third review, 2026-10-08; Windows CI must compile and test the watcher before push)
+- Slow network shares: an unreachable share can stall a page reload while the 60-second health check runs.
+- Junction roots: repointing a watched junction to a new target goes unnoticed.
+- Changes Windows drops are caught only when the window regains focus, not on the repository page.
+- Mixed watch types: a folder watched both with and without subfolders can lose its subfolders (unusual Git folder layouts only).

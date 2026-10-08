@@ -171,6 +171,13 @@
     void app.probeRoot(root);
   });
 
+  $effect(() => {
+    if (benchmarkEnabled || !isTauri() || !app.ready) return;
+    const targets = app.watchTargets();
+    const t = setTimeout(() => void app.autoRefresh.sync(targets), 500);
+    return () => clearTimeout(t);
+  });
+
   // Keep "already on disk" markers in sync with the destination.
   $effect(() => {
     if (benchmarkEnabled || !app.ready || app.view.kind === 'repos' || app.view.kind === 'repo' || !(app.rootSupport.valid || app.set.items.some(item => item.path))) return;

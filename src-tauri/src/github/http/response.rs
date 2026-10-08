@@ -29,6 +29,13 @@ pub(crate) struct Response {
 }
 
 impl Response {
+    pub fn checked(self) -> Result<Self, Error> {
+        if !(200..300).contains(&self.status) {
+            return Err(self.error());
+        }
+        Ok(self)
+    }
+
     pub fn decode<T: DeserializeOwned>(self) -> Result<Page<T>, Error> {
         if !(200..300).contains(&self.status) {
             return Err(self.error());

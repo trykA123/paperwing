@@ -48,6 +48,7 @@ mod search_job;
 mod search_rows;
 mod search_service;
 mod trash;
+mod watch;
 #[cfg(test)]
 mod test_support;
 
@@ -103,6 +104,9 @@ pub fn run() {
     builder
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                if let Some(watcher) = webview.try_state::<std::sync::Arc<watch::Service>>() {
+                    watcher.stop_all();
+                }
                 let closing = webview.state::<compare::Service>().release_sessions();
                 tauri::async_runtime::spawn(closing);
                 #[cfg(windows)]
@@ -133,6 +137,7 @@ pub fn run() {
                 commit::configure_temp_root(temp_root);
             }
             events::install(app.handle());
+            app.manage(std::sync::Arc::new(watch::Service::new(watch::tauri_sink(app.handle().clone()))));
             let store = store::Store::start(app.path().app_data_dir()?, app.path().app_cache_dir().ok());
             providers::install(app.handle(), store.clone());
             app.manage(store);
@@ -156,6 +161,7 @@ pub fn run() {
         .expect("error while building Skein")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                app.state::<std::sync::Arc<watch::Service>>().stop_all();
                 app.state::<store::Store>().mark_clean();
             }
         });

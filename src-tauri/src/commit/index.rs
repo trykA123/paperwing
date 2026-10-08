@@ -76,7 +76,7 @@ impl IndexState {
         Ok(())
     }
 
-    pub(super) async fn read(root: &str, file: &str) -> Result<Self, String> {
+    pub(crate) async fn read(root: &str, file: &str) -> Result<Self, String> {
         let state = Self {
             root: root.into(),
             file: file.into(),

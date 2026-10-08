@@ -1,0 +1,5 @@
+[
+  {"kind":"metadata","path":"/repos/admin/repo/actions/runs?branch=main&per_page=100&page=1","status":200,"headers":{"etag":"\"runs-1\""},"next":true,"body":{"workflow_runs":[{"id":31,"workflow_id":7,"name":"Build","run_number":4,"run_attempt":2,"head_branch":"main","head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","event":"push","status":"completed","conclusion":"failure","html_url":"https://enterprise.invalid/admin/repo/actions/runs/31","run_started_at":"2026-10-07T15:00:00Z","updated_at":"2026-10-07T15:01:30Z"}]}},
+  {"kind":"metadata","path":"/repos/admin/repo/actions/runs?branch=main&per_page=100&page=2","status":200,"body":{"workflow_runs":[]}},
+  {"kind":"metadata","path":"/repos/admin/repo/actions/runs?branch=main&per_page=100&page=1","etag":"\"runs-1\"","status":304}
+]

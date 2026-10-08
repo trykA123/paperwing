@@ -24,6 +24,9 @@ pub enum CoreEvent {
     CredentialChanged(EventPayload),
     GitActivity(EventPayload),
     DiagnosticsProgress(EventPayload),
+    RepoChanged(EventPayload),
+    WatchFailed(EventPayload),
+    WatchLost(EventPayload),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
