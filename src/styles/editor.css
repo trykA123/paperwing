@@ -10,15 +10,93 @@
     display: none;
 }
 
-.editor-host>.cm-mergeView,
-.editor-host>.cm-editor,
+.editor-host {
+    --ruler-w: 22px;
+}
+
 .editor-host>.vw {
     position: absolute;
     inset: 0;
 }
 
 .editor-host>.cm-mergeView {
+    position: absolute;
+    inset: 0 var(--ruler-w) 0 0;
+    scrollbar-width: none;
+}
+
+.editor-host>.cm-editor {
+    width: calc(100% - var(--ruler-w));
+    height: 100%;
+}
+
+.editor-host>.cm-mergeView::-webkit-scrollbar,
+.editor-host>.cm-editor .cm-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.editor-host>.cm-editor .cm-scroller {
+    scrollbar-width: none;
+}
+
+.editor-host>.cm-mergeView {
     overflow: auto;
+}
+
+.cm-ruler {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: var(--ruler-w);
+    overflow: hidden;
+    border-left: 1px solid var(--line);
+    background: var(--sidebar);
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+}
+
+.cm-ruler-mark {
+    position: absolute;
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 1px;
+    background: var(--tone);
+}
+
+.cm-ruler-mark:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+
+.cm-ruler-add {
+    --tone: var(--ok);
+}
+
+.cm-ruler-rem {
+    --tone: var(--err);
+}
+
+.cm-ruler-chg {
+    --tone: var(--warn);
+}
+
+.cm-ruler-cur {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
+}
+
+.cm-ruler-thumb {
+    position: absolute;
+    inset: 0 0 auto 0;
+    border-block: 1px solid var(--line-ctl);
+    background: color-mix(in oklch, var(--text) 10%, transparent);
+    pointer-events: none;
+    will-change: transform;
+}
+
+.cm-ruler-thumb.cm-ruler-drag {
+    background: color-mix(in oklch, var(--text) 18%, transparent);
 }
 
 .editor-host .cm-mergeViewEditor {
@@ -26,8 +104,61 @@
     overflow: clip;
 }
 
-.editor-host .cm-mergeViewEditor+.cm-mergeViewEditor {
-    border-left: 1px solid var(--line);
+.editor-host .cm-ribbons {
+    position: relative;
+    flex: 0 0 56px;
+    background: var(--sidebar);
+    border-inline: 1px solid var(--line);
+}
+
+.editor-host .cm-ribbons svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.cm-ribbon-add {
+    --tone: var(--ok);
+    --tt: var(--ok-text);
+}
+
+.cm-ribbon-rem {
+    --tone: var(--err);
+    --tt: var(--err-text);
+}
+
+.cm-ribbon-chg {
+    --tone: var(--warn);
+    --tt: var(--warn-text);
+}
+
+.cm-ribbon path {
+    fill: color-mix(in oklch, var(--tone) 20%, transparent);
+    stroke: var(--tt);
+    stroke-width: 1.25;
+    cursor: pointer;
+    pointer-events: all;
+}
+
+.cm-ribbon path:hover {
+    fill: color-mix(in oklch, var(--tone) 28%, transparent);
+}
+
+.cm-ribbon-cur path {
+    fill: color-mix(in oklch, var(--tone) 34%, transparent);
+    stroke-width: 2.25;
+}
+
+.cm-ribbon text {
+    fill: var(--tt);
+    font: 700 11px var(--mono);
+    paint-order: stroke;
+    stroke: var(--sidebar);
+    stroke-width: 3px;
+    pointer-events: none;
 }
 
 .editor-host .cm-panels-top {
@@ -155,16 +286,86 @@
     transform: translateX(var(--vw-shift, 0px));
 }
 
-.is-removed {
-    background: var(--err-bg);
-}
-
 .is-added {
-    background: var(--ok-bg);
+    --tone: var(--ok);
+    --tt: var(--ok-text);
 }
 
-.is-void {
-    background: var(--soft);
+.is-removed {
+    --tone: var(--err);
+    --tt: var(--err-text);
+}
+
+.is-changed {
+    --tone: var(--warn);
+    --tt: var(--warn-text);
+}
+
+.is-gap-ok {
+    --tone: var(--ok);
+}
+
+.is-gap-err {
+    --tone: var(--err);
+}
+
+.vw-cell.is-added .vw-tx,
+.vw-cell.is-removed .vw-tx,
+.vw-cell.is-changed .vw-tx,
+.vw-cell.is-void {
+    position: relative;
+}
+
+.vw-cell.is-added .vw-tx::before,
+.vw-cell.is-removed .vw-tx::before,
+.vw-cell.is-changed .vw-tx::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--tone);
+}
+
+.vw-cell.is-void {
+    --tone: var(--line-ctl);
+    background-image: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in oklch, var(--tone) 28%, transparent) 6px 7px);
+}
+
+.vw-cell.is-void::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: repeating-linear-gradient(180deg, var(--tone) 0 4px, transparent 4px 7px);
+}
+
+.vw-cell.is-added .vw-no,
+.vw-cell.is-removed .vw-no,
+.vw-cell.is-changed .vw-no {
+    position: relative;
+    color: var(--tt);
+}
+
+.vw-cell.is-added .vw-no:first-child::before,
+.vw-cell.is-removed .vw-no:first-child::before,
+.vw-cell.is-changed .vw-no:first-child::before {
+    position: absolute;
+    left: 0;
+    width: 16px;
+    text-align: center;
+    font-weight: 700;
+}
+
+.vw-cell.is-added .vw-no:first-child::before {
+    content: "+";
+}
+
+.vw-cell.is-removed .vw-no:first-child::before {
+    content: "\2212";
+}
+
+.vw-cell.is-changed .vw-no:first-child::before {
+    content: "~";
 }
 
 .vw-gap {

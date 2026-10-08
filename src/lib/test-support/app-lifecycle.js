@@ -22,6 +22,7 @@ export function appLifecycle(state) {
         setTimeout: (run, ms) => { const timer = { run, ms }; timers.push(timer); return timer; },
         clearTimeout: timer => { const index = timers.indexOf(timer); if (index >= 0) timers.splice(index, 1); },
         applyAppearance() {}, onSystemThemeChange() {}, benchmarkEnabled: false,
+        compareFullscreen: { active: false, follow() {}, toggle: async () => {}, back: async () => {} }, escapeLeaves: () => false,
     };
     new Function(...Object.keys(bindings), script)(...Object.values(bindings));
     return {

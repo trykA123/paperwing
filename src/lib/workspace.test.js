@@ -84,6 +84,16 @@ test('Right-click snapshot comparison starts read-only while ordinary Compare re
     }
 });
 
+test('N and P step through changes unless the key belongs to a text field', () => {
+    const event = { ctrlKey: false, metaKey: false, altKey: false, shiftKey: false };
+    expect(shortcut({ ...event, key: 'n' })).toBe('difference-next');
+    expect(shortcut({ ...event, key: 'p' })).toBe('difference-previous');
+    expect(shortcut({ ...event, key: 'n' }, true)).toBeUndefined();
+    expect(shortcut({ ...event, key: 'F7' }, true)).toBe('difference-next');
+    expect(shortcut({ ...event, key: 'n', ctrlKey: true })).toBeUndefined();
+    expect(shortcut({ ...event, key: 'P', shiftKey: true })).toBeUndefined();
+});
+
 test('Tab shortcuts wrap in visible order, preserve set context, and respect close guards', async () => {
     const previous = { ws: app.ws, tabs: app.tabs, active: app.activeTabId, guards: app.bufferGuards };
     const event = { ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };

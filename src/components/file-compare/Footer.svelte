@@ -1,15 +1,22 @@
 <script lang="ts">
-  import type { Command } from '../../lib/commands';
-  import Icon from '../Icon.svelte';
+  import type { ChangeCounts } from '../../lib/change-summary';
+  import { LANGUAGES, PLAIN_LABEL, PLAIN_TEXT } from '../../lib/languages';
+  import Select, { type SelectOption } from '../Select.svelte';
 
-  let { actions, onexecute }: {
-    actions: { hunkLeft: Command; hunkRight: Command; fileLeft: Command; fileRight: Command; undo: Command };
-    onexecute: (command: Command) => void;
+  type Language = { id: string; label: string; enabled: boolean };
+  let { counts, inline = $bindable(), hideSame = $bindable(), ignoreWhitespace = $bindable(), language, onlanguage }: {
+    counts: ChangeCounts; inline: boolean; hideSame: boolean; ignoreWhitespace: boolean; language: Language; onlanguage: (id: string) => void;
   } = $props();
+  const options = $derived<SelectOption[]>([{ id: PLAIN_TEXT, label: PLAIN_LABEL }, ...LANGUAGES].map(option => ({ value: option.id, label: option.id === language.id ? language.label : option.label })));
 </script>
 
-<footer class="editor-footer"><button class="btn" title={actions.hunkLeft.reason ?? 'Copy selected hunk to left (Ctrl+Alt+Left)'} disabled={!actions.hunkLeft.enabled} onclick={() => onexecute(actions.hunkLeft)}><Icon name="copy" /> To left</button>
-    <button class="btn" title={actions.hunkRight.reason ?? 'Copy selected hunk to right (Ctrl+Alt+Right)'} disabled={!actions.hunkRight.enabled} onclick={() => onexecute(actions.hunkRight)}><Icon name="copy" /> To right</button>
-    <button class="btn" title={actions.fileLeft.reason ?? 'Copy file to left'} disabled={!actions.fileLeft.enabled} onclick={() => onexecute(actions.fileLeft)}><Icon name="copy" /> File to left</button>
-    <button class="btn" title={actions.fileRight.reason ?? 'Copy file to right'} disabled={!actions.fileRight.enabled} onclick={() => onexecute(actions.fileRight)}><Icon name="copy" /> File to right</button>
-    <span class="grow"></span><button class="btn" title={actions.undo.reason ?? 'Undo saved operation'} disabled={!actions.undo.enabled} onclick={() => onexecute(actions.undo)}><Icon name="refresh" /> Undo saved operation</button></footer>
+<footer class="fc-foot">
+  <span class="fc-legend fc-add"><b aria-hidden="true">+</b>{counts.add} added</span>
+  <span class="fc-legend fc-rem"><b aria-hidden="true">&minus;</b>{counts.rem} removed</span>
+  <span class="fc-legend fc-chg"><b aria-hidden="true">~</b>{counts.chg} changed</span>
+  <span class="grow"></span>
+  <label class="check"><input type="checkbox" bind:checked={hideSame} /> Hide unchanged</label>
+  <label class="check"><input type="checkbox" bind:checked={ignoreWhitespace} /> Ignore whitespace</label>
+  <div class="seg small"><button class:on={!inline} onclick={() => inline = false}>Side by side</button><button class:on={inline} onclick={() => inline = true}>Inline</button></div>
+  <Select class="language-pick" label="Language" searchable searchPlaceholder="Find a language" {options} value={language.id} disabled={!language.enabled} onchange={onlanguage} />
+</footer>

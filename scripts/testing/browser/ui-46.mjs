@@ -3,6 +3,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openFolderCompare } from './open-compare.mjs';
 
 const [url, shots, theme = 'light', width = '1440'] = process.argv.slice(2);
 const { chromium } = await import(`${process.env.PLAYWRIGHT_DIR}/index.mjs`);
@@ -18,16 +19,13 @@ const FILES = ['ecu.arxml', 'config.m4', 'powertrain.a2l', 'body.dbc', 'node.can
 async function open(file, extra = {}) {
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: theme })).newPage();
   page.on('pageerror', error => { console.log('PAGE ERROR', error.message); process.exitCode = 1; });
-  await page.addInitScript(`window.__AUDIT=${JSON.stringify({ theme, platform: 'windows' })};window.__FX=${JSON.stringify({ file, ...extra })};`);
+  await page.addInitScript(`window.__AUDIT=${JSON.stringify({ theme, platform: 'windows', bigSet: true })};window.__FX=${JSON.stringify({ file, ...extra })};`);
   await page.addInitScript(mock);
   await page.addInitScript(fixtures);
   await page.goto(url);
   await page.waitForTimeout(5500);
   await page.reload();
-  await page.waitForSelector('.fm-row[data-id]');
-  await page.locator('.fm-row[data-id] input[type=checkbox]').nth(1).check({ force: true });
-  await page.click('.rail-btn[aria-label^="Compare"]');
-  await page.click('text=Compare repository refs');
+  await openFolderCompare(page);
   await page.getByText(file, { exact: true }).first().dblclick();
   await page.waitForSelector('.editor-host .cm-line', { timeout: 60000 });
   await page.setViewportSize({ width: Number(width), height: 900 });
@@ -62,13 +60,14 @@ if (width === '1440') {
   await sniff.waitForTimeout(300);
   check('picking a language applies to this file', (await pick(sniff).innerText()) === 'A2L (ASAP2)');
   const before = (await coloured(sniff)).colours;
-  await sniff.locator('label:has-text("Use for all .zzz files") input').check();
+  await sniff.getByRole('button', { name: 'More file actions' }).click();
+  await sniff.locator('label:has-text("Use this language for all .zzz files") input').check();
   await sniff.waitForFunction(() => window.__settings.at(-1)?.settings.workspace.languageMap?.zzz === 'asap2', null, { timeout: 8000 }).catch(() => {});
   const saved = await sniff.evaluate(() => window.__settings.at(-1).settings.workspace.languageMap);
   check('"Use for all" persists the mapping in the workspace', saved?.zzz === 'asap2', JSON.stringify(saved));
   check('the colouring stays after remembering', (await coloured(sniff)).colours >= Math.min(before, 2));
   await shot(sniff, 'picker-remembered');
-  await sniff.locator('label:has-text("Use for all .zzz files") input').uncheck();
+  await sniff.locator('label:has-text("Use this language for all .zzz files") input').uncheck();
   await sniff.waitForFunction(() => window.__settings.at(-1).settings.workspace.languageMap.zzz === undefined, null, { timeout: 5000 });
   check('unchecking removes the mapping', (await pick(sniff).innerText()) === 'XML');
   await sniff.context().close();
@@ -77,8 +76,8 @@ if (width === '1440') {
 if (width === '390') {
   const page = await open('ecu.arxml');
   check('picker is visible on a narrow window', await pick(page).isVisible());
-  const overflow = await page.evaluate(() => { const bar = document.querySelector('.editor-toolbar'); return bar.scrollWidth > bar.clientWidth + 1; });
-  check('the toolbar wraps without horizontal overflow', !overflow);
+  const overflow = await page.evaluate(() => { return ['.fc-head', '.fc-foot'].some(selector => { const bar = document.querySelector(selector); return bar.scrollWidth > bar.clientWidth + 1; }); });
+  check('the header and footer fit without horizontal overflow', !overflow);
   await shot(page, 'toolbar');
   await page.context().close();
 }

@@ -7,6 +7,8 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { api, type Source, type Workspace } from './lib/api';
   import { app } from './lib/state.svelte';
+  import { compareFullscreen } from './lib/compare-fullscreen';
+  import { escapeLeaves } from './lib/fullscreen.svelte';
   import { commands, execute, shortcut } from './lib/commands';
   import { applyAppearance, onSystemThemeChange } from './lib/appearance';
   import RepositoriesView from './components/repos/RepositoriesView.svelte';
@@ -48,6 +50,7 @@
   import { moduleById, moduleShortcut } from './lib/modules';
 
   const rightVisible = $derived(app.ws.shell.rightVisible && app.detailsAvailable);
+  const immersive = $derived(compareFullscreen.active && app.detailsAvailable);
   const failedRuns = $derived(app.activityFailed);
   let reducedMotion = $state(false), panelsMoving = $state(false);
   const gitBusy = $derived(app.running || app.gitBusy || app.clonePreparing || app.activityRunning > 0);
@@ -62,6 +65,11 @@
     const timer = setTimeout(() => { panelsMoving = false; }, 220);
     return () => clearTimeout(timer);
   });
+
+  $effect(() => {
+    if (app.ready) compareFullscreen.follow({ id: app.activeTabId, compare: app.detailsAvailable });
+  });
+  $effect(() => { if (immersive) app.sidebar.close(); });
 
   let sideOpener: HTMLElement | null = null;
   $effect(() => {
@@ -84,6 +92,16 @@
       app.sidebar.close();
       return;
     }
+    if (event.key === 'F11' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault(); event.stopPropagation();
+      void compareFullscreen.toggle();
+      return;
+    }
+    if (event.key === 'Escape' && immersive && !event.defaultPrevented && escapeLeaves(event.target as Element | null, document)) {
+      event.preventDefault(); event.stopPropagation();
+      void compareFullscreen.back();
+      return;
+    }
     if (app.copyRequest || app.recoveryOpen || detailsDrawer.target || document.querySelector('dialog[open]:not(.palette)')) return;
     if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
@@ -96,7 +114,7 @@
       app.repositories.back();
       return;
     }
-    const id = shortcut(event);
+    const id = shortcut(event, !!(event.target as Element | null)?.closest?.('.cm-content:not([aria-readonly="true"])'));
     if (!id) return;
     if (id.startsWith('rail-')) {
       if (!app.ready || app.paletteOpen) return;
@@ -194,7 +212,7 @@
 
 <svelte:window onfocus={onFocus} bind:innerWidth={app.sidebar.width} />
 
-<div id="shell" class:noright={!rightVisible} class:noside={!app.sidebar.shown || app.sidebar.narrow} class:narrow={app.sidebar.narrow} class:panels-moving={panelsMoving}
+<div id="shell" class:immersive class:noright={!rightVisible} class:noside={!app.sidebar.shown || app.sidebar.narrow} class:narrow={app.sidebar.narrow} class:panels-moving={panelsMoving}
   style:--lw="{app.sidebar.shown && !app.sidebar.narrow ? app.ws.shell.sidebarWidth : 0}px" style:--rw="{rightVisible ? app.ws.rightWidth : 0}px">
   <ActivityRail {gitBusy} />
   <div class="shell-brand" data-tauri-drag-region={app.platform.platform === 'windows' ? 'deep' : undefined}><span>{app.view.kind === 'repo' && app.ws.shell.section === 'repos' ? 'Repository' : moduleById(app.ws.shell.section).label}</span></div>

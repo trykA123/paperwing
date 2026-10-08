@@ -1,6 +1,7 @@
 import type { IconName, IconTone } from '../components/Icon.svelte';
 import type { SetItem } from './api';
 import { app } from './state.svelte';
+import { compareFullscreen } from './compare-fullscreen';
 import { detailsDrawer } from './details-drawer.svelte';
 import { paletteReturn } from './focus-trap';
 import { moduleShortcut } from './modules';
@@ -13,14 +14,14 @@ export type CommandGroup = (typeof GROUPS)[number];
 
 const GROUP_OF: Record<string, CommandGroup> = {
   'tab-next': 'Navigate', 'tab-previous': 'Navigate', 'tab-close': 'Navigate', set: 'Navigate', 'search-code': 'Navigate', 'new-set': 'Navigate', add: 'Navigate', settings: 'Navigate',
-  sidebar: 'View', details: 'View', theme: 'View',
+  sidebar: 'View', details: 'View', theme: 'View', fullscreen: 'View',
   'copy-left': 'Files', 'copy-right': 'Files', recovery: 'Files', 'editor-save': 'Files', 'editor-save-left': 'Files', 'editor-save-right': 'Files', 'difference-next': 'Files',
   'difference-previous': 'Files', 'hunk-left': 'Files', 'hunk-right': 'Files', 'file-undo': 'Files',
 };
 
 const SHORTCUT_OF: Record<string, string> = {
   'tab-next': 'Ctrl Tab', 'tab-previous': 'Ctrl Shift Tab', 'tab-close': 'Ctrl W', 'editor-save': 'Ctrl S', 'search-code': 'Ctrl Shift F',
-  'difference-next': 'F7', 'difference-previous': 'Shift F7', 'hunk-left': 'Ctrl Alt ←', 'hunk-right': 'Ctrl Alt →',
+  fullscreen: 'F11', 'difference-next': 'N or F7', 'difference-previous': 'P or Shift F7', 'hunk-left': 'Ctrl Alt ←', 'hunk-right': 'Ctrl Alt →',
 };
 
 export const commandGroup = (command: Pick<Command, 'id'>): CommandGroup => (command.id.startsWith('set:') ? 'Navigate' : GROUP_OF[command.id] ?? 'Actions');
@@ -67,6 +68,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
       run: () => app.sidebar.toggle() },
     { id: 'details', label: `${app.ws.shell.rightVisible ? 'Hide' : 'Show'} details`, icon: 'panel', enabled: app.detailsAvailable,
       run: () => { app.ws.shell.rightVisible = !app.ws.shell.rightVisible; } },
+    { id: 'fullscreen', label: `${compareFullscreen.active ? 'Leave' : 'Enter'} full screen`, icon: 'panel', enabled: app.ready, run: () => void compareFullscreen.toggle() },
     { id: 'theme', label: `Use ${app.ws.theme === 'dark' ? 'light' : 'dark'} theme`, icon: 'theme', enabled: true,
       run: () => { app.ws.theme = app.ws.theme === 'dark' ? 'light' : 'dark'; } },
     { id: 'status', label: 'Refresh local status', icon: 'refresh', tone: 'sync' as const, reason: app.rootSupport.reason, enabled: folderIdle && !!items.length,
@@ -96,7 +98,7 @@ export function commands(items: SetItem[] = app.actionItems): Command[] {
   ];
 }
 
-export function shortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): string | undefined {
+export function shortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>, typing = false): string | undefined {
   const control = event.ctrlKey || event.metaKey;
   if (control && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'f') return 'search-code';
   if (control && !event.altKey && !event.shiftKey && moduleShortcut(event.key)) return `rail-${event.key}`;
@@ -104,6 +106,7 @@ export function shortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'w') return 'tab-close';
   if (control && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') return 'editor-save';
   if (!control && !event.altKey && event.key === 'F7') return event.shiftKey ? 'difference-previous' : 'difference-next';
+  if (!typing && !control && !event.altKey && !event.shiftKey && (event.key === 'n' || event.key === 'p')) return event.key === 'n' ? 'difference-next' : 'difference-previous';
   if (control && event.altKey && !event.shiftKey && event.key === 'ArrowLeft') return 'hunk-left';
   if (control && event.altKey && !event.shiftKey && event.key === 'ArrowRight') return 'hunk-right';
 }

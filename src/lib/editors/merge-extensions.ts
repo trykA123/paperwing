@@ -1,8 +1,9 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from '@codemirror/view';
+import { changeMarkGutter, changeMarks } from './merge-marks';
 import { mergeTheme } from './merge-theme';
 
 export const languageSlot = new Compartment();
@@ -15,9 +16,9 @@ export const readOnlyExtension = (readOnly: boolean): Extension =>
 export const darkExtension = (dark: boolean): Extension => EditorView.darkTheme.of(dark);
 
 const base: Extension = [
-  lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(), history(), drawSelection(),
+  changeMarks, changeMarkGutter, lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(), history(), drawSelection(),
   indentOnInput(), bracketMatching(), highlightSelectionMatches(), search({ top: true }), mergeTheme,
-  keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+  keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
 ];
 
 export type ViewSettings = { language: Extension; readOnly: boolean; dark: boolean };

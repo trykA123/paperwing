@@ -7,6 +7,7 @@
   import type { CompareState } from '../lib/compare.svelte';
   import { tabId, type View } from '../lib/workspace';
   import { commands, execute } from '../lib/commands';
+  import { compareFullscreen } from '../lib/compare-fullscreen';
   import { createCompareEditor, currentTheme, LARGE_FILE_NOTICE, loadEngine, type CompareEditor, type EngineKind, type Side } from '../lib/editor';
   import { openSides } from '../lib/compare-sides';
   import { fileSignature } from '../lib/file-signature';
@@ -14,9 +15,12 @@
   import { languageLabel, resolveLanguage, extensionOf } from '../lib/languages';
   import { verifyReadonly } from '../lib/readonly-benchmark';
   import type { TextFormat } from '../lib/text-format';
-  import Toolbar from './file-compare/Toolbar.svelte';
-  import Endpoints from './file-compare/Endpoints.svelte';
+  import { countChanges, describeCopy, type ChangeCounts } from '../lib/change-summary';
+  import ConfirmBar from './file-compare/ConfirmBar.svelte';
   import Footer from './file-compare/Footer.svelte';
+  import Header from './file-compare/Header.svelte';
+  import MoreMenu from './file-compare/MoreMenu.svelte';
+  import PaneHeads from './file-compare/PaneHeads.svelte';
 
   let { view, comparison, active }: { view: Extract<View, { kind: 'fileDiff' }>; comparison: CompareState; active: boolean } = $props();
   let host: HTMLDivElement;
@@ -24,6 +28,8 @@
   let loading = $state(false), error = $state(''), fallback = $state(''), busy = $state(false), notice = $state('');
   let inline = $state(false), hideSame = $state(false), ignoreWhitespace = $state(false);
   let dirty = $state([false, false]), hunkIndex = $state(-1), changeCount = $state(0), computing = $state(true);
+  let counts = $state<ChangeCounts>({ add: 0, rem: 0, chg: 0 }), pendingCopy = $state<'left' | 'right' | null>(null);
+  let copyOpener: Element | null = null;
   let formats = $state<TextFormat[]>([]);
   let sniffed = $state(''), override = $state<string | null>(null);
   let tickets = $state<(EditFile | null)[]>([]);
@@ -64,7 +70,11 @@
     return () => { delete app.copyActions[tabIdentity]; };
   });
   function refreshDirty() { dirty = sides.map((side, index) => !!tickets[index] && !!editor?.isDirty(side)); }
-  function refreshChanges() { changeCount = editor?.changes().length ?? 0; hunkIndex = editor?.currentChange() ?? -1; }
+  function refreshChanges() {
+    const index = editor?.currentChange() ?? -1;
+    if (index !== hunkIndex) pendingCopy = null;
+    changeCount = editor?.changes().length ?? 0; hunkIndex = index; counts = countChanges(editor?.changes() ?? []);
+  }
 
   async function save(side?: number) {
     if (busy || stale || !editor || !app.fileCapability('edit').supported) return;
@@ -97,6 +107,7 @@
 
   function next(direction: number) {
     if (!editor || computing || !changeCount) return;
+    if (direction > 0 && editor.currentChange() < 0) editor.goToChange(1);
     editor.goToChange(direction > 0 ? 1 : -1); refreshChanges();
   }
 
@@ -104,6 +115,23 @@
     if (side === 'left' ? !canCopyLeft : !canCopyRight) return;
     editor?.copyChange(side === 'left' ? 'right' : 'left', side, Math.max(0, hunkIndex));
   }
+
+  function askCopy(side: 'left' | 'right') {
+    if (side === 'left' ? !canCopyLeft : !canCopyRight) return;
+    copyOpener = document.activeElement; pendingCopy = side;
+  }
+
+  function closeCopyBar(apply: boolean) {
+    const side = pendingCopy;
+    pendingCopy = null;
+    if (apply && side) copy(side);
+    if (copyOpener instanceof HTMLElement && copyOpener.isConnected) copyOpener.focus();
+  }
+
+  const copyMessage = $derived.by(() => {
+    const change = pendingCopy && editor?.changes()[Math.max(0, hunkIndex)];
+    return pendingCopy && change ? describeCopy(change, pendingCopy, Math.max(0, hunkIndex), changeCount) : '';
+  });
 
   async function undoSave() {
     if (!app.capability('recovery').supported || !undoIds.length || !await guard()) return;
@@ -189,12 +217,15 @@
 </script>
 
 <section class="file-compare">
-  <Toolbar path={view.path} count={changeCount ? `${Math.max(1, hunkIndex + 1)} / ${changeCount}` : computing ? 'Computing' : 'Identical'}
-    previous={command('difference-previous')} next={command('difference-next')} bind:inline bind:hideSame bind:ignoreWhitespace onexecute={execute}
-    language={{ id: language, label: languageLabel(view.path, language), extension, remembered, enabled: editor?.capabilities.highlight !== false }}
-    onlanguage={pickLanguage} onremember={on => rememberLanguage(on ? language : null)} />
-  {#if snapshot}<Endpoints endpoints={[snapshot.left.endpoint, snapshot.right.endpoint]} {tickets} {formats} {dirty} reasons={readOnlyReasons}
-    saveCommands={[command('editor-save-left'), command('editor-save-right')]} onexecute={execute} />{/if}
+  <Header {snapshot} path={view.path} count={changeCount ? `${Math.max(1, hunkIndex + 1)} / ${changeCount}` : computing ? 'Computing' : 'Identical'}
+    onback={compareFullscreen.active ? () => void compareFullscreen.back() : undefined}
+    previous={command('difference-previous')} next={command('difference-next')} saveRight={command('editor-save-right')} onexecute={execute}>
+    {#snippet actions()}<MoreMenu fileLeft={command('copy-left')} fileRight={command('copy-right')} undo={command('file-undo')} onexecute={execute}
+      remember={extension && editor?.capabilities.highlight !== false ? { extension, on: remembered } : null} onremember={on => rememberLanguage(on ? language : null)} />{/snippet}
+  </Header>
+  {#if pendingCopy}<ConfirmBar message={copyMessage} confirmLabel={`Copy to ${pendingCopy}`} onconfirm={() => closeCopyBar(true)} oncancel={() => closeCopyBar(false)} />{/if}
+  {#if snapshot}<PaneHeads {snapshot} {tickets} {formats} {dirty} reasons={readOnlyReasons} saveLeft={command('editor-save-left')}
+    copyLeft={command('hunk-left')} copyRight={command('hunk-right')} oncopy={askCopy} onexecute={execute} />{/if}
   {#if stale}<p class="compare-message warn">Comparison changed. Reopen this file from the folder comparison.</p>{/if}
   {#if notice}<p class="editor-notice" role="status">{notice}</p>{/if}
   {#each [...new Set(readOnlyReasons.filter(Boolean))] as reason}<p class="compare-message" role="status">Read-only: {reason}</p>{/each}
@@ -202,5 +233,6 @@
   {#if error}<p class="editor-error warn" role="alert">{error}</p>{/if}
   {#if fallback}<p class="compare-message">{fallback}</p>{/if}
   <div class="editor-host" bind:this={host} hidden={!!fallback || stale}></div>
-  <Footer actions={{ hunkLeft: command('hunk-left'), hunkRight: command('hunk-right'), fileLeft: command('copy-left'), fileRight: command('copy-right'), undo: command('file-undo') }} onexecute={execute} />
+  <Footer {counts} bind:inline bind:hideSame bind:ignoreWhitespace onlanguage={pickLanguage}
+    language={{ id: language, label: languageLabel(view.path, language), enabled: editor?.capabilities.highlight !== false }} />
 </section>

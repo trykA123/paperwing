@@ -9,8 +9,9 @@ import { mountInline } from './inline-surface';
 import { linesOf, replaceSpan } from './line-spans';
 import { darkExtension, darkSlot, languageSlot, readOnlyExtension, readOnlySlot, viewExtensions } from './merge-extensions';
 import { mountSideBySide } from './side-by-side-surface';
+import { withRuler } from './surface-ruler';
 import { Listeners, SIDES, stepIndex } from './shared';
-import type { Surface } from './surface';
+import type { Surface, SurfaceInit } from './surface';
 
 const toText = (text: string) => Text.of(text.split('\n'));
 
@@ -42,6 +43,7 @@ class MergeEditor implements CompareEditor {
     this.settings = init.settings;
     this.language = language;
     this.surface = this.mount({ left: this.baseline.left, right: this.baseline.right });
+    this.markCurrent();
     this.appearance = new MutationObserver(() => { void this.configure({ theme: currentTheme() }); this.layout(); });
     this.appearance.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
   }
@@ -54,11 +56,12 @@ class MergeEditor implements CompareEditor {
   private mount(docs: Record<Side, Text>): Surface {
     const watch = (side: Side) => EditorView.updateListener.of(update => { if (update.docChanged) { this.lastEdited = side; this.textChanged(side); } });
     const mount = this.settings.layout === 'inline' ? mountInline : mountSideBySide;
-    return mount({
+    const init: SurfaceInit = {
       host: this.host, docs, hideUnchanged: this.settings.hideUnchanged, ignoreWhitespace: this.settings.ignoreWhitespace, primary: this.primarySide(),
       extensions: side => viewExtensions({ language: this.language, readOnly: this.isReadOnly(side), dark: this.settings.theme === 'dark' }, watch(side)),
-      onText: side => this.textChanged(side),
-    });
+      onText: side => this.textChanged(side), onJump: index => this.jump(index),
+    };
+    return withRuler(mount(init), init);
   }
 
   private replaceSurface(docs: Record<Side, Text>) {
@@ -83,7 +86,12 @@ class MergeEditor implements CompareEditor {
 
   private changed() {
     this.current = Math.min(this.current, this.changes().length - 1);
+    this.markCurrent();
     this.listeners.emit({ type: 'changes' });
+  }
+
+  private markCurrent() {
+    queueMicrotask(() => { if (!this.disposed) this.surface.markCurrent(Math.max(0, this.current)); });
   }
 
   private reconfigure(effect: (side: Side) => StateEffect<unknown>) {
@@ -141,8 +149,14 @@ class MergeEditor implements CompareEditor {
   currentChange(): number { return this.current; }
 
   goToChange(direction: 1 | -1): number {
-    this.current = stepIndex(this.current, direction, this.changes().length);
+    return this.jump(stepIndex(this.current, direction, this.changes().length));
+  }
+
+  private jump(index: number): number {
+    this.current = Math.max(-1, Math.min(index, this.changes().length - 1));
+    this.surface.markCurrent(Math.max(0, this.current));
     this.surface.reveal(this.current);
+    this.listeners.emit({ type: 'changes' });
     return this.current;
   }
 
