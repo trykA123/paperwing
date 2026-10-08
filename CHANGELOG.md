@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add in-process code search with tracked-file parity, Unicode matching, shared caps and cancellation; keep Git grep for committed refs, Git attributes and unsupported regex constructs (packet 47 backend). Add typed workspace settings and a cancellable streamed file finder with fuzzy or exact matching.
+- Add in-process code search with tracked-file parity, Unicode matching, shared caps and cancellation; keep Git grep for committed refs, Git attributes and unsupported regex constructs (packet 47 backend). Add typed workspace settings and a cancellable streamed file finder with fuzzy or exact matching. Record logical search and finder benchmark timings.
 
 - Replace Monaco with CodeMirror 6 in file compare behind one editor adapter (`src/lib/editor.ts`, contract-tested), and open files over 5 MB in a read-only large-file renderer. Saves keep each file's BOM and line endings; files with mixed line endings stay read-only.
 - Add core boundaries inside the app crate: domain command registration, synchronous typed frontend events plus an in-process CoreEvent bus, per-host RepositoryProvider and PullRequestProvider instances, and a labeled per-source switch backed by settings.json, independent of SQLite (packet 38).

@@ -131,26 +131,15 @@ impl Drop for Completion {
 }
 
 pub async fn run_job(request: FinderRequest, job: Job) -> Result<Summary, String> {
+    #[cfg(feature = "benchmark")]
+    let _timing = crate::benchmark::Span::new("ipc.files", "find-file");
     let limit = validate(&request)?;
     let mut completion = Completion {
         id: job.id,
         send: job.send.clone(),
         sent: false,
     };
-    let repos = tauri::async_runtime::spawn_blocking(move || {
-        dedupe(
-            request
-                .repos
-                .into_iter()
-                .map(|path| RepoTarget {
-                    path,
-                    git_ref: None,
-                })
-                .collect(),
-        )
-    })
-    .await
-    .map_err(|_| "Could not read file finder repository paths")?;
+    let repos = repositories(request.repos).await?;
     let top = Arc::new(Mutex::new(Top {
         id: job.id,
         limit,
@@ -177,6 +166,22 @@ pub async fn run_job(request: FinderRequest, job: Job) -> Result<Summary, String
     let summary = finish_results(&top, &job.cancel, errors)?;
     completion.finish(summary.clone());
     Ok(summary)
+}
+
+async fn repositories(paths: Vec<String>) -> Result<Vec<RepoTarget>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        dedupe(
+            paths
+                .into_iter()
+                .map(|path| RepoTarget {
+                    path,
+                    git_ref: None,
+                })
+                .collect(),
+        )
+    })
+    .await
+    .map_err(|_| "Could not read file finder repository paths".into())
 }
 
 fn finish_results(

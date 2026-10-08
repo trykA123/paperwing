@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 const EVENT_LIMIT: usize = 16384;
-pub(crate) const OPERATIONS: &[&str] = &["other", "version", "rev-parse", "status", "ls-files", "ls-tree", "cat-file", "diff", "diff-tree", "var", "log", "show", "fetch", "clone", "checkout", "switch", "pull", "push", "add", "reset", "commit", "branch", "config", "for-each-ref", "symbolic-ref", "rev-list", "remote", "stash", "check-ignore", "check-attr"];
+pub(crate) const OPERATIONS: &[&str] = &["other", "version", "rev-parse", "status", "ls-files", "ls-tree", "cat-file", "diff", "diff-tree", "var", "log", "show", "fetch", "clone", "checkout", "switch", "pull", "push", "add", "reset", "commit", "branch", "config", "for-each-ref", "symbolic-ref", "rev-list", "remote", "stash", "check-ignore", "check-attr", "search-code", "find-file"];
 pub(crate) const PHASES: &[&str] = &["git.queue", "git.process", "compare.queue", "compare.prepare", "compare.inventory", "compare.metadata", "compare.history", "ipc.open", "ipc.refresh", "ipc.files", "ipc.content", "ui.request", "ui.files-ready", "ui.first-render", "ui.complete", "editor.import", "editor.construct", "editor.diff"];
 
 #[derive(Clone, Serialize)]
@@ -183,3 +183,7 @@ mod tests {
         assert_eq!(recorder().lock().unwrap().commands["version"] - before, 80);
     }
 }
+
+#[cfg(test)]
+#[path = "benchmark_search_tests.rs"]
+mod search_tests;

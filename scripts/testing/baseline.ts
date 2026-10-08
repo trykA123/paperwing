@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { identifier, launch, requireDisplay, validateProfile } from './native-profile';
 
 const phases = new Set(['git.queue', 'git.process', 'compare.queue', 'compare.prepare', 'compare.inventory', 'compare.metadata', 'compare.history', 'ipc.open', 'ipc.refresh', 'ipc.files', 'ipc.content', 'ui.request', 'ui.files-ready', 'ui.first-render', 'ui.complete', 'editor.import', 'editor.construct', 'editor.diff']);
-const operations = new Set(['other', 'version', 'rev-parse', 'status', 'ls-files', 'ls-tree', 'cat-file', 'diff', 'log', 'show', 'fetch', 'clone', 'checkout', 'switch', 'pull', 'push', 'add', 'reset', 'commit', 'branch', 'config', 'for-each-ref', 'symbolic-ref', 'rev-list', 'remote', 'stash', 'check-ignore', 'check-attr']);
+const operations = new Set(['other', 'version', 'rev-parse', 'status', 'ls-files', 'ls-tree', 'cat-file', 'diff', 'log', 'show', 'fetch', 'clone', 'checkout', 'switch', 'pull', 'push', 'add', 'reset', 'commit', 'branch', 'config', 'for-each-ref', 'symbolic-ref', 'rev-list', 'remote', 'stash', 'check-ignore', 'check-attr', 'search-code', 'find-file']);
 export type Event = { version: 1; sample: number; phase: string; operation: string; durationMs: number };
 
 export function parseEvents(text: string): Event[] {
@@ -72,6 +72,9 @@ export function report(profile: string, cache: string, osCache: string, expensiv
 
 function selfTest() {
   const event = (sample: number, phase = 'ui.complete', durationMs = sample): Event => ({ version: 1, sample, phase, operation: 'other', durationMs });
+  for (const [phase, operation] of [['ipc.content', 'search-code'], ['ipc.files', 'find-file']]) {
+    assert.equal(parseEvents(JSON.stringify({ ...event(1, phase), operation }))[0].operation, operation);
+  }
   const stats = statistics(Array.from({ length: 20 }, (_, index) => index + 1));
   assert.equal(stats.p50Ms, 10); assert.equal(stats.p95Ms, 19); assert.equal(stats.meanMs, 10.5); assert.equal(stats.varianceMs2, 35);
   assert.throws(() => statistics([1, 2]));

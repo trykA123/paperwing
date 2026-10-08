@@ -215,6 +215,8 @@ pub async fn run_with_engine(
     job: Job,
     engine: Engine,
 ) -> Result<Summary, String> {
+    #[cfg(feature = "benchmark")]
+    let _timing = crate::benchmark::Span::new("ipc.content", "search-code");
     let plan = plan(&request)?;
     let mut done = DoneGuard {
         id: job.id,
