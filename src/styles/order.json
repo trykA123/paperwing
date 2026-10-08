@@ -1,8 +1,8 @@
 {
   "version": 1,
   "normalization": "LF newlines and project-relative resolved CSS URLs; all remaining bytes and order preserved",
-  "originalLineCount": 8808,
-  "normalizedSourceSHA256": "c2a22ad8d52cd191aa5a4bbf829dc2388228eba19b14edb86f8dae49083f3eef",
+  "originalLineCount": 8806,
+  "normalizedSourceSHA256": "5e569131da1eb055425440c4b12c044271a48d956427ccad1518bc1e124f36e0",
   "chapters": [
     {
       "path": "comparison.css",
@@ -97,73 +97,73 @@
     {
       "path": "formation.css",
       "firstLine": 5804,
-      "lastLine": 6722,
-      "normalizedSHA256": "c3fed344f8ec2f1ead4c08022fb3020f6bf0ef09756f368c41b71bd17189c60e"
+      "lastLine": 6720,
+      "normalizedSHA256": "d9719da73e797ab1374e6bc76456f89ca418d5019a31aa635cc2ec889e819ec2"
     },
     {
       "path": "cleanup-search.css",
-      "firstLine": 6723,
-      "lastLine": 7026,
+      "firstLine": 6721,
+      "lastLine": 7024,
       "normalizedSHA256": "0b5e5cc9047a5261045fbbe64ddd481ca6dffbc05cd26eaac2a44c02c9c1c957"
     },
     {
       "path": "stash.css",
-      "firstLine": 7027,
-      "lastLine": 7287,
+      "firstLine": 7025,
+      "lastLine": 7285,
       "normalizedSHA256": "a3fc7ee4fae89a665bdf4816e98c6d483204008859fbe8162ef0d653af3423e8"
     },
     {
       "path": "tags.css",
-      "firstLine": 7288,
-      "lastLine": 7493,
+      "firstLine": 7286,
+      "lastLine": 7491,
       "normalizedSHA256": "34f7fca5dc6705f64b59772cca8ef774a10deb924a93ba325e68046750faff4c"
     },
     {
       "path": "pulls.css",
-      "firstLine": 7494,
-      "lastLine": 7721,
+      "firstLine": 7492,
+      "lastLine": 7719,
       "normalizedSHA256": "fd6ae7b314622ebd02c5e12020bf2e573949b2a456be7e9e17f87cc44d367cbc"
     },
     {
       "path": "modules.css",
-      "firstLine": 7722,
-      "lastLine": 7899,
+      "firstLine": 7720,
+      "lastLine": 7897,
       "normalizedSHA256": "17b858e1d2611f21b6b63964417e44e7434f276e6f630e2492246f6e52e2afe0"
     },
     {
       "path": "repo-list.css",
-      "firstLine": 7900,
-      "lastLine": 8014,
+      "firstLine": 7898,
+      "lastLine": 8012,
       "normalizedSHA256": "d38facd9b38b238f58a707796c029693b0fd6b850f65ede407f031d4a2cd4187"
     },
     {
       "path": "set-bar.css",
-      "firstLine": 8015,
-      "lastLine": 8068,
+      "firstLine": 8013,
+      "lastLine": 8066,
       "normalizedSHA256": "220e013c6033583afc086f58f528f0505e0d0ff5949c58a841d719f7918a83ba"
     },
     {
       "path": "popovers.css",
-      "firstLine": 8069,
-      "lastLine": 8177,
+      "firstLine": 8067,
+      "lastLine": 8175,
       "normalizedSHA256": "ca2c04c755771d5f92f722660bf323614685db71f11b98beddc073a29edb39be"
     },
     {
       "path": "repo-page.css",
-      "firstLine": 8178,
-      "lastLine": 8490,
+      "firstLine": 8176,
+      "lastLine": 8488,
       "normalizedSHA256": "410897c00fb3ee6c884a4a18ae20946017d1ac0041ae1b8b7b1a113c9a6d8aa7"
     },
     {
       "path": "details-drawer.css",
-      "firstLine": 8491,
-      "lastLine": 8588,
+      "firstLine": 8489,
+      "lastLine": 8586,
       "normalizedSHA256": "6e1e0adb2b6115c6aa2d38853f8b32e7f30804ffd35333e00a718407e8ab9ecc"
     },
     {
       "path": "editor.css",
-      "firstLine": 8589,
-      "lastLine": 8808,
+      "firstLine": 8587,
+      "lastLine": 8806,
       "normalizedSHA256": "960a3cfc966ba476c04bf90ef68697ff118c73457eb2d21bde1853fbec630a1b"
     }
   ]

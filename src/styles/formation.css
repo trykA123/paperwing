@@ -892,8 +892,6 @@ button.fm-ref:hover {
     }
 }
 
-/* right panel */
-
 .activity-filters input {
     height: var(--ctl-h);
     padding: 0 var(--sp-2);
